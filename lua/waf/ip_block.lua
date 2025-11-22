@@ -122,6 +122,7 @@ local function check_single_ip(client_ip)
             end
             -- 如果规则数据不存在，重新查询数据库获取规则信息
             -- 这种情况可能发生在缓存过期或规则数据未正确缓存时
+            -- 继续执行下面的数据库查询逻辑
         else
             return false, nil
         end
@@ -170,7 +171,8 @@ local function check_ip_range(client_ip)
             if rule_data then
                 return true, cjson.decode(rule_data)
             end
-            -- 如果规则数据不存在，继续查询数据库
+            -- 如果规则数据不存在，继续查询数据库获取规则信息
+            -- 继续执行下面的数据库查询逻辑
         else
             return false, nil
         end

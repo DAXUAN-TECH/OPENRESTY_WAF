@@ -519,6 +519,13 @@ main() {
     
     # 显示后续步骤
     show_next_steps
+    
+    # 如果设置了环境变量 TEMP_VARS_FILE，将变量写入文件供父脚本使用
+    if [ -n "$TEMP_VARS_FILE" ] && [ -f "$TEMP_VARS_FILE" ]; then
+        {
+            echo "REDIS_PASSWORD=\"${REDIS_PASSWORD}\""
+        } >> "$TEMP_VARS_FILE"
+    fi
 }
 
 # 执行主函数

@@ -226,19 +226,28 @@ if [[ "$USE_REDIS" =~ ^[Yy]$ ]]; then
                 
                 if [ -n "$REDIS_CONF" ] && command -v python3 &> /dev/null; then
                     # 使用 Python 更新 Redis 配置（支持特殊字符）
-                    python3 << PYTHON_EOF
+                    # 通过环境变量传递密码，避免在 heredoc 中处理特殊字符导致的语法错误
+                    # 使用单引号 heredoc ('PYTHON_EOF') 避免 shell 变量展开
+                    export REDIS_CONF_ENV="$REDIS_CONF"
+                    export REDIS_PASSWORD_ENV="$REDIS_PASSWORD"
+                    python3 << 'PYTHON_EOF'
 import re
 import sys
+import os
 
-redis_conf = "$REDIS_CONF"
-redis_password = "$REDIS_PASSWORD"
+redis_conf = os.environ.get('REDIS_CONF_ENV', '')
+redis_password = os.environ.get('REDIS_PASSWORD_ENV', '')
+
+if not redis_conf:
+    print("错误: Redis 配置文件路径未设置")
+    sys.exit(1)
 
 try:
     with open(redis_conf, 'r', encoding='utf-8') as f:
         content = f.read()
     
-    # 转义密码中的特殊字符
-    escaped_password = redis_password.replace('\\', '\\\\').replace('$', '\\$').replace('`', '\\`')
+    # 转义密码中的特殊字符（用于 Redis 配置）
+    escaped_password = redis_password.replace('\\', '\\\\').replace('$', '\\$').replace('`', '\\`').replace('"', '\\"').replace("'", "\\'")
     
     # 更新或添加 requirepass
     if re.search(r'^requirepass ', content, re.MULTILINE):

@@ -727,10 +727,33 @@ verify_installation() {
     
     # 测试连接
     if [ -n "$MYSQL_ROOT_PASSWORD" ]; then
-        if mysql -u root -p"${MYSQL_ROOT_PASSWORD}" -e "SELECT 1;" > /dev/null 2>&1; then
+        local test_output=$(mysql -u root -p"${MYSQL_ROOT_PASSWORD}" -e "SELECT 1;" 2>&1)
+        local test_exit_code=$?
+        
+        if [ $test_exit_code -eq 0 ]; then
             echo -e "${GREEN}✓ MySQL 连接测试成功${NC}"
         else
-            echo -e "${YELLOW}⚠ MySQL 连接测试失败，请检查密码${NC}"
+            # 如果连接测试失败，但之前的安全配置成功了，说明密码实际上是正确的
+            # 可能是密码包含特殊字符导致 shell 解析问题
+            echo -e "${YELLOW}⚠ MySQL 连接测试失败（可能是密码包含特殊字符）${NC}"
+            local error_msg=$(echo "$test_output" | grep -v "Warning: Using a password" | head -3)
+            if [ -n "$error_msg" ]; then
+                echo -e "${YELLOW}错误信息: $error_msg${NC}"
+            fi
+            echo ""
+            echo -e "${YELLOW}注意: 如果之前的步骤（安全配置）成功，说明密码实际上是正确的${NC}"
+            echo -e "${YELLOW}连接测试失败可能是因为密码包含特殊字符${NC}"
+            echo ""
+            echo -e "${BLUE}建议手动测试连接:${NC}"
+            echo "  mysql -u root -p"
+            echo "  # 然后输入密码进行交互式连接"
+            echo ""
+            echo -e "${BLUE}或者使用配置文件方式:${NC}"
+            echo "  echo '[client]' > ~/.my.cnf"
+            echo "  echo 'user=root' >> ~/.my.cnf"
+            echo "  echo 'password=${MYSQL_ROOT_PASSWORD}' >> ~/.my.cnf"
+            echo "  chmod 600 ~/.my.cnf"
+            echo "  mysql -e 'SELECT 1;'"
         fi
     else
         echo -e "${YELLOW}⚠ 未设置密码，跳过连接测试${NC}"

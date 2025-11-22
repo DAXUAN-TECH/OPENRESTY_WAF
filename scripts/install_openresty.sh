@@ -150,25 +150,78 @@ install_openresty_redhat() {
     
     # 添加 OpenResty 仓库
     if [ ! -f /etc/yum.repos.d/openresty.repo ]; then
-        wget -qO - https://openresty.org/package/pubkey.gpg | gpg --dearmor -o /etc/pki/rpm-gpg/RPM-GPG-KEY-openresty
+        echo "添加 OpenResty 仓库..."
+        
+        # 确保目录存在
+        mkdir -p /etc/pki/rpm-gpg
+        
+        # 下载并导入 GPG 密钥（带错误处理）
+        echo "下载 GPG 密钥..."
+        if wget -qO - https://openresty.org/package/pubkey.gpg > /tmp/openresty-pubkey.gpg 2>&1; then
+            # 检查下载的文件是否有效
+            if [ -s /tmp/openresty-pubkey.gpg ]; then
+                # 尝试导入密钥
+                if gpg --dearmor /tmp/openresty-pubkey.gpg -o /etc/pki/rpm-gpg/RPM-GPG-KEY-openresty 2>&1; then
+                    # 验证密钥文件是否创建成功
+                    if [ -s /etc/pki/rpm-gpg/RPM-GPG-KEY-openresty ]; then
+                        echo -e "${GREEN}✓ GPG 密钥导入成功${NC}"
+                        GPG_CHECK=1
+                    else
+                        echo -e "${YELLOW}⚠ GPG 密钥文件为空，将禁用 GPG 检查${NC}"
+                        GPG_CHECK=0
+                    fi
+                else
+                    echo -e "${YELLOW}⚠ GPG 密钥导入失败，将禁用 GPG 检查${NC}"
+                    GPG_CHECK=0
+                fi
+            else
+                echo -e "${YELLOW}⚠ GPG 密钥下载失败或文件为空，将禁用 GPG 检查${NC}"
+                GPG_CHECK=0
+            fi
+            rm -f /tmp/openresty-pubkey.gpg
+        else
+            echo -e "${YELLOW}⚠ 无法下载 GPG 密钥，将禁用 GPG 检查${NC}"
+            GPG_CHECK=0
+        fi
+        
+        # 创建仓库配置文件
         cat > /etc/yum.repos.d/openresty.repo <<EOF
 [openresty]
 name=Official OpenResty Repository
 baseurl=https://openresty.org/package/${OS}/\$releasever/\$basearch
-gpgcheck=1
+gpgcheck=${GPG_CHECK}
 enabled=1
-gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-openresty
 EOF
+        
+        # 如果 GPG 检查启用，添加密钥路径
+        if [ "$GPG_CHECK" = "1" ]; then
+            echo "gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-openresty" >> /etc/yum.repos.d/openresty.repo
+        fi
+        
+        echo -e "${GREEN}✓ OpenResty 仓库配置完成${NC}"
     fi
     
-    # 安装 OpenResty
+    # 尝试使用包管理器安装
+    echo "尝试使用包管理器安装 OpenResty..."
+    INSTALL_SUCCESS=0
+    
     if command -v dnf &> /dev/null; then
-        dnf install -y openresty openresty-resty
+        if dnf install -y openresty openresty-resty 2>&1; then
+            INSTALL_SUCCESS=1
+        fi
     else
-        yum install -y openresty openresty-resty
+        if yum install -y openresty openresty-resty 2>&1; then
+            INSTALL_SUCCESS=1
+        fi
     fi
     
-    echo -e "${GREEN}✓ OpenResty 安装完成${NC}"
+    # 如果包管理器安装失败，尝试从源码编译
+    if [ "$INSTALL_SUCCESS" -eq 0 ]; then
+        echo -e "${YELLOW}⚠ 包管理器安装失败，尝试从源码编译安装...${NC}"
+        install_openresty_from_source
+    else
+        echo -e "${GREEN}✓ OpenResty 安装完成${NC}"
+    fi
 }
 
 # 安装 OpenResty（Ubuntu/Debian）

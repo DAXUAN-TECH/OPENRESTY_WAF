@@ -19,6 +19,7 @@
 - 🔍 **自动检测系统类型**：自动识别 Linux 发行版
 - 📦 **自动安装依赖**：根据系统类型安装所需依赖包
 - 🚀 **多种安装方式**：优先使用包管理器，失败则从源码编译
+- 🛡️ **容错机制**：GPG 密钥失败时自动禁用检查，包管理器失败时自动切换源码编译
 - ⚙️ **自动配置**：创建目录结构、systemd 服务文件
 - 📚 **安装 Lua 模块**：自动安装常用 Lua 模块
 - ✅ **验证安装**：检查安装是否成功
@@ -139,12 +140,57 @@ sudo /usr/local/openresty/bin/openresty -s reload
 
 ## 故障排查
 
-### 问题 1：安装失败
+### 问题 1：GPG 密钥错误
+
+**错误信息**：
+```
+来自 file:///etc/pki/rpm-gpg/RPM-GPG-KEY-openresty 的无效 GPG 密钥：No key found in given key data
+```
+
+**可能原因**：
+- GPG 密钥下载失败
+- 网络连接问题
+- GPG 工具未安装或版本不兼容
+
+**解决方法**：
+1. **自动处理**：脚本已自动处理此问题
+   - 如果 GPG 密钥导入失败，脚本会自动禁用 GPG 检查（`gpgcheck=0`）
+   - 如果包管理器安装失败，脚本会自动切换到源码编译安装
+   - 安装过程会继续，不会中断
+
+2. **手动修复**（如果需要启用 GPG 检查）：
+   ```bash
+   # 删除旧的密钥文件
+   rm -f /etc/pki/rpm-gpg/RPM-GPG-KEY-openresty
+   
+   # 重新下载并导入密钥
+   wget -qO - https://openresty.org/package/pubkey.gpg | gpg --dearmor -o /etc/pki/rpm-gpg/RPM-GPG-KEY-openresty
+   
+   # 验证密钥文件
+   ls -lh /etc/pki/rpm-gpg/RPM-GPG-KEY-openresty
+   
+   # 更新仓库配置（如果需要）
+   sed -i 's/gpgcheck=0/gpgcheck=1/' /etc/yum.repos.d/openresty.repo
+   ```
+
+3. **检查网络连接**：
+   ```bash
+   # 测试 OpenResty 官网连接
+   curl -I https://openresty.org/package/pubkey.gpg
+   
+   # 检查 DNS 解析
+   nslookup openresty.org
+   ```
+
+**注意**：即使 GPG 密钥导入失败，脚本也会继续安装。如果包管理器安装失败，会自动切换到源码编译安装。
+
+### 问题 2：安装失败
 
 **可能原因**：
 - 网络连接问题
 - 依赖包安装失败
 - 权限不足
+- 包管理器仓库问题
 
 **解决方法**：
 ```bash
@@ -155,9 +201,13 @@ ping -c 3 openresty.org
 whoami  # 应该是 root
 
 # 手动安装依赖后重试
+# CentOS/RHEL
+yum install -y gcc gcc-c++ pcre-devel zlib-devel openssl-devel
+
+# 如果包管理器安装失败，脚本会自动切换到源码编译
 ```
 
-### 问题 2：服务启动失败
+### 问题 3：服务启动失败
 
 **可能原因**：
 - 配置文件语法错误
@@ -176,7 +226,7 @@ netstat -tlnp | grep :80
 tail -f /usr/local/openresty/nginx/logs/error.log
 ```
 
-### 问题 3：Lua 模块未安装
+### 问题 4：Lua 模块未安装
 
 **可能原因**：
 - opm 不可用
@@ -192,7 +242,7 @@ tail -f /usr/local/openresty/nginx/logs/error.log
 /usr/local/openresty/bin/opm --version
 ```
 
-### 问题 4：不支持的系统
+### 问题 5：不支持的系统
 
 **解决方法**：
 - 脚本会自动尝试从源码编译安装

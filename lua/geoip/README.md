@@ -35,8 +35,8 @@ wget "https://download.maxmind.com/app/geoip_download?edition_id=GeoLite2-City&l
 # 解压
 tar -xzf GeoLite2-City.tar.gz
 
-# 复制数据库文件
-cp GeoLite2-City_*/GeoLite2-City.mmdb /usr/local/openresty/nginx/lua/geoip/
+# 复制数据库文件到项目目录
+cp GeoLite2-City_*/GeoLite2-City.mmdb /path/to/project/lua/geoip/
 ```
 
 ### 方式三：使用第三方 IP 库
@@ -57,9 +57,12 @@ opm get anjia0532/lua-resty-maxminddb
 ```lua
 _M.geo = {
     enable = true,  -- 启用地域封控
-    geoip_db_path = "/usr/local/openresty/nginx/lua/geoip/GeoLite2-City.mmdb",
+    -- geoip_db_path 会在运行时自动设置，无需手动配置
+    -- 数据库文件应放在项目目录的 lua/geoip/ 下
 }
 ```
+
+**注意**：`geoip_db_path` 会在 `init_by_lua` 阶段自动设置，无需手动配置。数据库文件应放在项目目录的 `lua/geoip/` 目录下。
 
 ## 使用示例
 

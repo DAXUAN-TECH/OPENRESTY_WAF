@@ -67,10 +67,8 @@ OPENRESTY_WAF/
 │   ├── 技术实施方案.md      # 技术实施方案
 │   ├── 部署文档.md          # 部署文档
 │   ├── 地域封控使用示例.md  # 地域封控使用示例
-│   ├── 测试检查清单.md      # 测试检查清单
-│   ├── 代码检查报告.md      # 代码检查报告
 │   ├── 性能优化指南.md      # 性能优化指南
-│   └── 项目检查报告.md      # 项目全面检查报告
+│   └── 代码审计报告.md      # 代码审计报告
 ├── scripts/                 # 脚本目录
 │   ├── install_mysql.sh     # MySQL 一键安装脚本（支持多种 Linux 发行版）
 │   ├── install_mysql_README.md  # MySQL 安装说明
@@ -305,9 +303,7 @@ sudo ./scripts/optimize_system.sh
 - [GeoIP 更新说明](scripts/update_geoip_README.md) - GeoIP 数据库更新说明
 - [系统优化说明](scripts/optimize_system_README.md) - 系统优化脚本说明
 - [项目检查说明](scripts/check_all_README.md) - 项目检查脚本说明
-- [测试检查清单](docs/测试检查清单.md) - 服务器测试检查清单
-- [代码检查报告](docs/代码检查报告.md) - 代码检查结果和注意事项
-- [项目检查报告](docs/项目检查报告.md) - 项目全面检查报告
+- [代码审计报告](docs/代码审计报告.md) - 全方位代码审计报告
 
 ### 功能文档
 - [地域封控使用示例](docs/地域封控使用示例.md) - 地域封控功能使用示例

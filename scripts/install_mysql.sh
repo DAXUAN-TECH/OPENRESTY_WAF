@@ -1,7 +1,12 @@
 #!/bin/bash
 
 # MySQL 一键安装和配置脚本
-# 支持：CentOS/RHEL, Ubuntu/Debian, Fedora, openSUSE, Arch Linux
+# 支持多种 Linux 发行版：
+#   - RedHat 系列：CentOS, RHEL, Fedora, Rocky Linux, AlmaLinux, Oracle Linux, Amazon Linux
+#   - Debian 系列：Debian, Ubuntu, Linux Mint, Kali Linux, Raspbian
+#   - SUSE 系列：openSUSE, SLES
+#   - Arch 系列：Arch Linux, Manjaro
+#   - 其他：Alpine Linux, Gentoo
 # 用途：自动检测系统类型并安装配置 MySQL
 
 set -e
@@ -31,22 +36,91 @@ export USE_NEW_USER
 detect_os() {
     echo -e "${BLUE}[1/7] 检测操作系统...${NC}"
     
+    # 优先使用 /etc/os-release (标准方法)
     if [ -f /etc/os-release ]; then
         . /etc/os-release
         OS=$ID
+        OS_LIKE=${ID_LIKE:-""}
         OS_VERSION=$VERSION_ID
+        
+        # 处理特殊发行版
+        case $OS in
+            "ol"|"oracle")
+                OS="oraclelinux"
+                ;;
+            "amzn"|"amazon")
+                OS="amazonlinux"
+                ;;
+            "raspbian")
+                OS="debian"
+                ;;
+            "linuxmint")
+                OS="ubuntu"  # Linux Mint 基于 Ubuntu
+                ;;
+            "kali")
+                OS="debian"  # Kali Linux 基于 Debian
+                ;;
+        esac
+        
+        # 如果没有版本号，尝试从其他文件获取
+        if [ -z "$OS_VERSION" ]; then
+            if [ -f /etc/redhat-release ]; then
+                OS_VERSION=$(cat /etc/redhat-release | sed 's/.*release \([0-9.]*\).*/\1/')
+            elif [ -f /etc/debian_version ]; then
+                OS_VERSION=$(cat /etc/debian_version)
+            fi
+        fi
     elif [ -f /etc/redhat-release ]; then
-        OS="centos"
-        OS_VERSION=$(cat /etc/redhat-release | sed 's/.*release \([0-9.]*\).*/\1/')
+        # RedHat 系列
+        local release_info=$(cat /etc/redhat-release)
+        if echo "$release_info" | grep -qi "centos"; then
+            OS="centos"
+        elif echo "$release_info" | grep -qi "red hat\|rhel"; then
+            OS="rhel"
+        elif echo "$release_info" | grep -qi "rocky"; then
+            OS="rocky"
+        elif echo "$release_info" | grep -qi "alma"; then
+            OS="almalinux"
+        elif echo "$release_info" | grep -qi "oracle"; then
+            OS="oraclelinux"
+        elif echo "$release_info" | grep -qi "amazon"; then
+            OS="amazonlinux"
+        else
+            OS="centos"  # 默认
+        fi
+        OS_VERSION=$(echo "$release_info" | sed 's/.*release \([0-9.]*\).*/\1/')
     elif [ -f /etc/debian_version ]; then
+        # Debian 系列
         OS="debian"
         OS_VERSION=$(cat /etc/debian_version)
+    elif [ -f /etc/alpine-release ]; then
+        # Alpine Linux
+        OS="alpine"
+        OS_VERSION=$(cat /etc/alpine-release)
+    elif [ -f /etc/arch-release ]; then
+        # Arch Linux
+        OS="arch"
+        OS_VERSION="rolling"
+    elif [ -f /etc/SuSE-release ]; then
+        # SUSE
+        OS="opensuse"
+        OS_VERSION=$(grep VERSION /etc/SuSE-release | awk '{print $3}')
     else
-        echo -e "${RED}错误: 无法检测操作系统类型${NC}"
-        exit 1
+        echo -e "${YELLOW}警告: 无法自动检测操作系统类型${NC}"
+        echo -e "${YELLOW}将尝试使用通用方法${NC}"
+        OS="unknown"
+        OS_VERSION="unknown"
     fi
     
-    echo -e "${GREEN}✓ 检测到系统: ${OS} ${OS_VERSION}${NC}"
+    # 显示检测结果
+    if [ "$OS" != "unknown" ]; then
+        echo -e "${GREEN}✓ 检测到系统: ${OS} ${OS_VERSION}${NC}"
+        if [ -n "$OS_LIKE" ] && [ "$OS_LIKE" != "$OS" ]; then
+            echo -e "${BLUE}  基于: ${OS_LIKE}${NC}"
+        fi
+    else
+        echo -e "${YELLOW}⚠ 系统类型: 未知（将尝试通用方法）${NC}"
+    fi
 }
 
 # 检查是否为 root 用户
@@ -76,23 +150,57 @@ check_existing() {
     echo -e "${GREEN}✓ 检查完成${NC}"
 }
 
-# 安装 MySQL（CentOS/RHEL/Fedora）
+# 安装 MySQL（CentOS/RHEL/Fedora/Rocky/AlmaLinux/Oracle Linux/Amazon Linux）
 install_mysql_redhat() {
     echo -e "${BLUE}[3/7] 安装 MySQL（RedHat 系列）...${NC}"
+    
+    # 确定仓库版本（根据实际系统）
+    local el_version="el7"
+    case $OS in
+        fedora)
+            # Fedora 通常使用 el8 或 el9
+            if echo "$OS_VERSION" | grep -qE "^3[0-9]"; then
+                el_version="el9"
+            else
+                el_version="el8"
+            fi
+            ;;
+        rhel|rocky|almalinux|oraclelinux)
+            # 根据主版本号确定
+            if echo "$OS_VERSION" | grep -qE "^9\."; then
+                el_version="el9"
+            elif echo "$OS_VERSION" | grep -qE "^8\."; then
+                el_version="el8"
+            else
+                el_version="el7"
+            fi
+            ;;
+        amazonlinux)
+            # Amazon Linux 2 使用 el7，Amazon Linux 2023 使用 el9
+            if echo "$OS_VERSION" | grep -qE "^2023"; then
+                el_version="el9"
+            else
+                el_version="el7"
+            fi
+            ;;
+    esac
     
     # 安装 MySQL 仓库（MySQL 8.0）
     if [ ! -f /etc/yum.repos.d/mysql-community.repo ]; then
         echo "添加 MySQL 官方仓库..."
         
         # 下载 MySQL Yum Repository
-        if command -v dnf &> /dev/null; then
-            # Fedora/RHEL 8+
-            wget -q https://dev.mysql.com/get/mysql80-community-release-el8-1.noarch.rpm -O /tmp/mysql80-community-release.rpm 2>/dev/null || \
-            wget -q https://dev.mysql.com/get/mysql80-community-release-el7-7.noarch.rpm -O /tmp/mysql80-community-release.rpm 2>/dev/null || \
-            echo -e "${YELLOW}⚠ 无法下载 MySQL 仓库，尝试使用系统仓库${NC}"
-        else
-            # CentOS/RHEL 7
-            wget -q https://dev.mysql.com/get/mysql80-community-release-el7-7.noarch.rpm -O /tmp/mysql80-community-release.rpm 2>/dev/null || \
+        local repo_downloaded=0
+        
+        # 尝试下载对应版本的仓库
+        for el_ver in $el_version el8 el7; do
+            if wget -q "https://dev.mysql.com/get/mysql80-community-release-${el_ver}-1.noarch.rpm" -O /tmp/mysql80-community-release.rpm 2>/dev/null && [ -s /tmp/mysql80-community-release.rpm ]; then
+                repo_downloaded=1
+                break
+            fi
+        done
+        
+        if [ $repo_downloaded -eq 0 ]; then
             echo -e "${YELLOW}⚠ 无法下载 MySQL 仓库，尝试使用系统仓库${NC}"
         fi
         
@@ -117,16 +225,44 @@ install_mysql_redhat() {
     fi
     
     # 安装 MySQL
+    INSTALL_SUCCESS=0
+    
     if command -v dnf &> /dev/null; then
-        dnf install -y mysql-server mysql || yum install -y mysql-server mysql
+        if dnf install -y mysql-server mysql 2>&1; then
+            INSTALL_SUCCESS=1
+        fi
     else
-        yum install -y mysql-server mysql
+        if yum install -y mysql-server mysql 2>&1; then
+            INSTALL_SUCCESS=1
+        fi
     fi
     
-    echo -e "${GREEN}✓ MySQL 安装完成${NC}"
+    # 如果 MySQL 安装失败，尝试安装 MariaDB（MySQL 兼容）
+    if [ $INSTALL_SUCCESS -eq 0 ]; then
+        echo -e "${YELLOW}⚠ MySQL 安装失败，尝试安装 MariaDB（MySQL 兼容）...${NC}"
+        if command -v dnf &> /dev/null; then
+            if dnf install -y mariadb-server mariadb 2>&1; then
+                INSTALL_SUCCESS=1
+                echo -e "${GREEN}✓ MariaDB 安装完成（MySQL 兼容）${NC}"
+            fi
+        else
+            if yum install -y mariadb-server mariadb 2>&1; then
+                INSTALL_SUCCESS=1
+                echo -e "${GREEN}✓ MariaDB 安装完成（MySQL 兼容）${NC}"
+            fi
+        fi
+    fi
+    
+    if [ $INSTALL_SUCCESS -eq 0 ]; then
+        echo -e "${RED}✗ MySQL/MariaDB 安装失败${NC}"
+        echo -e "${YELLOW}请检查错误信息并手动安装${NC}"
+        exit 1
+    else
+        echo -e "${GREEN}✓ MySQL/MariaDB 安装完成${NC}"
+    fi
 }
 
-# 安装 MySQL（Ubuntu/Debian）
+# 安装 MySQL（Ubuntu/Debian/Linux Mint/Kali Linux）
 install_mysql_debian() {
     echo -e "${BLUE}[3/7] 安装 MySQL（Debian 系列）...${NC}"
     
@@ -134,9 +270,22 @@ install_mysql_debian() {
     apt-get update
     
     # 安装 MySQL（使用系统仓库，通常包含 MySQL 8.0）
-    DEBIAN_FRONTEND=noninteractive apt-get install -y mysql-server mysql-client
+    # 对于某些发行版，可能需要先安装 debconf-utils
+    if ! command -v debconf-set-selections &> /dev/null; then
+        apt-get install -y debconf-utils
+    fi
     
-    echo -e "${GREEN}✓ MySQL 安装完成${NC}"
+    # 设置非交互式安装
+    echo "mysql-server mysql-server/root_password password ${MYSQL_ROOT_PASSWORD:-}" | debconf-set-selections 2>/dev/null || true
+    echo "mysql-server mysql-server/root_password_again password ${MYSQL_ROOT_PASSWORD:-}" | debconf-set-selections 2>/dev/null || true
+    
+    # 安装 MySQL
+    if DEBIAN_FRONTEND=noninteractive apt-get install -y mysql-server mysql-client 2>&1; then
+        echo -e "${GREEN}✓ MySQL 安装完成${NC}"
+    else
+        echo -e "${YELLOW}⚠ 包管理器安装失败，请检查错误信息${NC}"
+        exit 1
+    fi
 }
 
 # 安装 MySQL（openSUSE）
@@ -155,20 +304,58 @@ install_mysql_suse() {
     echo -e "${GREEN}✓ MariaDB 安装完成（MySQL 兼容）${NC}"
 }
 
-# 安装 MySQL（Arch Linux）
+# 安装 MySQL（Arch Linux/Manjaro）
 install_mysql_arch() {
     echo -e "${BLUE}[3/7] 安装 MySQL（Arch Linux）...${NC}"
     
+    INSTALL_SUCCESS=0
+    
     # Arch Linux 使用 AUR 或系统仓库
     if command -v yay &> /dev/null; then
-        yay -S --noconfirm mysql
+        echo "使用 yay 从 AUR 安装..."
+        if yay -S --noconfirm mysql 2>&1; then
+            INSTALL_SUCCESS=1
+        fi
+    elif command -v paru &> /dev/null; then
+        echo "使用 paru 从 AUR 安装..."
+        if paru -S --noconfirm mysql 2>&1; then
+            INSTALL_SUCCESS=1
+        fi
     else
         # 尝试使用 pacman（可能需要启用 AUR）
-        pacman -S --noconfirm mysql || {
-            echo -e "${YELLOW}⚠ 需要从 AUR 安装，请安装 yay 或手动安装${NC}"
-            exit 1
-        }
+        if pacman -S --noconfirm mysql 2>&1; then
+            INSTALL_SUCCESS=1
+        fi
     fi
+    
+    if [ $INSTALL_SUCCESS -eq 0 ]; then
+        echo -e "${YELLOW}⚠ 需要从 AUR 安装，请安装 yay/paru 或手动安装${NC}"
+        echo -e "${YELLOW}⚠ 安装命令: yay -S mysql 或 pacman -S mysql${NC}"
+        exit 1
+    else
+        echo -e "${GREEN}✓ MySQL 安装完成${NC}"
+    fi
+}
+
+# 安装 MySQL（Alpine Linux）
+install_mysql_alpine() {
+    echo -e "${BLUE}[3/7] 安装 MySQL（Alpine Linux）...${NC}"
+    
+    # Alpine Linux 使用 MariaDB（MySQL 兼容）
+    apk add --no-cache mariadb mariadb-client mariadb-server-utils
+    
+    echo -e "${GREEN}✓ MariaDB 安装完成（MySQL 兼容）${NC}"
+}
+
+# 安装 MySQL（Gentoo）
+install_mysql_gentoo() {
+    echo -e "${BLUE}[3/7] 安装 MySQL（Gentoo）...${NC}"
+    
+    # Gentoo 使用 emerge
+    emerge --ask=n --quiet-build y dev-db/mysql || {
+        echo -e "${YELLOW}⚠ 安装失败，请手动安装${NC}"
+        exit 1
+    }
     
     echo -e "${GREEN}✓ MySQL 安装完成${NC}"
 }
@@ -176,10 +363,10 @@ install_mysql_arch() {
 # 安装 MySQL
 install_mysql() {
     case $OS in
-        centos|rhel|fedora|rocky|almalinux)
+        centos|rhel|fedora|rocky|almalinux|oraclelinux|amazonlinux)
             install_mysql_redhat
             ;;
-        ubuntu|debian)
+        ubuntu|debian|linuxmint|raspbian|kali)
             install_mysql_debian
             ;;
         opensuse*|sles)
@@ -188,12 +375,33 @@ install_mysql() {
         arch|manjaro)
             install_mysql_arch
             ;;
+        alpine)
+            install_mysql_alpine
+            ;;
+        gentoo)
+            install_mysql_gentoo
+            ;;
         *)
-            echo -e "${YELLOW}警告: 未识别的系统类型，尝试使用通用方法${NC}"
-            if command -v yum &> /dev/null; then
+            echo -e "${YELLOW}警告: 未识别的系统类型 (${OS})，尝试使用通用方法${NC}"
+            # 根据包管理器自动选择
+            if command -v yum &> /dev/null || command -v dnf &> /dev/null; then
+                echo -e "${BLUE}检测到 yum/dnf，使用 RedHat 系列方法${NC}"
                 install_mysql_redhat
             elif command -v apt-get &> /dev/null; then
+                echo -e "${BLUE}检测到 apt-get，使用 Debian 系列方法${NC}"
                 install_mysql_debian
+            elif command -v zypper &> /dev/null; then
+                echo -e "${BLUE}检测到 zypper，使用 SUSE 系列方法${NC}"
+                install_mysql_suse
+            elif command -v pacman &> /dev/null; then
+                echo -e "${BLUE}检测到 pacman，使用 Arch 系列方法${NC}"
+                install_mysql_arch
+            elif command -v apk &> /dev/null; then
+                echo -e "${BLUE}检测到 apk，使用 Alpine 方法${NC}"
+                install_mysql_alpine
+            elif command -v emerge &> /dev/null; then
+                echo -e "${BLUE}检测到 emerge，使用 Gentoo 方法${NC}"
+                install_mysql_gentoo
             else
                 echo -e "${RED}错误: 无法确定包管理器${NC}"
                 exit 1
@@ -221,10 +429,19 @@ configure_mysql() {
     
     # 获取临时 root 密码（MySQL 8.0）
     TEMP_PASSWORD=""
-    if [ -f /var/log/mysqld.log ]; then
-        TEMP_PASSWORD=$(grep 'temporary password' /var/log/mysqld.log 2>/dev/null | awk '{print $NF}' | tail -1)
-    elif [ -f /var/log/mysql/error.log ]; then
-        TEMP_PASSWORD=$(grep 'temporary password' /var/log/mysql/error.log 2>/dev/null | awk '{print $NF}' | tail -1)
+    # 尝试多个日志文件位置
+    for log_file in /var/log/mysqld.log /var/log/mysql/error.log /var/log/mysql/mysql.log /var/log/mariadb/mariadb.log; do
+        if [ -f "$log_file" ]; then
+            TEMP_PASSWORD=$(grep 'temporary password' "$log_file" 2>/dev/null | awk '{print $NF}' | tail -1)
+            if [ -n "$TEMP_PASSWORD" ]; then
+                break
+            fi
+        fi
+    done
+    
+    # 对于 MariaDB（Alpine/SUSE），可能没有临时密码
+    if [ -z "$TEMP_PASSWORD" ] && [ "$OS" = "alpine" ]; then
+        echo -e "${BLUE}  MariaDB 通常没有临时密码，root 用户可能无密码或需要初始化${NC}"
     fi
     
     echo -e "${GREEN}✓ MySQL 配置完成${NC}"
@@ -256,11 +473,20 @@ set_root_password() {
             echo -e "${YELLOW}⚠ 使用临时密码设置失败，尝试无密码设置${NC}"
         fi
         
-        # 如果临时密码方式失败，尝试无密码方式（某些系统可能没有临时密码）
+        # 如果临时密码方式失败，尝试无密码方式（某些系统可能没有临时密码，如 MariaDB）
         if ! mysql -u root -p"${MYSQL_ROOT_PASSWORD}" -e "SELECT 1;" > /dev/null 2>&1; then
-            mysql -u root -e "ALTER USER 'root'@'localhost' IDENTIFIED BY '${MYSQL_ROOT_PASSWORD}';" 2>/dev/null && \
-            echo -e "${GREEN}✓ root 密码已设置${NC}" || \
-            echo -e "${YELLOW}⚠ 无法自动设置密码，请手动设置${NC}"
+            # 尝试无密码连接（MariaDB 可能默认无密码）
+            if mysql -u root -e "ALTER USER 'root'@'localhost' IDENTIFIED BY '${MYSQL_ROOT_PASSWORD}';" 2>/dev/null; then
+                echo -e "${GREEN}✓ root 密码已设置${NC}"
+            else
+                # 对于 MariaDB，可能需要先初始化或使用不同的命令
+                if mysql -u root -e "SET PASSWORD FOR 'root'@'localhost' = PASSWORD('${MYSQL_ROOT_PASSWORD}');" 2>/dev/null; then
+                    echo -e "${GREEN}✓ root 密码已设置（MariaDB 方式）${NC}"
+                else
+                    echo -e "${YELLOW}⚠ 无法自动设置密码，请手动设置${NC}"
+                    echo -e "${YELLOW}  对于 MariaDB，可能需要运行: mysql_secure_installation${NC}"
+                fi
+            fi
         fi
     else
         echo -e "${YELLOW}跳过 root 密码设置${NC}"

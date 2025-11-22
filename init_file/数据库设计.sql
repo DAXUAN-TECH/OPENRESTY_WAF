@@ -1,7 +1,7 @@
 -- OpenResty WAF 数据库设计
 -- 数据库名：waf_db
 -- 字符集：utf8mb4
--- 排序规则：utf8mb4_unicode_ci
+-- 排序规则：utf8mb4_general_ci
 
 CREATE DATABASE IF NOT EXISTS waf_db DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
 

@@ -59,23 +59,105 @@ echo ""
 
 # MySQL 配置
 echo -e "${CYAN}MySQL 数据库配置${NC}"
-read -p "MySQL 主机地址 [127.0.0.1]: " MYSQL_HOST
-MYSQL_HOST="${MYSQL_HOST:-127.0.0.1}"
+read -p "使用本地 MySQL 还是外部 MySQL？[本地/外部] [本地]: " MYSQL_TYPE
+MYSQL_TYPE="${MYSQL_TYPE:-本地}"
 
-read -p "MySQL 端口 [3306]: " MYSQL_PORT
-MYSQL_PORT="${MYSQL_PORT:-3306}"
-
-read -p "数据库名称 [waf_db]: " MYSQL_DATABASE
-MYSQL_DATABASE="${MYSQL_DATABASE:-waf_db}"
-
-read -p "数据库用户名 [waf_user]: " MYSQL_USER
-MYSQL_USER="${MYSQL_USER:-waf_user}"
-
-read -sp "数据库密码: " MYSQL_PASSWORD
-echo ""
-if [ -z "$MYSQL_PASSWORD" ]; then
-    echo -e "${RED}错误: 数据库密码不能为空${NC}"
-    exit 1
+if [[ "$MYSQL_TYPE" =~ ^[外Ee] ]]; then
+    # 外部 MySQL
+    MYSQL_INSTALL_LOCAL="N"
+    echo -e "${GREEN}使用外部 MySQL 数据库${NC}"
+    echo ""
+    
+    read -p "MySQL 主机地址 [127.0.0.1]: " MYSQL_HOST
+    MYSQL_HOST="${MYSQL_HOST:-127.0.0.1}"
+    
+    read -p "MySQL 端口 [3306]: " MYSQL_PORT
+    MYSQL_PORT="${MYSQL_PORT:-3306}"
+    
+    read -p "数据库名称 [waf_db]: " MYSQL_DATABASE
+    MYSQL_DATABASE="${MYSQL_DATABASE:-waf_db}"
+    
+    read -p "数据库用户名 [waf_user]: " MYSQL_USER
+    MYSQL_USER="${MYSQL_USER:-waf_user}"
+    
+    read -sp "数据库密码: " MYSQL_PASSWORD
+    echo ""
+    if [ -z "$MYSQL_PASSWORD" ]; then
+        echo -e "${RED}错误: 数据库密码不能为空${NC}"
+        exit 1
+    fi
+else
+    # 本地 MySQL
+    MYSQL_INSTALL_LOCAL="Y"
+    echo -e "${GREEN}使用本地 MySQL 数据库，将自动安装${NC}"
+    echo ""
+    
+    # 先安装 MySQL
+    echo -e "${BLUE}开始安装 MySQL...${NC}"
+    if ! bash "${SCRIPTS_DIR}/install_mysql.sh"; then
+        echo -e "${RED}✗ MySQL 安装失败${NC}"
+        echo "请检查错误信息并重试"
+        exit 1
+    fi
+    
+    echo ""
+    echo -e "${CYAN}配置 MySQL 连接信息${NC}"
+    
+    # 询问是否设置 root 密码（如果安装脚本未设置）
+    read -sp "请输入 MySQL root 密码（如果已设置请直接回车）: " MYSQL_ROOT_PASSWORD
+    echo ""
+    
+    # 配置数据库信息
+    read -p "数据库名称 [waf_db]: " MYSQL_DATABASE
+    MYSQL_DATABASE="${MYSQL_DATABASE:-waf_db}"
+    
+    read -p "数据库用户名 [waf_user]: " MYSQL_USER
+    MYSQL_USER="${MYSQL_USER:-waf_user}"
+    
+    read -sp "数据库密码（用于 WAF 连接）: " MYSQL_PASSWORD
+    echo ""
+    if [ -z "$MYSQL_PASSWORD" ]; then
+        echo -e "${RED}错误: 数据库密码不能为空${NC}"
+        exit 1
+    fi
+    
+    # 本地 MySQL 默认配置
+    MYSQL_HOST="127.0.0.1"
+    MYSQL_PORT="3306"
+    
+    # 创建数据库和用户
+    echo ""
+    echo -e "${GREEN}创建数据库和用户...${NC}"
+    
+    # 构建创建数据库和用户的 SQL
+    CREATE_DB_SQL="
+CREATE DATABASE IF NOT EXISTS ${MYSQL_DATABASE} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE USER IF NOT EXISTS '${MYSQL_USER}'@'localhost' IDENTIFIED BY '${MYSQL_PASSWORD}';
+GRANT ALL PRIVILEGES ON ${MYSQL_DATABASE}.* TO '${MYSQL_USER}'@'localhost';
+FLUSH PRIVILEGES;
+"
+    
+    # 使用 root 用户创建数据库和用户
+    if [ -n "$MYSQL_ROOT_PASSWORD" ]; then
+        mysql -u root -p"${MYSQL_ROOT_PASSWORD}" <<EOF
+${CREATE_DB_SQL}
+EOF
+    else
+        # 尝试无密码连接（某些系统可能没有设置 root 密码）
+        mysql -u root <<EOF
+${CREATE_DB_SQL}
+EOF
+    fi
+    
+    if [ $? -eq 0 ]; then
+        echo -e "${GREEN}✓ 数据库和用户创建成功${NC}"
+    else
+        echo -e "${YELLOW}⚠ 数据库和用户创建可能失败，请手动创建${NC}"
+        echo "SQL 命令："
+        echo "$CREATE_DB_SQL"
+    fi
+    
+    echo ""
 fi
 
 # Redis 配置（可选）
@@ -85,18 +167,78 @@ read -p "是否使用 Redis 缓存？[y/N]: " USE_REDIS
 USE_REDIS="${USE_REDIS:-N}"
 
 if [[ "$USE_REDIS" =~ ^[Yy]$ ]]; then
-    read -p "Redis 主机地址 [127.0.0.1]: " REDIS_HOST
-    REDIS_HOST="${REDIS_HOST:-127.0.0.1}"
+    read -p "使用本地 Redis 还是外部 Redis？[本地/外部] [本地]: " REDIS_TYPE
+    REDIS_TYPE="${REDIS_TYPE:-本地}"
     
-    read -p "Redis 端口 [6379]: " REDIS_PORT
-    REDIS_PORT="${REDIS_PORT:-6379}"
-    
-    read -sp "Redis 密码（可选，直接回车跳过）: " REDIS_PASSWORD
-    echo ""
-    
-    read -p "Redis 数据库编号 [0]: " REDIS_DB
-    REDIS_DB="${REDIS_DB:-0}"
+    if [[ "$REDIS_TYPE" =~ ^[外Ee] ]]; then
+        # 外部 Redis
+        REDIS_INSTALL_LOCAL="N"
+        echo -e "${GREEN}使用外部 Redis${NC}"
+        echo ""
+        
+        read -p "Redis 主机地址 [127.0.0.1]: " REDIS_HOST
+        REDIS_HOST="${REDIS_HOST:-127.0.0.1}"
+        
+        read -p "Redis 端口 [6379]: " REDIS_PORT
+        REDIS_PORT="${REDIS_PORT:-6379}"
+        
+        read -sp "Redis 密码（可选，直接回车跳过）: " REDIS_PASSWORD
+        echo ""
+        
+        read -p "Redis 数据库编号 [0]: " REDIS_DB
+        REDIS_DB="${REDIS_DB:-0}"
+    else
+        # 本地 Redis
+        REDIS_INSTALL_LOCAL="Y"
+        echo -e "${GREEN}使用本地 Redis，将自动安装${NC}"
+        echo ""
+        
+        # 先安装 Redis
+        echo -e "${BLUE}开始安装 Redis...${NC}"
+        if ! bash "${SCRIPTS_DIR}/install_redis.sh"; then
+            echo -e "${YELLOW}⚠ Redis 安装失败，但这是可选步骤，将继续安装${NC}"
+            echo "您可以稍后手动运行: sudo ${SCRIPTS_DIR}/install_redis.sh"
+            USE_REDIS="N"
+            REDIS_HOST=""
+            REDIS_PORT=""
+            REDIS_PASSWORD=""
+            REDIS_DB=""
+        else
+            # 本地 Redis 默认配置
+            REDIS_HOST="127.0.0.1"
+            REDIS_PORT="6379"
+            REDIS_DB="0"
+            
+            # 询问是否设置密码
+            read -sp "Redis 密码（可选，直接回车跳过）: " REDIS_PASSWORD
+            echo ""
+            
+            # 如果设置了密码，更新 Redis 配置
+            if [ -n "$REDIS_PASSWORD" ]; then
+                REDIS_CONF=""
+                if [ -f /etc/redis/redis.conf ]; then
+                    REDIS_CONF="/etc/redis/redis.conf"
+                elif [ -f /etc/redis.conf ]; then
+                    REDIS_CONF="/etc/redis.conf"
+                fi
+                
+                if [ -n "$REDIS_CONF" ]; then
+                    if grep -q "^requirepass " "$REDIS_CONF"; then
+                        sed -i "s/^requirepass .*/requirepass ${REDIS_PASSWORD}/" "$REDIS_CONF"
+                    else
+                        echo "requirepass ${REDIS_PASSWORD}" >> "$REDIS_CONF"
+                    fi
+                    
+                    # 重启 Redis 服务
+                    if command -v systemctl &> /dev/null; then
+                        systemctl restart redis 2>/dev/null || systemctl restart redis-server 2>/dev/null || true
+                    fi
+                fi
+            fi
+        fi
+    fi
 else
+    REDIS_INSTALL_LOCAL="N"
     REDIS_HOST=""
     REDIS_PORT=""
     REDIS_PASSWORD=""
@@ -134,7 +276,11 @@ echo ""
 # 步骤 2: 安装 OpenResty
 # ============================================
 echo -e "${BLUE}========================================${NC}"
-echo -e "${BLUE}步骤 2/7: 安装 OpenResty${NC}"
+if [[ "$MYSQL_INSTALL_LOCAL" == "Y" ]]; then
+    echo -e "${BLUE}步骤 2/6: 安装 OpenResty${NC}"
+else
+    echo -e "${BLUE}步骤 2/7: 安装 OpenResty${NC}"
+fi
 echo -e "${BLUE}========================================${NC}"
 echo ""
 
@@ -167,7 +313,11 @@ echo ""
 # 步骤 3: 部署配置文件
 # ============================================
 echo -e "${BLUE}========================================${NC}"
-echo -e "${BLUE}步骤 3/7: 部署配置文件${NC}"
+if [[ "$MYSQL_INSTALL_LOCAL" == "Y" ]]; then
+    echo -e "${BLUE}步骤 3/6: 部署配置文件${NC}"
+else
+    echo -e "${BLUE}步骤 3/7: 部署配置文件${NC}"
+fi
 echo -e "${BLUE}========================================${NC}"
 echo ""
 
@@ -184,7 +334,11 @@ echo ""
 # 步骤 4: 配置 MySQL 和 Redis
 # ============================================
 echo -e "${BLUE}========================================${NC}"
-echo -e "${BLUE}步骤 4/7: 配置 MySQL 和 Redis${NC}"
+if [[ "$MYSQL_INSTALL_LOCAL" == "Y" ]]; then
+    echo -e "${BLUE}步骤 4/6: 配置 MySQL 和 Redis${NC}"
+else
+    echo -e "${BLUE}步骤 4/7: 配置 MySQL 和 Redis${NC}"
+fi
 echo -e "${BLUE}========================================${NC}"
 echo ""
 
@@ -381,7 +535,11 @@ echo ""
 # 步骤 5: 初始化数据库
 # ============================================
 echo -e "${BLUE}========================================${NC}"
-echo -e "${BLUE}步骤 5/7: 初始化数据库${NC}"
+if [[ "$MYSQL_INSTALL_LOCAL" == "Y" ]]; then
+    echo -e "${BLUE}步骤 5/6: 初始化数据库${NC}"
+else
+    echo -e "${BLUE}步骤 5/7: 初始化数据库${NC}"
+fi
 echo -e "${BLUE}========================================${NC}"
 echo ""
 
@@ -429,7 +587,11 @@ echo ""
 # ============================================
 if [[ "$INSTALL_GEOIP" =~ ^[Yy]$ ]]; then
     echo -e "${BLUE}========================================${NC}"
-    echo -e "${BLUE}步骤 6/7: 安装 GeoIP 数据库${NC}"
+    if [[ "$MYSQL_INSTALL_LOCAL" == "Y" ]]; then
+        echo -e "${BLUE}步骤 6/6: 安装 GeoIP 数据库${NC}"
+    else
+        echo -e "${BLUE}步骤 6/7: 安装 GeoIP 数据库${NC}"
+    fi
     echo -e "${BLUE}========================================${NC}"
     echo ""
     
@@ -449,7 +611,11 @@ fi
 # ============================================
 if [[ "$OPTIMIZE_SYSTEM" =~ ^[Yy]$ ]]; then
     echo -e "${BLUE}========================================${NC}"
-    echo -e "${BLUE}步骤 7/7: 系统优化${NC}"
+    if [[ "$MYSQL_INSTALL_LOCAL" == "Y" ]]; then
+        echo -e "${BLUE}步骤 7/7: 系统优化${NC}"
+    else
+        echo -e "${BLUE}步骤 7/7: 系统优化${NC}"
+    fi
     echo -e "${BLUE}========================================${NC}"
     echo ""
     

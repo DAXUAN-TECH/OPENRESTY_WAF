@@ -1,7 +1,19 @@
 -- IP 工具函数
--- 路径：/usr/local/openresty/nginx/lua/waf/ip_utils.lua
+-- 路径：项目目录下的 lua/waf/ip_utils.lua（保持在项目目录，不复制到系统目录）
 
 local _M = {}
+
+-- 检查 bit 库是否可用（LuaJIT 内置）
+local bit = bit
+if not bit then
+    -- 如果 bit 库不可用，尝试加载（OpenResty 中通常已内置）
+    local ok, bit_module = pcall(require, "bit")
+    if ok then
+        bit = bit_module
+    else
+        error("bit library is required for CIDR matching")
+    end
+end
 
 -- 获取客户端真实 IP
 function _M.get_real_ip()

@@ -1,5 +1,5 @@
 -- WAF 配置文件
--- 路径：/usr/local/openresty/nginx/lua/config.lua
+-- 路径：项目目录下的 lua/config.lua（保持在项目目录，不复制到系统目录）
 
 local _M = {}
 
@@ -29,6 +29,7 @@ _M.redis = {
 _M.cache = {
     ttl = 60,  -- 缓存过期时间（秒）
     max_items = 10000,  -- 最大缓存项数
+    rule_list_ttl = 300,  -- IP 段规则列表缓存时间（秒，5分钟）
 }
 
 -- 日志配置
@@ -36,6 +37,9 @@ _M.log = {
     batch_size = 100,  -- 批量写入大小
     batch_interval = 1,  -- 批量写入间隔（秒）
     enable_async = true,  -- 是否异步写入
+    max_retry = 3,  -- 最大重试次数
+    retry_delay = 0.1,  -- 重试延迟（秒）
+    buffer_warn_threshold = 0.8,  -- 缓冲区警告阈值（80%）
 }
 
 -- 封控配置
@@ -68,10 +72,11 @@ _M.whitelist = {
 -- 地域封控配置
 _M.geo = {
     enable = false,  -- 是否启用地域封控
-    -- GeoIP2 数据库路径（放在 lua 目录下）
+    -- GeoIP2 数据库路径（相对于项目根目录）
     -- 使用 GeoLite2-City.mmdb 以支持省市级别查询
-    -- 数据库文件需要放在：/usr/local/openresty/nginx/lua/geoip/GeoLite2-City.mmdb
-    geoip_db_path = "/usr/local/openresty/nginx/lua/geoip/GeoLite2-City.mmdb",
+    -- 数据库文件需要放在项目目录的 lua/geoip/ 下
+    -- 路径会在运行时动态获取
+    geoip_db_path = nil,  -- 将在 init_by_lua 中动态设置
 }
 
 return _M

@@ -1,5 +1,5 @@
 -- MySQL 连接池管理
--- 路径：/usr/local/openresty/nginx/lua/waf/mysql_pool.lua
+-- 路径：项目目录下的 lua/waf/mysql_pool.lua（保持在项目目录，不复制到系统目录）
 
 local mysql = require "resty.mysql"
 local config = require "config"

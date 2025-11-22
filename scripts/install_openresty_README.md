@@ -49,14 +49,19 @@ sudo OPENRESTY_VERSION=1.21.4.1 ./scripts/install_openresty.sh
 
 脚本会执行以下步骤：
 
-1. **检测操作系统** - 自动识别 Linux 发行版
-2. **安装依赖包** - 根据系统类型安装编译工具和依赖库
-3. **检查现有安装** - 如果已安装，询问是否继续
-4. **安装 OpenResty** - 使用包管理器或从源码编译
-5. **创建目录结构** - 创建必要的配置和脚本目录
-6. **配置 OpenResty** - 创建 systemd 服务文件
-7. **安装 Lua 模块** - 安装常用的 Lua 模块
-8. **验证安装** - 检查安装是否成功
+1. **[1/8] 检测操作系统** - 自动识别 Linux 发行版（CentOS/RHEL、Ubuntu/Debian、Fedora、openSUSE、Arch Linux）
+2. **[2/8] 安装依赖包** - 根据系统类型安装编译工具和依赖库
+3. **[3/8] 检查现有安装** - 如果已安装，询问是否继续
+4. **[4/8] 安装 OpenResty** - 使用包管理器或从源码编译
+   - RedHat 系列：使用 yum/dnf 安装
+   - Debian 系列：使用 apt-get 安装
+   - openSUSE：使用 zypper 安装或源码编译
+   - Arch Linux：使用 yay 安装或源码编译
+   - 其他系统：自动从源码编译
+5. **[5/8] 创建目录结构** - 创建必要的配置和脚本目录
+6. **[6/8] 配置 OpenResty** - 创建 systemd 服务文件和符号链接
+7. **[7/8] 安装 Lua 模块** - 安装常用的 Lua 模块（lua-resty-mysql、lua-resty-redis、lua-resty-maxminddb）
+8. **[8/8] 验证安装** - 检查安装是否成功，测试配置文件语法
 
 ## 安装位置
 
@@ -263,32 +268,44 @@ systemctl status openresty
 
 安装完成后，需要：
 
-1. **部署项目文件**：
+1. **部署项目文件**（推荐使用部署脚本）：
    ```bash
-   # 复制配置文件
-   sudo cp 05-nginx.conf /usr/local/openresty/nginx/conf/nginx.conf
-   sudo cp 06-waf.conf /usr/local/openresty/nginx/conf/waf.conf
+   # 使用部署脚本（自动处理路径）
+   sudo ./scripts/deploy.sh
+   ```
    
-   # 复制 Lua 脚本
-   sudo cp -r lua/* /usr/local/openresty/nginx/lua/
+   或手动部署：
+   ```bash
+   # 只复制 nginx.conf（从 init_file 目录）
+   sudo cp init_file/nginx.conf /usr/local/openresty/nginx/conf/nginx.conf
+   # 注意：conf.d 和 lua 目录保持在项目目录，不复制
    ```
 
 2. **配置数据库**：
    ```bash
    # 创建数据库
-   mysql -u root -p < 04-数据库设计.sql
+   mysql -u root -p < init_file/数据库设计.sql
    
-   # 修改配置文件
-   sudo vim /usr/local/openresty/nginx/lua/config.lua
+   # 修改配置文件（项目目录）
+   vim lua/config.lua
    ```
 
-3. **安装 GeoIP2 数据库**（可选）：
+3. **安装 GeoIP2 数据库**（可选，用于地域封控）：
    ```bash
    sudo ./scripts/install_geoip.sh YOUR_ACCOUNT_ID YOUR_LICENSE_KEY
    ```
 
-4. **启动服务**：
+4. **系统优化**（推荐，提高性能）：
    ```bash
+   sudo ./scripts/optimize_system.sh
+   ```
+
+5. **启动服务**：
+   ```bash
+   # 测试配置
+   sudo /usr/local/openresty/bin/openresty -t
+   
+   # 启动服务
    sudo systemctl start openresty
    sudo systemctl enable openresty
    ```

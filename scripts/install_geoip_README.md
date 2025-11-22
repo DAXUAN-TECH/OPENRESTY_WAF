@@ -58,10 +58,12 @@ sudo ./scripts/install_geoip.sh YOUR_ACCOUNT_ID YOUR_LICENSE_KEY
 
 ## 安装位置
 
-数据库文件将安装到：
+数据库文件将安装到项目目录：
 ```
-/usr/local/openresty/nginx/lua/geoip/GeoLite2-City.mmdb
+$project_root/lua/geoip/GeoLite2-City.mmdb
 ```
+
+**注意**：数据库文件安装在项目目录，而不是系统目录，方便管理和版本控制。
 
 ## 获取 Account ID 和 License Key
 
@@ -197,18 +199,21 @@ curl -L -u ACCOUNT_ID:LICENSE_KEY \
 tar -xzf /tmp/GeoLite2-City.tar.gz -C /tmp/
 ```
 
-### 3. 复制文件
+### 3. 复制文件（到项目目录）
 
 ```bash
-sudo mkdir -p /usr/local/openresty/nginx/lua/geoip
-sudo cp /tmp/GeoLite2-City_*/GeoLite2-City.mmdb /usr/local/openresty/nginx/lua/geoip/
+# 创建目录（如果不存在）
+mkdir -p lua/geoip
+
+# 复制文件
+sudo cp /tmp/GeoLite2-City_*/GeoLite2-City.mmdb lua/geoip/
 ```
 
 ### 4. 设置权限
 
 ```bash
-sudo chown nobody:nobody /usr/local/openresty/nginx/lua/geoip/GeoLite2-City.mmdb
-sudo chmod 644 /usr/local/openresty/nginx/lua/geoip/GeoLite2-City.mmdb
+sudo chown nobody:nobody lua/geoip/GeoLite2-City.mmdb
+sudo chmod 644 lua/geoip/GeoLite2-City.mmdb
 ```
 
 ## 使用示例
@@ -230,15 +235,24 @@ sudo ./scripts/install_geoip.sh 'https://download.maxmind.com/geoip/databases/Ge
 安装完成后，验证安装：
 
 ```bash
-# 检查文件是否存在
-ls -lh /usr/local/openresty/nginx/lua/geoip/GeoLite2-City.mmdb
+# 检查文件是否存在（项目目录）
+ls -lh lua/geoip/GeoLite2-City.mmdb
 
 # 检查文件大小（应该约 30-50MB）
-du -h /usr/local/openresty/nginx/lua/geoip/GeoLite2-City.mmdb
+du -h lua/geoip/GeoLite2-City.mmdb
 
 # 检查文件权限
-ls -l /usr/local/openresty/nginx/lua/geoip/GeoLite2-City.mmdb
+ls -l lua/geoip/GeoLite2-City.mmdb
+
+# 检查配置文件（如果使用 Account ID + License Key）
+ls -l scripts/.geoip_config
 ```
+
+**安装脚本会自动验证**：
+- 检查文件是否存在
+- 检查文件大小是否正常（> 1MB）
+- 显示文件路径和大小
+- 提示下一步操作
 
 ## 后续配置
 
@@ -247,14 +261,59 @@ ls -l /usr/local/openresty/nginx/lua/geoip/GeoLite2-City.mmdb
 ```lua
 _M.geo = {
     enable = true,  -- 启用地域封控
-    geoip_db_path = "/usr/local/openresty/nginx/lua/geoip/GeoLite2-City.mmdb",
+    -- geoip_db_path 会在运行时自动设置，无需手动配置
+    -- 如果 geoip_db_path 为 nil，系统会自动检测项目路径
 }
 ```
+
+**注意**：
+- `geoip_db_path` 会在运行时自动设置（由 `lua/waf/init.lua` 处理）
+- 如果项目路径正确，无需手动配置 `geoip_db_path`
+- 数据库文件位置：`$project_root/lua/geoip/GeoLite2-City.mmdb`
 
 然后重启 OpenResty 服务：
 
 ```bash
 sudo systemctl restart openresty
+# 或
+sudo /usr/local/openresty/bin/openresty -s reload
+```
+
+## 定期更新数据库
+
+GeoIP 数据库需要定期更新以保持准确性。MaxMind 通常**每周更新一次**数据库。
+
+### 自动更新（推荐）
+
+安装脚本会自动：
+1. **保存配置**到 `scripts/.geoip_config`（用于后续自动更新）
+2. **询问是否设置 crontab**（每周一凌晨 2 点自动更新）
+
+#### 自动设置 crontab
+
+安装脚本会询问是否自动配置计划任务：
+- 输入 `y` 或 `yes`：自动添加 crontab 任务
+- 输入其他：跳过，可稍后手动配置
+
+#### 手动配置计划任务
+
+如果安装时跳过了 crontab 设置，可以手动配置：
+
+```bash
+# 编辑 crontab
+sudo crontab -e
+
+# 添加以下行（每周一凌晨 2 点更新）
+# 日志文件在项目目录的 logs 文件夹
+0 2 * * 1 /path/to/scripts/update_geoip.sh >> /path/to/project/logs/geoip_update.log 2>&1
+```
+
+详细说明请参考：[update_geoip_README.md](update_geoip_README.md)
+
+### 手动更新
+
+```bash
+sudo ./scripts/update_geoip.sh
 ```
 
 ## 参考文档
@@ -262,11 +321,12 @@ sudo systemctl restart openresty
 - [MaxMind 数据库更新文档](https://dev.maxmind.com/geoip/updating-databases/)
 - [MaxMind 账号页面](https://www.maxmind.com/en/accounts/current)
 - [License Key 页面](https://www.maxmind.com/en/accounts/current/license-key)
-- [地域封控使用示例](../08-地域封控使用示例.md)
+- [自动更新脚本说明](update_geoip_README.md)
+- [地域封控使用示例](../docs/地域封控使用示例.md)
 
 ## 总结
 
 - ✅ **使用 `install_geoip.sh`** - 功能全面，支持所有下载方式
 - ✅ **推荐使用 Account ID + License Key** - 最可靠的方式
 - ✅ **必须使用 GeoLite2-City.mmdb** - 支持省市级别封控
-- ✅ **定期更新数据库** - 建议每月更新一次
+- ✅ **定期更新数据库** - 建议每周更新一次（使用 `update_geoip.sh`）

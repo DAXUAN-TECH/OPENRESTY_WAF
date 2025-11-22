@@ -14,7 +14,13 @@ NC='\033[0m' # No Color
 # 配置变量
 ACCOUNT_ID="${1:-}"
 LICENSE_KEY="${2:-}"
-GEOIP_DIR="/usr/local/openresty/nginx/lua/geoip"
+
+# 获取项目根目录（脚本所在目录的父目录）
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+# GeoIP 数据库目录（项目目录下的 lua/geoip）
+GEOIP_DIR="${PROJECT_ROOT}/lua/geoip"
 TEMP_DIR="/tmp/geoip_install"
 # 使用新的 permalink URL（需要从 MaxMind 账号页面获取）
 # 或者使用通用的下载端点（需要 Account ID 和 License Key）
@@ -273,6 +279,113 @@ cleanup() {
     echo -e "${GREEN}✓ 清理完成${NC}"
 }
 
+# 保存配置到文件（用于后续自动更新）
+save_config() {
+    local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    local config_file="${script_dir}/.geoip_config"
+    
+    # 只有在使用 Account ID 和 License Key 时才保存配置
+    if [ "$USE_PERMALINK" != true ] && [ -n "$ACCOUNT_ID" ] && [ -n "$LICENSE_KEY" ]; then
+        cat > "$config_file" <<EOF
+# GeoIP2 数据库更新配置
+# 此文件由 install_geoip.sh 自动生成
+# 用于 update_geoip.sh 自动更新脚本
+# 请妥善保管此文件，不要泄露 Account ID 和 License Key
+
+ACCOUNT_ID="$ACCOUNT_ID"
+LICENSE_KEY="$LICENSE_KEY"
+EOF
+        chmod 600 "$config_file"
+        echo -e "${GREEN}✓ 配置已保存到: $config_file${NC}"
+        echo -e "${YELLOW}  注意: 此文件包含敏感信息，已设置权限为 600${NC}"
+    fi
+}
+
+# 设置 crontab 计划任务
+setup_crontab() {
+    # 只有在使用 Account ID 和 License Key 时才设置 crontab（需要配置文件）
+    if [ "$USE_PERMALINK" = true ]; then
+        echo -e "${YELLOW}⚠ 使用 Permalink URL，无法自动设置计划任务${NC}"
+        echo -e "${YELLOW}  请手动配置 crontab 或使用 Account ID + License Key 重新安装${NC}"
+        return 0
+    fi
+
+    if [ -z "$ACCOUNT_ID" ] || [ -z "$LICENSE_KEY" ]; then
+        echo -e "${YELLOW}⚠ 未提供 Account ID 或 License Key，跳过 crontab 设置${NC}"
+        return 0
+    fi
+
+    # 获取脚本目录和更新脚本路径
+    local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    local update_script="${script_dir}/update_geoip.sh"
+    
+    # 检查更新脚本是否存在
+    if [ ! -f "$update_script" ]; then
+        echo -e "${YELLOW}⚠ 更新脚本不存在: $update_script${NC}"
+        echo -e "${YELLOW}  跳过 crontab 设置${NC}"
+        return 0
+    fi
+
+    # 确保更新脚本有执行权限
+    chmod +x "$update_script" 2>/dev/null || true
+
+    # 构建 crontab 任务（每周一凌晨 2 点更新）
+    # 日志文件放在项目目录的 logs 文件夹
+    local log_file="${PROJECT_ROOT}/logs/geoip_update.log"
+    local cron_job="0 2 * * 1 ${update_script} >> ${log_file} 2>&1"
+    
+    # 检查是否已存在相同的任务
+    if crontab -l 2>/dev/null | grep -qF "$update_script"; then
+        echo -e "${YELLOW}⚠ 计划任务已存在，跳过添加${NC}"
+        echo -e "${GREEN}  现有任务:${NC}"
+        crontab -l 2>/dev/null | grep "$update_script" | sed 's/^/    /'
+        return 0
+    fi
+
+    # 询问用户是否要添加计划任务
+    echo ""
+    echo -e "${YELLOW}是否要自动配置计划任务（每周一凌晨 2 点更新数据库）？${NC}"
+    echo -e "${YELLOW}输入 y/yes 确认，其他任意键跳过:${NC}"
+    read -r response
+    
+    if [[ ! "$response" =~ ^[Yy][Ee][Ss]?$ ]]; then
+        echo -e "${YELLOW}已跳过 crontab 设置${NC}"
+        echo -e "${YELLOW}如需手动配置，请运行:${NC}"
+        echo "  sudo crontab -e"
+        echo "  # 添加以下行:"
+        echo "  $cron_job"
+        return 0
+    fi
+
+    # 添加 crontab 任务
+    local temp_cron=$(mktemp)
+    crontab -l 2>/dev/null > "$temp_cron" || true
+    
+    # 添加新任务
+    echo "$cron_job" >> "$temp_cron"
+    
+    # 安装新的 crontab
+    if crontab "$temp_cron" 2>/dev/null; then
+        rm -f "$temp_cron"
+        echo -e "${GREEN}✓ 计划任务已添加${NC}"
+        echo -e "${GREEN}  任务: $cron_job${NC}"
+        echo ""
+        echo -e "${GREEN}查看计划任务:${NC}"
+        echo "  sudo crontab -l | grep update_geoip"
+        echo ""
+        echo -e "${GREEN}查看更新日志:${NC}"
+        echo "  tail -f ${PROJECT_ROOT}/logs/geoip_update.log"
+        echo ""
+        echo -e "${GREEN}移除计划任务:${NC}"
+        echo "  sudo crontab -e"
+        echo "  # 删除包含 update_geoip.sh 的行"
+    else
+        rm -f "$temp_cron"
+        echo -e "${RED}✗ 添加计划任务失败${NC}"
+        echo -e "${YELLOW}  请手动配置 crontab${NC}"
+    fi
+}
+
 # 验证安装
 verify_installation() {
     echo ""
@@ -299,11 +412,14 @@ verify_installation() {
         echo "1. 在 lua/config.lua 中启用地域封控:"
         echo "   _M.geo = {"
         echo "       enable = true,"
-        echo "       geoip_db_path = \"$target_file\","
+        echo "       -- geoip_db_path 会在运行时自动设置，无需手动配置"
         echo "   }"
         echo ""
-        echo "2. 重启 OpenResty 服务"
-        echo "3. 添加地域封控规则（参考 08-地域封控使用示例.md）"
+        echo "2. 运行部署脚本（如果还未运行）:"
+        echo "   sudo ./scripts/deploy.sh"
+        echo ""
+        echo "3. 重启 OpenResty 服务"
+        echo "4. 添加地域封控规则（参考 docs/地域封控使用示例.md）"
     else
         echo -e "${RED}✗ 安装失败: 数据库文件不存在${NC}"
         exit 1
@@ -334,8 +450,10 @@ main() {
     download_database
     extract_database
     install_database
+    save_config  # 保存配置用于后续自动更新
     cleanup
     verify_installation
+    setup_crontab  # 设置计划任务
     
     echo ""
     echo -e "${GREEN}========================================${NC}"

@@ -1,5 +1,5 @@
 -- 日志采集模块
--- 路径：/usr/local/openresty/nginx/lua/waf/log_collect.lua
+-- 路径：项目目录下的 lua/waf/log_collect.lua（保持在项目目录，不复制到系统目录）
 
 local ip_utils = require "waf.ip_utils"
 local mysql_pool = require "waf.mysql_pool"
@@ -10,24 +10,12 @@ local _M = {}
 local log_buffer = ngx.shared.waf_log_buffer
 local BATCH_SIZE = config.log.batch_size
 local BATCH_INTERVAL = config.log.batch_interval
+local MAX_RETRY = config.log.max_retry or 3
+local RETRY_DELAY = config.log.retry_delay or 0.1
+local BUFFER_WARN_THRESHOLD = config.log.buffer_warn_threshold or 0.8
 local BUFFER_KEY = "log_queue"
 local TIMER_KEY = "log_timer"
-
--- 将日志添加到缓冲区
-local function add_to_buffer(log_data)
-    if not config.log.enable_async then
-        -- 同步写入（不推荐，性能较差）
-        return write_log_direct(log_data)
-    end
-
-    -- 异步写入：添加到共享内存缓冲区
-    local queue_size = log_buffer:lpush(BUFFER_KEY, ngx.encode_base64(cjson.encode(log_data)))
-    
-    -- 如果缓冲区达到批量大小，触发写入
-    if queue_size and queue_size >= BATCH_SIZE then
-        ngx.timer.at(0, flush_logs)
-    end
-end
+local BUFFER_SIZE_KEY = "log_buffer_size"  -- 用于监控缓冲区大小
 
 -- 直接写入日志（同步方式）
 local function write_log_direct(log_data)
@@ -57,11 +45,42 @@ local function write_log_direct(log_data)
     return true
 end
 
--- 批量刷新日志到数据库
-local function flush_logs(premature)
+-- 将日志添加到缓冲区
+local function add_to_buffer(log_data)
+    if not config.log.enable_async then
+        -- 同步写入（不推荐，性能较差）
+        return write_log_direct(log_data)
+    end
+
+    -- 异步写入：添加到共享内存缓冲区
+    local queue_size = log_buffer:lpush(BUFFER_KEY, ngx.encode_base64(cjson.encode(log_data)))
+    
+    -- 更新缓冲区大小监控
+    if queue_size then
+        log_buffer:set(BUFFER_SIZE_KEY, queue_size, 0)  -- 0 表示不过期
+        
+        -- 检查缓冲区溢出警告（基于批量大小的阈值）
+        -- 当队列大小超过批量大小的阈值倍数时，记录警告
+        local warn_threshold_size = math.floor(BATCH_SIZE * (1 / BUFFER_WARN_THRESHOLD))
+        if queue_size >= warn_threshold_size then
+            ngx.log(ngx.WARN, "log buffer size high: ", queue_size, 
+                    " (threshold: ", warn_threshold_size, ", batch_size: ", BATCH_SIZE, ")")
+        end
+    end
+    
+    -- 如果缓冲区达到批量大小，触发写入
+    if queue_size and queue_size >= BATCH_SIZE then
+        ngx.timer.at(0, flush_logs)
+    end
+end
+
+-- 批量刷新日志到数据库（带重试机制）
+local function flush_logs(premature, retry_count)
     if premature then
         return
     end
+    
+    retry_count = retry_count or 0
 
     local logs = {}
     local count = 0
@@ -84,6 +103,8 @@ local function flush_logs(premature)
     end
 
     if #logs == 0 then
+        -- 更新缓冲区大小监控
+        log_buffer:set(BUFFER_SIZE_KEY, 0, 0)
         return
     end
 
@@ -113,11 +134,30 @@ local function flush_logs(premature)
 
     local res, err = mysql_pool.batch_insert("access_logs", fields, values_list)
     if err then
-        ngx.log(ngx.ERR, "batch log insert error: ", err)
-        -- 失败时重新放回缓冲区（可选，避免日志丢失）
-        -- 但要注意防止无限循环
+        ngx.log(ngx.ERR, "batch log insert error: ", err, " (retry: ", retry_count, "/", MAX_RETRY, ")")
+        
+        -- 重试机制：如果未达到最大重试次数，延迟后重试
+        if retry_count < MAX_RETRY then
+            -- 将日志重新放回缓冲区（从前往后放，保持顺序）
+            -- 使用 lpush 将日志放回队列前面，因为队列是 lpush/rpop 的 FIFO 队列
+            for i = 1, #logs do
+                log_buffer:lpush(BUFFER_KEY, ngx.encode_base64(cjson.encode(logs[i])))
+            end
+            
+            -- 延迟后重试
+            local ok, timer_err = ngx.timer.at(RETRY_DELAY, flush_logs, retry_count + 1)
+            if not ok then
+                ngx.log(ngx.ERR, "failed to create retry timer: ", timer_err)
+            end
+        else
+            -- 达到最大重试次数，记录错误但不再重试（避免无限循环）
+            ngx.log(ngx.ERR, "batch log insert failed after ", MAX_RETRY, " retries, dropping ", #logs, " logs")
+        end
     else
         ngx.log(ngx.DEBUG, "batch inserted ", #logs, " logs")
+        -- 更新缓冲区大小监控
+        local remaining = log_buffer:llen(BUFFER_KEY) or 0
+        log_buffer:set(BUFFER_SIZE_KEY, remaining, 0)
     end
 end
 
@@ -129,7 +169,7 @@ function _M.init_worker()
             return
         end
 
-        flush_logs(false)
+        flush_logs(false, 0)
 
         -- 设置下一次定时器
         local ok, err = ngx.timer.at(BATCH_INTERVAL, periodic_flush)

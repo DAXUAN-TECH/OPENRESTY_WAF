@@ -1,5 +1,5 @@
 -- 地域封控模块
--- 路径：/usr/local/openresty/nginx/lua/waf/geo_block.lua
+-- 路径：项目目录下的 lua/waf/geo_block.lua（保持在项目目录，不复制到系统目录）
 -- 需要安装：opm get anjia0532/lua-resty-maxminddb
 -- 支持：国家级别封控（国外）和省市级别封控（国内）
 
@@ -185,6 +185,7 @@ function _M.check(client_ip)
                     local cjson = require "cjson"
                     return true, cjson.decode(rule_data)
                 end
+                -- 如果规则数据不存在，继续查询数据库获取规则信息
             elseif cached == "0" then
                 -- 已确认无匹配，继续下一个
             end

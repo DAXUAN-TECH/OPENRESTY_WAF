@@ -573,11 +573,21 @@ fi
 
 # 执行 SQL 脚本
 echo "执行 SQL 脚本..."
-if mysql -h"$MYSQL_HOST" -P"$MYSQL_PORT" -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" < "$SQL_FILE" 2>&1; then
+SQL_OUTPUT=$(mysql -h"$MYSQL_HOST" -P"$MYSQL_PORT" -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE" < "$SQL_FILE" 2>&1)
+SQL_EXIT_CODE=$?
+
+if [ $SQL_EXIT_CODE -eq 0 ]; then
     echo -e "${GREEN}✓ 数据库初始化成功${NC}"
 else
-    echo -e "${YELLOW}⚠ 数据库初始化可能有问题，请检查错误信息${NC}"
-    echo "如果数据库已存在，这是正常的"
+    # 检查是否是"表已存在"的错误（这是正常的）
+    if echo "$SQL_OUTPUT" | grep -qi "already exists\|Duplicate\|exists"; then
+        echo -e "${YELLOW}⚠ 部分表可能已存在，这是正常的${NC}"
+        echo -e "${GREEN}✓ 数据库初始化完成${NC}"
+    else
+        echo -e "${YELLOW}⚠ 数据库初始化可能有问题，请检查错误信息${NC}"
+        echo "错误信息："
+        echo "$SQL_OUTPUT" | head -20
+    fi
 fi
 
 echo ""

@@ -423,9 +423,28 @@ configure_mysql() {
         chkconfig mysql on 2>/dev/null || chkconfig mysqld on 2>/dev/null || true
     fi
     
-    # 等待 MySQL 启动
+    # 等待 MySQL 启动并检查服务状态
     echo "等待 MySQL 启动..."
-    sleep 5
+    local max_wait=30
+    local waited=0
+    while [ $waited -lt $max_wait ]; do
+        if mysqladmin ping -h localhost --silent 2>/dev/null; then
+            echo -e "${GREEN}✓ MySQL 服务已启动${NC}"
+            break
+        fi
+        sleep 2
+        waited=$((waited + 2))
+        echo -n "."
+    done
+    echo ""
+    
+    # 额外等待几秒确保 MySQL 完全就绪
+    if mysqladmin ping -h localhost --silent 2>/dev/null; then
+        sleep 3
+    else
+        echo -e "${YELLOW}⚠ MySQL 服务可能还在启动中，继续等待...${NC}"
+        sleep 5
+    fi
     
     # 获取临时 root 密码（MySQL 8.0）
     TEMP_PASSWORD=""
@@ -482,16 +501,63 @@ set_root_password() {
     fi
     
     if [ -n "$MYSQL_ROOT_PASSWORD" ]; then
-        # 等待 MySQL 完全启动
-        sleep 3
+        # 等待 MySQL 完全启动并检查服务状态
+        echo "等待 MySQL 服务完全启动..."
+        local max_wait=30
+        local waited=0
+        while [ $waited -lt $max_wait ]; do
+            if mysqladmin ping -h localhost --silent 2>/dev/null; then
+                echo -e "${GREEN}✓ MySQL 服务已就绪${NC}"
+                break
+            fi
+            sleep 2
+            waited=$((waited + 2))
+            echo -n "."
+        done
+        echo ""
+        
+        # 如果 MySQL 服务未就绪，等待更长时间
+        if ! mysqladmin ping -h localhost --silent 2>/dev/null; then
+            echo -e "${YELLOW}⚠ MySQL 服务可能还在启动中，继续等待...${NC}"
+            sleep 5
+        fi
         
         # 尝试使用临时密码登录并修改（MySQL 8.0 需要使用 --connect-expired-password）
         if [ -n "$TEMP_PASSWORD" ]; then
-            if mysql --connect-expired-password -u root -p"${TEMP_PASSWORD}" -e "ALTER USER 'root'@'localhost' IDENTIFIED BY '${MYSQL_ROOT_PASSWORD}';" 2>/dev/null; then
+            echo "正在使用临时密码修改 root 密码..."
+            local error_output=$(mysql --connect-expired-password -u root -p"${TEMP_PASSWORD}" -e "ALTER USER 'root'@'localhost' IDENTIFIED BY '${MYSQL_ROOT_PASSWORD}';" 2>&1)
+            local exit_code=$?
+            
+            if [ $exit_code -eq 0 ]; then
                 echo -e "${GREEN}✓ root 密码已设置${NC}"
-                return 0
+                # 验证新密码是否生效
+                if mysql -u root -p"${MYSQL_ROOT_PASSWORD}" -e "SELECT 1;" > /dev/null 2>&1; then
+                    echo -e "${GREEN}✓ 新密码验证成功${NC}"
+                    return 0
+                else
+                    echo -e "${YELLOW}⚠ 密码已设置，但验证失败，请手动验证${NC}"
+                    return 0
+                fi
             else
-                echo -e "${YELLOW}⚠ 使用临时密码设置失败，尝试无密码设置${NC}"
+                echo -e "${RED}✗ 使用临时密码修改密码失败${NC}"
+                echo -e "${YELLOW}错误信息:${NC}"
+                echo "$error_output" | grep -v "Warning: Using a password" || echo "$error_output"
+                echo ""
+                echo -e "${YELLOW}可能的原因:${NC}"
+                echo "  1. MySQL 服务未完全启动"
+                echo "  2. 临时密码已过期或无效"
+                echo "  3. 临时密码不正确"
+                echo ""
+                echo -e "${YELLOW}建议:${NC}"
+                echo "  1. 检查 MySQL 服务状态: systemctl status mysqld"
+                echo "  2. 检查 MySQL 日志: tail -f /var/log/mysqld.log"
+                echo "  3. 手动修改密码:"
+                echo "     mysql --connect-expired-password -u root -p'${TEMP_PASSWORD}' -e \"ALTER USER 'root'@'localhost' IDENTIFIED BY 'your_new_password';\""
+                echo ""
+                read -p "是否继续尝试其他方式？[y/N]: " CONTINUE_TRY
+                if [[ ! "$CONTINUE_TRY" =~ ^[Yy]$ ]]; then
+                    return 1
+                fi
             fi
         fi
         

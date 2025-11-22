@@ -1,7 +1,12 @@
 #!/bin/bash
 
 # OpenResty 一键安装和配置脚本
-# 支持：CentOS/RHEL, Ubuntu/Debian, Fedora, openSUSE, Arch Linux
+# 支持多种 Linux 发行版：
+#   - RedHat 系列：CentOS, RHEL, Fedora, Rocky Linux, AlmaLinux, Oracle Linux, Amazon Linux
+#   - Debian 系列：Debian, Ubuntu, Linux Mint, Kali Linux, Raspbian
+#   - SUSE 系列：openSUSE, SLES
+#   - Arch 系列：Arch Linux, Manjaro
+#   - 其他：Alpine Linux, Gentoo (从源码编译)
 # 用途：自动检测系统类型并安装配置 OpenResty
 
 set -e
@@ -24,22 +29,91 @@ NGINX_LOG_DIR="${INSTALL_DIR}/nginx/logs"
 detect_os() {
     echo -e "${BLUE}[1/8] 检测操作系统...${NC}"
     
+    # 优先使用 /etc/os-release (标准方法)
     if [ -f /etc/os-release ]; then
         . /etc/os-release
         OS=$ID
+        OS_LIKE=${ID_LIKE:-""}
         OS_VERSION=$VERSION_ID
+        
+        # 处理特殊发行版
+        case $OS in
+            "ol"|"oracle")
+                OS="oraclelinux"
+                ;;
+            "amzn"|"amazon")
+                OS="amazonlinux"
+                ;;
+            "raspbian")
+                OS="debian"
+                ;;
+            "linuxmint")
+                OS="ubuntu"  # Linux Mint 基于 Ubuntu
+                ;;
+            "kali")
+                OS="debian"  # Kali Linux 基于 Debian
+                ;;
+        esac
+        
+        # 如果没有版本号，尝试从其他文件获取
+        if [ -z "$OS_VERSION" ]; then
+            if [ -f /etc/redhat-release ]; then
+                OS_VERSION=$(cat /etc/redhat-release | sed 's/.*release \([0-9.]*\).*/\1/')
+            elif [ -f /etc/debian_version ]; then
+                OS_VERSION=$(cat /etc/debian_version)
+            fi
+        fi
     elif [ -f /etc/redhat-release ]; then
-        OS="centos"
-        OS_VERSION=$(cat /etc/redhat-release | sed 's/.*release \([0-9.]*\).*/\1/')
+        # RedHat 系列
+        local release_info=$(cat /etc/redhat-release)
+        if echo "$release_info" | grep -qi "centos"; then
+            OS="centos"
+        elif echo "$release_info" | grep -qi "red hat\|rhel"; then
+            OS="rhel"
+        elif echo "$release_info" | grep -qi "rocky"; then
+            OS="rocky"
+        elif echo "$release_info" | grep -qi "alma"; then
+            OS="almalinux"
+        elif echo "$release_info" | grep -qi "oracle"; then
+            OS="oraclelinux"
+        elif echo "$release_info" | grep -qi "amazon"; then
+            OS="amazonlinux"
+        else
+            OS="centos"  # 默认
+        fi
+        OS_VERSION=$(echo "$release_info" | sed 's/.*release \([0-9.]*\).*/\1/')
     elif [ -f /etc/debian_version ]; then
+        # Debian 系列
         OS="debian"
         OS_VERSION=$(cat /etc/debian_version)
+    elif [ -f /etc/alpine-release ]; then
+        # Alpine Linux
+        OS="alpine"
+        OS_VERSION=$(cat /etc/alpine-release)
+    elif [ -f /etc/arch-release ]; then
+        # Arch Linux
+        OS="arch"
+        OS_VERSION="rolling"
+    elif [ -f /etc/SuSE-release ]; then
+        # SUSE
+        OS="opensuse"
+        OS_VERSION=$(grep VERSION /etc/SuSE-release | awk '{print $3}')
     else
-        echo -e "${RED}错误: 无法检测操作系统类型${NC}"
-        exit 1
+        echo -e "${YELLOW}警告: 无法自动检测操作系统类型${NC}"
+        echo -e "${YELLOW}将尝试使用通用方法（从源码编译）${NC}"
+        OS="unknown"
+        OS_VERSION="unknown"
     fi
     
-    echo -e "${GREEN}✓ 检测到系统: ${OS} ${OS_VERSION}${NC}"
+    # 显示检测结果
+    if [ "$OS" != "unknown" ]; then
+        echo -e "${GREEN}✓ 检测到系统: ${OS} ${OS_VERSION}${NC}"
+        if [ -n "$OS_LIKE" ] && [ "$OS_LIKE" != "$OS" ]; then
+            echo -e "${BLUE}  基于: ${OS_LIKE}${NC}"
+        fi
+    else
+        echo -e "${YELLOW}⚠ 系统类型: 未知（将使用源码编译）${NC}"
+    fi
 }
 
 # 检查是否为 root 用户
@@ -97,13 +171,31 @@ install_deps_arch() {
     echo -e "${GREEN}✓ 依赖包安装完成${NC}"
 }
 
+# 安装依赖（Alpine Linux）
+install_deps_alpine() {
+    echo -e "${BLUE}[2/8] 安装依赖包（Alpine Linux）...${NC}"
+    
+    apk add --no-cache gcc g++ make pcre-dev zlib-dev openssl-dev perl readline-dev wget curl
+    
+    echo -e "${GREEN}✓ 依赖包安装完成${NC}"
+}
+
+# 安装依赖（Gentoo）
+install_deps_gentoo() {
+    echo -e "${BLUE}[2/8] 安装依赖包（Gentoo）...${NC}"
+    
+    emerge --ask=n --quiet-build y gcc make pcre zlib openssl perl readline wget curl
+    
+    echo -e "${GREEN}✓ 依赖包安装完成${NC}"
+}
+
 # 安装依赖
 install_dependencies() {
     case $OS in
-        centos|rhel|fedora|rocky|almalinux)
+        centos|rhel|fedora|rocky|almalinux|oraclelinux|amazonlinux)
             install_deps_redhat
             ;;
-        ubuntu|debian)
+        ubuntu|debian|linuxmint|raspbian|kali)
             install_deps_debian
             ;;
         opensuse*|sles)
@@ -112,15 +204,36 @@ install_dependencies() {
         arch|manjaro)
             install_deps_arch
             ;;
+        alpine)
+            install_deps_alpine
+            ;;
+        gentoo)
+            install_deps_gentoo
+            ;;
         *)
             echo -e "${YELLOW}警告: 未识别的系统类型，尝试使用通用方法安装依赖${NC}"
-            if command -v yum &> /dev/null; then
+            # 根据包管理器自动选择
+            if command -v yum &> /dev/null || command -v dnf &> /dev/null; then
+                echo -e "${BLUE}检测到 yum/dnf，使用 RedHat 系列方法${NC}"
                 install_deps_redhat
             elif command -v apt-get &> /dev/null; then
+                echo -e "${BLUE}检测到 apt-get，使用 Debian 系列方法${NC}"
                 install_deps_debian
+            elif command -v zypper &> /dev/null; then
+                echo -e "${BLUE}检测到 zypper，使用 SUSE 系列方法${NC}"
+                install_deps_suse
+            elif command -v pacman &> /dev/null; then
+                echo -e "${BLUE}检测到 pacman，使用 Arch 系列方法${NC}"
+                install_deps_arch
+            elif command -v apk &> /dev/null; then
+                echo -e "${BLUE}检测到 apk，使用 Alpine 方法${NC}"
+                install_deps_alpine
+            elif command -v emerge &> /dev/null; then
+                echo -e "${BLUE}检测到 emerge，使用 Gentoo 方法${NC}"
+                install_deps_gentoo
             else
-                echo -e "${RED}错误: 无法确定包管理器${NC}"
-                exit 1
+                echo -e "${YELLOW}⚠ 无法确定包管理器，将尝试从源码编译（需要手动安装依赖）${NC}"
+                echo -e "${BLUE}所需依赖: gcc, g++, make, pcre-dev, zlib-dev, openssl-dev, perl, readline-dev${NC}"
             fi
             ;;
     esac
@@ -144,9 +257,23 @@ check_existing() {
     echo -e "${GREEN}✓ 检查完成${NC}"
 }
 
-# 安装 OpenResty（CentOS/RHEL/Fedora）
+# 安装 OpenResty（CentOS/RHEL/Fedora/Rocky/AlmaLinux/Oracle Linux/Amazon Linux）
 install_openresty_redhat() {
     echo -e "${BLUE}[4/8] 安装 OpenResty（RedHat 系列）...${NC}"
+    
+    # 确定仓库名称（根据实际系统）
+    local repo_os=$OS
+    case $OS in
+        oraclelinux|ol)
+            repo_os="centos"  # Oracle Linux 使用 CentOS 仓库
+            ;;
+        amazonlinux|amzn)
+            repo_os="amazonlinux"  # Amazon Linux 有专门仓库
+            ;;
+        rocky|almalinux)
+            repo_os="centos"  # Rocky 和 AlmaLinux 使用 CentOS 仓库
+            ;;
+    esac
     
     # 添加 OpenResty 仓库
     if [ ! -f /etc/yum.repos.d/openresty.repo ]; then
@@ -193,7 +320,7 @@ install_openresty_redhat() {
             cat > /etc/yum.repos.d/openresty.repo <<EOF
 [openresty]
 name=Official OpenResty Repository
-baseurl=https://openresty.org/package/${OS}/\$releasever/\$basearch
+baseurl=https://openresty.org/package/${repo_os}/\$releasever/\$basearch
 gpgcheck=1
 enabled=1
 gpgkey=https://openresty.org/package/pubkey.gpg
@@ -203,7 +330,7 @@ EOF
             cat > /etc/yum.repos.d/openresty.repo <<EOF
 [openresty]
 name=Official OpenResty Repository
-baseurl=https://openresty.org/package/${OS}/\$releasever/\$basearch
+baseurl=https://openresty.org/package/${repo_os}/\$releasever/\$basearch
 gpgcheck=0
 enabled=1
 EOF
@@ -248,21 +375,77 @@ EOF
     fi
 }
 
-# 安装 OpenResty（Ubuntu/Debian）
+# 安装 OpenResty（Ubuntu/Debian/Linux Mint/Kali Linux）
 install_openresty_debian() {
     echo -e "${BLUE}[4/8] 安装 OpenResty（Debian 系列）...${NC}"
     
+    # 确定仓库名称（根据实际系统）
+    local repo_os=$OS
+    case $OS in
+        linuxmint)
+            repo_os="ubuntu"  # Linux Mint 使用 Ubuntu 仓库
+            ;;
+        kali|raspbian)
+            repo_os="debian"  # Kali 和 Raspbian 使用 Debian 仓库
+            ;;
+    esac
+    
+    # 获取发行版代号
+    local distro_codename
+    if command -v lsb_release &> /dev/null; then
+        distro_codename=$(lsb_release -sc)
+    elif [ -f /etc/os-release ]; then
+        . /etc/os-release
+        distro_codename=$VERSION_CODENAME
+        if [ -z "$distro_codename" ]; then
+            # 尝试从 VERSION_ID 推断
+            case $OS in
+                ubuntu)
+                    case $VERSION_ID in
+                        20.04) distro_codename="focal" ;;
+                        22.04) distro_codename="jammy" ;;
+                        18.04) distro_codename="bionic" ;;
+                        *) distro_codename="focal" ;;  # 默认
+                    esac
+                    ;;
+                debian)
+                    case $VERSION_ID in
+                        11) distro_codename="bullseye" ;;
+                        12) distro_codename="bookworm" ;;
+                        10) distro_codename="buster" ;;
+                        *) distro_codename="bullseye" ;;  # 默认
+                    esac
+                    ;;
+            esac
+        fi
+    fi
+    
+    if [ -z "$distro_codename" ]; then
+        echo -e "${YELLOW}⚠ 无法确定发行版代号，尝试使用通用方法${NC}"
+        distro_codename="focal"  # 默认使用 Ubuntu 20.04
+    fi
+    
     # 添加 OpenResty 仓库
     if [ ! -f /etc/apt/sources.list.d/openresty.list ]; then
-        wget -qO - https://openresty.org/package/pubkey.gpg | apt-key add -
-        echo "deb http://openresty.org/package/${OS} $(lsb_release -sc) main" > /etc/apt/sources.list.d/openresty.list
+        # 尝试使用 apt-key（旧方法）
+        if wget -qO - https://openresty.org/package/pubkey.gpg | apt-key add - 2>/dev/null; then
+            echo "deb http://openresty.org/package/${repo_os} ${distro_codename} main" > /etc/apt/sources.list.d/openresty.list
+        else
+            # 使用新方法（apt 2.4+）
+            mkdir -p /etc/apt/keyrings
+            wget -qO - https://openresty.org/package/pubkey.gpg | gpg --dearmor -o /etc/apt/keyrings/openresty.gpg
+            echo "deb [signed-by=/etc/apt/keyrings/openresty.gpg] http://openresty.org/package/${repo_os} ${distro_codename} main" > /etc/apt/sources.list.d/openresty.list
+        fi
         apt-get update
     fi
     
     # 安装 OpenResty
-    apt-get install -y openresty
-    
-    echo -e "${GREEN}✓ OpenResty 安装完成${NC}"
+    if apt-get install -y openresty 2>&1; then
+        echo -e "${GREEN}✓ OpenResty 安装完成${NC}"
+    else
+        echo -e "${YELLOW}⚠ 包管理器安装失败，尝试从源码编译安装...${NC}"
+        install_openresty_from_source
+    fi
 }
 
 # 安装 OpenResty（openSUSE）
@@ -274,17 +457,49 @@ install_openresty_suse() {
     install_openresty_from_source
 }
 
-# 安装 OpenResty（Arch Linux）
+# 安装 OpenResty（Arch Linux/Manjaro）
 install_openresty_arch() {
     echo -e "${BLUE}[4/8] 安装 OpenResty（Arch Linux）...${NC}"
     
     # Arch Linux 使用 AUR，需要 yay 或手动安装
+    INSTALL_SUCCESS=0
+    
     if command -v yay &> /dev/null; then
-        yay -S --noconfirm openresty
-    else
-        echo -e "${YELLOW}注意: 需要 yay 或手动从 AUR 安装${NC}"
-        install_openresty_from_source
+        echo "使用 yay 从 AUR 安装..."
+        if yay -S --noconfirm openresty 2>&1; then
+            INSTALL_SUCCESS=1
+        fi
+    elif command -v paru &> /dev/null; then
+        echo "使用 paru 从 AUR 安装..."
+        if paru -S --noconfirm openresty 2>&1; then
+            INSTALL_SUCCESS=1
+        fi
     fi
+    
+    if [ "$INSTALL_SUCCESS" -eq 0 ]; then
+        echo -e "${YELLOW}注意: 未找到 AUR 助手（yay/paru），从源码编译安装${NC}"
+        install_openresty_from_source
+    else
+        echo -e "${GREEN}✓ OpenResty 安装完成${NC}"
+    fi
+}
+
+# 安装 OpenResty（Alpine Linux）
+install_openresty_alpine() {
+    echo -e "${BLUE}[4/8] 安装 OpenResty（Alpine Linux）...${NC}"
+    
+    # Alpine Linux 没有官方 OpenResty 包，从源码编译
+    echo -e "${YELLOW}注意: Alpine Linux 需要从源码编译安装${NC}"
+    install_openresty_from_source
+}
+
+# 安装 OpenResty（Gentoo）
+install_openresty_gentoo() {
+    echo -e "${BLUE}[4/8] 安装 OpenResty（Gentoo）...${NC}"
+    
+    # Gentoo 可能需要从源码编译或使用 overlay
+    echo -e "${YELLOW}注意: Gentoo 需要从源码编译安装或使用 overlay${NC}"
+    install_openresty_from_source
 }
 
 # 从源码编译安装 OpenResty
@@ -330,10 +545,10 @@ install_openresty_from_source() {
 # 安装 OpenResty
 install_openresty() {
     case $OS in
-        centos|rhel|fedora|rocky|almalinux)
+        centos|rhel|fedora|rocky|almalinux|oraclelinux|amazonlinux)
             install_openresty_redhat
             ;;
-        ubuntu|debian)
+        ubuntu|debian|linuxmint|raspbian|kali)
             install_openresty_debian
             ;;
         opensuse*|sles)
@@ -342,8 +557,14 @@ install_openresty() {
         arch|manjaro)
             install_openresty_arch
             ;;
+        alpine)
+            install_openresty_alpine
+            ;;
+        gentoo)
+            install_openresty_gentoo
+            ;;
         *)
-            echo -e "${YELLOW}警告: 未识别的系统类型，使用源码编译安装${NC}"
+            echo -e "${YELLOW}警告: 未识别的系统类型 (${OS})，使用源码编译安装${NC}"
             install_openresty_from_source
             ;;
     esac

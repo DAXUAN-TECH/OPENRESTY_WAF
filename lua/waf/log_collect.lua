@@ -20,7 +20,7 @@ local BUFFER_SIZE_KEY = "log_buffer_size"  -- 用于监控缓冲区大小
 -- 直接写入日志（同步方式）
 local function write_log_direct(log_data)
     local sql = [[
-        INSERT INTO access_logs 
+        INSERT INTO waf_access_logs 
         (client_ip, request_path, request_method, status_code, user_agent, referer, request_time, response_time)
         VALUES (?, ?, ?, ?, ?, ?, FROM_UNIXTIME(?), ?)
     ]]
@@ -132,7 +132,7 @@ local function flush_logs(premature, retry_count)
         })
     end
 
-    local res, err = mysql_pool.batch_insert("access_logs", fields, values_list)
+    local res, err = mysql_pool.batch_insert("waf_access_logs", fields, values_list)
     if err then
         ngx.log(ngx.ERR, "batch log insert error: ", err, " (retry: ", retry_count, "/", MAX_RETRY, ")")
         

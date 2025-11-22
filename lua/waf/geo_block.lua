@@ -192,7 +192,7 @@ function _M.check(client_ip)
         else
             -- 查询数据库
             local sql = [[
-                SELECT id, rule_name, rule_value, priority FROM block_rules 
+                SELECT id, rule_name, rule_value, priority FROM waf_block_rules 
                 WHERE status = 1 
                 AND rule_type = 'geo'
                 AND rule_value = ?

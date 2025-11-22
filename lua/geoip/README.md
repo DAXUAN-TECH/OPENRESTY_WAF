@@ -77,11 +77,11 @@ _M.geo = {
 
 ```sql
 -- 封控美国
-INSERT INTO block_rules (rule_type, rule_value, rule_name, description, status, priority)
+INSERT INTO waf_block_rules (rule_type, rule_value, rule_name, description, status, priority)
 VALUES ('geo', 'US', '封控美国', '封控所有来自美国的访问', 1, 80);
 
 -- 封控日本
-INSERT INTO block_rules (rule_type, rule_value, rule_name, description, status, priority)
+INSERT INTO waf_block_rules (rule_type, rule_value, rule_name, description, status, priority)
 VALUES ('geo', 'JP', '封控日本', '封控所有来自日本的访问', 1, 80);
 ```
 
@@ -89,15 +89,15 @@ VALUES ('geo', 'JP', '封控日本', '封控所有来自日本的访问', 1, 80)
 
 ```sql
 -- 封控北京
-INSERT INTO block_rules (rule_type, rule_value, rule_name, description, status, priority)
+INSERT INTO waf_block_rules (rule_type, rule_value, rule_name, description, status, priority)
 VALUES ('geo', 'CN:Beijing', '封控北京', '封控所有来自北京的访问', 1, 90);
 
 -- 封控上海
-INSERT INTO block_rules (rule_type, rule_value, rule_name, description, status, priority)
+INSERT INTO waf_block_rules (rule_type, rule_value, rule_name, description, status, priority)
 VALUES ('geo', 'CN:Shanghai', '封控上海', '封控所有来自上海的访问', 1, 90);
 
 -- 封控广东
-INSERT INTO block_rules (rule_type, rule_value, rule_name, description, status, priority)
+INSERT INTO waf_block_rules (rule_type, rule_value, rule_name, description, status, priority)
 VALUES ('geo', 'CN:Guangdong', '封控广东', '封控所有来自广东的访问', 1, 90);
 ```
 
@@ -105,11 +105,11 @@ VALUES ('geo', 'CN:Guangdong', '封控广东', '封控所有来自广东的访�
 
 ```sql
 -- 封控北京市（精确到城市）
-INSERT INTO block_rules (rule_type, rule_value, rule_name, description, status, priority)
+INSERT INTO waf_block_rules (rule_type, rule_value, rule_name, description, status, priority)
 VALUES ('geo', 'CN:Beijing:Beijing', '封控北京市', '封控所有来自北京市的访问', 1, 100);
 
 -- 封控上海市（精确到城市）
-INSERT INTO block_rules (rule_type, rule_value, rule_name, description, status, priority)
+INSERT INTO waf_block_rules (rule_type, rule_value, rule_name, description, status, priority)
 VALUES ('geo', 'CN:Shanghai:Shanghai', '封控上海市', '封控所有来自上海市的访问', 1, 100);
 ```
 

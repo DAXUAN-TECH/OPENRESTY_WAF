@@ -30,7 +30,7 @@ local function check_whitelist(client_ip)
 
     -- 查询数据库（先查询单个 IP）
     local sql = [[
-        SELECT id, ip_type, ip_value FROM whitelist 
+        SELECT id, ip_type, ip_value FROM waf_whitelist 
         WHERE status = 1 
         AND ip_type = 'single_ip'
         AND ip_value = ?
@@ -65,7 +65,7 @@ local function check_whitelist(client_ip)
     -- 如果缓存不存在或已过期，从数据库查询
     if not rules then
         local sql = [[
-            SELECT id, ip_type, ip_value FROM whitelist 
+            SELECT id, ip_type, ip_value FROM waf_whitelist 
             WHERE status = 1 
             AND ip_type = 'ip_range'
         ]]
@@ -193,7 +193,7 @@ local function check_ip_range(client_ip)
     -- 如果缓存不存在或已过期，从数据库查询
     if not rules then
         local sql = [[
-            SELECT id, rule_name, rule_value, priority FROM block_rules 
+            SELECT id, rule_name, rule_value, priority FROM waf_block_rules 
             WHERE status = 1 
             AND rule_type = 'ip_range'
             AND (start_time IS NULL OR start_time <= NOW())
@@ -260,7 +260,7 @@ local function log_block(client_ip, rule)
     local user_agent = ngx.var.http_user_agent or ""
     
     local sql = [[
-        INSERT INTO block_logs (client_ip, rule_id, rule_name, block_time, request_path, user_agent)
+        INSERT INTO waf_block_logs (client_ip, rule_id, rule_name, block_time, request_path, user_agent)
         VALUES (?, ?, ?, NOW(), ?, ?)
     ]]
 

@@ -402,16 +402,49 @@ install_lua_modules() {
     
     # 检查 opm 是否可用
     if [ -f "${INSTALL_DIR}/bin/opm" ]; then
-        echo "安装 lua-resty-mysql..."
-        ${INSTALL_DIR}/bin/opm get openresty/lua-resty-mysql || echo -e "${YELLOW}警告: lua-resty-mysql 安装失败${NC}"
+        local critical_modules_failed=0
         
-        echo "安装 lua-resty-redis..."
-        ${INSTALL_DIR}/bin/opm get openresty/lua-resty-redis || echo -e "${YELLOW}警告: lua-resty-redis 安装失败（可选）${NC}"
+        echo "安装 lua-resty-mysql（关键模块）..."
+        if ${INSTALL_DIR}/bin/opm get openresty/lua-resty-mysql 2>&1; then
+            echo -e "${GREEN}  ✓ lua-resty-mysql 安装成功${NC}"
+        else
+            echo -e "${RED}  ✗ lua-resty-mysql 安装失败（关键模块）${NC}"
+            critical_modules_failed=1
+        fi
         
-        echo "安装 lua-resty-maxminddb..."
-        ${INSTALL_DIR}/bin/opm get anjia0532/lua-resty-maxminddb || echo -e "${YELLOW}警告: lua-resty-maxminddb 安装失败（可选）${NC}"
+        echo "安装 lua-resty-redis（可选模块）..."
+        if ${INSTALL_DIR}/bin/opm get openresty/lua-resty-redis 2>&1; then
+            echo -e "${GREEN}  ✓ lua-resty-redis 安装成功${NC}"
+        else
+            echo -e "${YELLOW}  ⚠ lua-resty-redis 安装失败（可选，不影响基本功能）${NC}"
+        fi
+        
+        echo "安装 lua-resty-maxminddb（可选模块）..."
+        if ${INSTALL_DIR}/bin/opm get anjia0532/lua-resty-maxminddb 2>&1; then
+            echo -e "${GREEN}  ✓ lua-resty-maxminddb 安装成功${NC}"
+        else
+            echo -e "${YELLOW}  ⚠ lua-resty-maxminddb 安装失败（可选，仅影响地域封控功能）${NC}"
+        fi
+        
+        if [ $critical_modules_failed -eq 1 ]; then
+            echo ""
+            echo -e "${YELLOW}⚠ 关键模块 lua-resty-mysql 安装失败${NC}"
+            echo -e "${YELLOW}这将影响 WAF 的数据库连接功能${NC}"
+            echo ""
+            echo -e "${BLUE}手动安装方法:${NC}"
+            echo "1. 使用 opm 手动安装:"
+            echo "   ${INSTALL_DIR}/bin/opm get openresty/lua-resty-mysql"
+            echo ""
+            echo "2. 或从源码安装:"
+            echo "   cd /tmp"
+            echo "   git clone https://github.com/openresty/lua-resty-mysql.git"
+            echo "   cp -r lua-resty-mysql/lib/resty ${INSTALL_DIR}/site/lualib/resty/"
+            echo ""
+            echo -e "${YELLOW}安装完成后，请重启 OpenResty 服务${NC}"
+        fi
     else
         echo -e "${YELLOW}警告: opm 未找到，跳过 Lua 模块安装${NC}"
+        echo -e "${YELLOW}请手动安装 Lua 模块或使用源码编译方式${NC}"
     fi
     
     echo -e "${GREEN}✓ Lua 模块安装完成${NC}"

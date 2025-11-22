@@ -149,12 +149,22 @@ download_database() {
         url="${PERMALINK_URL}"
         echo "使用 Permalink URL 下载"
         echo "URL: $url"
-        echo -e "${YELLOW}注意: Permalink URL 仍然需要 Account ID 和 License Key 认证${NC}"
-        echo -e "${YELLOW}如果没有提供，将尝试不使用认证下载（可能会失败）${NC}"
+        echo ""
+        echo -e "${YELLOW}重要提示: Permalink URL 仍然需要 Account ID 和 License Key 进行 Basic Authentication${NC}"
+        echo -e "${YELLOW}根据 MaxMind 文档，即使使用 Permalink URL，也需要提供认证信息${NC}"
+        echo ""
+        
         # 如果提供了 Account ID 和 License Key，使用它们
         if [ -n "$ACCOUNT_ID" ] && [ -n "$LICENSE_KEY" ]; then
             curl_opts=(-u "${ACCOUNT_ID}:${LICENSE_KEY}")
-            echo "使用 Account ID 和 License Key 进行认证"
+            echo -e "${GREEN}✓ 使用 Account ID 和 License Key 进行认证${NC}"
+        else
+            echo -e "${RED}✗ 错误: 使用 Permalink URL 时必须提供 Account ID 和 License Key${NC}"
+            echo -e "${YELLOW}请重新运行脚本并提供认证信息:${NC}"
+            echo "  sudo $0 [ACCOUNT_ID] [LICENSE_KEY]"
+            echo "  或"
+            echo "  sudo $0 [PERMALINK_URL] [ACCOUNT_ID] [LICENSE_KEY]"
+            exit 1
         fi
     else
         # 使用 Account ID 和 License Key（Basic Authentication）

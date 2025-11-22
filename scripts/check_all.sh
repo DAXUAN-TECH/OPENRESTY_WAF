@@ -116,32 +116,69 @@ echo ""
 # 4. 检查脚本逻辑完整性
 echo -e "${BLUE}[4/5] 检查脚本逻辑完整性...${NC}"
 
-# 检查 install_geoip.sh
+# 检查函数调用关系
+check_script_logic() {
+    local script_file="$1"
+    local script_name=$(basename "$script_file")
+    local functions_defined=$(grep -E "^[a-z_]+\(\)" "$script_file" 2>/dev/null | sed 's/()//' | wc -l)
+    local functions_called=$(grep -E "[a-z_]+\(\)" "$script_file" 2>/dev/null | grep -v "^#" | grep -v "^[a-z_]*()" | wc -l)
+    
+    if [ "$functions_defined" -gt 0 ]; then
+        # 检查 main 函数是否存在
+        if grep -q "^main\|^main()" "$script_file"; then
+            check_ok "$script_name 有 main 函数"
+        else
+            check_warning "$script_name 未找到 main 函数（可能直接执行）"
+        fi
+        
+        # 检查函数是否被调用
+        local unused_functions=0
+        while IFS= read -r func_name; do
+            if [ -n "$func_name" ]; then
+                # 检查函数是否被调用（排除自身定义）
+                local call_count=$(grep -c "$func_name" "$script_file" 2>/dev/null || echo "0")
+                if [ "$call_count" -le 1 ]; then
+                    ((unused_functions++))
+                fi
+            fi
+        done < <(grep -E "^[a-z_]+\(\)" "$script_file" 2>/dev/null | sed 's/()//')
+        
+        if [ $unused_functions -gt 0 ]; then
+            check_warning "$script_name 可能有 $unused_functions 个未使用的函数"
+        fi
+    fi
+}
+
+# 检查各个脚本
+for script in scripts/*.sh; do
+    if [ -f "$script" ] && [ "$(basename "$script")" != "common.sh" ]; then
+        check_script_logic "$script"
+    fi
+done
+
+# 检查关键脚本的特定函数
 if grep -q "check_root\|get_credentials\|download_database\|extract_database\|install_database\|save_config\|setup_crontab" scripts/install_geoip.sh; then
-    check_ok "install_geoip.sh 逻辑完整"
+    check_ok "install_geoip.sh 关键函数存在"
 else
-    check_error "install_geoip.sh 逻辑不完整"
+    check_error "install_geoip.sh 关键函数缺失"
 fi
 
-# 检查 update_geoip.sh
 if grep -q "load_config\|check_dependencies\|download_database\|extract_database\|install_database" scripts/update_geoip.sh; then
-    check_ok "update_geoip.sh 逻辑完整"
+    check_ok "update_geoip.sh 关键函数存在"
 else
-    check_error "update_geoip.sh 逻辑不完整"
+    check_error "update_geoip.sh 关键函数缺失"
 fi
 
-# 检查 deploy.sh
 if grep -q "PROJECT_ROOT\|NGINX_CONF_DIR\|sed.*project_root" scripts/deploy.sh; then
-    check_ok "deploy.sh 逻辑完整"
+    check_ok "deploy.sh 关键逻辑存在"
 else
-    check_error "deploy.sh 逻辑不完整"
+    check_error "deploy.sh 关键逻辑缺失"
 fi
 
-# 检查 optimize_system.sh
 if grep -q "CPU_CORES\|WORKER_PROCESSES\|ULIMIT_NOFILE\|BACKUP_DIR" scripts/optimize_system.sh; then
-    check_ok "optimize_system.sh 逻辑完整"
+    check_ok "optimize_system.sh 关键变量存在"
 else
-    check_error "optimize_system.sh 逻辑不完整"
+    check_error "optimize_system.sh 关键变量缺失"
 fi
 
 echo ""

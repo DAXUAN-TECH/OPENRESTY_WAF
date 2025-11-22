@@ -172,8 +172,32 @@ install_database() {
         log_info "备份旧文件到: $backup_file"
         cp "$target_file" "$backup_file"
         
-        # 只保留最近 5 个备份
-        find "$GEOIP_DIR" -name "GeoLite2-City.mmdb.backup.*" -type f | sort -r | tail -n +6 | xargs rm -f 2>/dev/null || true
+        # 检查磁盘空间（至少需要 500MB 可用空间）
+        local available_space=$(df -m "$GEOIP_DIR" | awk 'NR==2 {print $4}')
+        if [ "$available_space" -lt 500 ]; then
+            log_warn "磁盘可用空间不足 500MB，将清理旧备份文件"
+        fi
+        
+        # 清理旧备份：保留最近 5 个备份，或总大小超过 1GB 时清理
+        local backup_files=($(find "$GEOIP_DIR" -name "GeoLite2-City.mmdb.backup.*" -type f | sort -r))
+        local backup_count=${#backup_files[@]}
+        local total_backup_size=0
+        
+        # 计算备份文件总大小
+        for backup in "${backup_files[@]}"; do
+            local size=$(stat -f%z "$backup" 2>/dev/null || stat -c%s "$backup" 2>/dev/null || echo "0")
+            total_backup_size=$((total_backup_size + size))
+        done
+        
+        # 如果备份数量超过 5 个或总大小超过 1GB，清理旧备份
+        if [ $backup_count -gt 5 ] || [ $total_backup_size -gt 1073741824 ]; then
+            log_info "清理旧备份文件（当前: $backup_count 个，总大小: $(($total_backup_size / 1048576))MB）"
+            # 保留最近 5 个备份
+            for ((i=5; i<${#backup_files[@]}; i++)); do
+                rm -f "${backup_files[$i]}" 2>/dev/null || true
+                log_info "已删除旧备份: $(basename "${backup_files[$i]}")"
+            done
+        fi
     fi
 
     # 复制新文件

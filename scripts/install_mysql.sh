@@ -346,23 +346,41 @@ create_database() {
     
     # 创建数据库
     echo "正在创建数据库 ${DB_NAME}..."
+    local db_create_output=""
+    local db_create_exit_code=0
+    
     if [ -n "$MYSQL_ROOT_PASSWORD" ]; then
-        mysql -u root -p"${MYSQL_ROOT_PASSWORD}" <<EOF
+        db_create_output=$(mysql -u root -p"${MYSQL_ROOT_PASSWORD}" <<EOF 2>&1
 CREATE DATABASE IF NOT EXISTS ${DB_NAME} DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
 EOF
+)
+        db_create_exit_code=$?
     else
-        mysql -u root <<EOF
+        db_create_output=$(mysql -u root <<EOF 2>&1
 CREATE DATABASE IF NOT EXISTS ${DB_NAME} DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
 EOF
+)
+        db_create_exit_code=$?
     fi
     
-    if [ $? -eq 0 ]; then
+    if [ $db_create_exit_code -eq 0 ]; then
         echo -e "${GREEN}✓ 数据库 ${DB_NAME} 创建成功（字符集：utf8mb4，排序规则：utf8mb4_general_ci）${NC}"
         # 保存数据库名称到全局变量并导出
         MYSQL_DATABASE="$DB_NAME"
         export CREATED_DB_NAME="$DB_NAME"
     else
         echo -e "${RED}✗ 数据库创建失败${NC}"
+        echo -e "${RED}错误信息: ${db_create_output}${NC}"
+        echo -e "${YELLOW}可能的原因:${NC}"
+        echo "  1. MySQL 服务未启动"
+        echo "  2. root 密码不正确"
+        echo "  3. 数据库名称已存在且权限不足"
+        echo "  4. MySQL 连接失败"
+        echo ""
+        echo -e "${YELLOW}建议:${NC}"
+        echo "  1. 检查 MySQL 服务状态: systemctl status mysqld"
+        echo "  2. 验证 root 密码: mysql -u root -p"
+        echo "  3. 手动创建数据库: mysql -u root -p -e \"CREATE DATABASE ${DB_NAME} CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;\""
         return 1
     fi
 }

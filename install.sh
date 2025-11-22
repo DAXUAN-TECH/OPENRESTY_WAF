@@ -53,7 +53,7 @@ fi
 # 配置信息收集
 # ============================================
 echo -e "${BLUE}========================================${NC}"
-echo -e "${BLUE}步骤 1/7: 收集配置信息${NC}"
+echo -e "${BLUE}步骤 1: 收集配置信息${NC}"
 echo -e "${BLUE}========================================${NC}"
 echo ""
 
@@ -311,15 +311,29 @@ echo ""
 echo -e "${GREEN}✓ 配置信息收集完成${NC}"
 echo ""
 
+# 计算总步骤数（在收集完配置后）
+TOTAL_STEPS=7
+if [[ "$MYSQL_INSTALL_LOCAL" == "Y" ]]; then
+    TOTAL_STEPS=$((TOTAL_STEPS - 1))  # 本地 MySQL 不需要单独配置步骤
+fi
+if [[ "$REDIS_INSTALL_LOCAL" == "Y" ]]; then
+    TOTAL_STEPS=$((TOTAL_STEPS - 1))  # 本地 Redis 不需要单独配置步骤
+fi
+if [[ "$INSTALL_GEOIP" != "Y" ]]; then
+    TOTAL_STEPS=$((TOTAL_STEPS - 1))  # 不安装 GeoIP 时减少步骤
+fi
+if [[ "$OPTIMIZE_SYSTEM" != "Y" ]]; then
+    TOTAL_STEPS=$((TOTAL_STEPS - 1))  # 不优化系统时减少步骤
+fi
+
+# 步骤计数器
+CURRENT_STEP=2
+
 # ============================================
 # 步骤 2: 安装 OpenResty
 # ============================================
 echo -e "${BLUE}========================================${NC}"
-if [[ "$MYSQL_INSTALL_LOCAL" == "Y" ]]; then
-    echo -e "${BLUE}步骤 2/6: 安装 OpenResty${NC}"
-else
-    echo -e "${BLUE}步骤 2/7: 安装 OpenResty${NC}"
-fi
+echo -e "${BLUE}步骤 ${CURRENT_STEP}/${TOTAL_STEPS}: 安装 OpenResty${NC}"
 echo -e "${BLUE}========================================${NC}"
 echo ""
 
@@ -351,12 +365,9 @@ echo ""
 # ============================================
 # 步骤 3: 部署配置文件
 # ============================================
+CURRENT_STEP=$((CURRENT_STEP + 1))
 echo -e "${BLUE}========================================${NC}"
-if [[ "$MYSQL_INSTALL_LOCAL" == "Y" ]]; then
-    echo -e "${BLUE}步骤 3/6: 部署配置文件${NC}"
-else
-    echo -e "${BLUE}步骤 3/7: 部署配置文件${NC}"
-fi
+echo -e "${BLUE}步骤 ${CURRENT_STEP}/${TOTAL_STEPS}: 部署配置文件${NC}"
 echo -e "${BLUE}========================================${NC}"
 echo ""
 
@@ -372,12 +383,9 @@ echo ""
 # ============================================
 # 步骤 4: 配置 MySQL 和 Redis
 # ============================================
+CURRENT_STEP=$((CURRENT_STEP + 1))
 echo -e "${BLUE}========================================${NC}"
-if [[ "$MYSQL_INSTALL_LOCAL" == "Y" ]]; then
-    echo -e "${BLUE}步骤 4/6: 配置 MySQL 和 Redis${NC}"
-else
-    echo -e "${BLUE}步骤 4/7: 配置 MySQL 和 Redis${NC}"
-fi
+echo -e "${BLUE}步骤 ${CURRENT_STEP}/${TOTAL_STEPS}: 配置 MySQL 和 Redis${NC}"
 echo -e "${BLUE}========================================${NC}"
 echo ""
 

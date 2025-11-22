@@ -61,11 +61,38 @@ sed -i "s|include /path/to/project/conf.d/set_conf/\*\.conf|include $PROJECT_ROO
 sed -i "s|include /path/to/project/conf.d/vhost_conf/\*\.conf|include $PROJECT_ROOT/conf.d/vhost_conf/*.conf|g" "$NGINX_CONF_DIR/nginx.conf"
 
 # 更新 conf.d 配置文件中的路径（在项目目录中直接修改）
-# 更新 lua.conf 中的路径（替换 $project_root 变量为实际路径）
-sed -i "s|\$project_root/lua|$PROJECT_ROOT/lua|g" "$PROJECT_ROOT/conf.d/set_conf/lua.conf"
+# 检查并替换所有配置文件中的路径占位符
+echo "检查并更新 conf.d 配置文件中的路径..."
 
-# 更新 log.conf 中的日志路径（替换 $project_root 变量为实际路径）
-sed -i "s|\$project_root/logs/access.log|$PROJECT_ROOT/logs/access.log|g" "$PROJECT_ROOT/conf.d/set_conf/log.conf"
+# 需要更新的配置文件列表
+CONF_FILES=(
+    "$PROJECT_ROOT/conf.d/set_conf/lua.conf"
+    "$PROJECT_ROOT/conf.d/set_conf/log.conf"
+    "$PROJECT_ROOT/conf.d/set_conf/waf.conf"
+    "$PROJECT_ROOT/conf.d/set_conf/performance.conf"
+    "$PROJECT_ROOT/conf.d/vhost_conf/default.conf"
+)
+
+# 路径替换模式
+for conf_file in "${CONF_FILES[@]}"; do
+    if [ -f "$conf_file" ]; then
+        # 替换 $project_root 变量为实际路径
+        sed -i "s|\$project_root|$PROJECT_ROOT|g" "$conf_file"
+        # 替换 /path/to/project 占位符
+        sed -i "s|/path/to/project|$PROJECT_ROOT|g" "$conf_file"
+        echo "  ✓ 已更新: $(basename "$conf_file")"
+    fi
+done
+
+# 检查是否还有未替换的路径占位符
+REMAINING_PATHS=$(grep -r "/path/to/project\|\\\$project_root" "$PROJECT_ROOT/conf.d" 2>/dev/null | wc -l)
+if [ "$REMAINING_PATHS" -gt 0 ]; then
+    echo -e "${YELLOW}⚠ 警告: 仍有 $REMAINING_PATHS 处路径占位符未替换${NC}"
+    echo "未替换的路径:"
+    grep -rn "/path/to/project\|\\\$project_root" "$PROJECT_ROOT/conf.d" 2>/dev/null | head -10
+else
+    echo -e "${GREEN}✓ 所有路径占位符已替换${NC}"
+fi
 
 echo -e "${GREEN}✓ 路径配置已更新${NC}"
 

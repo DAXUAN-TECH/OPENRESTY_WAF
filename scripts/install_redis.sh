@@ -285,14 +285,33 @@ install_redis() {
 configure_redis() {
     echo -e "${BLUE}[5/7] 配置 Redis...${NC}"
     
-    # 查找 Redis 配置文件
+    # 查找 Redis 配置文件（更全面的路径检测）
     REDIS_CONF=""
-    if [ -f /etc/redis/redis.conf ]; then
-        REDIS_CONF="/etc/redis/redis.conf"
-    elif [ -f /etc/redis.conf ]; then
-        REDIS_CONF="/etc/redis.conf"
-    elif [ -f /usr/local/etc/redis.conf ]; then
-        REDIS_CONF="/usr/local/etc/redis.conf"
+    # 常见配置文件路径
+    local possible_paths=(
+        "/etc/redis/redis.conf"
+        "/etc/redis.conf"
+        "/usr/local/etc/redis.conf"
+        "/usr/local/redis/etc/redis.conf"
+        "/opt/redis/etc/redis.conf"
+        "/var/lib/redis/redis.conf"
+    )
+    
+    for path in "${possible_paths[@]}"; do
+        if [ -f "$path" ]; then
+            REDIS_CONF="$path"
+            echo "找到 Redis 配置文件: $path"
+            break
+        fi
+    done
+    
+    # 如果仍未找到，尝试使用 find 命令搜索
+    if [ -z "$REDIS_CONF" ]; then
+        local found_conf=$(find /etc /usr/local /opt -name "redis.conf" -type f 2>/dev/null | head -n 1)
+        if [ -n "$found_conf" ]; then
+            REDIS_CONF="$found_conf"
+            echo "通过搜索找到 Redis 配置文件: $found_conf"
+        fi
     fi
     
     if [ -n "$REDIS_CONF" ]; then
@@ -377,32 +396,86 @@ start_redis() {
     fi
     
     # 启动服务
+    local service_started=false
+    
     if command -v systemctl &> /dev/null; then
         systemctl daemon-reload
         systemctl enable redis 2>/dev/null || systemctl enable redis-server 2>/dev/null || true
-        systemctl start redis 2>/dev/null || systemctl start redis-server 2>/dev/null || {
-            # 如果服务启动失败，尝试直接启动
-            echo -e "${YELLOW}⚠ systemd 服务启动失败，尝试直接启动${NC}"
-            if command -v redis-server &> /dev/null; then
-                redis-server /etc/redis/redis.conf --daemonize yes 2>/dev/null || \
-                redis-server /etc/redis.conf --daemonize yes 2>/dev/null || true
+        
+        if systemctl start redis 2>/dev/null || systemctl start redis-server 2>/dev/null; then
+            # 等待服务启动
+            sleep 2
+            # 检查服务状态
+            if systemctl is-active --quiet redis 2>/dev/null || systemctl is-active --quiet redis-server 2>/dev/null; then
+                service_started=true
+                echo -e "${GREEN}✓ Redis 服务启动成功（systemd）${NC}"
+            else
+                echo -e "${YELLOW}⚠ systemd 服务启动后状态异常${NC}"
             fi
-        }
+        else
+            echo -e "${YELLOW}⚠ systemd 服务启动失败，尝试直接启动${NC}"
+            # 如果服务启动失败，尝试直接启动
+            if command -v redis-server &> /dev/null; then
+                local redis_conf_path=""
+                if [ -n "$REDIS_CONF" ] && [ -f "$REDIS_CONF" ]; then
+                    redis_conf_path="$REDIS_CONF"
+                elif [ -f /etc/redis/redis.conf ]; then
+                    redis_conf_path="/etc/redis/redis.conf"
+                elif [ -f /etc/redis.conf ]; then
+                    redis_conf_path="/etc/redis.conf"
+                fi
+                
+                if [ -n "$redis_conf_path" ]; then
+                    if redis-server "$redis_conf_path" --daemonize yes 2>/dev/null; then
+                        sleep 2
+                        if redis-cli ping > /dev/null 2>&1; then
+                            service_started=true
+                            echo -e "${GREEN}✓ Redis 服务启动成功（直接启动）${NC}"
+                        fi
+                    fi
+                fi
+            fi
+        fi
     elif command -v service &> /dev/null; then
-        service redis start 2>/dev/null || service redis-server start 2>/dev/null || true
-        chkconfig redis on 2>/dev/null || chkconfig redis-server on 2>/dev/null || true
+        if service redis start 2>/dev/null || service redis-server start 2>/dev/null; then
+            chkconfig redis on 2>/dev/null || chkconfig redis-server on 2>/dev/null || true
+            sleep 2
+            if pgrep -x redis-server > /dev/null 2>&1; then
+                service_started=true
+                echo -e "${GREEN}✓ Redis 服务启动成功（service）${NC}"
+            fi
+        fi
     else
         # 直接启动
         if command -v redis-server &> /dev/null; then
-            redis-server /etc/redis/redis.conf --daemonize yes 2>/dev/null || \
-            redis-server /etc/redis.conf --daemonize yes 2>/dev/null || true
+            local redis_conf_path=""
+            if [ -n "$REDIS_CONF" ] && [ -f "$REDIS_CONF" ]; then
+                redis_conf_path="$REDIS_CONF"
+            elif [ -f /etc/redis/redis.conf ]; then
+                redis_conf_path="/etc/redis/redis.conf"
+            elif [ -f /etc/redis.conf ]; then
+                redis_conf_path="/etc/redis.conf"
+            fi
+            
+            if [ -n "$redis_conf_path" ]; then
+                if redis-server "$redis_conf_path" --daemonize yes 2>/dev/null; then
+                    sleep 2
+                    if redis-cli ping > /dev/null 2>&1; then
+                        service_started=true
+                        echo -e "${GREEN}✓ Redis 服务启动成功（直接启动）${NC}"
+                    fi
+                fi
+            fi
         fi
     fi
     
-    # 等待服务启动
-    sleep 2
-    
-    echo -e "${GREEN}✓ Redis 服务启动完成${NC}"
+    if [ "$service_started" = false ]; then
+        echo -e "${YELLOW}⚠ Redis 服务启动可能失败，请手动检查${NC}"
+        echo -e "${YELLOW}建议:${NC}"
+        echo "  1. 检查 Redis 配置文件: $REDIS_CONF"
+        echo "  2. 手动启动: redis-server $REDIS_CONF"
+        echo "  3. 查看日志: tail -f /var/log/redis/redis-server.log"
+    fi
 }
 
 # 验证安装

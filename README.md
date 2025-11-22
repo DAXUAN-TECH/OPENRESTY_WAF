@@ -409,22 +409,22 @@ _M.geo = {
 
 ```sql
 -- 单个 IP 封控
-INSERT INTO block_rules (rule_type, rule_value, rule_name, status, priority)
+INSERT INTO waf_block_rules (rule_type, rule_value, rule_name, status, priority)
 VALUES ('single_ip', '192.168.1.100', '封控恶意IP', 1, 100);
 
 -- IP 段封控（CIDR）
-INSERT INTO block_rules (rule_type, rule_value, rule_name, status, priority)
+INSERT INTO waf_block_rules (rule_type, rule_value, rule_name, status, priority)
 VALUES ('ip_range', '192.168.1.0/24', '封控IP段', 1, 90);
 
 -- IP 范围封控
-INSERT INTO block_rules (rule_type, rule_value, rule_name, status, priority)
+INSERT INTO waf_block_rules (rule_type, rule_value, rule_name, status, priority)
 VALUES ('ip_range', '192.168.1.1-192.168.1.100', '封控IP范围', 1, 90);
 ```
 
 ### 添加白名单
 
 ```sql
-INSERT INTO whitelist (ip_type, ip_value, description, status)
+INSERT INTO waf_whitelist (ip_type, ip_value, description, status)
 VALUES ('single_ip', '192.168.1.50', '管理员IP', 1);
 ```
 
@@ -432,13 +432,13 @@ VALUES ('single_ip', '192.168.1.50', '管理员IP', 1);
 
 ```sql
 -- 查询最近 1 小时的访问记录
-SELECT * FROM access_logs 
+SELECT * FROM waf_access_logs 
 WHERE request_time >= DATE_SUB(NOW(), INTERVAL 1 HOUR)
 ORDER BY request_time DESC;
 
 -- 统计 IP 访问次数
 SELECT client_ip, COUNT(*) as count 
-FROM access_logs 
+FROM waf_access_logs 
 WHERE request_time >= DATE_SUB(NOW(), INTERVAL 24 HOUR)
 GROUP BY client_ip 
 ORDER BY count DESC;

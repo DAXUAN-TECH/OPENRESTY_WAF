@@ -135,6 +135,19 @@ function _M.batch_insert(table_name, fields, values_list)
         return nil, "empty values list"
     end
 
+    -- 表名白名单检查（安全增强）
+    local allowed_tables = {
+        ["waf_access_logs"] = true,
+        ["waf_block_logs"] = true,
+        ["waf_block_rules"] = true,
+        ["waf_whitelist"] = true,
+    }
+    
+    if not allowed_tables[table_name] then
+        ngx.log(ngx.ERR, "batch_insert: invalid table name: ", table_name)
+        return nil, "invalid table name"
+    end
+
     local db, err = _M.get_connection()
     if not db then
         return nil, err

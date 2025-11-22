@@ -125,7 +125,7 @@ sudo ./scripts/install_geoip.sh
 **注意**：
 - 需要有效的 MaxMind License Key
 - 如果不使用地域封控功能，可以跳过此步骤
-- 详细说明请参考 `scripts/README.md`
+- 详细说明请参考 `scripts/install_geoip_README.md`
 
 ### 5. 部署文件
 

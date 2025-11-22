@@ -159,7 +159,7 @@ local function flush_logs(premature, retry_count)
         end
     else
         ngx.log(ngx.DEBUG, "batch inserted ", #logs, " logs")
-        -- 更新缓冲区大小监控
+        -- 更新缓冲区大小监控（使用 llen 获取实际队列长度）
         local remaining = log_buffer:llen(BUFFER_KEY) or 0
         log_buffer:set(BUFFER_SIZE_KEY, remaining, 0)
     end

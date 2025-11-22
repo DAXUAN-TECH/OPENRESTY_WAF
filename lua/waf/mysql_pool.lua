@@ -15,6 +15,8 @@ local function escape_sql(str)
     if type(str) == "number" then
         return tostring(str)
     end
+    -- 转义反斜杠（必须在单引号之前）
+    str = string.gsub(str, "\\", "\\\\")
     -- 转义单引号
     str = string.gsub(str, "'", "''")
     return "'" .. str .. "'"

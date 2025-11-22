@@ -799,14 +799,41 @@ create_database() {
     local db_create_output=""
     local db_create_exit_code=0
     
-    # 尝试连接并创建数据库（支持临时密码）
+    # 尝试连接并创建数据库（支持临时密码和特殊字符密码）
     if [ -n "$MYSQL_ROOT_PASSWORD" ]; then
-        # 先尝试使用提供的密码
+        # 先尝试使用提供的密码（直接方式）
         db_create_output=$(mysql -u root -p"${MYSQL_ROOT_PASSWORD}" <<EOF 2>&1
 CREATE DATABASE IF NOT EXISTS ${DB_NAME} DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
 EOF
 )
         db_create_exit_code=$?
+        
+        # 如果失败，可能是密码包含特殊字符，尝试使用临时配置文件方式
+        if [ $db_create_exit_code -ne 0 ]; then
+            echo -e "${YELLOW}⚠ 使用密码参数方式失败，尝试使用配置文件方式...${NC}"
+            # 创建临时配置文件
+            local temp_cnf=$(mktemp)
+            cat > "$temp_cnf" <<CNF_EOF
+[client]
+user=root
+password=${MYSQL_ROOT_PASSWORD}
+CNF_EOF
+            chmod 600 "$temp_cnf"
+            
+            # 使用配置文件方式创建数据库
+            db_create_output=$(mysql --defaults-file="$temp_cnf" <<EOF 2>&1
+CREATE DATABASE IF NOT EXISTS ${DB_NAME} DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
+EOF
+)
+            db_create_exit_code=$?
+            
+            # 清理临时文件
+            rm -f "$temp_cnf"
+            
+            if [ $db_create_exit_code -eq 0 ]; then
+                echo -e "${GREEN}✓ 使用配置文件方式创建数据库成功${NC}"
+            fi
+        fi
         
         # 如果失败且使用的是临时密码，提示用户需要先修改密码
         if [ $db_create_exit_code -ne 0 ] && [ "$MYSQL_ROOT_PASSWORD" = "$TEMP_PASSWORD" ]; then
@@ -860,18 +887,42 @@ EOF
         export CREATED_DB_NAME="$DB_NAME"
     else
         echo -e "${RED}✗ 数据库创建失败${NC}"
-        echo -e "${RED}错误信息: ${db_create_output}${NC}"
+        # 显示详细错误信息（过滤掉警告信息）
+        local error_msg=$(echo "$db_create_output" | grep -v "Warning: Using a password" | head -5)
+        if [ -n "$error_msg" ]; then
+            echo -e "${RED}错误信息:${NC}"
+            echo "$error_msg"
+        else
+            echo -e "${RED}错误信息: ${db_create_output}${NC}"
+        fi
+        echo ""
         echo -e "${YELLOW}可能的原因:${NC}"
         echo "  1. MySQL 服务未启动"
-        echo "  2. root 密码不正确"
+        echo "  2. root 密码不正确或包含特殊字符"
         echo "  3. 数据库名称已存在且权限不足"
         echo "  4. MySQL 连接失败"
+        echo "  5. 密码包含特殊字符，shell 解析错误"
         echo ""
         echo -e "${YELLOW}建议:${NC}"
         echo "  1. 检查 MySQL 服务状态: systemctl status mysqld"
-        echo "  2. 验证 root 密码: mysql -u root -p"
-        echo "  3. 手动创建数据库: mysql -u root -p -e \"CREATE DATABASE ${DB_NAME} CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;\""
-        return 1
+        echo "  2. 验证 root 密码: mysql -u root -p（交互式输入密码）"
+        echo "  3. 手动创建数据库:"
+        echo "     mysql -u root -p"
+        echo "     # 然后执行: CREATE DATABASE ${DB_NAME} CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;"
+        echo "  4. 或者使用配置文件方式:"
+        echo "     echo '[client]' > ~/.my.cnf"
+        echo "     echo 'user=root' >> ~/.my.cnf"
+        echo "     echo 'password=your_password' >> ~/.my.cnf"
+        echo "     chmod 600 ~/.my.cnf"
+        echo "     mysql -e \"CREATE DATABASE ${DB_NAME} CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;\""
+        echo ""
+        read -p "是否跳过数据库创建？[y/N]: " SKIP_DB
+        if [[ "$SKIP_DB" =~ ^[Yy]$ ]]; then
+            echo -e "${YELLOW}跳过数据库创建${NC}"
+            return 0
+        else
+            return 1
+        fi
     fi
 }
 

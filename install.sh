@@ -59,10 +59,10 @@ echo ""
 
 # MySQL 配置
 echo -e "${CYAN}MySQL 数据库配置${NC}"
-read -p "使用本地 MySQL 还是外部 MySQL？[本地/外部] [本地]: " MYSQL_TYPE
-MYSQL_TYPE="${MYSQL_TYPE:-本地}"
+read -p "是否使用本地 MySQL？[Y/n]: " MYSQL_USE_LOCAL
+MYSQL_USE_LOCAL="${MYSQL_USE_LOCAL:-Y}"
 
-if [[ "$MYSQL_TYPE" =~ ^[外Ee] ]]; then
+if [[ ! "$MYSQL_USE_LOCAL" =~ ^[Yy]$ ]]; then
     # 外部 MySQL
     MYSQL_INSTALL_LOCAL="N"
     echo -e "${GREEN}使用外部 MySQL 数据库${NC}"
@@ -167,10 +167,10 @@ read -p "是否使用 Redis 缓存？[y/N]: " USE_REDIS
 USE_REDIS="${USE_REDIS:-N}"
 
 if [[ "$USE_REDIS" =~ ^[Yy]$ ]]; then
-    read -p "使用本地 Redis 还是外部 Redis？[本地/外部] [本地]: " REDIS_TYPE
-    REDIS_TYPE="${REDIS_TYPE:-本地}"
+    read -p "是否使用本地 Redis？[Y/n]: " REDIS_USE_LOCAL
+    REDIS_USE_LOCAL="${REDIS_USE_LOCAL:-Y}"
     
-    if [[ "$REDIS_TYPE" =~ ^[外Ee] ]]; then
+    if [[ ! "$REDIS_USE_LOCAL" =~ ^[Yy]$ ]]; then
         # 外部 Redis
         REDIS_INSTALL_LOCAL="N"
         echo -e "${GREEN}使用外部 Redis${NC}"

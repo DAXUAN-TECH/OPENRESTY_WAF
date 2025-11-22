@@ -457,7 +457,26 @@ configure_mysql() {
 set_root_password() {
     echo -e "${BLUE}[5/7] 设置 MySQL root 密码...${NC}"
     
-    if [ -z "$MYSQL_ROOT_PASSWORD" ]; then
+    # 如果检测到临时密码，主动提示用户设置密码
+    if [ -z "$MYSQL_ROOT_PASSWORD" ] && [ -n "$TEMP_PASSWORD" ]; then
+        echo -e "${YELLOW}检测到 MySQL 临时密码，建议立即修改 root 密码${NC}"
+        echo -e "${YELLOW}临时密码: ${TEMP_PASSWORD}${NC}"
+        echo ""
+        read -p "是否现在设置 root 密码？[Y/n]: " SET_PASSWORD
+        SET_PASSWORD="${SET_PASSWORD:-Y}"
+        if [[ "$SET_PASSWORD" =~ ^[Yy]$ ]]; then
+            read -sp "请输入新的 MySQL root 密码: " MYSQL_ROOT_PASSWORD
+            echo ""
+            if [ -z "$MYSQL_ROOT_PASSWORD" ]; then
+                echo -e "${RED}错误: 密码不能为空${NC}"
+                echo -e "${YELLOW}跳过 root 密码设置${NC}"
+                return 0
+            fi
+        else
+            echo -e "${YELLOW}跳过 root 密码设置${NC}"
+            return 0
+        fi
+    elif [ -z "$MYSQL_ROOT_PASSWORD" ]; then
         read -sp "请输入 MySQL root 密码（直接回车跳过）: " MYSQL_ROOT_PASSWORD
         echo ""
     fi
@@ -470,6 +489,7 @@ set_root_password() {
         if [ -n "$TEMP_PASSWORD" ]; then
             if mysql --connect-expired-password -u root -p"${TEMP_PASSWORD}" -e "ALTER USER 'root'@'localhost' IDENTIFIED BY '${MYSQL_ROOT_PASSWORD}';" 2>/dev/null; then
                 echo -e "${GREEN}✓ root 密码已设置${NC}"
+                return 0
             else
                 echo -e "${YELLOW}⚠ 使用临时密码设置失败，尝试无密码设置${NC}"
             fi
@@ -489,6 +509,8 @@ set_root_password() {
                     echo -e "${YELLOW}  对于 MariaDB，可能需要运行: mysql_secure_installation${NC}"
                 fi
             fi
+        else
+            echo -e "${GREEN}✓ root 密码验证成功${NC}"
         fi
     else
         echo -e "${YELLOW}跳过 root 密码设置${NC}"

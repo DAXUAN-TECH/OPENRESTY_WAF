@@ -128,7 +128,7 @@ local function check_single_ip(client_ip)
     end
 
     local sql = [[
-        SELECT id, rule_name FROM block_rules 
+        SELECT id, rule_name FROM waf_block_rules 
         WHERE status = 1 
         AND rule_type = 'single_ip' 
         AND rule_value = ?

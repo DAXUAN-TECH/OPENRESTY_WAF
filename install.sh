@@ -180,6 +180,11 @@ if [[ "$USE_REDIS" =~ ^[Yy]$ ]]; then
         
         # 先安装 Redis
         echo -e "${BLUE}开始安装 Redis...${NC}"
+        
+        # 创建临时文件用于传递变量（在 install_redis.sh 执行前）
+        TEMP_REDIS_VARS=$(mktemp)
+        export TEMP_VARS_FILE="$TEMP_REDIS_VARS"
+        
         if ! bash "${SCRIPTS_DIR}/install_redis.sh"; then
             echo -e "${YELLOW}⚠ Redis 安装失败，但这是可选步骤，将继续安装${NC}"
             echo "您可以稍后手动运行: sudo ${SCRIPTS_DIR}/install_redis.sh"
@@ -188,25 +193,27 @@ if [[ "$USE_REDIS" =~ ^[Yy]$ ]]; then
             REDIS_PORT=""
             REDIS_PASSWORD=""
             REDIS_DB=""
+            rm -f "$TEMP_REDIS_VARS"
         else
             # 本地 Redis 默认配置
             REDIS_HOST="127.0.0.1"
             REDIS_PORT="6379"
             REDIS_DB="0"
             
-            # 询问是否设置密码
-            read -sp "Redis 密码（可选，直接回车跳过）: " REDIS_PASSWORD
-            echo ""
-            
             # 从 install_redis.sh 获取密码（如果已设置）
-            # install_redis.sh 会导出 REDIS_PASSWORD，但需要重新执行才能获取
-            # 这里先询问用户，如果 install_redis.sh 已设置密码，用户可以直接回车跳过
+            # install_redis.sh 会在结束时写入密码到临时文件
+            if [ -f "$TEMP_REDIS_VARS" ]; then
+                source "$TEMP_REDIS_VARS" 2>/dev/null || true
+            fi
             
             # 如果 install_redis.sh 未设置密码，询问用户
             if [ -z "$REDIS_PASSWORD" ]; then
                 read -sp "Redis 密码（可选，直接回车跳过）: " REDIS_PASSWORD
                 echo ""
             fi
+            
+            # 清理临时文件
+            rm -f "$TEMP_REDIS_VARS"
             
             # 如果设置了密码，更新 Redis 配置（使用 Python，与 MySQL 一致）
             if [ -n "$REDIS_PASSWORD" ]; then

@@ -6,10 +6,12 @@
 
 ### 脚本说明
 
-提供两个脚本：
+**install_geoip.sh** - GeoIP2 数据库安装脚本
 
-1. **install_geoip.sh** - 推荐使用，支持 Account ID + License Key 或 Permalink URL
-2. **install_geoip_permalink.sh** - 仅支持 Permalink URL（需要手动处理认证）
+支持多种下载方式：
+- Account ID + License Key（推荐）
+- Permalink URL
+- 交互式输入
 
 ### 使用方法
 

@@ -459,15 +459,15 @@
 ## 修复建议清单
 
 ### 必须修复（影响功能）
-- [ ] `install_mysql.sh`：导出 `CREATED_DB_NAME`, `MYSQL_USER_FOR_WAF`, `MYSQL_PASSWORD_FOR_WAF`, `USE_NEW_USER`
-- [ ] `install_redis.sh`：导出 `REDIS_PASSWORD`
-- [ ] `install.sh`：正确读取子脚本导出的变量
+- [x] `install_mysql.sh`：导出 `CREATED_DB_NAME`, `MYSQL_USER_FOR_WAF`, `MYSQL_PASSWORD_FOR_WAF`, `USE_NEW_USER` ✅
+- [x] `install_redis.sh`：导出 `REDIS_PASSWORD` ✅
+- [x] `install.sh`：正确读取子脚本导出的变量 ✅
 
 ### 建议修复（提升体验）
-- [ ] `install.sh`：Redis 密码更新使用 Python
-- [ ] `deploy.sh`：添加 `openresty -t` 配置验证
-- [ ] `install_mysql.sh`：优化 SQL 导入错误处理（避免重复执行）
-- [ ] `optimize_system.sh`：检查 `sysctl -p` 返回值
+- [x] `install.sh`：Redis 密码更新使用 Python ✅
+- [x] `deploy.sh`：添加 `openresty -t` 配置验证 ✅
+- [x] `install_mysql.sh`：优化 SQL 导入错误处理（避免重复执行）✅
+- [x] `optimize_system.sh`：检查 `sysctl -p` 返回值 ✅
 
 ### 可选优化（代码质量）
 - [ ] 提取公共函数到 `common.sh``

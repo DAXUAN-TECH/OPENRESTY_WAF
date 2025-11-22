@@ -155,28 +155,31 @@ install_openresty_redhat() {
         # 确保目录存在
         mkdir -p /etc/pki/rpm-gpg
         
-        # 下载并导入 GPG 密钥（带错误处理）
+        # 尝试下载并导入 GPG 密钥（带错误处理）
         echo "下载 GPG 密钥..."
-        if wget -qO - https://openresty.org/package/pubkey.gpg > /tmp/openresty-pubkey.gpg 2>&1; then
-            # 检查下载的文件是否有效
-            if [ -s /tmp/openresty-pubkey.gpg ]; then
-                # 尝试导入密钥
-                if gpg --dearmor /tmp/openresty-pubkey.gpg -o /etc/pki/rpm-gpg/RPM-GPG-KEY-openresty 2>&1; then
-                    # 验证密钥文件是否创建成功
-                    if [ -s /etc/pki/rpm-gpg/RPM-GPG-KEY-openresty ]; then
-                        echo -e "${GREEN}✓ GPG 密钥导入成功${NC}"
+        GPG_CHECK=0
+        
+        # 方法1：尝试直接使用 rpm --import
+        if wget -qO - https://openresty.org/package/pubkey.gpg > /tmp/openresty-pubkey.gpg 2>&1 && [ -s /tmp/openresty-pubkey.gpg ]; then
+            # 尝试直接导入到 RPM 密钥环
+            if rpm --import /tmp/openresty-pubkey.gpg 2>&1; then
+                echo -e "${GREEN}✓ GPG 密钥已导入到 RPM 密钥环${NC}"
+                GPG_CHECK=1
+            else
+                # 方法2：尝试使用 gpg --dearmor 然后导入
+                if gpg --dearmor /tmp/openresty-pubkey.gpg -o /etc/pki/rpm-gpg/RPM-GPG-KEY-openresty 2>&1 && [ -s /etc/pki/rpm-gpg/RPM-GPG-KEY-openresty ]; then
+                    # 尝试导入到 RPM 密钥环
+                    if rpm --import /etc/pki/rpm-gpg/RPM-GPG-KEY-openresty 2>&1; then
+                        echo -e "${GREEN}✓ GPG 密钥已导入到 RPM 密钥环${NC}"
                         GPG_CHECK=1
                     else
-                        echo -e "${YELLOW}⚠ GPG 密钥文件为空，将禁用 GPG 检查${NC}"
+                        echo -e "${YELLOW}⚠ GPG 密钥导入到 RPM 密钥环失败，将禁用 GPG 检查${NC}"
                         GPG_CHECK=0
                     fi
                 else
-                    echo -e "${YELLOW}⚠ GPG 密钥导入失败，将禁用 GPG 检查${NC}"
+                    echo -e "${YELLOW}⚠ GPG 密钥处理失败，将禁用 GPG 检查${NC}"
                     GPG_CHECK=0
                 fi
-            else
-                echo -e "${YELLOW}⚠ GPG 密钥下载失败或文件为空，将禁用 GPG 检查${NC}"
-                GPG_CHECK=0
             fi
             rm -f /tmp/openresty-pubkey.gpg
         else
@@ -185,20 +188,41 @@ install_openresty_redhat() {
         fi
         
         # 创建仓库配置文件
-        cat > /etc/yum.repos.d/openresty.repo <<EOF
+        # 如果 GPG 检查失败，直接禁用（不设置 gpgkey）
+        if [ "$GPG_CHECK" = "1" ]; then
+            cat > /etc/yum.repos.d/openresty.repo <<EOF
 [openresty]
 name=Official OpenResty Repository
 baseurl=https://openresty.org/package/${OS}/\$releasever/\$basearch
-gpgcheck=${GPG_CHECK}
+gpgcheck=1
+enabled=1
+gpgkey=https://openresty.org/package/pubkey.gpg
+EOF
+        else
+            # 禁用 GPG 检查
+            cat > /etc/yum.repos.d/openresty.repo <<EOF
+[openresty]
+name=Official OpenResty Repository
+baseurl=https://openresty.org/package/${OS}/\$releasever/\$basearch
+gpgcheck=0
 enabled=1
 EOF
-        
-        # 如果 GPG 检查启用，添加密钥路径
-        if [ "$GPG_CHECK" = "1" ]; then
-            echo "gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-openresty" >> /etc/yum.repos.d/openresty.repo
+            echo -e "${YELLOW}⚠ 已禁用 GPG 检查，继续安装${NC}"
         fi
         
         echo -e "${GREEN}✓ OpenResty 仓库配置完成${NC}"
+    else
+        # 如果仓库文件已存在，检查是否需要修复
+        if grep -q "gpgcheck=1" /etc/yum.repos.d/openresty.repo && ! rpm -q gpg-pubkey-d5edeb74 &> /dev/null; then
+            echo "检测到 GPG 检查已启用但密钥未导入，尝试修复..."
+            if wget -qO - https://openresty.org/package/pubkey.gpg | rpm --import 2>&1; then
+                echo -e "${GREEN}✓ GPG 密钥已导入${NC}"
+            else
+                echo -e "${YELLOW}⚠ GPG 密钥导入失败，禁用 GPG 检查${NC}"
+                sed -i 's/gpgcheck=1/gpgcheck=0/' /etc/yum.repos.d/openresty.repo
+                sed -i '/gpgkey=/d' /etc/yum.repos.d/openresty.repo
+            fi
+        fi
     fi
     
     # 尝试使用包管理器安装

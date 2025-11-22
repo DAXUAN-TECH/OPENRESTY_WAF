@@ -522,14 +522,26 @@ install_openresty_from_source() {
     tar -xzf "openresty-${version}.tar.gz"
     cd "openresty-${version}"
     
-    # 配置
-    ./configure --prefix=${INSTALL_DIR} \
+    # 配置（根据系统调整）
+    echo "配置 OpenResty..."
+    local configure_opts="--prefix=${INSTALL_DIR} \
         --with-http_realip_module \
         --with-http_ssl_module \
         --with-http_stub_status_module \
         --with-http_gzip_static_module \
         --with-pcre \
-        --with-luajit
+        --with-luajit"
+    
+    # Alpine Linux 使用 musl libc，可能需要特殊配置
+    if [ "$OS" = "alpine" ]; then
+        echo -e "${BLUE}  检测到 Alpine Linux，使用 musl libc 配置...${NC}"
+    fi
+    
+    if ! ./configure $configure_opts; then
+        echo -e "${RED}✗ 配置失败，请检查依赖是否完整${NC}"
+        echo -e "${YELLOW}所需依赖: gcc, g++, make, pcre-dev, zlib-dev, openssl-dev, perl, readline-dev${NC}"
+        exit 1
+    fi
     
     # 编译安装
     echo "编译 OpenResty（这可能需要几分钟）..."

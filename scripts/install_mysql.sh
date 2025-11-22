@@ -342,16 +342,16 @@ create_database() {
     echo "正在创建数据库 ${DB_NAME}..."
     if [ -n "$MYSQL_ROOT_PASSWORD" ]; then
         mysql -u root -p"${MYSQL_ROOT_PASSWORD}" <<EOF
-CREATE DATABASE IF NOT EXISTS ${DB_NAME} DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE DATABASE IF NOT EXISTS ${DB_NAME} DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
 EOF
     else
         mysql -u root <<EOF
-CREATE DATABASE IF NOT EXISTS ${DB_NAME} DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE DATABASE IF NOT EXISTS ${DB_NAME} DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
 EOF
     fi
     
     if [ $? -eq 0 ]; then
-        echo -e "${GREEN}✓ 数据库 ${DB_NAME} 创建成功（字符集：utf8mb4）${NC}"
+        echo -e "${GREEN}✓ 数据库 ${DB_NAME} 创建成功（字符集：utf8mb4，排序规则：utf8mb4_general_ci）${NC}"
         # 保存数据库名称到全局变量
         MYSQL_DATABASE="$DB_NAME"
     else

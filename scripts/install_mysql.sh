@@ -559,9 +559,18 @@ create_database() {
     
     # 获取 root 密码（如果未设置）
     if [ -z "$MYSQL_ROOT_PASSWORD" ]; then
-        read -sp "请输入 MySQL root 密码: " MYSQL_ROOT_PASSWORD
+        # 如果存在临时密码，提示用户
+        if [ -n "$TEMP_PASSWORD" ]; then
+            echo -e "${YELLOW}检测到 MySQL 临时密码，请使用临时密码或已设置的新密码${NC}"
+            echo -e "${YELLOW}临时密码: ${TEMP_PASSWORD}${NC}"
+        fi
+        read -sp "请输入 MySQL root 密码（直接回车使用临时密码或无密码）: " MYSQL_ROOT_PASSWORD
         echo ""
-        if [ -z "$MYSQL_ROOT_PASSWORD" ]; then
+        # 如果用户没有输入密码，使用临时密码
+        if [ -z "$MYSQL_ROOT_PASSWORD" ] && [ -n "$TEMP_PASSWORD" ]; then
+            MYSQL_ROOT_PASSWORD="$TEMP_PASSWORD"
+            echo -e "${BLUE}使用临时密码连接 MySQL${NC}"
+        elif [ -z "$MYSQL_ROOT_PASSWORD" ]; then
             echo -e "${YELLOW}⚠ 未输入 root 密码，尝试无密码连接${NC}"
         fi
     fi
@@ -575,12 +584,52 @@ create_database() {
     local db_create_output=""
     local db_create_exit_code=0
     
+    # 尝试连接并创建数据库（支持临时密码）
     if [ -n "$MYSQL_ROOT_PASSWORD" ]; then
+        # 先尝试使用提供的密码
         db_create_output=$(mysql -u root -p"${MYSQL_ROOT_PASSWORD}" <<EOF 2>&1
 CREATE DATABASE IF NOT EXISTS ${DB_NAME} DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
 EOF
 )
         db_create_exit_code=$?
+        
+        # 如果失败且使用的是临时密码，提示用户需要先修改密码
+        if [ $db_create_exit_code -ne 0 ] && [ "$MYSQL_ROOT_PASSWORD" = "$TEMP_PASSWORD" ]; then
+            echo -e "${YELLOW}⚠ 使用临时密码创建数据库失败${NC}"
+            echo -e "${YELLOW}MySQL 8.0 要求首次登录后必须修改临时密码才能执行其他操作${NC}"
+            echo -e "${YELLOW}请先修改 root 密码，然后再创建数据库${NC}"
+            echo ""
+            echo -e "${BLUE}修改密码命令:${NC}"
+            echo "  mysql -u root -p'${TEMP_PASSWORD}' -e \"ALTER USER 'root'@'localhost' IDENTIFIED BY 'your_new_password';\""
+            echo ""
+            read -p "是否现在修改 root 密码？[Y/n]: " CHANGE_PWD
+            CHANGE_PWD="${CHANGE_PWD:-Y}"
+            if [[ "$CHANGE_PWD" =~ ^[Yy]$ ]]; then
+                read -sp "请输入新密码: " NEW_PASSWORD
+                echo ""
+                if [ -n "$NEW_PASSWORD" ]; then
+                    # 修改密码
+                    if mysql -u root -p"${TEMP_PASSWORD}" -e "ALTER USER 'root'@'localhost' IDENTIFIED BY '${NEW_PASSWORD}';" 2>/dev/null; then
+                        MYSQL_ROOT_PASSWORD="$NEW_PASSWORD"
+                        echo -e "${GREEN}✓ root 密码已修改${NC}"
+                        # 重新尝试创建数据库
+                        db_create_output=$(mysql -u root -p"${MYSQL_ROOT_PASSWORD}" <<EOF 2>&1
+CREATE DATABASE IF NOT EXISTS ${DB_NAME} DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
+EOF
+)
+                        db_create_exit_code=$?
+                    else
+                        echo -e "${RED}✗ 密码修改失败，请手动修改密码后重试${NC}"
+                        return 1
+                    fi
+                else
+                    echo -e "${RED}错误: 新密码不能为空${NC}"
+                    return 1
+                fi
+            else
+                return 1
+            fi
+        fi
     else
         db_create_output=$(mysql -u root <<EOF 2>&1
 CREATE DATABASE IF NOT EXISTS ${DB_NAME} DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;

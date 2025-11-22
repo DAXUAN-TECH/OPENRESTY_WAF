@@ -532,8 +532,19 @@ install_openresty_from_source() {
         --with-luajit
     
     # 编译安装
-    make -j$(nproc)
-    make install
+    echo "编译 OpenResty（这可能需要几分钟）..."
+    local cpu_cores=$(nproc 2>/dev/null || echo "1")
+    if ! make -j${cpu_cores}; then
+        echo -e "${RED}✗ 编译失败${NC}"
+        echo -e "${YELLOW}提示: 如果编译失败，请检查错误信息，可能需要安装更多依赖${NC}"
+        exit 1
+    fi
+    
+    echo "安装 OpenResty..."
+    if ! make install; then
+        echo -e "${RED}✗ 安装失败${NC}"
+        exit 1
+    fi
     
     # 清理
     cd /

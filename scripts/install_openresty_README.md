@@ -6,13 +6,34 @@
 
 ### 支持的系统
 
-- ✅ **CentOS/RHEL** (6.x, 7.x, 8.x, 9.x)
+#### RedHat 系列
+- ✅ **CentOS** (6.x, 7.x, 8.x)
+- ✅ **RHEL** (6.x, 7.x, 8.x, 9.x)
 - ✅ **Fedora** (所有版本)
-- ✅ **Rocky Linux** / **AlmaLinux**
-- ✅ **Ubuntu** (16.04+)
-- ✅ **Debian** (9+)
-- ✅ **openSUSE** (需要从源码编译)
-- ✅ **Arch Linux** / **Manjaro** (需要 yay 或从源码编译)
+- ✅ **Rocky Linux** (8.x, 9.x)
+- ✅ **AlmaLinux** (8.x, 9.x)
+- ✅ **Oracle Linux** (7.x, 8.x, 9.x)
+- ✅ **Amazon Linux** (1, 2, 2023)
+
+#### Debian 系列
+- ✅ **Debian** (9+, 包括 Debian 10/11/12)
+- ✅ **Ubuntu** (16.04+, 包括 18.04/20.04/22.04)
+- ✅ **Linux Mint** (所有版本，基于 Ubuntu)
+- ✅ **Kali Linux** (所有版本，基于 Debian)
+- ✅ **Raspbian** (所有版本，基于 Debian)
+
+#### SUSE 系列
+- ✅ **openSUSE** (Leap, Tumbleweed，需要从源码编译)
+- ✅ **SLES** (SUSE Linux Enterprise Server，需要从源码编译)
+
+#### Arch 系列
+- ✅ **Arch Linux** (需要 yay/paru 或从源码编译)
+- ✅ **Manjaro** (需要 yay/paru 或从源码编译)
+
+#### 其他发行版
+- ✅ **Alpine Linux** (从源码编译，支持 musl libc)
+- ✅ **Gentoo** (从源码编译)
+- ✅ **其他未列出的发行版** (自动检测包管理器，失败则从源码编译)
 
 ### 功能特性
 

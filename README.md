@@ -49,8 +49,11 @@ OPENRESTY_WAF/
 ├── 08-地域封控使用示例.md    # 地域封控使用示例
 ├── README.md                # 项目说明
 ├── scripts/                 # 安装脚本目录
-│   ├── install_geoip.sh    # GeoIP2 数据库安装脚本
-│   └── README.md            # 脚本说明
+│   ├── install_openresty.sh           # OpenResty 一键安装脚本
+│   ├── install_openresty_README.md   # OpenResty 安装说明
+│   ├── install_geoip.sh               # GeoIP2 数据库安装脚本
+│   ├── README.md                       # 脚本说明
+│   └── 使用说明.md                     # 使用说明
 └── lua/                     # Lua 脚本目录
     ├── config.lua           # 配置文件
     └── waf/                 # WAF 模块
@@ -69,16 +72,35 @@ OPENRESTY_WAF/
 - MySQL 8.0+ 或 MariaDB 10.6+
 - Redis 5.0+（可选）
 
-### 2. 安装依赖
+### 2. 安装 OpenResty（推荐使用一键安装脚本）
 
 ```bash
-# 安装 OpenResty（以 CentOS 为例）
+# 使用一键安装脚本（支持多种 Linux 发行版）
+sudo ./scripts/install_openresty.sh
+
+# 脚本会自动：
+# - 检测操作系统类型
+# - 安装所需依赖
+# - 安装 OpenResty
+# - 配置 systemd 服务
+# - 安装常用 Lua 模块
+```
+
+**或者手动安装**：
+
+```bash
+# CentOS/RHEL
 sudo yum install -y openresty openresty-resty
+
+# Ubuntu/Debian
+sudo apt-get install -y openresty
 
 # 安装 Lua 模块
 opm get openresty/lua-resty-mysql
 opm get openresty/lua-resty-redis  # 可选
 ```
+
+详细说明请参考：[install_openresty_README.md](scripts/install_openresty_README.md)
 
 ### 3. 数据库配置
 

@@ -529,14 +529,41 @@ set_root_password() {
             local exit_code=$?
             
             if [ $exit_code -eq 0 ]; then
-                echo -e "${GREEN}✓ root 密码已设置${NC}"
-                # 验证新密码是否生效
-                if mysql -u root -p"${MYSQL_ROOT_PASSWORD}" -e "SELECT 1;" > /dev/null 2>&1; then
+                echo -e "${GREEN}✓ root 密码修改命令执行成功${NC}"
+                # 等待一下让密码生效
+                sleep 2
+                
+                # 刷新权限（确保密码立即生效）
+                mysql --connect-expired-password -u root -p"${TEMP_PASSWORD}" -e "FLUSH PRIVILEGES;" > /dev/null 2>&1 || true
+                
+                # 验证新密码是否生效（使用多种方式验证）
+                echo "验证新密码..."
+                local verify_output=$(mysql -u root -p"${MYSQL_ROOT_PASSWORD}" -e "SELECT 1;" 2>&1)
+                local verify_exit_code=$?
+                
+                if [ $verify_exit_code -eq 0 ]; then
                     echo -e "${GREEN}✓ 新密码验证成功${NC}"
                     return 0
                 else
-                    echo -e "${YELLOW}⚠ 密码已设置，但验证失败，请手动验证${NC}"
-                    return 0
+                    # 如果验证失败，尝试使用临时密码再次验证密码是否真的修改了
+                    echo -e "${YELLOW}⚠ 新密码验证失败，尝试使用临时密码验证...${NC}"
+                    local temp_verify=$(mysql --connect-expired-password -u root -p"${TEMP_PASSWORD}" -e "SELECT 1;" 2>&1)
+                    if echo "$temp_verify" | grep -qi "expired\|must be reset"; then
+                        echo -e "${GREEN}✓ 密码已成功修改（临时密码已失效）${NC}"
+                        echo -e "${YELLOW}⚠ 但新密码验证失败，可能是密码包含特殊字符${NC}"
+                        echo -e "${YELLOW}验证错误: $verify_output${NC}"
+                        echo ""
+                        echo -e "${YELLOW}建议:${NC}"
+                        echo "  1. 手动测试密码: mysql -u root -p"
+                        echo "  2. 如果密码包含特殊字符，可能需要使用引号: mysql -u root -p'your_password'"
+                        echo "  3. 或者重新设置一个不包含特殊字符的密码"
+                        # 继续执行，让用户知道密码已设置
+                        return 0
+                    else
+                        echo -e "${RED}✗ 密码修改可能未生效${NC}"
+                        echo -e "${YELLOW}验证错误: $verify_output${NC}"
+                        return 1
+                    fi
                 fi
             else
                 echo -e "${RED}✗ 使用临时密码修改密码失败${NC}"
@@ -562,7 +589,8 @@ set_root_password() {
         fi
         
         # 如果临时密码方式失败，尝试无密码方式（某些系统可能没有临时密码，如 MariaDB）
-        if ! mysql -u root -p"${MYSQL_ROOT_PASSWORD}" -e "SELECT 1;" > /dev/null 2>&1; then
+        # 注意：如果上面已经设置了密码，这里不应该再执行
+        if [ -z "$TEMP_PASSWORD" ] && ! mysql -u root -p"${MYSQL_ROOT_PASSWORD}" -e "SELECT 1;" > /dev/null 2>&1; then
             # 尝试无密码连接（MariaDB 可能默认无密码）
             if mysql -u root -e "ALTER USER 'root'@'localhost' IDENTIFIED BY '${MYSQL_ROOT_PASSWORD}';" 2>/dev/null; then
                 echo -e "${GREEN}✓ root 密码已设置${NC}"
@@ -591,14 +619,53 @@ secure_mysql() {
     echo
     if [[ ! $REPLY =~ ^[Nn]$ ]]; then
         if [ -n "$MYSQL_ROOT_PASSWORD" ]; then
-            # 非交互式运行 mysql_secure_installation
-            mysql -u root -p"${MYSQL_ROOT_PASSWORD}" <<EOF
+            # 先验证密码是否有效
+            echo "验证 root 密码..."
+            local verify_output=$(mysql -u root -p"${MYSQL_ROOT_PASSWORD}" -e "SELECT 1;" 2>&1)
+            local verify_exit_code=$?
+            
+            if [ $verify_exit_code -ne 0 ]; then
+                echo -e "${RED}✗ root 密码验证失败${NC}"
+                echo -e "${YELLOW}错误信息:${NC}"
+                echo "$verify_output" | grep -v "Warning: Using a password" || echo "$verify_output"
+                echo ""
+                echo -e "${YELLOW}可能的原因:${NC}"
+                echo "  1. 密码不正确"
+                echo "  2. 密码包含特殊字符，需要特殊处理"
+                echo "  3. MySQL 服务状态异常"
+                echo ""
+                echo -e "${YELLOW}建议:${NC}"
+                echo "  1. 手动测试密码: mysql -u root -p"
+                echo "  2. 如果密码包含特殊字符，请使用交互式方式: mysql -u root -p（然后输入密码）"
+                echo "  3. 或者重新设置密码"
+                echo ""
+                read -p "是否跳过安全配置？[Y/n]: " SKIP_SECURE
+                SKIP_SECURE="${SKIP_SECURE:-Y}"
+                if [[ "$SKIP_SECURE" =~ ^[Yy]$ ]]; then
+                    echo -e "${YELLOW}跳过安全配置${NC}"
+                    return 0
+                fi
+            else
+                echo -e "${GREEN}✓ root 密码验证成功${NC}"
+                # 非交互式运行 mysql_secure_installation
+                echo "执行安全配置..."
+                local secure_output=$(mysql -u root -p"${MYSQL_ROOT_PASSWORD}" <<EOF 2>&1
 DELETE FROM mysql.user WHERE User='';
 DELETE FROM mysql.user WHERE User='root' AND Host NOT IN ('localhost', '127.0.0.1', '::1');
 DROP DATABASE IF EXISTS test;
 DELETE FROM mysql.db WHERE Db='test' OR Db='test\\_%';
 FLUSH PRIVILEGES;
 EOF
+)
+                local secure_exit_code=$?
+                
+                if [ $secure_exit_code -eq 0 ]; then
+                    echo -e "${GREEN}✓ 安全配置完成${NC}"
+                else
+                    echo -e "${YELLOW}⚠ 安全配置执行时出现警告或错误${NC}"
+                    echo "$secure_output" | grep -v "Warning: Using a password" | head -5
+                fi
+            fi
         elif [ -n "$TEMP_PASSWORD" ]; then
             # 如果未设置密码但有临时密码，使用临时密码（需要 --connect-expired-password）
             echo -e "${YELLOW}⚠ 检测到临时密码，使用临时密码进行安全配置${NC}"

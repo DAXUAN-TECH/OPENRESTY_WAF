@@ -141,6 +141,8 @@ function _M.batch_insert(table_name, fields, values_list)
         ["waf_block_logs"] = true,
         ["waf_block_rules"] = true,
         ["waf_whitelist"] = true,
+        ["waf_geo_codes"] = true,
+        ["waf_system_config"] = true,
     }
     
     if not allowed_tables[table_name] then

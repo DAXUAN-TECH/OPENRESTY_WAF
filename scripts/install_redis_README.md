@@ -1,0 +1,331 @@
+# Redis 一键安装脚本说明
+
+## 脚本功能
+
+`install_redis.sh` 是一个全自动的 Redis 安装和配置脚本，支持多种 Linux 发行版。
+
+### 支持的系统
+
+- ✅ **CentOS/RHEL** (7.x, 8.x, 9.x)
+- ✅ **Fedora** (所有版本)
+- ✅ **Rocky Linux** / **AlmaLinux**
+- ✅ **Ubuntu** (18.04+)
+- ✅ **Debian** (9+)
+- ✅ **openSUSE** (所有版本)
+- ✅ **Arch Linux** / **Manjaro**
+
+### 功能特性
+
+- 🔍 **自动检测系统类型**：自动识别 Linux 发行版
+- 📦 **自动安装依赖**：根据系统类型安装编译工具
+- 🚀 **多种安装方式**：优先使用包管理器，失败则从源码编译
+- ⚙️ **自动配置**：配置文件、systemd 服务、用户权限
+- 🔒 **密码设置**：可选设置 Redis 密码
+- ✅ **验证安装**：检查安装是否成功，测试连接
+
+## 使用方法
+
+### 基本使用
+
+```bash
+# 运行安装脚本（需要 root 权限）
+sudo ./scripts/install_redis.sh
+```
+
+### 指定密码
+
+```bash
+# 通过环境变量指定密码
+sudo REDIS_PASSWORD='your_password' ./scripts/install_redis.sh
+```
+
+### 指定端口
+
+```bash
+# 通过环境变量指定端口（默认 6379）
+sudo REDIS_PORT=6380 ./scripts/install_redis.sh
+```
+
+### 指定版本
+
+```bash
+# 通过环境变量指定版本（默认 7.0）
+sudo REDIS_VERSION=7.0 ./scripts/install_redis.sh
+```
+
+## 安装过程
+
+脚本会执行以下步骤：
+
+1. **[1/7] 检测操作系统** - 自动识别 Linux 发行版
+2. **[2/7] 检查是否已安装** - 如果已安装，询问是否继续
+3. **[3/7] 安装依赖包** - 安装编译工具（gcc、make 等）
+4. **[4/7] 安装 Redis** - 使用包管理器或从源码编译
+   - RedHat 系列：使用 EPEL 仓库或从源码编译
+   - Debian 系列：使用 apt-get 安装
+   - openSUSE：使用 zypper 安装或从源码编译
+   - Arch Linux：使用 yay 或 pacman 安装
+5. **[5/7] 配置 Redis** - 配置文件、端口、持久化等
+6. **[6/7] 设置密码** - 交互式输入或使用环境变量
+7. **[7/7] 启动服务** - 启动 Redis 并设置开机自启
+8. **[8/8] 验证安装** - 检查安装是否成功，测试连接
+
+## 安装位置
+
+Redis 将安装到以下位置：
+
+```
+/usr/local/bin/redis-server    # 主程序（源码编译）
+/usr/bin/redis-server          # 主程序（包管理器）
+/etc/redis/redis.conf          # 配置文件
+/var/lib/redis/                # 数据目录
+/var/log/redis/                # 日志目录
+```
+
+## 服务管理
+
+安装完成后，可以使用 systemd 管理 Redis：
+
+```bash
+# 启动服务
+sudo systemctl start redis
+sudo systemctl start redis-server
+
+# 停止服务
+sudo systemctl stop redis
+sudo systemctl stop redis-server
+
+# 重启服务
+sudo systemctl restart redis
+sudo systemctl restart redis-server
+
+# 查看状态
+sudo systemctl status redis
+sudo systemctl status redis-server
+
+# 设置开机自启
+sudo systemctl enable redis
+sudo systemctl enable redis-server
+
+# 禁用开机自启
+sudo systemctl disable redis
+sudo systemctl disable redis-server
+```
+
+## 连接 Redis
+
+### 使用 redis-cli 连接
+
+```bash
+# 无密码连接
+redis-cli
+
+# 有密码连接
+redis-cli -a 'your_password'
+
+# 指定主机和端口
+redis-cli -h 127.0.0.1 -p 6379
+
+# 有密码且指定主机端口
+redis-cli -h 127.0.0.1 -p 6379 -a 'your_password'
+```
+
+### 测试连接
+
+```bash
+# 无密码
+redis-cli ping
+# 应返回: PONG
+
+# 有密码
+redis-cli -a 'your_password' ping
+# 应返回: PONG
+```
+
+## 配置文件
+
+### 配置文件位置
+
+- `/etc/redis/redis.conf`（推荐）
+- `/etc/redis.conf`（旧版本）
+
+### 主要配置项
+
+```conf
+# 端口
+port 6379
+
+# 密码（如果设置）
+requirepass your_password
+
+# 数据目录
+dir /var/lib/redis
+
+# 日志文件
+logfile /var/log/redis/redis-server.log
+
+# 持久化配置
+save 900 1      # 900 秒内至少 1 个 key 变化时保存
+save 300 10     # 300 秒内至少 10 个 key 变化时保存
+save 60 10000   # 60 秒内至少 10000 个 key 变化时保存
+```
+
+### 修改配置
+
+```bash
+# 编辑配置文件
+sudo vim /etc/redis/redis.conf
+
+# 重新加载配置（不中断服务）
+redis-cli CONFIG REWRITE
+
+# 或重启服务
+sudo systemctl restart redis
+```
+
+## 故障排查
+
+### 问题 1：Redis 安装失败
+
+**可能原因**：
+- 网络连接问题
+- 依赖包安装失败
+- 编译错误
+
+**解决方法**：
+```bash
+# 检查网络连接
+ping -c 3 download.redis.io
+
+# 检查编译工具
+gcc --version
+make --version
+
+# 手动安装依赖后重试
+```
+
+### 问题 2：服务启动失败
+
+**可能原因**：
+- 端口被占用
+- 配置文件错误
+- 权限问题
+
+**解决方法**：
+```bash
+# 检查端口占用
+netstat -tlnp | grep :6379
+
+# 检查错误日志
+tail -f /var/log/redis/redis-server.log
+
+# 检查服务状态
+systemctl status redis
+
+# 检查配置文件语法
+redis-server /etc/redis/redis.conf --test-memory 1
+```
+
+### 问题 3：无法连接 Redis
+
+**可能原因**：
+- 服务未启动
+- 密码错误
+- 防火墙阻止
+
+**解决方法**：
+```bash
+# 检查服务状态
+systemctl status redis
+
+# 检查防火墙
+firewall-cmd --list-all    # CentOS/RHEL
+ufw status                 # Ubuntu/Debian
+
+# 测试本地连接
+redis-cli ping
+```
+
+### 问题 4：忘记密码
+
+**解决方法**：
+```bash
+# 1. 编辑配置文件
+sudo vim /etc/redis/redis.conf
+
+# 2. 注释或删除 requirepass 行
+# requirepass your_password
+
+# 3. 重启服务
+sudo systemctl restart redis
+
+# 4. 重新设置密码
+redis-cli
+CONFIG SET requirepass new_password
+CONFIG REWRITE
+```
+
+## 安全建议
+
+1. **设置密码**：生产环境必须设置 Redis 密码
+2. **限制网络**：只允许本地连接（bind 127.0.0.1）
+3. **禁用危险命令**：禁用 FLUSHALL、CONFIG 等命令
+4. **定期更新**：保持 Redis 版本最新
+5. **监控日志**：定期检查 Redis 日志
+
+## 性能优化
+
+### 内存优化
+
+```conf
+# 设置最大内存
+maxmemory 2gb
+
+# 内存淘汰策略
+maxmemory-policy allkeys-lru
+```
+
+### 持久化优化
+
+```conf
+# 启用 AOF（追加式持久化）
+appendonly yes
+appendfsync everysec
+```
+
+## 后续配置
+
+安装完成后，需要：
+
+1. **配置 WAF 连接**（如果使用 Redis）：
+   - 使用 `install.sh` 自动配置（推荐）
+   - 或手动编辑 `lua/config.lua`
+
+2. **测试连接**：
+   ```bash
+   redis-cli -a 'your_password' ping
+   ```
+
+3. **监控 Redis**：
+   ```bash
+   # 查看 Redis 信息
+   redis-cli -a 'your_password' INFO
+
+   # 查看内存使用
+   redis-cli -a 'your_password' INFO memory
+   ```
+
+## 注意事项
+
+1. **需要 root 权限**：安装过程需要 root 权限
+2. **网络连接**：需要网络连接下载包和源码
+3. **磁盘空间**：确保有足够的磁盘空间（至少 500MB）
+4. **端口占用**：确保 6379 端口未被占用
+5. **编译时间**：从源码编译可能需要较长时间（5-10 分钟）
+
+## 参考文档
+
+- [Redis 官网](https://redis.io/)
+- [Redis 安装文档](https://redis.io/docs/getting-started/installation/)
+- [Redis 配置文档](https://redis.io/docs/management/config/)
+

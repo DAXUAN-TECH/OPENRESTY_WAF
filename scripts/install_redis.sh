@@ -1,0 +1,523 @@
+#!/bin/bash
+
+# Redis 一键安装和配置脚本
+# 支持：CentOS/RHEL, Ubuntu/Debian, Fedora, openSUSE, Arch Linux
+# 用途：自动检测系统类型并安装配置 Redis
+
+set -e
+
+# 颜色定义
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# 配置变量
+REDIS_VERSION="${REDIS_VERSION:-7.0}"
+REDIS_PASSWORD="${REDIS_PASSWORD:-}"
+REDIS_PORT="${REDIS_PORT:-6379}"
+
+# 检测系统类型
+detect_os() {
+    echo -e "${BLUE}[1/7] 检测操作系统...${NC}"
+    
+    if [ -f /etc/os-release ]; then
+        . /etc/os-release
+        OS=$ID
+        OS_VERSION=$VERSION_ID
+    elif [ -f /etc/redhat-release ]; then
+        OS="centos"
+        OS_VERSION=$(cat /etc/redhat-release | sed 's/.*release \([0-9.]*\).*/\1/')
+    elif [ -f /etc/debian_version ]; then
+        OS="debian"
+        OS_VERSION=$(cat /etc/debian_version)
+    else
+        echo -e "${RED}错误: 无法检测操作系统类型${NC}"
+        exit 1
+    fi
+    
+    echo -e "${GREEN}✓ 检测到系统: ${OS} ${OS_VERSION}${NC}"
+}
+
+# 检查是否为 root 用户
+check_root() {
+    if [ "$EUID" -ne 0 ]; then 
+        echo -e "${RED}错误: 需要 root 权限来安装 Redis${NC}"
+        echo "请使用: sudo $0"
+        exit 1
+    fi
+}
+
+# 检查 Redis 是否已安装
+check_existing() {
+    echo -e "${BLUE}[2/7] 检查是否已安装 Redis...${NC}"
+    
+    if command -v redis-server &> /dev/null; then
+        local redis_version=$(redis-server --version 2>&1 | head -n 1)
+        echo -e "${YELLOW}检测到已安装 Redis: ${redis_version}${NC}"
+        read -p "是否继续安装/更新？(y/N): " -n 1 -r
+        echo
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            echo -e "${YELLOW}安装已取消${NC}"
+            exit 0
+        fi
+    fi
+    
+    echo -e "${GREEN}✓ 检查完成${NC}"
+}
+
+# 安装依赖
+install_dependencies() {
+    echo -e "${BLUE}[3/7] 安装依赖包...${NC}"
+    
+    case $OS in
+        centos|rhel|fedora|rocky|almalinux)
+            if command -v dnf &> /dev/null; then
+                dnf install -y gcc gcc-c++ make wget tar || yum install -y gcc gcc-c++ make wget tar
+            else
+                yum install -y gcc gcc-c++ make wget tar
+            fi
+            ;;
+        ubuntu|debian)
+            apt-get update
+            apt-get install -y build-essential wget tar
+            ;;
+        opensuse*|sles)
+            zypper install -y gcc gcc-c++ make wget tar
+            ;;
+        arch|manjaro)
+            pacman -S --noconfirm base-devel wget tar
+            ;;
+        *)
+            echo -e "${YELLOW}警告: 未识别的系统类型，尝试安装基本编译工具${NC}"
+            if command -v yum &> /dev/null; then
+                yum install -y gcc gcc-c++ make wget tar
+            elif command -v apt-get &> /dev/null; then
+                apt-get update
+                apt-get install -y build-essential wget tar
+            fi
+            ;;
+    esac
+    
+    echo -e "${GREEN}✓ 依赖包安装完成${NC}"
+}
+
+# 安装 Redis（CentOS/RHEL/Fedora）
+install_redis_redhat() {
+    echo -e "${BLUE}[4/7] 安装 Redis（RedHat 系列）...${NC}"
+    
+    # 尝试使用 EPEL 仓库安装
+    if ! rpm -q epel-release &> /dev/null; then
+        echo "安装 EPEL 仓库..."
+        if command -v dnf &> /dev/null; then
+            dnf install -y epel-release || yum install -y epel-release
+        else
+            yum install -y epel-release
+        fi
+    fi
+    
+    # 尝试使用包管理器安装
+    if command -v dnf &> /dev/null; then
+        if dnf install -y redis 2>&1; then
+            echo -e "${GREEN}✓ Redis 安装完成（包管理器）${NC}"
+            return 0
+        fi
+    else
+        if yum install -y redis 2>&1; then
+            echo -e "${GREEN}✓ Redis 安装完成（包管理器）${NC}"
+            return 0
+        fi
+    fi
+    
+    # 如果包管理器安装失败，从源码编译
+    echo -e "${YELLOW}⚠ 包管理器安装失败，从源码编译安装...${NC}"
+    install_redis_from_source
+}
+
+# 安装 Redis（Ubuntu/Debian）
+install_redis_debian() {
+    echo -e "${BLUE}[4/7] 安装 Redis（Debian 系列）...${NC}"
+    
+    # 尝试使用包管理器安装
+    if apt-get install -y redis-server 2>&1; then
+        echo -e "${GREEN}✓ Redis 安装完成（包管理器）${NC}"
+        return 0
+    fi
+    
+    # 如果包管理器安装失败，从源码编译
+    echo -e "${YELLOW}⚠ 包管理器安装失败，从源码编译安装...${NC}"
+    install_redis_from_source
+}
+
+# 安装 Redis（openSUSE）
+install_redis_suse() {
+    echo -e "${BLUE}[4/7] 安装 Redis（openSUSE）...${NC}"
+    
+    # 尝试使用包管理器安装
+    if zypper install -y redis 2>&1; then
+        echo -e "${GREEN}✓ Redis 安装完成（包管理器）${NC}"
+        return 0
+    fi
+    
+    # 如果包管理器安装失败，从源码编译
+    echo -e "${YELLOW}⚠ 包管理器安装失败，从源码编译安装...${NC}"
+    install_redis_from_source
+}
+
+# 安装 Redis（Arch Linux）
+install_redis_arch() {
+    echo -e "${BLUE}[4/7] 安装 Redis（Arch Linux）...${NC}"
+    
+    # Arch Linux 通常有 Redis 包
+    if command -v yay &> /dev/null; then
+        yay -S --noconfirm redis || pacman -S --noconfirm redis
+    else
+        pacman -S --noconfirm redis
+    fi
+    
+    echo -e "${GREEN}✓ Redis 安装完成${NC}"
+}
+
+# 从源码编译安装 Redis
+install_redis_from_source() {
+    echo -e "${BLUE}[4/7] 从源码编译安装 Redis...${NC}"
+    
+    local build_dir="/tmp/redis-build"
+    local version="${REDIS_VERSION}"
+    
+    mkdir -p "$build_dir"
+    cd "$build_dir"
+    
+    # 下载源码
+    if [ ! -f "redis-${version}.tar.gz" ] && [ ! -f "redis-stable.tar.gz" ]; then
+        echo "下载 Redis ${version} 源码..."
+        if ! wget "https://download.redis.io/releases/redis-${version}.tar.gz" 2>&1; then
+            echo -e "${YELLOW}⚠ 无法下载 Redis ${version}，尝试下载最新稳定版${NC}"
+            if ! wget "https://download.redis.io/redis-stable.tar.gz" 2>&1; then
+                echo -e "${RED}✗ 无法下载 Redis 源码${NC}"
+                exit 1
+            fi
+        fi
+    fi
+    
+    # 解压
+    tar -xzf "redis-${version}.tar.gz" || tar -xzf "redis-stable.tar.gz"
+    cd redis-* || cd redis-stable
+    
+    # 编译安装
+    make -j$(nproc)
+    make install PREFIX=/usr/local
+    
+    # 创建必要的目录和文件
+    mkdir -p /etc/redis
+    mkdir -p /var/lib/redis
+    mkdir -p /var/log/redis
+    
+    # 复制配置文件
+    if [ ! -f /etc/redis/redis.conf ]; then
+        cp redis.conf /etc/redis/redis.conf
+    fi
+    
+    # 创建 systemd 服务文件
+    if [ ! -f /etc/systemd/system/redis.service ]; then
+        cat > /etc/systemd/system/redis.service <<EOF
+[Unit]
+Description=Redis In-Memory Data Store
+After=network.target
+
+[Service]
+User=redis
+Group=redis
+ExecStart=/usr/local/bin/redis-server /etc/redis/redis.conf
+ExecStop=/usr/local/bin/redis-cli shutdown
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+    fi
+    
+    # 创建 redis 用户（如果不存在）
+    if ! id redis &>/dev/null; then
+        useradd -r -s /bin/false redis
+    fi
+    
+    # 设置权限
+    chown -R redis:redis /var/lib/redis
+    chown -R redis:redis /var/log/redis
+    chown redis:redis /etc/redis/redis.conf
+    
+    # 清理
+    cd /
+    rm -rf "$build_dir"
+    
+    echo -e "${GREEN}✓ Redis 编译安装完成${NC}"
+}
+
+# 安装 Redis
+install_redis() {
+    case $OS in
+        centos|rhel|fedora|rocky|almalinux)
+            install_redis_redhat
+            ;;
+        ubuntu|debian)
+            install_redis_debian
+            ;;
+        opensuse*|sles)
+            install_redis_suse
+            ;;
+        arch|manjaro)
+            install_redis_arch
+            ;;
+        *)
+            echo -e "${YELLOW}警告: 未识别的系统类型，使用源码编译安装${NC}"
+            install_redis_from_source
+            ;;
+    esac
+}
+
+# 配置 Redis
+configure_redis() {
+    echo -e "${BLUE}[5/7] 配置 Redis...${NC}"
+    
+    # 查找 Redis 配置文件
+    REDIS_CONF=""
+    if [ -f /etc/redis/redis.conf ]; then
+        REDIS_CONF="/etc/redis/redis.conf"
+    elif [ -f /etc/redis.conf ]; then
+        REDIS_CONF="/etc/redis.conf"
+    elif [ -f /usr/local/etc/redis.conf ]; then
+        REDIS_CONF="/usr/local/etc/redis.conf"
+    fi
+    
+    if [ -n "$REDIS_CONF" ]; then
+        # 备份原配置
+        cp "$REDIS_CONF" "${REDIS_CONF}.bak.$(date +%Y%m%d_%H%M%S)"
+        
+        # 配置端口
+        if grep -q "^port " "$REDIS_CONF"; then
+            sed -i "s/^port .*/port ${REDIS_PORT}/" "$REDIS_CONF"
+        else
+            echo "port ${REDIS_PORT}" >> "$REDIS_CONF"
+        fi
+        
+        # 配置密码（如果提供）
+        if [ -n "$REDIS_PASSWORD" ]; then
+            if grep -q "^requirepass " "$REDIS_CONF"; then
+                sed -i "s/^requirepass .*/requirepass ${REDIS_PASSWORD}/" "$REDIS_CONF"
+            else
+                echo "requirepass ${REDIS_PASSWORD}" >> "$REDIS_CONF"
+            fi
+        fi
+        
+        # 配置持久化（启用 RDB）
+        sed -i 's/^save 900 1/save 900 1/' "$REDIS_CONF" || echo "save 900 1" >> "$REDIS_CONF"
+        sed -i 's/^save 300 10/save 300 10/' "$REDIS_CONF" || echo "save 300 10" >> "$REDIS_CONF"
+        sed -i 's/^save 60 10000/save 60 10000/' "$REDIS_CONF" || echo "save 60 10000" >> "$REDIS_CONF"
+        
+        # 配置数据目录
+        if grep -q "^dir " "$REDIS_CONF"; then
+            sed -i "s|^dir .*|dir /var/lib/redis|" "$REDIS_CONF"
+        else
+            echo "dir /var/lib/redis" >> "$REDIS_CONF"
+        fi
+        
+        # 配置日志
+        if grep -q "^logfile " "$REDIS_CONF"; then
+            sed -i "s|^logfile .*|logfile /var/log/redis/redis-server.log|" "$REDIS_CONF"
+        else
+            echo "logfile /var/log/redis/redis-server.log" >> "$REDIS_CONF"
+        fi
+        
+        echo -e "${GREEN}✓ Redis 配置完成${NC}"
+    else
+        echo -e "${YELLOW}⚠ 未找到 Redis 配置文件，使用默认配置${NC}"
+    fi
+}
+
+# 设置 Redis 密码（可选）
+set_redis_password() {
+    echo -e "${BLUE}[6/7] 设置 Redis 密码...${NC}"
+    
+    if [ -z "$REDIS_PASSWORD" ]; then
+        read -sp "请输入 Redis 密码（直接回车跳过）: " REDIS_PASSWORD
+        echo ""
+    fi
+    
+    if [ -n "$REDIS_PASSWORD" ] && [ -n "$REDIS_CONF" ]; then
+        if grep -q "^requirepass " "$REDIS_CONF"; then
+            sed -i "s/^requirepass .*/requirepass ${REDIS_PASSWORD}/" "$REDIS_CONF"
+        else
+            echo "requirepass ${REDIS_PASSWORD}" >> "$REDIS_CONF"
+        fi
+        echo -e "${GREEN}✓ Redis 密码已设置${NC}"
+    else
+        echo -e "${YELLOW}跳过 Redis 密码设置${NC}"
+    fi
+}
+
+# 启动 Redis 服务
+start_redis() {
+    echo -e "${BLUE}[7/7] 启动 Redis 服务...${NC}"
+    
+    # 创建必要的目录
+    mkdir -p /var/lib/redis
+    mkdir -p /var/log/redis
+    
+    # 创建 redis 用户（如果不存在）
+    if ! id redis &>/dev/null; then
+        useradd -r -s /bin/false redis
+        chown -R redis:redis /var/lib/redis
+        chown -R redis:redis /var/log/redis
+    fi
+    
+    # 启动服务
+    if command -v systemctl &> /dev/null; then
+        systemctl daemon-reload
+        systemctl enable redis 2>/dev/null || systemctl enable redis-server 2>/dev/null || true
+        systemctl start redis 2>/dev/null || systemctl start redis-server 2>/dev/null || {
+            # 如果服务启动失败，尝试直接启动
+            echo -e "${YELLOW}⚠ systemd 服务启动失败，尝试直接启动${NC}"
+            if command -v redis-server &> /dev/null; then
+                redis-server /etc/redis/redis.conf --daemonize yes 2>/dev/null || \
+                redis-server /etc/redis.conf --daemonize yes 2>/dev/null || true
+            fi
+        }
+    elif command -v service &> /dev/null; then
+        service redis start 2>/dev/null || service redis-server start 2>/dev/null || true
+        chkconfig redis on 2>/dev/null || chkconfig redis-server on 2>/dev/null || true
+    else
+        # 直接启动
+        if command -v redis-server &> /dev/null; then
+            redis-server /etc/redis/redis.conf --daemonize yes 2>/dev/null || \
+            redis-server /etc/redis.conf --daemonize yes 2>/dev/null || true
+        fi
+    fi
+    
+    # 等待服务启动
+    sleep 2
+    
+    echo -e "${GREEN}✓ Redis 服务启动完成${NC}"
+}
+
+# 验证安装
+verify_installation() {
+    echo -e "${BLUE}[8/8] 验证安装...${NC}"
+    
+    if command -v redis-server &> /dev/null; then
+        local version=$(redis-server --version 2>&1 | head -n 1)
+        echo -e "${GREEN}✓ Redis 安装成功${NC}"
+        echo "  版本: $version"
+    else
+        echo -e "${RED}✗ Redis 安装失败${NC}"
+        exit 1
+    fi
+    
+    # 测试连接
+    if command -v redis-cli &> /dev/null; then
+        if [ -n "$REDIS_PASSWORD" ]; then
+            if redis-cli -a "${REDIS_PASSWORD}" ping 2>/dev/null | grep -q "PONG"; then
+                echo -e "${GREEN}✓ Redis 连接测试成功${NC}"
+            else
+                echo -e "${YELLOW}⚠ Redis 连接测试失败，请检查密码和服务状态${NC}"
+            fi
+        else
+            if redis-cli ping 2>/dev/null | grep -q "PONG"; then
+                echo -e "${GREEN}✓ Redis 连接测试成功${NC}"
+            else
+                echo -e "${YELLOW}⚠ Redis 连接测试失败，请检查服务状态${NC}"
+            fi
+        fi
+    fi
+}
+
+# 显示后续步骤
+show_next_steps() {
+    echo ""
+    echo -e "${GREEN}========================================${NC}"
+    echo -e "${GREEN}Redis 安装完成！${NC}"
+    echo -e "${GREEN}========================================${NC}"
+    echo ""
+    echo -e "${BLUE}后续步骤:${NC}"
+    echo ""
+    echo "1. 检查 Redis 服务状态:"
+    echo "   sudo systemctl status redis"
+    echo "   或"
+    echo "   sudo systemctl status redis-server"
+    echo ""
+    echo "2. 连接 Redis:"
+    if [ -n "$REDIS_PASSWORD" ]; then
+        echo "   redis-cli -a '${REDIS_PASSWORD}'"
+    else
+        echo "   redis-cli"
+    fi
+    echo ""
+    echo "3. 测试 Redis:"
+    if [ -n "$REDIS_PASSWORD" ]; then
+        echo "   redis-cli -a '${REDIS_PASSWORD}' ping"
+    else
+        echo "   redis-cli ping"
+    fi
+    echo ""
+    echo "4. 修改 WAF 配置文件（如果使用 Redis）:"
+    echo "   vim lua/config.lua"
+    echo "   或使用 install.sh 自动配置"
+    echo ""
+    echo -e "${BLUE}服务管理:${NC}"
+    echo "  启动: sudo systemctl start redis"
+    echo "  停止: sudo systemctl stop redis"
+    echo "  重启: sudo systemctl restart redis"
+    echo "  开机自启: sudo systemctl enable redis"
+    echo ""
+    echo -e "${BLUE}配置文件位置:${NC}"
+    if [ -f /etc/redis/redis.conf ]; then
+        echo "  /etc/redis/redis.conf"
+    elif [ -f /etc/redis.conf ]; then
+        echo "  /etc/redis.conf"
+    fi
+    echo ""
+}
+
+# 主函数
+main() {
+    echo -e "${GREEN}========================================${NC}"
+    echo -e "${GREEN}Redis 一键安装和配置脚本${NC}"
+    echo -e "${GREEN}========================================${NC}"
+    echo ""
+    
+    # 检查 root 权限
+    check_root
+    
+    # 检测操作系统
+    detect_os
+    
+    # 检查现有安装
+    check_existing
+    
+    # 安装依赖
+    install_dependencies
+    
+    # 安装 Redis
+    install_redis
+    
+    # 配置 Redis
+    configure_redis
+    
+    # 设置密码
+    set_redis_password
+    
+    # 启动服务
+    start_redis
+    
+    # 验证安装
+    verify_installation
+    
+    # 显示后续步骤
+    show_next_steps
+}
+
+# 执行主函数
+main "$@"
+

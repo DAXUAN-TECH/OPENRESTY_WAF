@@ -18,6 +18,9 @@ REDIS_VERSION="${REDIS_VERSION:-7.0}"
 REDIS_PASSWORD="${REDIS_PASSWORD:-}"
 REDIS_PORT="${REDIS_PORT:-6379}"
 
+# 导出变量供父脚本使用
+export REDIS_PASSWORD
+
 # 检测系统类型
 detect_os() {
     echo -e "${BLUE}[1/7] 检测操作系统...${NC}"

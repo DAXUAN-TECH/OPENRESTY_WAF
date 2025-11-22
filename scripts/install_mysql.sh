@@ -21,6 +21,12 @@ MYSQL_USER=""
 MYSQL_USER_PASSWORD=""
 USE_NEW_USER="N"
 
+# 导出变量供父脚本使用
+export CREATED_DB_NAME=""
+export MYSQL_USER_FOR_WAF=""
+export MYSQL_PASSWORD_FOR_WAF=""
+export USE_NEW_USER
+
 # 检测系统类型
 detect_os() {
     echo -e "${BLUE}[1/7] 检测操作系统...${NC}"
@@ -352,8 +358,9 @@ EOF
     
     if [ $? -eq 0 ]; then
         echo -e "${GREEN}✓ 数据库 ${DB_NAME} 创建成功（字符集：utf8mb4，排序规则：utf8mb4_general_ci）${NC}"
-        # 保存数据库名称到全局变量
+        # 保存数据库名称到全局变量并导出
         MYSQL_DATABASE="$DB_NAME"
+        export CREATED_DB_NAME="$DB_NAME"
     else
         echo -e "${RED}✗ 数据库创建失败${NC}"
         return 1
@@ -419,10 +426,18 @@ EOF
         if [[ "$USE_NEW_USER" =~ ^[Yy]$ ]]; then
             MYSQL_USER="$DB_USER"
             MYSQL_USER_PASSWORD="$DB_USER_PASSWORD"
+            # 导出变量供父脚本使用
+            export MYSQL_USER_FOR_WAF="$DB_USER"
+            export MYSQL_PASSWORD_FOR_WAF="$DB_USER_PASSWORD"
+            export USE_NEW_USER="Y"
             echo -e "${GREEN}✓ 将使用用户 ${DB_USER} 连接 MySQL${NC}"
         else
             MYSQL_USER="root"
             MYSQL_USER_PASSWORD="$MYSQL_ROOT_PASSWORD"
+            # 导出变量供父脚本使用
+            export MYSQL_USER_FOR_WAF="root"
+            export MYSQL_PASSWORD_FOR_WAF="$MYSQL_ROOT_PASSWORD"
+            export USE_NEW_USER="N"
             echo -e "${YELLOW}将使用 root 用户连接 MySQL${NC}"
         fi
     else
@@ -465,9 +480,9 @@ init_database() {
     # 导入 SQL 脚本
     echo "正在导入 SQL 脚本: ${SQL_FILE}"
     if [ -n "$MYSQL_USER_PASSWORD" ]; then
-        mysql -h"127.0.0.1" -u"${MYSQL_USER}" -p"${MYSQL_USER_PASSWORD}" "${MYSQL_DATABASE}" < "$SQL_FILE" 2>&1
+        SQL_OUTPUT=$(mysql -h"127.0.0.1" -u"${MYSQL_USER}" -p"${MYSQL_USER_PASSWORD}" "${MYSQL_DATABASE}" < "$SQL_FILE" 2>&1)
     else
-        mysql -h"127.0.0.1" -u"${MYSQL_USER}" "${MYSQL_DATABASE}" < "$SQL_FILE" 2>&1
+        SQL_OUTPUT=$(mysql -h"127.0.0.1" -u"${MYSQL_USER}" "${MYSQL_DATABASE}" < "$SQL_FILE" 2>&1)
     fi
     
     SQL_EXIT_CODE=$?
@@ -476,7 +491,6 @@ init_database() {
         echo -e "${GREEN}✓ 数据库初始化成功${NC}"
     else
         # 检查是否是"表已存在"的错误（这是正常的）
-        SQL_OUTPUT=$(mysql -h"127.0.0.1" -u"${MYSQL_USER}" -p"${MYSQL_USER_PASSWORD}" "${MYSQL_DATABASE}" < "$SQL_FILE" 2>&1)
         if echo "$SQL_OUTPUT" | grep -qi "already exists\|Duplicate\|exists"; then
             echo -e "${YELLOW}⚠ 部分表可能已存在，这是正常的${NC}"
             echo -e "${GREEN}✓ 数据库初始化完成${NC}"

@@ -206,8 +206,12 @@ else
 fi
 
 # 应用内核参数
-sysctl -p > /dev/null 2>&1 || true
-echo -e "    ${GREEN}✓ 已应用内核参数${NC}"
+if sysctl -p > /dev/null 2>&1; then
+    echo -e "    ${GREEN}✓ 已应用内核参数${NC}"
+else
+    echo -e "    ${YELLOW}⚠ 内核参数应用失败，请检查 /etc/sysctl.conf 语法${NC}"
+    echo -e "    ${YELLOW}  运行 'sysctl -p' 查看详细错误信息${NC}"
+fi
 
 # 4.3 优化网络参数（临时生效）
 echo "  优化网络参数（临时生效）..."
@@ -341,6 +345,8 @@ echo "     $OPENRESTY_PREFIX/bin/openresty -s reload"
 echo ""
 echo -e "${YELLOW}重要提示:${NC}"
 echo "  - 文件描述符限制需要重新登录才能完全生效"
+echo "  - 或者运行以下命令临时生效（当前会话）:"
+echo "     ulimit -n $ULIMIT_NOFILE"
 echo "  - 内核参数优化已写入 /etc/sysctl.conf，重启后自动生效"
 echo "  - 如需恢复，备份文件在: $BACKUP_DIR"
 echo ""

@@ -71,6 +71,23 @@ echo -e "${GREEN}✓ 路径配置已更新${NC}"
 
 # 验证配置文件
 echo -e "${GREEN}[4/4] 验证配置...${NC}"
+
+# 验证 nginx.conf 语法
+if [ -f "${OPENRESTY_PREFIX}/bin/openresty" ]; then
+    echo "验证 nginx.conf 语法..."
+    if ${OPENRESTY_PREFIX}/bin/openresty -t > /dev/null 2>&1; then
+        echo -e "${GREEN}✓ nginx.conf 语法正确${NC}"
+    else
+        echo -e "${RED}✗ nginx.conf 语法错误${NC}"
+        echo "错误信息："
+        ${OPENRESTY_PREFIX}/bin/openresty -t 2>&1 | head -20
+        echo -e "${YELLOW}⚠ 请修复配置文件后重新部署${NC}"
+        exit 1
+    fi
+else
+    echo -e "${YELLOW}⚠ OpenResty 未安装，跳过语法验证${NC}"
+fi
+
 echo -e "${GREEN}✓ 配置文件处理完成${NC}"
 echo -e "${YELLOW}  注意: conf.d 和 lua 目录保持在项目目录，方便配置管理${NC}"
 

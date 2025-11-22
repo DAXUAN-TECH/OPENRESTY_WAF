@@ -94,68 +94,58 @@ else
     
     # 先安装 MySQL
     echo -e "${BLUE}开始安装 MySQL...${NC}"
-    if ! bash "${SCRIPTS_DIR}/install_mysql.sh"; then
+    
+    # 创建临时文件用于传递变量
+    TEMP_VARS_FILE=$(mktemp)
+    
+    # 执行安装脚本并捕获导出的变量
+    if ! bash -c "
+        source ${SCRIPTS_DIR}/install_mysql.sh
+        echo \"CREATED_DB_NAME=\${CREATED_DB_NAME}\" > ${TEMP_VARS_FILE}
+        echo \"MYSQL_USER_FOR_WAF=\${MYSQL_USER_FOR_WAF}\" >> ${TEMP_VARS_FILE}
+        echo \"MYSQL_PASSWORD_FOR_WAF=\${MYSQL_PASSWORD_FOR_WAF}\" >> ${TEMP_VARS_FILE}
+        echo \"USE_NEW_USER=\${USE_NEW_USER}\" >> ${TEMP_VARS_FILE}
+    "; then
         echo -e "${RED}✗ MySQL 安装失败${NC}"
         echo "请检查错误信息并重试"
+        rm -f "$TEMP_VARS_FILE"
         exit 1
     fi
     
-    echo ""
-    echo -e "${CYAN}配置 MySQL 连接信息${NC}"
+    # 读取导出的变量
+    if [ -f "$TEMP_VARS_FILE" ]; then
+        source "$TEMP_VARS_FILE"
+        rm -f "$TEMP_VARS_FILE"
+    fi
     
-    # 询问是否设置 root 密码（如果安装脚本未设置）
-    read -sp "请输入 MySQL root 密码（如果已设置请直接回车）: " MYSQL_ROOT_PASSWORD
-    echo ""
-    
-    # 配置数据库信息
-    read -p "数据库名称 [waf_db]: " MYSQL_DATABASE
-    MYSQL_DATABASE="${MYSQL_DATABASE:-waf_db}"
-    
-    read -p "数据库用户名 [waf_user]: " MYSQL_USER
-    MYSQL_USER="${MYSQL_USER:-waf_user}"
-    
-    read -sp "数据库密码（用于 WAF 连接）: " MYSQL_PASSWORD
-    echo ""
-    if [ -z "$MYSQL_PASSWORD" ]; then
-        echo -e "${RED}错误: 数据库密码不能为空${NC}"
-        exit 1
+    # 如果 install_mysql.sh 已经创建了数据库和用户，使用这些信息
+    if [ -n "$CREATED_DB_NAME" ] && [ -n "$MYSQL_USER_FOR_WAF" ] && [ -n "$MYSQL_PASSWORD_FOR_WAF" ]; then
+        echo -e "${GREEN}✓ 使用 install_mysql.sh 创建的数据库和用户${NC}"
+        MYSQL_DATABASE="$CREATED_DB_NAME"
+        MYSQL_USER="$MYSQL_USER_FOR_WAF"
+        MYSQL_PASSWORD="$MYSQL_PASSWORD_FOR_WAF"
+    else
+        # 如果没有创建，则提示用户输入
+        echo ""
+        echo -e "${CYAN}配置 MySQL 连接信息${NC}"
+        
+        read -p "数据库名称 [waf_db]: " MYSQL_DATABASE
+        MYSQL_DATABASE="${MYSQL_DATABASE:-waf_db}"
+        
+        read -p "数据库用户名 [waf_user]: " MYSQL_USER
+        MYSQL_USER="${MYSQL_USER:-waf_user}"
+        
+        read -sp "数据库密码（用于 WAF 连接）: " MYSQL_PASSWORD
+        echo ""
+        if [ -z "$MYSQL_PASSWORD" ]; then
+            echo -e "${RED}错误: 数据库密码不能为空${NC}"
+            exit 1
+        fi
     fi
     
     # 本地 MySQL 默认配置
     MYSQL_HOST="127.0.0.1"
     MYSQL_PORT="3306"
-    
-    # 创建数据库和用户
-    echo ""
-    echo -e "${GREEN}创建数据库和用户...${NC}"
-    
-    # 构建创建数据库和用户的 SQL
-    CREATE_DB_SQL="
-CREATE DATABASE IF NOT EXISTS ${MYSQL_DATABASE} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-CREATE USER IF NOT EXISTS '${MYSQL_USER}'@'localhost' IDENTIFIED BY '${MYSQL_PASSWORD}';
-GRANT ALL PRIVILEGES ON ${MYSQL_DATABASE}.* TO '${MYSQL_USER}'@'localhost';
-FLUSH PRIVILEGES;
-"
-    
-    # 使用 root 用户创建数据库和用户
-    if [ -n "$MYSQL_ROOT_PASSWORD" ]; then
-        mysql -u root -p"${MYSQL_ROOT_PASSWORD}" <<EOF
-${CREATE_DB_SQL}
-EOF
-    else
-        # 尝试无密码连接（某些系统可能没有设置 root 密码）
-        mysql -u root <<EOF
-${CREATE_DB_SQL}
-EOF
-    fi
-    
-    if [ $? -eq 0 ]; then
-        echo -e "${GREEN}✓ 数据库和用户创建成功${NC}"
-    else
-        echo -e "${YELLOW}⚠ 数据库和用户创建可能失败，请手动创建${NC}"
-        echo "SQL 命令："
-        echo "$CREATE_DB_SQL"
-    fi
     
     echo ""
 fi
@@ -213,7 +203,23 @@ if [[ "$USE_REDIS" =~ ^[Yy]$ ]]; then
             read -sp "Redis 密码（可选，直接回车跳过）: " REDIS_PASSWORD
             echo ""
             
-            # 如果设置了密码，更新 Redis 配置
+            # 从 install_redis.sh 获取密码（如果已设置）
+            TEMP_REDIS_VARS=$(mktemp)
+            if bash -c "
+                source ${SCRIPTS_DIR}/install_redis.sh 2>/dev/null || true
+                echo \"REDIS_PASSWORD=\${REDIS_PASSWORD}\" > ${TEMP_REDIS_VARS}
+            " 2>/dev/null && [ -f "$TEMP_REDIS_VARS" ]; then
+                source "$TEMP_REDIS_VARS"
+                rm -f "$TEMP_REDIS_VARS"
+            fi
+            
+            # 如果 install_redis.sh 未设置密码，询问用户
+            if [ -z "$REDIS_PASSWORD" ]; then
+                read -sp "Redis 密码（可选，直接回车跳过）: " REDIS_PASSWORD
+                echo ""
+            fi
+            
+            # 如果设置了密码，更新 Redis 配置（使用 Python，与 MySQL 一致）
             if [ -n "$REDIS_PASSWORD" ]; then
                 REDIS_CONF=""
                 if [ -f /etc/redis/redis.conf ]; then
@@ -222,7 +228,44 @@ if [[ "$USE_REDIS" =~ ^[Yy]$ ]]; then
                     REDIS_CONF="/etc/redis.conf"
                 fi
                 
-                if [ -n "$REDIS_CONF" ]; then
+                if [ -n "$REDIS_CONF" ] && command -v python3 &> /dev/null; then
+                    # 使用 Python 更新 Redis 配置（支持特殊字符）
+                    python3 << PYTHON_EOF
+import re
+import sys
+
+redis_conf = "$REDIS_CONF"
+redis_password = "$REDIS_PASSWORD"
+
+try:
+    with open(redis_conf, 'r', encoding='utf-8') as f:
+        content = f.read()
+    
+    # 转义密码中的特殊字符
+    escaped_password = redis_password.replace('\\', '\\\\').replace('$', '\\$').replace('`', '\\`')
+    
+    # 更新或添加 requirepass
+    if re.search(r'^requirepass ', content, re.MULTILINE):
+        content = re.sub(r'^requirepass .*', f'requirepass {escaped_password}', content, flags=re.MULTILINE)
+    else:
+        content += f'\nrequirepass {escaped_password}\n'
+    
+    with open(redis_conf, 'w', encoding='utf-8') as f:
+        f.write(content)
+    
+    print("✓ Redis 密码已设置")
+except Exception as e:
+    print(f"错误: {e}")
+    sys.exit(1)
+PYTHON_EOF
+                    if [ $? -eq 0 ]; then
+                        # 重启 Redis 服务
+                        if command -v systemctl &> /dev/null; then
+                            systemctl restart redis 2>/dev/null || systemctl restart redis-server 2>/dev/null || true
+                        fi
+                    fi
+                elif [ -n "$REDIS_CONF" ]; then
+                    # 备用方案：使用 sed（简单情况）
                     if grep -q "^requirepass " "$REDIS_CONF"; then
                         sed -i "s/^requirepass .*/requirepass ${REDIS_PASSWORD}/" "$REDIS_CONF"
                     else

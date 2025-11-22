@@ -600,6 +600,16 @@ main() {
     
     # 显示后续步骤
     show_next_steps
+    
+    # 如果设置了环境变量 TEMP_VARS_FILE，将变量写入文件供父脚本使用
+    if [ -n "$TEMP_VARS_FILE" ] && [ -f "$TEMP_VARS_FILE" ]; then
+        {
+            echo "CREATED_DB_NAME=\"${CREATED_DB_NAME}\""
+            echo "MYSQL_USER_FOR_WAF=\"${MYSQL_USER_FOR_WAF}\""
+            echo "MYSQL_PASSWORD_FOR_WAF=\"${MYSQL_PASSWORD_FOR_WAF}\""
+            echo "USE_NEW_USER=\"${USE_NEW_USER}\""
+        } > "$TEMP_VARS_FILE"
+    fi
 }
 
 # 执行主函数

@@ -72,6 +72,10 @@ OPENRESTY_WAF/
 │   ├── 性能优化指南.md      # 性能优化指南
 │   └── 项目检查报告.md      # 项目全面检查报告
 ├── scripts/                 # 脚本目录
+│   ├── install_mysql.sh     # MySQL 一键安装脚本（支持多种 Linux 发行版）
+│   ├── install_mysql_README.md  # MySQL 安装说明
+│   ├── install_redis.sh     # Redis 一键安装脚本（支持多种 Linux 发行版）
+│   ├── install_redis_README.md  # Redis 安装说明
 │   ├── install_openresty.sh # OpenResty 一键安装脚本
 │   ├── install_openresty_README.md  # OpenResty 安装说明
 │   ├── deploy.sh            # 部署脚本（自动处理路径）
@@ -122,17 +126,21 @@ sudo ./install.sh
 ```
 
 **脚本会自动完成**：
-1. ✅ 创建必要目录（自动创建日志目录）
-2. ✅ 安装 OpenResty（自动检测系统类型）
-3. ✅ 部署配置文件（自动处理路径）
-4. ✅ 配置 MySQL 和 Redis 连接（交互式输入）
-5. ✅ 初始化数据库（自动执行 SQL 脚本）
-6. ✅ 安装 GeoIP 数据库（可选）
-7. ✅ 系统优化（可选，推荐）
+1. ✅ 收集配置信息（支持本地/外部数据库选择）
+2. ✅ 安装数据库（如果选择本地，自动安装 MySQL 和 Redis）
+3. ✅ 创建必要目录（自动创建日志目录）
+4. ✅ 安装 OpenResty（自动检测系统类型）
+5. ✅ 部署配置文件（自动处理路径）
+6. ✅ 配置 MySQL 和 Redis 连接（自动同步密码）
+7. ✅ 初始化数据库（自动执行 SQL 脚本）
+8. ✅ 安装 GeoIP 数据库（可选）
+9. ✅ 系统优化（可选，推荐）
 
 **优势**：
 - 🎯 一步到位，无需手动操作
-- 🔒 自动配置数据库连接
+- 🗄️ 支持本地/外部数据库选择
+- 🔧 本地数据库自动安装和配置
+- 🔒 自动配置数据库连接，密码自动同步
 - 📝 自动备份配置文件
 - ⚙️ 支持交互式配置
 - 🛡️ 完善的错误处理（必须步骤失败会退出，可选步骤失败会继续）
@@ -148,9 +156,9 @@ sudo ./install.sh
 
 ### 1. 环境要求
 
-- OpenResty 1.21.4.1+
-- MySQL 8.0+ 或 MariaDB 10.6+
-- Redis 5.0+（可选）
+- OpenResty 1.21.4.1+（脚本自动安装）
+- MySQL 8.0+ 或 MariaDB 10.6+（可选择本地安装或使用外部数据库）
+- Redis 5.0+（可选，可选择本地安装或使用外部数据库）
 
 ### 2. 安装 OpenResty（推荐使用一键安装脚本）
 
@@ -184,13 +192,31 @@ opm get openresty/lua-resty-redis  # 可选
 
 ### 3. 数据库配置
 
+**方式一：使用一键安装脚本（推荐）**
+
+如果使用 `install.sh` 一键安装，可以选择：
+- **本地数据库**：脚本会自动安装 MySQL 和 Redis，并创建数据库和用户
+- **外部数据库**：填写外部数据库连接信息
+
+**方式二：手动安装和配置**
+
 ```bash
+# 安装 MySQL（使用一键安装脚本）
+sudo ./scripts/install_mysql.sh
+
+# 或安装 Redis（使用一键安装脚本）
+sudo ./scripts/install_redis.sh
+
 # 创建数据库
 mysql -u root -p < init_file/数据库设计.sql
 
 # 修改配置文件中的数据库连接信息
 vim lua/config.lua
 ```
+
+详细说明请参考：
+- [MySQL 安装说明](scripts/install_mysql_README.md)
+- [Redis 安装说明](scripts/install_redis_README.md)
 
 ### 4. 安装 GeoIP2 数据库（可选，用于地域封控）
 
@@ -271,8 +297,10 @@ sudo ./scripts/optimize_system.sh
 ### 部署与运维
 - [一键安装脚本说明](install_README.md) - 一键安装脚本使用说明（推荐）⭐
 - [部署文档](docs/部署文档.md) - 安装步骤、配置说明、故障排查
-- [部署脚本说明](scripts/deploy_README.md) - 部署脚本使用说明
+- [MySQL 安装说明](scripts/install_mysql_README.md) - MySQL 安装脚本说明
+- [Redis 安装说明](scripts/install_redis_README.md) - Redis 安装脚本说明
 - [OpenResty 安装说明](scripts/install_openresty_README.md) - OpenResty 安装脚本说明
+- [部署脚本说明](scripts/deploy_README.md) - 部署脚本使用说明
 - [GeoIP 安装说明](scripts/install_geoip_README.md) - GeoIP 数据库安装说明
 - [GeoIP 更新说明](scripts/update_geoip_README.md) - GeoIP 数据库更新说明
 - [系统优化说明](scripts/optimize_system_README.md) - 系统优化脚本说明

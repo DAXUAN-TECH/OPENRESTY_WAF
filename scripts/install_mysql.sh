@@ -309,6 +309,181 @@ verify_installation() {
     fi
 }
 
+# 创建数据库
+create_database() {
+    echo -e "${BLUE}[8/10] 创建数据库...${NC}"
+    
+    read -p "是否创建数据库？[Y/n]: " CREATE_DB
+    CREATE_DB="${CREATE_DB:-Y}"
+    
+    if [[ ! "$CREATE_DB" =~ ^[Yy]$ ]]; then
+        echo -e "${YELLOW}跳过数据库创建${NC}"
+        return 0
+    fi
+    
+    # 获取 root 密码（如果未设置）
+    if [ -z "$MYSQL_ROOT_PASSWORD" ]; then
+        read -sp "请输入 MySQL root 密码: " MYSQL_ROOT_PASSWORD
+        echo ""
+        if [ -z "$MYSQL_ROOT_PASSWORD" ]; then
+            echo -e "${YELLOW}⚠ 未输入 root 密码，尝试无密码连接${NC}"
+        fi
+    fi
+    
+    # 交互式输入数据库名称
+    read -p "请输入数据库名称 [waf_db]: " DB_NAME
+    DB_NAME="${DB_NAME:-waf_db}"
+    
+    # 创建数据库
+    echo "正在创建数据库 ${DB_NAME}..."
+    if [ -n "$MYSQL_ROOT_PASSWORD" ]; then
+        mysql -u root -p"${MYSQL_ROOT_PASSWORD}" <<EOF
+CREATE DATABASE IF NOT EXISTS ${DB_NAME} DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+EOF
+    else
+        mysql -u root <<EOF
+CREATE DATABASE IF NOT EXISTS ${DB_NAME} DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+EOF
+    fi
+    
+    if [ $? -eq 0 ]; then
+        echo -e "${GREEN}✓ 数据库 ${DB_NAME} 创建成功（字符集：utf8mb4）${NC}"
+        # 保存数据库名称到全局变量
+        MYSQL_DATABASE="$DB_NAME"
+    else
+        echo -e "${RED}✗ 数据库创建失败${NC}"
+        return 1
+    fi
+}
+
+# 创建数据库用户
+create_database_user() {
+    echo -e "${BLUE}[9/10] 创建数据库用户...${NC}"
+    
+    read -p "是否创建数据库用户？[Y/n]: " CREATE_USER
+    CREATE_USER="${CREATE_USER:-Y}"
+    
+    if [[ ! "$CREATE_USER" =~ ^[Yy]$ ]]; then
+        echo -e "${YELLOW}跳过用户创建，将使用 root 用户${NC}"
+        MYSQL_USER="root"
+        MYSQL_USER_PASSWORD="$MYSQL_ROOT_PASSWORD"
+        USE_NEW_USER="N"
+        return 0
+    fi
+    
+    # 检查是否已创建数据库
+    if [ -z "$MYSQL_DATABASE" ]; then
+        echo -e "${YELLOW}⚠ 未创建数据库，请先创建数据库${NC}"
+        return 1
+    fi
+    
+    # 交互式输入用户名
+    read -p "请输入数据库用户名 [waf_user]: " DB_USER
+    DB_USER="${DB_USER:-waf_user}"
+    
+    # 交互式输入密码
+    read -sp "请输入数据库用户密码: " DB_USER_PASSWORD
+    echo ""
+    if [ -z "$DB_USER_PASSWORD" ]; then
+        echo -e "${RED}错误: 用户密码不能为空${NC}"
+        return 1
+    fi
+    
+    # 创建用户
+    echo "正在创建用户 ${DB_USER}..."
+    if [ -n "$MYSQL_ROOT_PASSWORD" ]; then
+        mysql -u root -p"${MYSQL_ROOT_PASSWORD}" <<EOF
+CREATE USER IF NOT EXISTS '${DB_USER}'@'localhost' IDENTIFIED BY '${DB_USER_PASSWORD}';
+GRANT ALL PRIVILEGES ON ${MYSQL_DATABASE}.* TO '${DB_USER}'@'localhost';
+FLUSH PRIVILEGES;
+EOF
+    else
+        mysql -u root <<EOF
+CREATE USER IF NOT EXISTS '${DB_USER}'@'localhost' IDENTIFIED BY '${DB_USER_PASSWORD}';
+GRANT ALL PRIVILEGES ON ${MYSQL_DATABASE}.* TO '${DB_USER}'@'localhost';
+FLUSH PRIVILEGES;
+EOF
+    fi
+    
+    if [ $? -eq 0 ]; then
+        echo -e "${GREEN}✓ 用户 ${DB_USER} 创建成功，并已授予 ${MYSQL_DATABASE} 数据库的全部权限${NC}"
+        
+        # 询问是否使用新创建的用户
+        read -p "是否使用新创建的用户 ${DB_USER} 连接 MySQL？[Y/n]: " USE_NEW_USER
+        USE_NEW_USER="${USE_NEW_USER:-Y}"
+        
+        if [[ "$USE_NEW_USER" =~ ^[Yy]$ ]]; then
+            MYSQL_USER="$DB_USER"
+            MYSQL_USER_PASSWORD="$DB_USER_PASSWORD"
+            echo -e "${GREEN}✓ 将使用用户 ${DB_USER} 连接 MySQL${NC}"
+        else
+            MYSQL_USER="root"
+            MYSQL_USER_PASSWORD="$MYSQL_ROOT_PASSWORD"
+            echo -e "${YELLOW}将使用 root 用户连接 MySQL${NC}"
+        fi
+    else
+        echo -e "${RED}✗ 用户创建失败${NC}"
+        MYSQL_USER="root"
+        MYSQL_USER_PASSWORD="$MYSQL_ROOT_PASSWORD"
+        return 1
+    fi
+}
+
+# 初始化数据库数据
+init_database() {
+    echo -e "${BLUE}[10/10] 初始化数据库数据...${NC}"
+    
+    read -p "是否初始化数据库数据（导入 SQL 脚本）？[Y/n]: " INIT_DB
+    INIT_DB="${INIT_DB:-Y}"
+    
+    if [[ ! "$INIT_DB" =~ ^[Yy]$ ]]; then
+        echo -e "${YELLOW}跳过数据库初始化${NC}"
+        return 0
+    fi
+    
+    # 检查是否已创建数据库
+    if [ -z "$MYSQL_DATABASE" ]; then
+        echo -e "${YELLOW}⚠ 未创建数据库，无法初始化${NC}"
+        return 1
+    fi
+    
+    # 查找 SQL 文件
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+    SQL_FILE="${PROJECT_ROOT}/init_file/数据库设计.sql"
+    
+    if [ ! -f "$SQL_FILE" ]; then
+        echo -e "${YELLOW}⚠ SQL 文件不存在: ${SQL_FILE}${NC}"
+        echo "请手动导入 SQL 脚本"
+        return 1
+    fi
+    
+    # 导入 SQL 脚本
+    echo "正在导入 SQL 脚本: ${SQL_FILE}"
+    if [ -n "$MYSQL_USER_PASSWORD" ]; then
+        mysql -h"127.0.0.1" -u"${MYSQL_USER}" -p"${MYSQL_USER_PASSWORD}" "${MYSQL_DATABASE}" < "$SQL_FILE" 2>&1
+    else
+        mysql -h"127.0.0.1" -u"${MYSQL_USER}" "${MYSQL_DATABASE}" < "$SQL_FILE" 2>&1
+    fi
+    
+    SQL_EXIT_CODE=$?
+    
+    if [ $SQL_EXIT_CODE -eq 0 ]; then
+        echo -e "${GREEN}✓ 数据库初始化成功${NC}"
+    else
+        # 检查是否是"表已存在"的错误（这是正常的）
+        SQL_OUTPUT=$(mysql -h"127.0.0.1" -u"${MYSQL_USER}" -p"${MYSQL_USER_PASSWORD}" "${MYSQL_DATABASE}" < "$SQL_FILE" 2>&1)
+        if echo "$SQL_OUTPUT" | grep -qi "already exists\|Duplicate\|exists"; then
+            echo -e "${YELLOW}⚠ 部分表可能已存在，这是正常的${NC}"
+            echo -e "${GREEN}✓ 数据库初始化完成${NC}"
+        else
+            echo -e "${YELLOW}⚠ 数据库初始化可能有问题，请检查错误信息${NC}"
+            echo "错误信息："
+            echo "$SQL_OUTPUT" | head -20
+        fi
+    fi
+}
+
 # 显示后续步骤
 show_next_steps() {
     echo ""
@@ -316,6 +491,20 @@ show_next_steps() {
     echo -e "${GREEN}MySQL 安装完成！${NC}"
     echo -e "${GREEN}========================================${NC}"
     echo ""
+    
+    # 显示创建的数据库和用户信息
+    if [ -n "$MYSQL_DATABASE" ]; then
+        echo -e "${BLUE}数据库信息:${NC}"
+        echo "  数据库名称: ${MYSQL_DATABASE}"
+        if [ -n "$MYSQL_USER" ] && [ "$MYSQL_USER" != "root" ]; then
+            echo "  用户名: ${MYSQL_USER}"
+            echo "  密码: ${MYSQL_USER_PASSWORD}"
+        else
+            echo "  使用 root 用户"
+        fi
+        echo ""
+    fi
+    
     echo -e "${BLUE}后续步骤:${NC}"
     echo ""
     echo "1. 检查 MySQL 服务状态:"
@@ -324,15 +513,21 @@ show_next_steps() {
     echo "   sudo systemctl status mysql"
     echo ""
     echo "2. 连接 MySQL:"
-    if [ -n "$MYSQL_ROOT_PASSWORD" ]; then
+    if [ -n "$MYSQL_USER_PASSWORD" ] && [ "$MYSQL_USER" != "root" ]; then
+        echo "   mysql -u ${MYSQL_USER} -p'${MYSQL_USER_PASSWORD}' ${MYSQL_DATABASE}"
+    elif [ -n "$MYSQL_ROOT_PASSWORD" ]; then
         echo "   mysql -u root -p'${MYSQL_ROOT_PASSWORD}'"
     else
         echo "   mysql -u root -p"
     fi
     echo ""
-    echo "3. 创建数据库和用户（用于 WAF 系统）:"
-    echo "   mysql -u root -p < init_file/数据库设计.sql"
-    echo ""
+    
+    if [ -z "$MYSQL_DATABASE" ]; then
+        echo "3. 创建数据库和用户（用于 WAF 系统）:"
+        echo "   mysql -u root -p < init_file/数据库设计.sql"
+        echo ""
+    fi
+    
     echo "4. 修改 WAF 配置文件:"
     echo "   vim lua/config.lua"
     echo "   或使用 install.sh 自动配置"
@@ -375,6 +570,15 @@ main() {
     
     # 验证安装
     verify_installation
+    
+    # 创建数据库
+    create_database
+    
+    # 创建数据库用户
+    create_database_user
+    
+    # 初始化数据库数据
+    init_database
     
     # 显示后续步骤
     show_next_steps

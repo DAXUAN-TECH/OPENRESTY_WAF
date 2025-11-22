@@ -239,8 +239,10 @@ try:
     content = re.sub(r'(database = ")(waf_db)(")', r'\1' + mysql_database + r'\3', content)
     content = re.sub(r'(user = ")(waf_user)(")', r'\1' + mysql_user + r'\3', content)
     
-    # 更新密码（需要转义引号）
-    escaped_password = mysql_password.replace('"', '\\"').replace('\\', '\\\\')
+    # 更新密码（需要转义引号和反斜杠）
+    # 在 heredoc 中，反斜杠需要特殊处理
+    # 先转义反斜杠（4个反斜杠 = 2个实际反斜杠），再转义双引号
+    escaped_password = mysql_password.replace('\\', '\\\\').replace('"', '\\"')
     content = re.sub(r'(password = ")(waf_password)(")', r'\1' + escaped_password + r'\3', content)
     
     with open(config_file, 'w', encoding='utf-8') as f:
@@ -320,7 +322,9 @@ try:
     
     # 更新密码
     if redis_password:
-        escaped_password = redis_password.replace('"', '\\"').replace('\\', '\\\\')
+        # 在 heredoc 中，反斜杠需要特殊处理
+        # 先转义反斜杠，再转义双引号
+        escaped_password = redis_password.replace('\\', '\\\\').replace('"', '\\"')
         content = re.sub(r'password = nil', f'password = "{escaped_password}"', content)
     
     with open(config_file, 'w', encoding='utf-8') as f:

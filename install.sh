@@ -97,22 +97,17 @@ else
     
     # 创建临时文件用于传递变量
     TEMP_VARS_FILE=$(mktemp)
+    export TEMP_VARS_FILE
     
-    # 执行安装脚本并捕获导出的变量
-    if ! bash -c "
-        source ${SCRIPTS_DIR}/install_mysql.sh
-        echo \"CREATED_DB_NAME=\${CREATED_DB_NAME}\" > ${TEMP_VARS_FILE}
-        echo \"MYSQL_USER_FOR_WAF=\${MYSQL_USER_FOR_WAF}\" >> ${TEMP_VARS_FILE}
-        echo \"MYSQL_PASSWORD_FOR_WAF=\${MYSQL_PASSWORD_FOR_WAF}\" >> ${TEMP_VARS_FILE}
-        echo \"USE_NEW_USER=\${USE_NEW_USER}\" >> ${TEMP_VARS_FILE}
-    "; then
+    # 执行安装脚本
+    if ! bash "${SCRIPTS_DIR}/install_mysql.sh"; then
         echo -e "${RED}✗ MySQL 安装失败${NC}"
         echo "请检查错误信息并重试"
         rm -f "$TEMP_VARS_FILE"
         exit 1
     fi
     
-    # 读取导出的变量
+    # 读取导出的变量（install_mysql.sh 会在结束时写入）
     if [ -f "$TEMP_VARS_FILE" ]; then
         source "$TEMP_VARS_FILE"
         rm -f "$TEMP_VARS_FILE"
@@ -204,14 +199,8 @@ if [[ "$USE_REDIS" =~ ^[Yy]$ ]]; then
             echo ""
             
             # 从 install_redis.sh 获取密码（如果已设置）
-            TEMP_REDIS_VARS=$(mktemp)
-            if bash -c "
-                source ${SCRIPTS_DIR}/install_redis.sh 2>/dev/null || true
-                echo \"REDIS_PASSWORD=\${REDIS_PASSWORD}\" > ${TEMP_REDIS_VARS}
-            " 2>/dev/null && [ -f "$TEMP_REDIS_VARS" ]; then
-                source "$TEMP_REDIS_VARS"
-                rm -f "$TEMP_REDIS_VARS"
-            fi
+            # install_redis.sh 会导出 REDIS_PASSWORD，但需要重新执行才能获取
+            # 这里先询问用户，如果 install_redis.sh 已设置密码，用户可以直接回车跳过
             
             # 如果 install_redis.sh 未设置密码，询问用户
             if [ -z "$REDIS_PASSWORD" ]; then

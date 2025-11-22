@@ -361,8 +361,19 @@ install_redis_from_source() {
     cd redis-* || cd redis-stable
     
     # 编译安装
-    make -j$(nproc)
-    make install PREFIX=/usr/local
+    echo "编译 Redis（这可能需要几分钟）..."
+    local cpu_cores=$(nproc 2>/dev/null || echo "1")
+    if ! make -j${cpu_cores}; then
+        echo -e "${RED}✗ 编译失败${NC}"
+        echo -e "${YELLOW}提示: 如果编译失败，请检查错误信息，可能需要安装更多依赖${NC}"
+        exit 1
+    fi
+    
+    echo "安装 Redis..."
+    if ! make install PREFIX=/usr/local; then
+        echo -e "${RED}✗ 安装失败${NC}"
+        exit 1
+    fi
     
     # 创建必要的目录和文件
     mkdir -p /etc/redis

@@ -466,11 +466,13 @@ set_root_password() {
         # 等待 MySQL 完全启动
         sleep 3
         
-        # 尝试使用临时密码登录并修改
+        # 尝试使用临时密码登录并修改（MySQL 8.0 需要使用 --connect-expired-password）
         if [ -n "$TEMP_PASSWORD" ]; then
-            mysql -u root -p"${TEMP_PASSWORD}" -e "ALTER USER 'root'@'localhost' IDENTIFIED BY '${MYSQL_ROOT_PASSWORD}';" 2>/dev/null && \
-            echo -e "${GREEN}✓ root 密码已设置${NC}" || \
-            echo -e "${YELLOW}⚠ 使用临时密码设置失败，尝试无密码设置${NC}"
+            if mysql --connect-expired-password -u root -p"${TEMP_PASSWORD}" -e "ALTER USER 'root'@'localhost' IDENTIFIED BY '${MYSQL_ROOT_PASSWORD}';" 2>/dev/null; then
+                echo -e "${GREEN}✓ root 密码已设置${NC}"
+            else
+                echo -e "${YELLOW}⚠ 使用临时密码设置失败，尝试无密码设置${NC}"
+            fi
         fi
         
         # 如果临时密码方式失败，尝试无密码方式（某些系统可能没有临时密码，如 MariaDB）
@@ -509,6 +511,41 @@ DROP DATABASE IF EXISTS test;
 DELETE FROM mysql.db WHERE Db='test' OR Db='test\\_%';
 FLUSH PRIVILEGES;
 EOF
+        elif [ -n "$TEMP_PASSWORD" ]; then
+            # 如果未设置密码但有临时密码，使用临时密码（需要 --connect-expired-password）
+            echo -e "${YELLOW}⚠ 检测到临时密码，使用临时密码进行安全配置${NC}"
+            echo -e "${YELLOW}⚠ 注意：使用临时密码时，必须先修改密码才能执行其他操作${NC}"
+            echo -e "${YELLOW}⚠ 建议先设置 root 密码，然后再运行安全配置${NC}"
+            echo ""
+            read -p "是否现在设置 root 密码？[Y/n]: " SET_PWD_NOW
+            SET_PWD_NOW="${SET_PWD_NOW:-Y}"
+            if [[ "$SET_PWD_NOW" =~ ^[Yy]$ ]]; then
+                read -sp "请输入新密码: " NEW_PASSWORD
+                echo ""
+                if [ -n "$NEW_PASSWORD" ]; then
+                    # 使用临时密码修改密码
+                    if mysql --connect-expired-password -u root -p"${TEMP_PASSWORD}" -e "ALTER USER 'root'@'localhost' IDENTIFIED BY '${NEW_PASSWORD}';" 2>/dev/null; then
+                        MYSQL_ROOT_PASSWORD="$NEW_PASSWORD"
+                        echo -e "${GREEN}✓ root 密码已设置${NC}"
+                        # 现在可以使用新密码进行安全配置
+                        mysql -u root -p"${MYSQL_ROOT_PASSWORD}" <<EOF
+DELETE FROM mysql.user WHERE User='';
+DELETE FROM mysql.user WHERE User='root' AND Host NOT IN ('localhost', '127.0.0.1', '::1');
+DROP DATABASE IF EXISTS test;
+DELETE FROM mysql.db WHERE Db='test' OR Db='test\\_%';
+FLUSH PRIVILEGES;
+EOF
+                    else
+                        echo -e "${RED}✗ 密码修改失败，请手动修改密码后重试${NC}"
+                        echo -e "${YELLOW}手动修改密码命令:${NC}"
+                        echo "  mysql --connect-expired-password -u root -p'${TEMP_PASSWORD}' -e \"ALTER USER 'root'@'localhost' IDENTIFIED BY 'your_new_password';\""
+                    fi
+                else
+                    echo -e "${RED}错误: 新密码不能为空${NC}"
+                fi
+            else
+                echo -e "${YELLOW}跳过安全配置${NC}"
+            fi
         else
             echo -e "${YELLOW}⚠ 未设置 root 密码，跳过安全配置${NC}"
             echo -e "${YELLOW}⚠ 请手动运行: mysql_secure_installation${NC}"
@@ -608,8 +645,8 @@ EOF
                 read -sp "请输入新密码: " NEW_PASSWORD
                 echo ""
                 if [ -n "$NEW_PASSWORD" ]; then
-                    # 修改密码
-                    if mysql -u root -p"${TEMP_PASSWORD}" -e "ALTER USER 'root'@'localhost' IDENTIFIED BY '${NEW_PASSWORD}';" 2>/dev/null; then
+                    # 修改密码（MySQL 8.0 需要使用 --connect-expired-password）
+                    if mysql --connect-expired-password -u root -p"${TEMP_PASSWORD}" -e "ALTER USER 'root'@'localhost' IDENTIFIED BY '${NEW_PASSWORD}';" 2>/dev/null; then
                         MYSQL_ROOT_PASSWORD="$NEW_PASSWORD"
                         echo -e "${GREEN}✓ root 密码已修改${NC}"
                         # 重新尝试创建数据库

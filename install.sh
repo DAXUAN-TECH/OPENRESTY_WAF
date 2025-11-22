@@ -581,12 +581,9 @@ echo ""
 # ============================================
 # 步骤 5: 初始化数据库
 # ============================================
+CURRENT_STEP=$((CURRENT_STEP + 1))
 echo -e "${BLUE}========================================${NC}"
-if [[ "$MYSQL_INSTALL_LOCAL" == "Y" ]]; then
-    echo -e "${BLUE}步骤 5/6: 初始化数据库${NC}"
-else
-    echo -e "${BLUE}步骤 5/7: 初始化数据库${NC}"
-fi
+echo -e "${BLUE}步骤 ${CURRENT_STEP}/${TOTAL_STEPS}: 初始化数据库${NC}"
 echo -e "${BLUE}========================================${NC}"
 echo ""
 
@@ -643,12 +640,9 @@ echo ""
 # 步骤 6: 安装 GeoIP（可选）
 # ============================================
 if [[ "$INSTALL_GEOIP" =~ ^[Yy]$ ]]; then
+    CURRENT_STEP=$((CURRENT_STEP + 1))
     echo -e "${BLUE}========================================${NC}"
-    if [[ "$MYSQL_INSTALL_LOCAL" == "Y" ]]; then
-        echo -e "${BLUE}步骤 6/6: 安装 GeoIP 数据库${NC}"
-    else
-        echo -e "${BLUE}步骤 6/7: 安装 GeoIP 数据库${NC}"
-    fi
+    echo -e "${BLUE}步骤 ${CURRENT_STEP}/${TOTAL_STEPS}: 安装 GeoIP 数据库${NC}"
     echo -e "${BLUE}========================================${NC}"
     echo ""
     
@@ -667,12 +661,9 @@ fi
 # 步骤 7: 系统优化（可选）
 # ============================================
 if [[ "$OPTIMIZE_SYSTEM" =~ ^[Yy]$ ]]; then
+    CURRENT_STEP=$((CURRENT_STEP + 1))
     echo -e "${BLUE}========================================${NC}"
-    if [[ "$MYSQL_INSTALL_LOCAL" == "Y" ]]; then
-        echo -e "${BLUE}步骤 7/7: 系统优化${NC}"
-    else
-        echo -e "${BLUE}步骤 7/7: 系统优化${NC}"
-    fi
+    echo -e "${BLUE}步骤 ${CURRENT_STEP}/${TOTAL_STEPS}: 系统优化${NC}"
     echo -e "${BLUE}========================================${NC}"
     echo ""
     

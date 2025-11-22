@@ -3,7 +3,7 @@
 -- 字符集：utf8mb4
 -- 排序规则：utf8mb4_unicode_ci
 
-CREATE DATABASE IF NOT EXISTS waf_db DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE DATABASE IF NOT EXISTS waf_db DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
 
 USE waf_db;
 
@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS access_logs (
     KEY idx_request_time (request_time),
     KEY idx_status_code (status_code),
     KEY idx_client_ip_time (client_ip, request_time)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='访问日志表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='访问日志表';
 
 -- 2. 封控规则表
 CREATE TABLE IF NOT EXISTS block_rules (
@@ -50,7 +50,7 @@ CREATE TABLE IF NOT EXISTS block_rules (
     KEY idx_rule_type (rule_type),
     KEY idx_status_type (status, rule_type),
     KEY idx_start_end_time (start_time, end_time)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='封控规则表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='封控规则表';
 
 -- 插入地域封控规则示例
 -- 注意：以下示例仅供参考，实际使用时请根据需求修改
@@ -80,7 +80,7 @@ CREATE TABLE IF NOT EXISTS whitelist (
     KEY idx_status (status),
     KEY idx_ip_type (ip_type),
     KEY idx_status_type (status, ip_type)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='白名单表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='白名单表';
 
 -- 4. 封控日志表
 CREATE TABLE IF NOT EXISTS block_logs (
@@ -97,7 +97,7 @@ CREATE TABLE IF NOT EXISTS block_logs (
     KEY idx_block_time (block_time),
     KEY idx_rule_id (rule_id),
     KEY idx_client_ip_time (client_ip, block_time)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='封控日志表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='封控日志表';
 
 -- 5. 地域代码表（可选，用于地域封控）
 CREATE TABLE IF NOT EXISTS geo_codes (
@@ -110,7 +110,7 @@ CREATE TABLE IF NOT EXISTS geo_codes (
     PRIMARY KEY (id),
     UNIQUE KEY uk_country_code (country_code),
     KEY idx_country_region (country_code, region_code)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='地域代码表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='地域代码表';
 
 -- 插入一些常用的地域代码示例
 INSERT INTO geo_codes (country_code, country_name) VALUES
@@ -135,7 +135,7 @@ CREATE TABLE IF NOT EXISTS system_config (
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     PRIMARY KEY (id),
     UNIQUE KEY uk_config_key (config_key)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='系统配置表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='系统配置表';
 
 -- 插入默认配置
 INSERT INTO system_config (config_key, config_value, description) VALUES

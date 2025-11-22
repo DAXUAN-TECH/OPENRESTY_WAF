@@ -396,7 +396,14 @@ EOF
     
     # 创建 redis 用户（如果不存在）
     if ! id redis &>/dev/null; then
-        useradd -r -s /bin/false redis
+        # 根据系统类型使用不同的命令创建用户
+        if command -v adduser &> /dev/null && [ "$OS" = "alpine" ]; then
+            # Alpine Linux 使用 adduser
+            adduser -D -s /bin/false redis
+        else
+            # 其他系统使用 useradd
+            useradd -r -s /bin/false redis
+        fi
     fi
     
     # 设置权限

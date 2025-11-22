@@ -1,7 +1,12 @@
 #!/bin/bash
 
 # Redis 一键安装和配置脚本
-# 支持：CentOS/RHEL, Ubuntu/Debian, Fedora, openSUSE, Arch Linux
+# 支持多种 Linux 发行版：
+#   - RedHat 系列：CentOS, RHEL, Fedora, Rocky Linux, AlmaLinux, Oracle Linux, Amazon Linux
+#   - Debian 系列：Debian, Ubuntu, Linux Mint, Kali Linux, Raspbian
+#   - SUSE 系列：openSUSE, SLES
+#   - Arch 系列：Arch Linux, Manjaro
+#   - 其他：Alpine Linux, Gentoo
 # 用途：自动检测系统类型并安装配置 Redis
 
 set -e
@@ -25,22 +30,91 @@ export REDIS_PASSWORD
 detect_os() {
     echo -e "${BLUE}[1/7] 检测操作系统...${NC}"
     
+    # 优先使用 /etc/os-release (标准方法)
     if [ -f /etc/os-release ]; then
         . /etc/os-release
         OS=$ID
+        OS_LIKE=${ID_LIKE:-""}
         OS_VERSION=$VERSION_ID
+        
+        # 处理特殊发行版
+        case $OS in
+            "ol"|"oracle")
+                OS="oraclelinux"
+                ;;
+            "amzn"|"amazon")
+                OS="amazonlinux"
+                ;;
+            "raspbian")
+                OS="debian"
+                ;;
+            "linuxmint")
+                OS="ubuntu"  # Linux Mint 基于 Ubuntu
+                ;;
+            "kali")
+                OS="debian"  # Kali Linux 基于 Debian
+                ;;
+        esac
+        
+        # 如果没有版本号，尝试从其他文件获取
+        if [ -z "$OS_VERSION" ]; then
+            if [ -f /etc/redhat-release ]; then
+                OS_VERSION=$(cat /etc/redhat-release | sed 's/.*release \([0-9.]*\).*/\1/')
+            elif [ -f /etc/debian_version ]; then
+                OS_VERSION=$(cat /etc/debian_version)
+            fi
+        fi
     elif [ -f /etc/redhat-release ]; then
-        OS="centos"
-        OS_VERSION=$(cat /etc/redhat-release | sed 's/.*release \([0-9.]*\).*/\1/')
+        # RedHat 系列
+        local release_info=$(cat /etc/redhat-release)
+        if echo "$release_info" | grep -qi "centos"; then
+            OS="centos"
+        elif echo "$release_info" | grep -qi "red hat\|rhel"; then
+            OS="rhel"
+        elif echo "$release_info" | grep -qi "rocky"; then
+            OS="rocky"
+        elif echo "$release_info" | grep -qi "alma"; then
+            OS="almalinux"
+        elif echo "$release_info" | grep -qi "oracle"; then
+            OS="oraclelinux"
+        elif echo "$release_info" | grep -qi "amazon"; then
+            OS="amazonlinux"
+        else
+            OS="centos"  # 默认
+        fi
+        OS_VERSION=$(echo "$release_info" | sed 's/.*release \([0-9.]*\).*/\1/')
     elif [ -f /etc/debian_version ]; then
+        # Debian 系列
         OS="debian"
         OS_VERSION=$(cat /etc/debian_version)
+    elif [ -f /etc/alpine-release ]; then
+        # Alpine Linux
+        OS="alpine"
+        OS_VERSION=$(cat /etc/alpine-release)
+    elif [ -f /etc/arch-release ]; then
+        # Arch Linux
+        OS="arch"
+        OS_VERSION="rolling"
+    elif [ -f /etc/SuSE-release ]; then
+        # SUSE
+        OS="opensuse"
+        OS_VERSION=$(grep VERSION /etc/SuSE-release | awk '{print $3}')
     else
-        echo -e "${RED}错误: 无法检测操作系统类型${NC}"
-        exit 1
+        echo -e "${YELLOW}警告: 无法自动检测操作系统类型${NC}"
+        echo -e "${YELLOW}将尝试使用通用方法（从源码编译）${NC}"
+        OS="unknown"
+        OS_VERSION="unknown"
     fi
     
-    echo -e "${GREEN}✓ 检测到系统: ${OS} ${OS_VERSION}${NC}"
+    # 显示检测结果
+    if [ "$OS" != "unknown" ]; then
+        echo -e "${GREEN}✓ 检测到系统: ${OS} ${OS_VERSION}${NC}"
+        if [ -n "$OS_LIKE" ] && [ "$OS_LIKE" != "$OS" ]; then
+            echo -e "${BLUE}  基于: ${OS_LIKE}${NC}"
+        fi
+    else
+        echo -e "${YELLOW}⚠ 系统类型: 未知（将使用源码编译）${NC}"
+    fi
 }
 
 # 检查是否为 root 用户
@@ -75,14 +149,14 @@ install_dependencies() {
     echo -e "${BLUE}[3/7] 安装依赖包...${NC}"
     
     case $OS in
-        centos|rhel|fedora|rocky|almalinux)
+        centos|rhel|fedora|rocky|almalinux|oraclelinux|amazonlinux)
             if command -v dnf &> /dev/null; then
                 dnf install -y gcc gcc-c++ make wget tar || yum install -y gcc gcc-c++ make wget tar
             else
                 yum install -y gcc gcc-c++ make wget tar
             fi
             ;;
-        ubuntu|debian)
+        ubuntu|debian|linuxmint|raspbian|kali)
             apt-get update
             apt-get install -y build-essential wget tar
             ;;
@@ -92,13 +166,41 @@ install_dependencies() {
         arch|manjaro)
             pacman -S --noconfirm base-devel wget tar
             ;;
+        alpine)
+            apk add --no-cache gcc g++ make wget tar linux-headers
+            ;;
+        gentoo)
+            emerge --ask=n --quiet-build y gcc make wget tar
+            ;;
         *)
-            echo -e "${YELLOW}警告: 未识别的系统类型，尝试安装基本编译工具${NC}"
-            if command -v yum &> /dev/null; then
-                yum install -y gcc gcc-c++ make wget tar
+            echo -e "${YELLOW}警告: 未识别的系统类型，尝试使用通用方法安装依赖${NC}"
+            # 根据包管理器自动选择
+            if command -v yum &> /dev/null || command -v dnf &> /dev/null; then
+                echo -e "${BLUE}检测到 yum/dnf，使用 RedHat 系列方法${NC}"
+                if command -v dnf &> /dev/null; then
+                    dnf install -y gcc gcc-c++ make wget tar
+                else
+                    yum install -y gcc gcc-c++ make wget tar
+                fi
             elif command -v apt-get &> /dev/null; then
+                echo -e "${BLUE}检测到 apt-get，使用 Debian 系列方法${NC}"
                 apt-get update
                 apt-get install -y build-essential wget tar
+            elif command -v zypper &> /dev/null; then
+                echo -e "${BLUE}检测到 zypper，使用 SUSE 系列方法${NC}"
+                zypper install -y gcc gcc-c++ make wget tar
+            elif command -v pacman &> /dev/null; then
+                echo -e "${BLUE}检测到 pacman，使用 Arch 系列方法${NC}"
+                pacman -S --noconfirm base-devel wget tar
+            elif command -v apk &> /dev/null; then
+                echo -e "${BLUE}检测到 apk，使用 Alpine 方法${NC}"
+                apk add --no-cache gcc g++ make wget tar linux-headers
+            elif command -v emerge &> /dev/null; then
+                echo -e "${BLUE}检测到 emerge，使用 Gentoo 方法${NC}"
+                emerge --ask=n --quiet-build y gcc make wget tar
+            else
+                echo -e "${YELLOW}⚠ 无法确定包管理器，将尝试从源码编译（需要手动安装依赖）${NC}"
+                echo -e "${BLUE}所需依赖: gcc, g++, make, wget, tar${NC}"
             fi
             ;;
     esac
@@ -106,51 +208,60 @@ install_dependencies() {
     echo -e "${GREEN}✓ 依赖包安装完成${NC}"
 }
 
-# 安装 Redis（CentOS/RHEL/Fedora）
+# 安装 Redis（CentOS/RHEL/Fedora/Rocky/AlmaLinux/Oracle Linux/Amazon Linux）
 install_redis_redhat() {
     echo -e "${BLUE}[4/7] 安装 Redis（RedHat 系列）...${NC}"
     
-    # 尝试使用 EPEL 仓库安装
+    INSTALL_SUCCESS=0
+    
+    # 尝试使用 EPEL 仓库安装（某些系统需要）
     if ! rpm -q epel-release &> /dev/null; then
-        echo "安装 EPEL 仓库..."
+        echo "尝试安装 EPEL 仓库..."
         if command -v dnf &> /dev/null; then
-            dnf install -y epel-release || yum install -y epel-release
+            dnf install -y epel-release 2>/dev/null || yum install -y epel-release 2>/dev/null || true
         else
-            yum install -y epel-release
+            yum install -y epel-release 2>/dev/null || true
         fi
     fi
     
     # 尝试使用包管理器安装
     if command -v dnf &> /dev/null; then
         if dnf install -y redis 2>&1; then
-            echo -e "${GREEN}✓ Redis 安装完成（包管理器）${NC}"
-            return 0
+            INSTALL_SUCCESS=1
         fi
     else
         if yum install -y redis 2>&1; then
-            echo -e "${GREEN}✓ Redis 安装完成（包管理器）${NC}"
-            return 0
+            INSTALL_SUCCESS=1
         fi
     fi
     
     # 如果包管理器安装失败，从源码编译
-    echo -e "${YELLOW}⚠ 包管理器安装失败，从源码编译安装...${NC}"
-    install_redis_from_source
+    if [ $INSTALL_SUCCESS -eq 0 ]; then
+        echo -e "${YELLOW}⚠ 包管理器安装失败，从源码编译安装...${NC}"
+        install_redis_from_source
+    else
+        echo -e "${GREEN}✓ Redis 安装完成（包管理器）${NC}"
+    fi
 }
 
-# 安装 Redis（Ubuntu/Debian）
+# 安装 Redis（Ubuntu/Debian/Linux Mint/Kali Linux）
 install_redis_debian() {
     echo -e "${BLUE}[4/7] 安装 Redis（Debian 系列）...${NC}"
     
+    INSTALL_SUCCESS=0
+    
     # 尝试使用包管理器安装
     if apt-get install -y redis-server 2>&1; then
-        echo -e "${GREEN}✓ Redis 安装完成（包管理器）${NC}"
-        return 0
+        INSTALL_SUCCESS=1
     fi
     
     # 如果包管理器安装失败，从源码编译
-    echo -e "${YELLOW}⚠ 包管理器安装失败，从源码编译安装...${NC}"
-    install_redis_from_source
+    if [ $INSTALL_SUCCESS -eq 0 ]; then
+        echo -e "${YELLOW}⚠ 包管理器安装失败，从源码编译安装...${NC}"
+        install_redis_from_source
+    else
+        echo -e "${GREEN}✓ Redis 安装完成（包管理器）${NC}"
+    fi
 }
 
 # 安装 Redis（openSUSE）
@@ -168,18 +279,59 @@ install_redis_suse() {
     install_redis_from_source
 }
 
-# 安装 Redis（Arch Linux）
+# 安装 Redis（Arch Linux/Manjaro）
 install_redis_arch() {
     echo -e "${BLUE}[4/7] 安装 Redis（Arch Linux）...${NC}"
     
+    INSTALL_SUCCESS=0
+    
     # Arch Linux 通常有 Redis 包
     if command -v yay &> /dev/null; then
-        yay -S --noconfirm redis || pacman -S --noconfirm redis
+        if yay -S --noconfirm redis 2>&1; then
+            INSTALL_SUCCESS=1
+        fi
+    elif command -v paru &> /dev/null; then
+        if paru -S --noconfirm redis 2>&1; then
+            INSTALL_SUCCESS=1
+        fi
     else
-        pacman -S --noconfirm redis
+        if pacman -S --noconfirm redis 2>&1; then
+            INSTALL_SUCCESS=1
+        fi
     fi
     
-    echo -e "${GREEN}✓ Redis 安装完成${NC}"
+    if [ $INSTALL_SUCCESS -eq 0 ]; then
+        echo -e "${YELLOW}⚠ 包管理器安装失败，从源码编译安装...${NC}"
+        install_redis_from_source
+    else
+        echo -e "${GREEN}✓ Redis 安装完成${NC}"
+    fi
+}
+
+# 安装 Redis（Alpine Linux）
+install_redis_alpine() {
+    echo -e "${BLUE}[4/7] 安装 Redis（Alpine Linux）...${NC}"
+    
+    # Alpine Linux 使用 apk
+    if apk add --no-cache redis 2>&1; then
+        echo -e "${GREEN}✓ Redis 安装完成${NC}"
+    else
+        echo -e "${YELLOW}⚠ 包管理器安装失败，从源码编译安装...${NC}"
+        install_redis_from_source
+    fi
+}
+
+# 安装 Redis（Gentoo）
+install_redis_gentoo() {
+    echo -e "${BLUE}[4/7] 安装 Redis（Gentoo）...${NC}"
+    
+    # Gentoo 使用 emerge
+    if emerge --ask=n --quiet-build y dev-db/redis 2>&1; then
+        echo -e "${GREEN}✓ Redis 安装完成${NC}"
+    else
+        echo -e "${YELLOW}⚠ 包管理器安装失败，从源码编译安装...${NC}"
+        install_redis_from_source
+    fi
 }
 
 # 从源码编译安装 Redis
@@ -262,10 +414,10 @@ EOF
 # 安装 Redis
 install_redis() {
     case $OS in
-        centos|rhel|fedora|rocky|almalinux)
+        centos|rhel|fedora|rocky|almalinux|oraclelinux|amazonlinux)
             install_redis_redhat
             ;;
-        ubuntu|debian)
+        ubuntu|debian|linuxmint|raspbian|kali)
             install_redis_debian
             ;;
         opensuse*|sles)
@@ -274,8 +426,14 @@ install_redis() {
         arch|manjaro)
             install_redis_arch
             ;;
+        alpine)
+            install_redis_alpine
+            ;;
+        gentoo)
+            install_redis_gentoo
+            ;;
         *)
-            echo -e "${YELLOW}警告: 未识别的系统类型，使用源码编译安装${NC}"
+            echo -e "${YELLOW}警告: 未识别的系统类型 (${OS})，使用源码编译安装${NC}"
             install_redis_from_source
             ;;
     esac
@@ -390,9 +548,16 @@ start_redis() {
     
     # 创建 redis 用户（如果不存在）
     if ! id redis &>/dev/null; then
-        useradd -r -s /bin/false redis
-        chown -R redis:redis /var/lib/redis
-        chown -R redis:redis /var/log/redis
+        # 根据系统类型使用不同的命令创建用户
+        if command -v adduser &> /dev/null && [ "$OS" = "alpine" ]; then
+            # Alpine Linux 使用 adduser
+            adduser -D -s /bin/false redis
+        else
+            # 其他系统使用 useradd
+            useradd -r -s /bin/false redis
+        fi
+        chown -R redis:redis /var/lib/redis 2>/dev/null || true
+        chown -R redis:redis /var/log/redis 2>/dev/null || true
     fi
     
     # 启动服务

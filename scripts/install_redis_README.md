@@ -6,21 +6,44 @@
 
 ### 支持的系统
 
-- ✅ **CentOS/RHEL** (7.x, 8.x, 9.x)
+#### RedHat 系列
+- ✅ **CentOS** (6.x, 7.x, 8.x)
+- ✅ **RHEL** (6.x, 7.x, 8.x, 9.x)
 - ✅ **Fedora** (所有版本)
-- ✅ **Rocky Linux** / **AlmaLinux**
-- ✅ **Ubuntu** (18.04+)
-- ✅ **Debian** (9+)
-- ✅ **openSUSE** (所有版本)
-- ✅ **Arch Linux** / **Manjaro**
+- ✅ **Rocky Linux** (8.x, 9.x)
+- ✅ **AlmaLinux** (8.x, 9.x)
+- ✅ **Oracle Linux** (7.x, 8.x, 9.x)
+- ✅ **Amazon Linux** (1, 2, 2023)
+
+#### Debian 系列
+- ✅ **Debian** (9+, 包括 Debian 10/11/12)
+- ✅ **Ubuntu** (16.04+, 包括 18.04/20.04/22.04)
+- ✅ **Linux Mint** (所有版本，基于 Ubuntu)
+- ✅ **Kali Linux** (所有版本，基于 Debian)
+- ✅ **Raspbian** (所有版本，基于 Debian)
+
+#### SUSE 系列
+- ✅ **openSUSE** (Leap, Tumbleweed)
+- ✅ **SLES** (SUSE Linux Enterprise Server)
+
+#### Arch 系列
+- ✅ **Arch Linux** (需要 yay/paru 或从源码编译)
+- ✅ **Manjaro** (需要 yay/paru 或从源码编译)
+
+#### 其他发行版
+- ✅ **Alpine Linux** (使用 apk 或从源码编译)
+- ✅ **Gentoo** (使用 emerge 或从源码编译)
+- ✅ **其他未列出的发行版** (自动检测包管理器，失败则从源码编译)
 
 ### 功能特性
 
-- 🔍 **自动检测系统类型**：自动识别 Linux 发行版
+- 🔍 **自动检测系统类型**：自动识别 Linux 发行版（支持 20+ 种发行版）
 - 📦 **自动安装依赖**：根据系统类型安装编译工具
 - 🚀 **多种安装方式**：优先使用包管理器，失败则从源码编译
-- ⚙️ **自动配置**：配置文件、systemd 服务、用户权限
+- 🛡️ **容错机制**：包管理器失败时自动回退到源码编译
+- ⚙️ **自动配置**：配置文件、systemd/OpenRC 服务、用户权限
 - 🔒 **密码设置**：可选设置 Redis 密码
+- 🔧 **服务管理**：支持 systemd、service、OpenRC 等多种服务管理方式
 - ✅ **验证安装**：检查安装是否成功，测试连接
 
 ## 使用方法

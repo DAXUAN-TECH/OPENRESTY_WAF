@@ -525,16 +525,7 @@ set_root_password() {
         # 尝试使用临时密码登录并修改（MySQL 8.0 需要使用 --connect-expired-password）
         if [ -n "$TEMP_PASSWORD" ]; then
             echo "正在使用临时密码修改 root 密码..."
-            # 创建临时配置文件用于传递临时密码（避免特殊字符问题）
-            local temp_cnf=$(mktemp)
-            cat > "$temp_cnf" <<CNF_EOF
-[client]
-user=root
-password=${TEMP_PASSWORD}
-CNF_EOF
-            chmod 600 "$temp_cnf"
             
-            # 使用临时配置文件连接并修改密码（MySQL 8.0 必须使用 --connect-expired-password）
             # 使用 Python 安全地生成 SQL（转义单引号，避免 SQL 注入和 shell 解析问题）
             local sql_file=$(mktemp)
             if command -v python3 &> /dev/null; then
@@ -563,22 +554,48 @@ FLUSH PRIVILEGES;
 SQL_EOF
             fi
             
-            # 使用 SQL 文件执行密码修改（避免 heredoc 中的 shell 解析问题）
-            local error_output=$(mysql --connect-expired-password --defaults-file="$temp_cnf" < "$sql_file" 2>&1)
-            local exit_code=$?
+            # 尝试多种方式执行密码修改（兼容不同的 MySQL 版本）
+            local error_output=""
+            local exit_code=1
+            local has_error=1
+            
+            # 方法1: 使用配置文件方式（推荐，但某些版本可能不支持）
+            local temp_cnf=$(mktemp)
+            cat > "$temp_cnf" <<CNF_EOF
+[client]
+user=root
+password=${TEMP_PASSWORD}
+CNF_EOF
+            chmod 600 "$temp_cnf"
+            
+            # 先测试配置文件方式是否可用
+            local test_output=$(mysql --connect-expired-password --defaults-file="$temp_cnf" -e "SELECT 1;" 2>&1)
+            local test_exit_code=$?
+            
+            if [ $test_exit_code -eq 0 ] || ! echo "$test_output" | grep -qi "unknown variable.*defaults-file"; then
+                # 配置文件方式可用，使用它执行密码修改
+                error_output=$(mysql --connect-expired-password --defaults-file="$temp_cnf" < "$sql_file" 2>&1)
+                exit_code=$?
+            else
+                # 配置文件方式不可用，使用直接传递密码的方式（会有警告，但可以工作）
+                echo -e "${YELLOW}⚠ 检测到 --defaults-file 不可用，使用直接传递密码方式${NC}"
+                error_output=$(mysql --connect-expired-password -u root -p"${TEMP_PASSWORD}" < "$sql_file" 2>&1)
+                exit_code=$?
+            fi
+            
+            rm -f "$temp_cnf"
             
             # 检查错误输出中是否包含真正的错误（不仅仅是警告）
-            local has_error=0
-            if [ $exit_code -ne 0 ]; then
-                has_error=1
+            if [ $exit_code -eq 0 ]; then
+                has_error=0
             elif echo "$error_output" | grep -qiE "error|failed|denied|syntax" && ! echo "$error_output" | grep -qi "Warning: Using a password"; then
                 has_error=1
+            else
+                # 如果只有警告信息，可能实际上成功了
+                has_error=0
             fi
             
             rm -f "$sql_file"
-            
-            # 清理临时配置文件
-            rm -f "$temp_cnf"
             
             if [ $has_error -eq 0 ]; then
                 echo -e "${GREEN}✓ root 密码修改命令执行成功${NC}"
@@ -587,8 +604,12 @@ SQL_EOF
                 
                 # 刷新权限已在上面执行，无需再次执行
                 
-                # 验证新密码是否生效（使用配置文件方式，避免特殊字符问题）
+                # 验证新密码是否生效（尝试多种方式）
                 echo "验证新密码..."
+                local verify_output=""
+                local verify_exit_code=1
+                
+                # 方法1: 尝试使用配置文件方式
                 local verify_cnf=$(mktemp)
                 cat > "$verify_cnf" <<CNF_EOF
 [client]
@@ -597,8 +618,15 @@ password=${MYSQL_ROOT_PASSWORD}
 CNF_EOF
                 chmod 600 "$verify_cnf"
                 
-                local verify_output=$(mysql --defaults-file="$verify_cnf" -e "SELECT 1;" 2>&1)
-                local verify_exit_code=$?
+                verify_output=$(mysql --defaults-file="$verify_cnf" -e "SELECT 1;" 2>&1)
+                verify_exit_code=$?
+                
+                # 如果配置文件方式失败且错误是 "unknown variable"，尝试直接传递密码
+                if [ $verify_exit_code -ne 0 ] && echo "$verify_output" | grep -qi "unknown variable.*defaults-file"; then
+                    verify_output=$(mysql -u root -p"${MYSQL_ROOT_PASSWORD}" -e "SELECT 1;" 2>&1)
+                    verify_exit_code=$?
+                fi
+                
                 rm -f "$verify_cnf"
                 
                 if [ $verify_exit_code -eq 0 ]; then
@@ -607,6 +635,10 @@ CNF_EOF
                 else
                     # 如果验证失败，尝试使用临时密码再次验证密码是否真的修改了
                     echo -e "${YELLOW}⚠ 新密码验证失败，尝试使用临时密码验证...${NC}"
+                    local temp_verify=""
+                    local temp_verify_exit_code=1
+                    
+                    # 尝试使用配置文件方式
                     local temp_verify_cnf=$(mktemp)
                     cat > "$temp_verify_cnf" <<CNF_EOF
 [client]
@@ -615,8 +647,15 @@ password=${TEMP_PASSWORD}
 CNF_EOF
                     chmod 600 "$temp_verify_cnf"
                     
-                    local temp_verify=$(mysql --connect-expired-password --defaults-file="$temp_verify_cnf" -e "SELECT 1;" 2>&1)
-                    local temp_verify_exit_code=$?
+                    temp_verify=$(mysql --connect-expired-password --defaults-file="$temp_verify_cnf" -e "SELECT 1;" 2>&1)
+                    temp_verify_exit_code=$?
+                    
+                    # 如果配置文件方式失败，尝试直接传递密码
+                    if [ $temp_verify_exit_code -ne 0 ] && echo "$temp_verify" | grep -qi "unknown variable.*defaults-file"; then
+                        temp_verify=$(mysql --connect-expired-password -u root -p"${TEMP_PASSWORD}" -e "SELECT 1;" 2>&1)
+                        temp_verify_exit_code=$?
+                    fi
+                    
                     rm -f "$temp_verify_cnf"
                     # 更严格的验证：如果临时密码仍然可以登录（exit_code=0），说明密码修改失败
                     if [ $temp_verify_exit_code -eq 0 ]; then
@@ -719,8 +758,12 @@ secure_mysql() {
     echo
     if [[ ! $REPLY =~ ^[Nn]$ ]]; then
         if [ -n "$MYSQL_ROOT_PASSWORD" ]; then
-            # 先验证密码是否有效（使用配置文件方式，避免特殊字符问题）
+            # 先验证密码是否有效（尝试多种方式）
             echo "验证 root 密码..."
+            local verify_output=""
+            local verify_exit_code=1
+            
+            # 方法1: 尝试使用配置文件方式
             local verify_cnf=$(mktemp)
             cat > "$verify_cnf" <<CNF_EOF
 [client]
@@ -729,8 +772,15 @@ password=${MYSQL_ROOT_PASSWORD}
 CNF_EOF
             chmod 600 "$verify_cnf"
             
-            local verify_output=$(mysql --defaults-file="$verify_cnf" -e "SELECT 1;" 2>&1)
-            local verify_exit_code=$?
+            verify_output=$(mysql --defaults-file="$verify_cnf" -e "SELECT 1;" 2>&1)
+            verify_exit_code=$?
+            
+            # 如果配置文件方式失败且错误是 "unknown variable"，尝试直接传递密码
+            if [ $verify_exit_code -ne 0 ] && echo "$verify_output" | grep -qi "unknown variable.*defaults-file"; then
+                verify_output=$(mysql -u root -p"${MYSQL_ROOT_PASSWORD}" -e "SELECT 1;" 2>&1)
+                verify_exit_code=$?
+            fi
+            
             rm -f "$verify_cnf"
             
             if [ $verify_exit_code -ne 0 ]; then
@@ -767,7 +817,7 @@ CNF_EOF
                         echo -e "${YELLOW}跳过安全配置${NC}"
                         return 0
                     fi
-                    # 重新验证
+                    # 重新验证（尝试多种方式）
                     verify_cnf=$(mktemp)
                     cat > "$verify_cnf" <<CNF_EOF
 [client]
@@ -775,8 +825,16 @@ user=root
 password=${MYSQL_ROOT_PASSWORD}
 CNF_EOF
                     chmod 600 "$verify_cnf"
+                    
                     verify_output=$(mysql --defaults-file="$verify_cnf" -e "SELECT 1;" 2>&1)
                     verify_exit_code=$?
+                    
+                    # 如果配置文件方式失败，尝试直接传递密码
+                    if [ $verify_exit_code -ne 0 ] && echo "$verify_output" | grep -qi "unknown variable.*defaults-file"; then
+                        verify_output=$(mysql -u root -p"${MYSQL_ROOT_PASSWORD}" -e "SELECT 1;" 2>&1)
+                        verify_exit_code=$?
+                    fi
+                    
                     rm -f "$verify_cnf"
                     if [ $verify_exit_code -ne 0 ]; then
                         echo -e "${RED}✗ 密码仍然不正确，跳过安全配置${NC}"
@@ -789,8 +847,12 @@ CNF_EOF
                 fi
             else
                 echo -e "${GREEN}✓ root 密码验证成功${NC}"
-                # 非交互式运行 mysql_secure_installation（使用配置文件方式，避免特殊字符问题）
+                # 非交互式运行 mysql_secure_installation（尝试多种方式）
                 echo "执行安全配置..."
+                local secure_output=""
+                local secure_exit_code=1
+                
+                # 方法1: 尝试使用配置文件方式
                 local secure_cnf=$(mktemp)
                 cat > "$secure_cnf" <<CNF_EOF
 [client]
@@ -799,7 +861,7 @@ password=${MYSQL_ROOT_PASSWORD}
 CNF_EOF
                 chmod 600 "$secure_cnf"
                 
-                local secure_output=$(mysql --defaults-file="$secure_cnf" <<EOF 2>&1
+                secure_output=$(mysql --defaults-file="$secure_cnf" <<EOF 2>&1
 DELETE FROM mysql.user WHERE User='';
 DELETE FROM mysql.user WHERE User='root' AND Host NOT IN ('localhost', '127.0.0.1', '::1');
 DROP DATABASE IF EXISTS test;
@@ -807,7 +869,21 @@ DELETE FROM mysql.db WHERE Db='test' OR Db='test\\_%';
 FLUSH PRIVILEGES;
 EOF
 )
-                local secure_exit_code=$?
+                secure_exit_code=$?
+                
+                # 如果配置文件方式失败，尝试直接传递密码
+                if [ $secure_exit_code -ne 0 ] && echo "$secure_output" | grep -qi "unknown variable.*defaults-file"; then
+                    secure_output=$(mysql -u root -p"${MYSQL_ROOT_PASSWORD}" <<EOF 2>&1
+DELETE FROM mysql.user WHERE User='';
+DELETE FROM mysql.user WHERE User='root' AND Host NOT IN ('localhost', '127.0.0.1', '::1');
+DROP DATABASE IF EXISTS test;
+DELETE FROM mysql.db WHERE Db='test' OR Db='test\\_%';
+FLUSH PRIVILEGES;
+EOF
+)
+                    secure_exit_code=$?
+                fi
+                
                 rm -f "$secure_cnf"
                 
                 if [ $secure_exit_code -eq 0 ]; then
@@ -952,7 +1028,7 @@ create_database() {
     
     # 尝试连接并创建数据库（支持临时密码和特殊字符密码）
     if [ -n "$MYSQL_ROOT_PASSWORD" ]; then
-        # 首先验证密码是否有效（使用配置文件方式，避免特殊字符问题）
+        # 首先验证密码是否有效（尝试多种方式）
         local verify_cnf=$(mktemp)
         cat > "$verify_cnf" <<CNF_EOF
 [client]
@@ -961,9 +1037,15 @@ password=${MYSQL_ROOT_PASSWORD}
 CNF_EOF
         chmod 600 "$verify_cnf"
         
-        # 验证密码
+        # 验证密码（方法1: 配置文件方式）
         local verify_output=$(mysql --defaults-file="$verify_cnf" -e "SELECT 1;" 2>&1)
         local verify_exit_code=$?
+        
+        # 如果配置文件方式失败且错误是 "unknown variable"，尝试直接传递密码
+        if [ $verify_exit_code -ne 0 ] && echo "$verify_output" | grep -qi "unknown variable.*defaults-file"; then
+            verify_output=$(mysql -u root -p"${MYSQL_ROOT_PASSWORD}" -e "SELECT 1;" 2>&1)
+            verify_exit_code=$?
+        fi
         
         if [ $verify_exit_code -ne 0 ]; then
             # 密码验证失败，可能是密码不正确或密码修改未成功
@@ -1002,9 +1084,15 @@ CNF_EOF
 user=root
 password=${MYSQL_ROOT_PASSWORD}
 CNF_EOF
-                # 重新验证
+                # 重新验证（尝试多种方式）
                 verify_output=$(mysql --defaults-file="$verify_cnf" -e "SELECT 1;" 2>&1)
                 verify_exit_code=$?
+                
+                # 如果配置文件方式失败，尝试直接传递密码
+                if [ $verify_exit_code -ne 0 ] && echo "$verify_output" | grep -qi "unknown variable.*defaults-file"; then
+                    verify_output=$(mysql -u root -p"${MYSQL_ROOT_PASSWORD}" -e "SELECT 1;" 2>&1)
+                    verify_exit_code=$?
+                fi
                 if [ $verify_exit_code -ne 0 ]; then
                     echo -e "${RED}✗ 密码仍然不正确，请检查密码${NC}"
                     rm -f "$verify_cnf"
@@ -1017,12 +1105,21 @@ CNF_EOF
             fi
         fi
         
-        # 使用配置文件方式创建数据库（避免特殊字符问题）
+        # 使用配置文件方式创建数据库（尝试多种方式）
         db_create_output=$(mysql --defaults-file="$verify_cnf" <<EOF 2>&1
 CREATE DATABASE IF NOT EXISTS ${DB_NAME} DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
 EOF
 )
         db_create_exit_code=$?
+        
+        # 如果配置文件方式失败，尝试直接传递密码
+        if [ $db_create_exit_code -ne 0 ] && echo "$db_create_output" | grep -qi "unknown variable.*defaults-file"; then
+            db_create_output=$(mysql -u root -p"${MYSQL_ROOT_PASSWORD}" <<EOF 2>&1
+CREATE DATABASE IF NOT EXISTS ${DB_NAME} DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
+EOF
+)
+            db_create_exit_code=$?
+        fi
         
         # 清理临时文件
         rm -f "$verify_cnf"

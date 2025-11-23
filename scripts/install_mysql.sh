@@ -474,6 +474,9 @@ configure_mysql() {
 
 # 设置 root 密码（可选）
 set_root_password() {
+    # 临时禁用 set -e，以便更好地处理错误
+    set +e
+    
     echo -e "${BLUE}[5/7] 设置 MySQL root 密码...${NC}"
     
     # 如果检测到临时密码，主动提示用户设置密码
@@ -672,6 +675,7 @@ CNF_EOF
                 
                 if [ $verify_exit_code -eq 0 ]; then
                     echo -e "${GREEN}✓ 新密码验证成功${NC}"
+                    set -e  # 重新启用 set -e
                     return 0
                 else
                     # 如果验证失败，尝试使用临时密码再次验证密码是否真的修改了
@@ -718,6 +722,7 @@ CNF_EOF
                         echo "     ALTER USER 'root'@'127.0.0.1' IDENTIFIED BY 'your_new_password';"
                         echo "     ALTER USER 'root'@'::1' IDENTIFIED BY 'your_new_password';"
                         echo "     FLUSH PRIVILEGES;"
+                        set -e  # 重新启用 set -e
                         return 1
                     elif echo "$temp_verify" | grep -qi "expired\|must be reset\|Access denied"; then
                         echo -e "${GREEN}✓ 密码已成功修改（临时密码已失效）${NC}"
@@ -729,19 +734,30 @@ CNF_EOF
                         echo "  2. 如果密码包含特殊字符，可能需要使用引号: mysql -u root -p'your_password'"
                         echo "  3. 或者重新设置一个不包含特殊字符的密码"
                         # 继续执行，让用户知道密码已设置
+                        set -e  # 重新启用 set -e
                         return 0
                     else
                         echo -e "${RED}✗ 密码修改可能未生效${NC}"
                         echo -e "${YELLOW}验证错误: $verify_output${NC}"
                         echo -e "${YELLOW}临时密码验证结果: $temp_verify${NC}"
+                        set -e  # 重新启用 set -e
                         return 1
                     fi
                 fi
             else
+                echo ""
+                echo -e "${RED}========================================${NC}"
                 echo -e "${RED}✗ 使用临时密码修改密码失败${NC}"
+                echo -e "${RED}========================================${NC}"
+                echo ""
                 echo -e "${YELLOW}详细错误信息:${NC}"
                 # 显示所有错误信息（过滤掉密码警告）
-                echo "$error_output" | grep -vE "Warning: Using a password|Using a password on the command line" || echo "$error_output"
+                local clean_error=$(echo "$error_output" | grep -vE "Warning: Using a password|Using a password on the command line" || echo "$error_output")
+                if [ -n "$clean_error" ]; then
+                    echo "$clean_error"
+                else
+                    echo "$error_output"
+                fi
                 echo ""
                 echo -e "${YELLOW}退出代码: ${exit_code}${NC}"
                 echo ""
@@ -754,38 +770,41 @@ CNF_EOF
                 echo ""
                 echo -e "${BLUE}调试信息:${NC}"
                 echo "  临时密码: ${TEMP_PASSWORD}"
+                echo "  新密码长度: ${#MYSQL_ROOT_PASSWORD} 字符"
                 echo "  SQL 文件: $sql_file"
                 if [ -f "$sql_file" ]; then
                     echo "  SQL 内容预览:"
-                    head -3 "$sql_file" | sed 's/^/    /'
+                    head -5 "$sql_file" | sed 's/^/    /'
                 fi
                 echo ""
-                echo -e "${YELLOW}建议:${NC}"
-                echo "  1. 检查 MySQL 服务状态: systemctl status mysqld"
-                echo "  2. 检查 MySQL 日志: tail -20 /var/log/mysqld.log"
-                echo "  3. 手动测试临时密码连接:"
-                echo "     mysql --connect-expired-password -u root -p'${TEMP_PASSWORD}' -e 'SELECT 1;'"
-                echo "  4. 手动修改密码（推荐）:"
-                echo "     mysql --connect-expired-password -u root -p'${TEMP_PASSWORD}'"
-                echo "     # 然后在 MySQL 中执行:"
-                echo "     ALTER USER 'root'@'localhost' IDENTIFIED BY 'your_new_password';"
-                echo "     ALTER USER 'root'@'127.0.0.1' IDENTIFIED BY 'your_new_password';"
-                echo "     ALTER USER 'root'@'::1' IDENTIFIED BY 'your_new_password';"
-                echo "     FLUSH PRIVILEGES;"
+                echo -e "${YELLOW}建议的解决步骤:${NC}"
                 echo ""
-                read -p "是否继续尝试其他方式？[y/N]: " CONTINUE_TRY
-                if [[ ! "$CONTINUE_TRY" =~ ^[Yy]$ ]]; then
-                    # 清除错误的密码，让后续步骤重新提示输入
-                    MYSQL_ROOT_PASSWORD=""
-                    rm -f "$sql_file" 2>/dev/null || true
-                    return 1
-                fi
-                # 如果用户选择继续，尝试使用交互式方式
-                echo -e "${BLUE}尝试交互式修改密码...${NC}"
-                # 这里可以添加交互式修改的逻辑，但比较复杂，建议用户手动修改
-                echo -e "${YELLOW}请按照上面的建议手动修改密码，然后重新运行安装脚本${NC}"
+                echo "  步骤 1: 测试临时密码是否可以连接"
+                echo "    mysql --connect-expired-password -u root -p'${TEMP_PASSWORD}' -e 'SELECT 1;'"
+                echo ""
+                echo "  步骤 2: 如果步骤1成功，手动修改密码（推荐）"
+                echo "    mysql --connect-expired-password -u root -p'${TEMP_PASSWORD}'"
+                echo "    # 然后在 MySQL 中执行以下命令（替换 your_new_password 为你的新密码）:"
+                echo "    ALTER USER 'root'@'localhost' IDENTIFIED BY 'your_new_password';"
+                echo "    ALTER USER 'root'@'127.0.0.1' IDENTIFIED BY 'your_new_password';"
+                echo "    ALTER USER 'root'@'::1' IDENTIFIED BY 'your_new_password';"
+                echo "    FLUSH PRIVILEGES;"
+                echo "    exit;"
+                echo ""
+                echo "  步骤 3: 验证新密码"
+                echo "    mysql -u root -p'your_new_password' -e 'SELECT 1;'"
+                echo ""
+                echo "  步骤 4: 重新运行安装脚本"
+                echo "    sudo ./scripts/install_mysql.sh"
+                echo ""
+                echo -e "${BLUE}其他调试命令:${NC}"
+                echo "  检查 MySQL 服务状态: systemctl status mysqld"
+                echo "  查看 MySQL 错误日志: tail -30 /var/log/mysqld.log"
+                echo ""
+                # 清除错误的密码，让后续步骤重新提示输入
                 MYSQL_ROOT_PASSWORD=""
                 rm -f "$sql_file" 2>/dev/null || true
+                set -e  # 重新启用 set -e
                 return 1
             fi
         fi
@@ -811,6 +830,9 @@ CNF_EOF
     else
         echo -e "${YELLOW}跳过 root 密码设置${NC}"
     fi
+    
+    # 重新启用 set -e
+    set -e
 }
 
 # 配置安全设置（可选）
@@ -1496,7 +1518,16 @@ main() {
     configure_mysql
     
     # 设置 root 密码
-    set_root_password
+    if ! set_root_password; then
+        echo ""
+        echo -e "${RED}========================================${NC}"
+        echo -e "${RED}MySQL 安装失败：root 密码设置失败${NC}"
+        echo -e "${RED}========================================${NC}"
+        echo ""
+        echo -e "${YELLOW}请按照上面的错误提示手动修改密码，然后重新运行安装脚本${NC}"
+        echo ""
+        exit 1
+    fi
     
     # 安全配置
     secure_mysql

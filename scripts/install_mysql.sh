@@ -540,68 +540,74 @@ set_root_password() {
                 mysql_version="5.7"
                 echo -e "${GREEN}✓ 检测到 MySQL 5.7${NC}"
             else
-                echo -e "${YELLOW}⚠ 未检测到 MySQL 8.0 或 5.7，跳过密码策略设置${NC}"
+                echo -e "${YELLOW}⚠ 未检测到 MySQL 8.0 或 5.7${NC}"
             fi
             
-            # 先设置密码策略（如果检测到版本）
-            if [ -n "$mysql_version" ]; then
-                echo "设置密码策略..."
-                local policy_sql=""
-                if [ "$mysql_version" = "8.0" ]; then
-                    policy_sql="SET GLOBAL validate_password.policy = LOW; SET GLOBAL validate_password.length = 4;"
-                elif [ "$mysql_version" = "5.7" ]; then
-                    policy_sql="SET GLOBAL validate_password_policy = LOW; SET GLOBAL validate_password_length = 4;"
-                fi
-                
-                if [ -n "$policy_sql" ]; then
-                    # 创建临时配置文件用于传递临时密码
-                    local temp_cnf=$(mktemp)
-                    cat > "$temp_cnf" <<CNF_EOF
-[client]
-user=root
-password=${TEMP_PASSWORD}
-CNF_EOF
-                    chmod 600 "$temp_cnf"
-                    
-                    # 先测试配置文件方式是否可用
-                    local test_output=$(mysql --connect-expired-password --defaults-file="$temp_cnf" -e "SELECT 1;" 2>&1)
-                    local test_exit_code=$?
-                    local use_defaults_file=1
-                    
-                    if [ $test_exit_code -ne 0 ] && echo "$test_output" | grep -qi "unknown variable.*defaults-file"; then
-                        use_defaults_file=0
+            # 验证密码复杂度（必须满足：大写字母、小写字母、数字、特殊字符）
+            echo "验证密码复杂度..."
+            local password_valid=0
+            local password_check_msg=""
+            
+            if [ ${#MYSQL_ROOT_PASSWORD} -lt 8 ]; then
+                password_check_msg="密码长度至少 8 位"
+            elif ! echo "$MYSQL_ROOT_PASSWORD" | grep -q '[A-Z]'; then
+                password_check_msg="密码必须包含至少一个大写字母"
+            elif ! echo "$MYSQL_ROOT_PASSWORD" | grep -q '[a-z]'; then
+                password_check_msg="密码必须包含至少一个小写字母"
+            elif ! echo "$MYSQL_ROOT_PASSWORD" | grep -q '[0-9]'; then
+                password_check_msg="密码必须包含至少一个数字"
+            elif ! echo "$MYSQL_ROOT_PASSWORD" | grep -q '[^A-Za-z0-9]'; then
+                password_check_msg="密码必须包含至少一个特殊字符"
+            else
+                password_valid=1
+            fi
+            
+            if [ $password_valid -eq 0 ]; then
+                echo -e "${RED}✗ 密码复杂度验证失败: ${password_check_msg}${NC}"
+                echo -e "${YELLOW}密码要求:${NC}"
+                echo "  - 至少 8 位长度"
+                echo "  - 包含至少一个大写字母 (A-Z)"
+                echo "  - 包含至少一个小写字母 (a-z)"
+                echo "  - 包含至少一个数字 (0-9)"
+                echo "  - 包含至少一个特殊字符 (!@#$%^&*等)"
+                echo ""
+                read -p "是否重新输入密码？[Y/n]: " REENTER_PWD
+                REENTER_PWD="${REENTER_PWD:-Y}"
+                if [[ "$REENTER_PWD" =~ ^[Yy]$ ]]; then
+                    read -sp "请输入新的 MySQL root 密码（必须满足复杂度要求）: " MYSQL_ROOT_PASSWORD
+                    echo ""
+                    if [ -z "$MYSQL_ROOT_PASSWORD" ]; then
+                        echo -e "${RED}错误: 密码不能为空${NC}"
+                        set -e
+                        return 1
                     fi
-                    
-                    # 执行密码策略设置
-                    local policy_output=""
-                    local policy_exit_code=1
-                    if [ $use_defaults_file -eq 1 ]; then
-                        policy_output=$(mysql --connect-expired-password --defaults-file="$temp_cnf" -e "$policy_sql" 2>&1)
-                        policy_exit_code=$?
-                        if [ $policy_exit_code -ne 0 ] && echo "$policy_output" | grep -qi "unknown variable.*defaults-file"; then
-                            policy_output=$(mysql --connect-expired-password -u root -p"${TEMP_PASSWORD}" -e "$policy_sql" 2>&1)
-                            policy_exit_code=$?
-                        fi
+                    # 重新验证
+                    password_valid=0
+                    if [ ${#MYSQL_ROOT_PASSWORD} -lt 8 ]; then
+                        password_check_msg="密码长度至少 8 位"
+                    elif ! echo "$MYSQL_ROOT_PASSWORD" | grep -q '[A-Z]'; then
+                        password_check_msg="密码必须包含至少一个大写字母"
+                    elif ! echo "$MYSQL_ROOT_PASSWORD" | grep -q '[a-z]'; then
+                        password_check_msg="密码必须包含至少一个小写字母"
+                    elif ! echo "$MYSQL_ROOT_PASSWORD" | grep -q '[0-9]'; then
+                        password_check_msg="密码必须包含至少一个数字"
+                    elif ! echo "$MYSQL_ROOT_PASSWORD" | grep -q '[^A-Za-z0-9]'; then
+                        password_check_msg="密码必须包含至少一个特殊字符"
                     else
-                        policy_output=$(mysql --connect-expired-password -u root -p"${TEMP_PASSWORD}" -e "$policy_sql" 2>&1)
-                        policy_exit_code=$?
+                        password_valid=1
                     fi
-                    
-                    rm -f "$temp_cnf"
-                    
-                    if [ $policy_exit_code -eq 0 ]; then
-                        echo -e "${GREEN}✓ 密码策略设置成功${NC}"
-                    else
-                        # 检查是否是"变量不存在"的错误（某些版本可能没有密码验证插件）
-                        if echo "$policy_output" | grep -qi "Unknown system variable\|Unknown variable"; then
-                            echo -e "${YELLOW}⚠ 密码验证插件未安装，跳过密码策略设置${NC}"
-                        else
-                            echo -e "${YELLOW}⚠ 密码策略设置失败，但继续尝试修改密码${NC}"
-                            echo -e "${YELLOW}错误信息: $(echo "$policy_output" | grep -vE 'Warning: Using a password' | head -2)${NC}"
-                        fi
+                    if [ $password_valid -eq 0 ]; then
+                        echo -e "${RED}✗ 密码仍然不满足复杂度要求: ${password_check_msg}${NC}"
+                        set -e
+                        return 1
                     fi
+                else
+                    set -e
+                    return 1
                 fi
             fi
+            
+            echo -e "${GREEN}✓ 密码复杂度验证通过${NC}"
             
             # 生成修改密码的 SQL 文件
             echo "准备修改密码..."
@@ -761,6 +767,261 @@ CNF_EOF
                 
                 if [ $verify_exit_code -eq 0 ]; then
                     echo -e "${GREEN}✓ 新密码验证成功${NC}"
+                    
+                    # 步骤 2-7: 设置密码策略、修改配置文件、重启服务、验证
+                    if [ -n "$mysql_version" ]; then
+                        echo ""
+                        echo -e "${BLUE}步骤 2: 设置密码策略...${NC}"
+                        
+                        # 创建新密码的配置文件
+                        local new_pwd_cnf=$(mktemp)
+                        cat > "$new_pwd_cnf" <<CNF_EOF
+[client]
+user=root
+password=${MYSQL_ROOT_PASSWORD}
+CNF_EOF
+                        chmod 600 "$new_pwd_cnf"
+                        
+                        # 测试配置文件方式
+                        local test_new_output=$(mysql --defaults-file="$new_pwd_cnf" -e "SELECT 1;" 2>&1)
+                        local test_new_exit_code=$?
+                        local use_new_defaults_file=1
+                        
+                        if [ $test_new_exit_code -ne 0 ] && echo "$test_new_output" | grep -qi "unknown variable.*defaults-file"; then
+                            use_new_defaults_file=0
+                        fi
+                        
+                        # 设置密码策略
+                        local policy_sql=""
+                        local policy_length_sql=""
+                        if [ "$mysql_version" = "8.0" ]; then
+                            policy_sql="SET GLOBAL validate_password.policy = LOW;"
+                            policy_length_sql="SET GLOBAL validate_password.length = 6;"
+                        elif [ "$mysql_version" = "5.7" ]; then
+                            policy_sql="SET GLOBAL validate_password_policy = LOW;"
+                            policy_length_sql="SET GLOBAL validate_password_length = 6;"
+                        fi
+                        
+                        if [ -n "$policy_sql" ]; then
+                            # 设置密码策略为 LOW
+                            local policy_output=""
+                            local policy_exit_code=1
+                            if [ $use_new_defaults_file -eq 1 ]; then
+                                policy_output=$(mysql --defaults-file="$new_pwd_cnf" -e "$policy_sql" 2>&1)
+                                policy_exit_code=$?
+                                if [ $policy_exit_code -ne 0 ] && echo "$policy_output" | grep -qi "unknown variable.*defaults-file"; then
+                                    policy_output=$(mysql -u root -p"${MYSQL_ROOT_PASSWORD}" -e "$policy_sql" 2>&1)
+                                    policy_exit_code=$?
+                                fi
+                            else
+                                policy_output=$(mysql -u root -p"${MYSQL_ROOT_PASSWORD}" -e "$policy_sql" 2>&1)
+                                policy_exit_code=$?
+                            fi
+                            
+                            if [ $policy_exit_code -eq 0 ]; then
+                                echo -e "${GREEN}✓ 密码策略设置为 LOW${NC}"
+                            else
+                                if echo "$policy_output" | grep -qi "Unknown system variable\|Unknown variable"; then
+                                    echo -e "${YELLOW}⚠ 密码验证插件未安装，跳过密码策略设置${NC}"
+                                else
+                                    echo -e "${YELLOW}⚠ 密码策略设置失败: $(echo "$policy_output" | grep -vE 'Warning: Using a password' | head -1)${NC}"
+                                fi
+                            fi
+                            
+                            # 设置密码最小长度为 6
+                            echo -e "${BLUE}步骤 3: 设置密码最小长度为 6...${NC}"
+                            local length_output=""
+                            local length_exit_code=1
+                            if [ $use_new_defaults_file -eq 1 ]; then
+                                length_output=$(mysql --defaults-file="$new_pwd_cnf" -e "$policy_length_sql" 2>&1)
+                                length_exit_code=$?
+                                if [ $length_exit_code -ne 0 ] && echo "$length_output" | grep -qi "unknown variable.*defaults-file"; then
+                                    length_output=$(mysql -u root -p"${MYSQL_ROOT_PASSWORD}" -e "$policy_length_sql" 2>&1)
+                                    length_exit_code=$?
+                                fi
+                            else
+                                length_output=$(mysql -u root -p"${MYSQL_ROOT_PASSWORD}" -e "$policy_length_sql" 2>&1)
+                                length_exit_code=$?
+                            fi
+                            
+                            if [ $length_exit_code -eq 0 ]; then
+                                echo -e "${GREEN}✓ 密码最小长度设置为 6${NC}"
+                            else
+                                if echo "$length_output" | grep -qi "Unknown system variable\|Unknown variable"; then
+                                    echo -e "${YELLOW}⚠ 密码验证插件未安装，跳过密码长度设置${NC}"
+                                else
+                                    echo -e "${YELLOW}⚠ 密码长度设置失败: $(echo "$length_output" | grep -vE 'Warning: Using a password' | head -1)${NC}"
+                                fi
+                            fi
+                        fi
+                        
+                        rm -f "$new_pwd_cnf"
+                        
+                        # 步骤 4: 修改 my.cnf 配置文件
+                        echo -e "${BLUE}步骤 4: 修改 MySQL 配置文件 my.cnf...${NC}"
+                        local my_cnf_files=(
+                            "/etc/my.cnf"
+                            "/etc/mysql/my.cnf"
+                            "/usr/local/mysql/etc/my.cnf"
+                            "/usr/local/etc/my.cnf"
+                            "/etc/mysql/mysql.conf.d/mysqld.cnf"
+                        )
+                        
+                        local my_cnf_file=""
+                        for file in "${my_cnf_files[@]}"; do
+                            if [ -f "$file" ]; then
+                                my_cnf_file="$file"
+                                break
+                            fi
+                        done
+                        
+                        if [ -z "$my_cnf_file" ]; then
+                            # 如果找不到配置文件，尝试创建或使用默认位置
+                            my_cnf_file="/etc/my.cnf"
+                            if [ ! -f "$my_cnf_file" ]; then
+                                touch "$my_cnf_file"
+                                echo "[mysqld]" >> "$my_cnf_file"
+                            fi
+                        fi
+                        
+                        if [ -n "$my_cnf_file" ]; then
+                            # 检查是否已存在 lower_case_table_names 配置
+                            if grep -q "^lower_case_table_names" "$my_cnf_file" 2>/dev/null || grep -q "^[[:space:]]*lower_case_table_names" "$my_cnf_file" 2>/dev/null; then
+                                # 如果已存在，检查值是否为 1
+                                if grep -q "^[[:space:]]*lower_case_table_names[[:space:]]*=[[:space:]]*1" "$my_cnf_file" 2>/dev/null; then
+                                    echo -e "${GREEN}✓ lower_case_table_names 已设置为 1${NC}"
+                                else
+                                    # 修改现有配置
+                                    sed -i 's/^[[:space:]]*lower_case_table_names[[:space:]]*=.*/lower_case_table_names=1/' "$my_cnf_file" 2>/dev/null || \
+                                    sed -i 's/^lower_case_table_names.*/lower_case_table_names=1/' "$my_cnf_file" 2>/dev/null
+                                    echo -e "${GREEN}✓ 已更新 lower_case_table_names 为 1${NC}"
+                                fi
+                            else
+                                # 如果不存在，检查是否有 [mysqld] 段
+                                if grep -q "^\[mysqld\]" "$my_cnf_file" 2>/dev/null; then
+                                    # 在 [mysqld] 段下添加配置
+                                    sed -i '/^\[mysqld\]/a lower_case_table_names=1' "$my_cnf_file" 2>/dev/null
+                                    echo -e "${GREEN}✓ 已在 [mysqld] 段下添加 lower_case_table_names=1${NC}"
+                                else
+                                    # 如果没有 [mysqld] 段，添加它和配置
+                                    echo "" >> "$my_cnf_file"
+                                    echo "[mysqld]" >> "$my_cnf_file"
+                                    echo "lower_case_table_names=1" >> "$my_cnf_file"
+                                    echo -e "${GREEN}✓ 已添加 [mysqld] 段和 lower_case_table_names=1${NC}"
+                                fi
+                            fi
+                            echo -e "${BLUE}  配置文件位置: ${my_cnf_file}${NC}"
+                        else
+                            echo -e "${YELLOW}⚠ 未找到 MySQL 配置文件，跳过 lower_case_table_names 设置${NC}"
+                        fi
+                        
+                        # 步骤 5: 重启 MySQL 服务
+                        echo -e "${BLUE}步骤 5: 重启 MySQL 服务...${NC}"
+                        if command -v systemctl &> /dev/null; then
+                            if systemctl restart mysqld 2>/dev/null || systemctl restart mysql 2>/dev/null; then
+                                echo -e "${GREEN}✓ MySQL 服务重启成功${NC}"
+                                # 等待服务启动
+                                sleep 3
+                            else
+                                echo -e "${YELLOW}⚠ MySQL 服务重启失败，请手动重启${NC}"
+                            fi
+                        elif command -v service &> /dev/null; then
+                            if service mysqld restart 2>/dev/null || service mysql restart 2>/dev/null; then
+                                echo -e "${GREEN}✓ MySQL 服务重启成功${NC}"
+                                sleep 3
+                            else
+                                echo -e "${YELLOW}⚠ MySQL 服务重启失败，请手动重启${NC}"
+                            fi
+                        else
+                            echo -e "${YELLOW}⚠ 未找到 systemctl 或 service 命令，请手动重启 MySQL 服务${NC}"
+                        fi
+                        
+                        # 步骤 6: 验证修改的内容
+                        echo -e "${BLUE}步骤 6: 验证修改的内容...${NC}"
+                        
+                        # 验证密码策略
+                        local verify_cnf=$(mktemp)
+                        cat > "$verify_cnf" <<CNF_EOF
+[client]
+user=root
+password=${MYSQL_ROOT_PASSWORD}
+CNF_EOF
+                        chmod 600 "$verify_cnf"
+                        
+                        local verify_use_defaults=1
+                        local verify_test=$(mysql --defaults-file="$verify_cnf" -e "SELECT 1;" 2>&1)
+                        if [ $? -ne 0 ] && echo "$verify_test" | grep -qi "unknown variable.*defaults-file"; then
+                            verify_use_defaults=0
+                        fi
+                        
+                        if [ "$mysql_version" = "8.0" ]; then
+                            local policy_check=""
+                            if [ $verify_use_defaults -eq 1 ]; then
+                                policy_check=$(mysql --defaults-file="$verify_cnf" -e "SHOW VARIABLES LIKE 'validate_password.policy';" 2>&1 | grep -i "validate_password.policy" | awk '{print $2}')
+                            else
+                                policy_check=$(mysql -u root -p"${MYSQL_ROOT_PASSWORD}" -e "SHOW VARIABLES LIKE 'validate_password.policy';" 2>&1 | grep -i "validate_password.policy" | awk '{print $2}')
+                            fi
+                            if [ "$policy_check" = "LOW" ]; then
+                                echo -e "${GREEN}✓ 密码策略验证: LOW${NC}"
+                            else
+                                echo -e "${YELLOW}⚠ 密码策略验证: ${policy_check:-未设置}${NC}"
+                            fi
+                            
+                            local length_check=""
+                            if [ $verify_use_defaults -eq 1 ]; then
+                                length_check=$(mysql --defaults-file="$verify_cnf" -e "SHOW VARIABLES LIKE 'validate_password.length';" 2>&1 | grep -i "validate_password.length" | awk '{print $2}')
+                            else
+                                length_check=$(mysql -u root -p"${MYSQL_ROOT_PASSWORD}" -e "SHOW VARIABLES LIKE 'validate_password.length';" 2>&1 | grep -i "validate_password.length" | awk '{print $2}')
+                            fi
+                            if [ "$length_check" = "6" ]; then
+                                echo -e "${GREEN}✓ 密码最小长度验证: 6${NC}"
+                            else
+                                echo -e "${YELLOW}⚠ 密码最小长度验证: ${length_check:-未设置}${NC}"
+                            fi
+                        elif [ "$mysql_version" = "5.7" ]; then
+                            local policy_check=""
+                            if [ $verify_use_defaults -eq 1 ]; then
+                                policy_check=$(mysql --defaults-file="$verify_cnf" -e "SHOW VARIABLES LIKE 'validate_password_policy';" 2>&1 | grep -i "validate_password_policy" | awk '{print $2}')
+                            else
+                                policy_check=$(mysql -u root -p"${MYSQL_ROOT_PASSWORD}" -e "SHOW VARIABLES LIKE 'validate_password_policy';" 2>&1 | grep -i "validate_password_policy" | awk '{print $2}')
+                            fi
+                            if [ "$policy_check" = "LOW" ]; then
+                                echo -e "${GREEN}✓ 密码策略验证: LOW${NC}"
+                            else
+                                echo -e "${YELLOW}⚠ 密码策略验证: ${policy_check:-未设置}${NC}"
+                            fi
+                            
+                            local length_check=""
+                            if [ $verify_use_defaults -eq 1 ]; then
+                                length_check=$(mysql --defaults-file="$verify_cnf" -e "SHOW VARIABLES LIKE 'validate_password_length';" 2>&1 | grep -i "validate_password_length" | awk '{print $2}')
+                            else
+                                length_check=$(mysql -u root -p"${MYSQL_ROOT_PASSWORD}" -e "SHOW VARIABLES LIKE 'validate_password_length';" 2>&1 | grep -i "validate_password_length" | awk '{print $2}')
+                            fi
+                            if [ "$length_check" = "6" ]; then
+                                echo -e "${GREEN}✓ 密码最小长度验证: 6${NC}"
+                            else
+                                echo -e "${YELLOW}⚠ 密码最小长度验证: ${length_check:-未设置}${NC}"
+                            fi
+                        fi
+                        
+                        # 验证 lower_case_table_names
+                        local case_check=""
+                        if [ $verify_use_defaults -eq 1 ]; then
+                            case_check=$(mysql --defaults-file="$verify_cnf" -e "SHOW VARIABLES LIKE 'lower_case_table_names';" 2>&1 | grep -i "lower_case_table_names" | awk '{print $2}')
+                        else
+                            case_check=$(mysql -u root -p"${MYSQL_ROOT_PASSWORD}" -e "SHOW VARIABLES LIKE 'lower_case_table_names';" 2>&1 | grep -i "lower_case_table_names" | awk '{print $2}')
+                        fi
+                        if [ "$case_check" = "1" ]; then
+                            echo -e "${GREEN}✓ lower_case_table_names 验证: 1（不区分大小写）${NC}"
+                        else
+                            echo -e "${YELLOW}⚠ lower_case_table_names 验证: ${case_check:-未设置}（需要重启 MySQL 服务后生效）${NC}"
+                        fi
+                        
+                        rm -f "$verify_cnf"
+                        
+                        echo -e "${BLUE}步骤 7: 继续下一步...${NC}"
+                    fi
+                    
                     set -e  # 重新启用 set -e
                     return 0
                 else

@@ -19,6 +19,8 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # 配置变量
+# 保存原始环境变量（如果通过环境变量设置）
+MYSQL_VERSION_FROM_ENV="${MYSQL_VERSION:-}"
 MYSQL_VERSION="${MYSQL_VERSION:-8.0}"
 MYSQL_ROOT_PASSWORD="${MYSQL_ROOT_PASSWORD:-}"
 MYSQL_DATABASE=""
@@ -318,6 +320,15 @@ check_existing() {
                     REINSTALL_MODE="keep_data"
                     # 先卸载软件包
                     completely_uninstall_mysql
+                    # 卸载后清除版本选择，让用户重新选择
+                    # 但保留通过环境变量设置的版本（如果存在）
+                    if [ -z "${MYSQL_VERSION_FROM_ENV:-}" ]; then
+                        # 如果版本不是通过环境变量设置的，清除它让用户重新选择
+                        unset MYSQL_VERSION
+                    else
+                        # 如果版本是通过环境变量设置的，恢复它
+                        MYSQL_VERSION="${MYSQL_VERSION_FROM_ENV}"
+                    fi
                     ;;
                 3)
                     echo -e "${RED}警告: 将删除所有 MySQL 数据和配置！${NC}"
@@ -396,11 +407,29 @@ check_existing() {
                         rm -rf /var/run/mysqld 2>/dev/null || true
                         rm -rf /var/run/mysql 2>/dev/null || true
                         rm -rf /tmp/mysql* 2>/dev/null || true
+                        
+                        # 卸载后清除版本选择，让用户重新选择
+                        # 但保留通过环境变量设置的版本（如果存在）
+                        if [ -z "${MYSQL_VERSION_FROM_ENV:-}" ]; then
+                            # 如果版本不是通过环境变量设置的，清除它让用户重新选择
+                            unset MYSQL_VERSION
+                        else
+                            # 如果版本是通过环境变量设置的，恢复它
+                            MYSQL_VERSION="${MYSQL_VERSION_FROM_ENV}"
+                        fi
                     else
                         echo -e "${GREEN}取消删除，将保留数据重新安装${NC}"
                         REINSTALL_MODE="keep_data"
                         # 仍然需要卸载软件包
                         completely_uninstall_mysql
+                        # 卸载后清除版本选择，让用户重新选择
+                        if [ -z "${MYSQL_VERSION_FROM_ENV:-}" ]; then
+                            # 如果版本不是通过环境变量设置的，清除它让用户重新选择
+                            unset MYSQL_VERSION
+                        else
+                            # 如果版本是通过环境变量设置的，恢复它
+                            MYSQL_VERSION="${MYSQL_VERSION_FROM_ENV}"
+                        fi
                     fi
                     ;;
                 *)
@@ -420,12 +449,20 @@ check_existing() {
             REINSTALL_MODE="update"
             # 先卸载软件包
             completely_uninstall_mysql
+            # 卸载后清除版本选择，让用户重新选择
+            if [ -z "${MYSQL_VERSION_FROM_ENV:-}" ]; then
+                # 如果版本不是通过环境变量设置的，清除它让用户重新选择
+                unset MYSQL_VERSION
+            else
+                # 如果版本是通过环境变量设置的，恢复它
+                MYSQL_VERSION="${MYSQL_VERSION_FROM_ENV}"
+            fi
         fi
     else
         echo -e "${GREEN}✓ MySQL 未安装，将进行全新安装${NC}"
     fi
     
-    # 版本选择（如果未设置环境变量）
+    # 版本选择（如果未设置环境变量或已卸载需要重新选择）
     if [ -z "$MYSQL_VERSION" ]; then
         echo ""
         echo "请选择 MySQL 版本："
@@ -500,10 +537,59 @@ check_existing() {
                 ;;
         esac
     else
-        echo -e "${BLUE}使用环境变量指定的版本: ${MYSQL_VERSION}${NC}"
+        if [ -n "${MYSQL_VERSION_FROM_ENV:-}" ] && [ "$MYSQL_VERSION" = "${MYSQL_VERSION_FROM_ENV:-}" ]; then
+            echo -e "${BLUE}使用环境变量指定的版本: ${MYSQL_VERSION}${NC}"
+        else
+            echo -e "${BLUE}使用已选择的版本: ${MYSQL_VERSION}${NC}"
+        fi
     fi
     
     echo -e "${GREEN}✓ 检查完成${NC}"
+}
+
+# 验证 MySQL 是否真正安装成功
+verify_mysql_installation() {
+    local install_log="${1:-/tmp/mysql_install.log}"
+    
+    # 检查安装日志中是否有错误信息
+    if [ -f "$install_log" ]; then
+        # 检查是否有"没有可用软件包"或"错误：无须任何处理"等错误
+        if grep -qiE "没有可用软件包|No package available|错误：无须任何处理|Nothing to do|No packages marked for|无需任何处理" "$install_log"; then
+            echo -e "${RED}✗ 检测到安装失败：软件包不可用或无需处理${NC}"
+            return 1
+        fi
+        
+        # 检查是否有其他安装错误（排除GPG警告）
+        if grep -qiE "Error.*install|Failed.*install|无法安装|安装失败|安装.*失败" "$install_log" && ! grep -qiE "GPG key|GPG 密钥|GPG.*warning" "$install_log"; then
+            echo -e "${RED}✗ 检测到安装错误${NC}"
+            return 1
+        fi
+        
+        # 检查是否真的安装了软件包（检查日志中是否有"Installed"或"已安装"）
+        if ! grep -qiE "Installed|已安装|安装.*完成|Complete!" "$install_log"; then
+            # 如果没有安装成功的标记，检查是否有错误
+            if grep -qiE "Error|Failed|失败|错误" "$install_log" && ! grep -qiE "GPG|warning|警告" "$install_log"; then
+                echo -e "${RED}✗ 未检测到安装成功的标记${NC}"
+                return 1
+            fi
+        fi
+    fi
+    
+    # 检查 MySQL 命令是否存在
+    if ! command -v mysql &> /dev/null && ! command -v mysqld &> /dev/null; then
+        echo -e "${RED}✗ MySQL 命令未找到，安装可能失败${NC}"
+        return 1
+    fi
+    
+    # 检查 MySQL 服务包是否已安装（RedHat系列）
+    if command -v rpm &> /dev/null; then
+        if ! rpm -qa | grep -qiE "mysql-community-server|mysql-server|mariadb-server"; then
+            echo -e "${RED}✗ MySQL/MariaDB 服务包未安装${NC}"
+            return 1
+        fi
+    fi
+    
+    return 0
 }
 
 # 安装 MySQL（CentOS/RHEL/Fedora/Rocky/AlmaLinux/Oracle Linux/Amazon Linux）
@@ -622,13 +708,29 @@ install_mysql_redhat() {
         echo "尝试安装包: $version_package"
         if command -v dnf &> /dev/null; then
             if dnf install -y "$version_package" "mysql-community-client-${full_version}" 2>&1 | tee /tmp/mysql_install.log; then
-                INSTALL_SUCCESS=1
-                echo -e "${GREEN}✓ MySQL ${full_version} 安装成功${NC}"
+                # 验证是否真正安装成功
+                if verify_mysql_installation /tmp/mysql_install.log; then
+                    INSTALL_SUCCESS=1
+                    echo -e "${GREEN}✓ MySQL ${full_version} 安装成功${NC}"
+                else
+                    echo -e "${RED}✗ MySQL ${full_version} 安装失败${NC}"
+                    INSTALL_SUCCESS=0
+                fi
+            else
+                INSTALL_SUCCESS=0
             fi
         else
             if yum install -y "$version_package" "mysql-community-client-${full_version}" 2>&1 | tee /tmp/mysql_install.log; then
-                INSTALL_SUCCESS=1
-                echo -e "${GREEN}✓ MySQL ${full_version} 安装成功${NC}"
+                # 验证是否真正安装成功
+                if verify_mysql_installation /tmp/mysql_install.log; then
+                    INSTALL_SUCCESS=1
+                    echo -e "${GREEN}✓ MySQL ${full_version} 安装成功${NC}"
+                else
+                    echo -e "${RED}✗ MySQL ${full_version} 安装失败${NC}"
+                    INSTALL_SUCCESS=0
+                fi
+            else
+                INSTALL_SUCCESS=0
             fi
         fi
         
@@ -638,14 +740,30 @@ install_mysql_redhat() {
             if command -v dnf &> /dev/null; then
                 # 使用 dnf 安装指定版本（dnf 支持版本锁定）
                 if dnf install -y "mysql-community-server-${major_minor}*" "mysql-community-client-${major_minor}*" 2>&1 | tee /tmp/mysql_install.log; then
-                    INSTALL_SUCCESS=1
-                    echo -e "${GREEN}✓ MySQL ${major_minor} 系列安装成功${NC}"
+                    # 验证是否真正安装成功
+                    if verify_mysql_installation /tmp/mysql_install.log; then
+                        INSTALL_SUCCESS=1
+                        echo -e "${GREEN}✓ MySQL ${major_minor} 系列安装成功${NC}"
+                    else
+                        echo -e "${RED}✗ MySQL ${major_minor} 系列安装失败${NC}"
+                        INSTALL_SUCCESS=0
+                    fi
+                else
+                    INSTALL_SUCCESS=0
                 fi
             else
                 # 使用 yum 安装指定版本
                 if yum install -y "mysql-community-server-${major_minor}*" "mysql-community-client-${major_minor}*" 2>&1 | tee /tmp/mysql_install.log; then
-                    INSTALL_SUCCESS=1
-                    echo -e "${GREEN}✓ MySQL ${major_minor} 系列安装成功${NC}"
+                    # 验证是否真正安装成功
+                    if verify_mysql_installation /tmp/mysql_install.log; then
+                        INSTALL_SUCCESS=1
+                        echo -e "${GREEN}✓ MySQL ${major_minor} 系列安装成功${NC}"
+                    else
+                        echo -e "${RED}✗ MySQL ${major_minor} 系列安装失败${NC}"
+                        INSTALL_SUCCESS=0
+                    fi
+                else
+                    INSTALL_SUCCESS=0
                 fi
             fi
         fi
@@ -669,13 +787,29 @@ install_mysql_redhat() {
             # 再次尝试安装
             if command -v dnf &> /dev/null; then
                 if dnf install -y mysql-community-server mysql-community-client 2>&1 | tee /tmp/mysql_install.log; then
-                    INSTALL_SUCCESS=1
-                    echo -e "${GREEN}✓ MySQL ${major_minor} 系列安装成功${NC}"
+                    # 验证是否真正安装成功
+                    if verify_mysql_installation /tmp/mysql_install.log; then
+                        INSTALL_SUCCESS=1
+                        echo -e "${GREEN}✓ MySQL ${major_minor} 系列安装成功${NC}"
+                    else
+                        echo -e "${RED}✗ MySQL ${major_minor} 系列安装失败${NC}"
+                        INSTALL_SUCCESS=0
+                    fi
+                else
+                    INSTALL_SUCCESS=0
                 fi
             else
                 if yum install -y mysql-community-server mysql-community-client 2>&1 | tee /tmp/mysql_install.log; then
-                    INSTALL_SUCCESS=1
-                    echo -e "${GREEN}✓ MySQL ${major_minor} 系列安装成功${NC}"
+                    # 验证是否真正安装成功
+                    if verify_mysql_installation /tmp/mysql_install.log; then
+                        INSTALL_SUCCESS=1
+                        echo -e "${GREEN}✓ MySQL ${major_minor} 系列安装成功${NC}"
+                    else
+                        echo -e "${RED}✗ MySQL ${major_minor} 系列安装失败${NC}"
+                        INSTALL_SUCCESS=0
+                    fi
+                else
+                    INSTALL_SUCCESS=0
                 fi
             fi
         fi
@@ -685,12 +819,28 @@ install_mysql_redhat() {
     if [ $INSTALL_SUCCESS -eq 0 ]; then
         echo -e "${YELLOW}⚠ 指定版本安装失败，尝试使用默认安装${NC}"
         if command -v dnf &> /dev/null; then
-            if dnf install -y mysql-server mysql 2>&1; then
-                INSTALL_SUCCESS=1
+            if dnf install -y mysql-server mysql 2>&1 | tee /tmp/mysql_install.log; then
+                # 验证是否真正安装成功
+                if verify_mysql_installation /tmp/mysql_install.log; then
+                    INSTALL_SUCCESS=1
+                    echo -e "${GREEN}✓ MySQL 默认版本安装成功${NC}"
+                else
+                    INSTALL_SUCCESS=0
+                fi
+            else
+                INSTALL_SUCCESS=0
             fi
         else
-            if yum install -y mysql-server mysql 2>&1; then
-                INSTALL_SUCCESS=1
+            if yum install -y mysql-server mysql 2>&1 | tee /tmp/mysql_install.log; then
+                # 验证是否真正安装成功
+                if verify_mysql_installation /tmp/mysql_install.log; then
+                    INSTALL_SUCCESS=1
+                    echo -e "${GREEN}✓ MySQL 默认版本安装成功${NC}"
+                else
+                    INSTALL_SUCCESS=0
+                fi
+            else
+                INSTALL_SUCCESS=0
             fi
         fi
     fi
@@ -699,21 +849,52 @@ install_mysql_redhat() {
     if [ $INSTALL_SUCCESS -eq 0 ]; then
         echo -e "${YELLOW}⚠ MySQL 安装失败，尝试安装 MariaDB（MySQL 兼容）...${NC}"
         if command -v dnf &> /dev/null; then
-            if dnf install -y mariadb-server mariadb 2>&1; then
-                INSTALL_SUCCESS=1
-                echo -e "${GREEN}✓ MariaDB 安装完成（MySQL 兼容）${NC}"
+            if dnf install -y mariadb-server mariadb 2>&1 | tee /tmp/mysql_install.log; then
+                # 验证是否真正安装成功
+                if verify_mysql_installation /tmp/mysql_install.log; then
+                    INSTALL_SUCCESS=1
+                    echo -e "${GREEN}✓ MariaDB 安装完成（MySQL 兼容）${NC}"
+                else
+                    INSTALL_SUCCESS=0
+                fi
+            else
+                INSTALL_SUCCESS=0
             fi
         else
-            if yum install -y mariadb-server mariadb 2>&1; then
-                INSTALL_SUCCESS=1
-                echo -e "${GREEN}✓ MariaDB 安装完成（MySQL 兼容）${NC}"
+            if yum install -y mariadb-server mariadb 2>&1 | tee /tmp/mysql_install.log; then
+                # 验证是否真正安装成功
+                if verify_mysql_installation /tmp/mysql_install.log; then
+                    INSTALL_SUCCESS=1
+                    echo -e "${GREEN}✓ MariaDB 安装完成（MySQL 兼容）${NC}"
+                else
+                    INSTALL_SUCCESS=0
+                fi
+            else
+                INSTALL_SUCCESS=0
             fi
         fi
     fi
     
-    if [ $INSTALL_SUCCESS -eq 0 ]; then
+    # 最终验证安装是否成功
+    if [ $INSTALL_SUCCESS -eq 0 ] || ! verify_mysql_installation /tmp/mysql_install.log; then
+        echo ""
+        echo -e "${RED}========================================${NC}"
         echo -e "${RED}✗ MySQL/MariaDB 安装失败${NC}"
-        echo -e "${YELLOW}请检查错误信息并手动安装${NC}"
+        echo -e "${RED}========================================${NC}"
+        echo ""
+        echo -e "${YELLOW}可能的原因：${NC}"
+        echo "  1. 指定的版本不可用"
+        echo "  2. 软件仓库配置错误"
+        echo "  3. 网络连接问题"
+        echo "  4. 软件包名称不正确"
+        echo ""
+        if [ -f /tmp/mysql_install.log ]; then
+            echo -e "${BLUE}安装日志（最后20行）：${NC}"
+            tail -20 /tmp/mysql_install.log
+            echo ""
+        fi
+        echo -e "${YELLOW}请检查错误信息并手动安装，或尝试其他版本${NC}"
+        echo ""
         exit 1
     else
         echo -e "${GREEN}✓ MySQL/MariaDB 安装完成${NC}"

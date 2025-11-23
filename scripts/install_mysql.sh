@@ -525,21 +525,46 @@ set_root_password() {
         # 尝试使用临时密码登录并修改（MySQL 8.0 需要使用 --connect-expired-password）
         if [ -n "$TEMP_PASSWORD" ]; then
             echo "正在使用临时密码修改 root 密码..."
-            local error_output=$(mysql --connect-expired-password -u root -p"${TEMP_PASSWORD}" -e "ALTER USER 'root'@'localhost' IDENTIFIED BY '${MYSQL_ROOT_PASSWORD}';" 2>&1)
+            # 创建临时配置文件用于传递临时密码（避免特殊字符问题）
+            local temp_cnf=$(mktemp)
+            cat > "$temp_cnf" <<CNF_EOF
+[client]
+user=root
+password=${TEMP_PASSWORD}
+CNF_EOF
+            chmod 600 "$temp_cnf"
+            
+            # 使用临时配置文件连接并修改密码（MySQL 8.0 必须使用 --connect-expired-password）
+            local error_output=$(mysql --connect-expired-password --defaults-file="$temp_cnf" <<SQL_EOF 2>&1
+ALTER USER 'root'@'localhost' IDENTIFIED BY '${MYSQL_ROOT_PASSWORD}';
+FLUSH PRIVILEGES;
+SQL_EOF
+)
             local exit_code=$?
+            
+            # 清理临时配置文件
+            rm -f "$temp_cnf"
             
             if [ $exit_code -eq 0 ]; then
                 echo -e "${GREEN}✓ root 密码修改命令执行成功${NC}"
                 # 等待一下让密码生效
                 sleep 2
                 
-                # 刷新权限（确保密码立即生效）
-                mysql --connect-expired-password -u root -p"${TEMP_PASSWORD}" -e "FLUSH PRIVILEGES;" > /dev/null 2>&1 || true
+                # 刷新权限已在上面执行，无需再次执行
                 
-                # 验证新密码是否生效（使用多种方式验证）
+                # 验证新密码是否生效（使用配置文件方式，避免特殊字符问题）
                 echo "验证新密码..."
-                local verify_output=$(mysql -u root -p"${MYSQL_ROOT_PASSWORD}" -e "SELECT 1;" 2>&1)
+                local verify_cnf=$(mktemp)
+                cat > "$verify_cnf" <<CNF_EOF
+[client]
+user=root
+password=${MYSQL_ROOT_PASSWORD}
+CNF_EOF
+                chmod 600 "$verify_cnf"
+                
+                local verify_output=$(mysql --defaults-file="$verify_cnf" -e "SELECT 1;" 2>&1)
                 local verify_exit_code=$?
+                rm -f "$verify_cnf"
                 
                 if [ $verify_exit_code -eq 0 ]; then
                     echo -e "${GREEN}✓ 新密码验证成功${NC}"
@@ -547,7 +572,17 @@ set_root_password() {
                 else
                     # 如果验证失败，尝试使用临时密码再次验证密码是否真的修改了
                     echo -e "${YELLOW}⚠ 新密码验证失败，尝试使用临时密码验证...${NC}"
-                    local temp_verify=$(mysql --connect-expired-password -u root -p"${TEMP_PASSWORD}" -e "SELECT 1;" 2>&1)
+                    local temp_verify_cnf=$(mktemp)
+                    cat > "$temp_verify_cnf" <<CNF_EOF
+[client]
+user=root
+password=${TEMP_PASSWORD}
+CNF_EOF
+                    chmod 600 "$temp_verify_cnf"
+                    
+                    local temp_verify=$(mysql --connect-expired-password --defaults-file="$temp_verify_cnf" -e "SELECT 1;" 2>&1)
+                    local temp_verify_exit_code=$?
+                    rm -f "$temp_verify_cnf"
                     if echo "$temp_verify" | grep -qi "expired\|must be reset"; then
                         echo -e "${GREEN}✓ 密码已成功修改（临时密码已失效）${NC}"
                         echo -e "${YELLOW}⚠ 但新密码验证失败，可能是密码包含特殊字符${NC}"

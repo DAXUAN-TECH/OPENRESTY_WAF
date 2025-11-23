@@ -79,5 +79,169 @@ _M.geo = {
     geoip_db_path = nil,  -- 将在 init_by_lua 中动态设置
 }
 
+-- 自动封控配置
+_M.auto_block = {
+    enable = true,  -- 是否启用自动封控
+    frequency_threshold = 100,  -- 频率阈值（每分钟访问次数）
+    error_rate_threshold = 0.5,  -- 错误率阈值（0-1之间，如0.5表示50%）
+    scan_path_threshold = 20,  -- 扫描行为阈值（短时间内访问的不同路径数）
+    window_size = 60,  -- 统计窗口大小（秒）
+    block_duration = 3600,  -- 自动封控时长（秒，默认1小时）
+    check_interval = 10,  -- 检查间隔（秒）
+}
+
+-- 代理IP安全配置
+_M.proxy = {
+    enable_trusted_proxy_check = true,  -- 是否启用受信任代理检查
+    trusted_proxies_cache_ttl = 300,  -- 受信任代理列表缓存时间（秒）
+    log_ip_resolution = false,  -- 是否记录IP解析过程日志（调试用）
+}
+
+-- 缓存失效配置
+_M.cache_invalidation = {
+    enable_version_check = true,  -- 是否启用版本号检查
+    version_check_interval = 30,  -- 版本号检查间隔（秒）
+}
+
+-- 降级机制配置
+_M.fallback = {
+    enable = true,  -- 是否启用降级机制
+    health_check_interval = 10,  -- 健康检查间隔（秒）
+}
+
+-- 监控指标配置
+_M.metrics = {
+    enable = true,  -- 是否启用监控指标
+    prometheus_endpoint = "/metrics",  -- Prometheus指标导出端点
+}
+
+-- 缓存穿透防护配置
+_M.cache_protection = {
+    enable = true,  -- 是否启用缓存穿透防护
+    enable_bloom_filter = true,  -- 是否启用布隆过滤器
+    enable_rate_limit = true,  -- 是否启用频率限制
+    empty_result_ttl = 60,  -- 空结果缓存时间（秒）
+    bloom_filter_size = 100000,  -- 布隆过滤器大小
+    bloom_filter_hash_count = 3,  -- 布隆过滤器哈希函数数量
+    rate_limit_window = 60,  -- 频率限制窗口（秒）
+    rate_limit_threshold = 100,  -- 频率限制阈值（每个窗口内的请求数）
+}
+
+-- 连接池监控配置
+_M.pool_monitor = {
+    enable = true,  -- 是否启用连接池监控
+    check_interval = 10,  -- 监控检查间隔（秒）
+    warn_threshold = 0.8,  -- 连接池警告阈值（80%）
+    max_pool_size = 100,  -- 最大连接池大小
+    min_pool_size = 10,  -- 最小连接池大小
+    growth_step = 10,  -- 连接池增长步长
+}
+
+-- 缓存配置增强
+_M.cache.inactive_ttl = 30  -- 不活跃IP缓存时间（秒）
+_M.cache.access_count_threshold = 3  -- 活跃访问次数阈值
+
+-- 日志配置增强
+_M.log.enable_local_backup = true  -- 是否启用本地日志备份
+_M.log.local_log_path = nil  -- 本地日志文件路径（nil表示使用项目根目录下的logs目录，会在运行时动态设置）
+_M.log.queue_max_size = 10000  -- 日志队列最大大小
+
+-- 缓存预热配置
+_M.cache_warmup = {
+    enable = true,  -- 是否启用缓存预热
+    interval = 300,  -- 预热间隔（秒）
+    batch_size = 100,  -- 预热批次大小
+    smooth_transition = true,  -- 是否启用平滑过渡
+    warmup_common_ips = false,  -- 是否预热常用IP（可选）
+}
+
+-- GeoIP配置增强
+_M.geo.cache_ttl = 3600  -- GeoIP查询结果缓存时间（秒，默认1小时）
+
+-- 序列化配置
+_M.serializer = {
+    use_msgpack = false,  -- 是否使用MessagePack（需要安装resty.msgpack）
+}
+
+-- 规则备份配置
+_M.rule_backup = {
+    enable = true,  -- 是否启用规则备份
+    backup_dir = nil,  -- 备份目录（nil表示使用项目根目录下的backup目录，会在运行时动态设置）
+    backup_interval = 300,  -- 备份间隔（秒，默认5分钟）
+    max_backup_files = 10,  -- 最大备份文件数
+}
+
+-- Redis缓存配置（二级缓存）
+_M.redis_cache = {
+    enable = true,  -- 是否启用Redis二级缓存（需要配置Redis）
+    key_prefix = "waf:",  -- Redis键前缀
+    ttl = 300,  -- 默认TTL（秒）
+}
+
+-- 规则更新通知配置
+_M.rule_notification = {
+    enable = true,  -- 是否启用规则更新通知
+    use_redis_pubsub = false,  -- 是否使用Redis Pub/Sub（需要Redis）
+    channel = "waf:rule_update",  -- Redis Pub/Sub频道
+}
+
+-- 告警配置
+_M.alert = {
+    enable = true,  -- 是否启用告警
+    cooldown = 300,  -- 告警冷却时间（秒，防止重复告警）
+    webhook_url = nil,  -- Webhook URL（可选，用于发送告警到外部系统）
+    thresholds = {
+        block_rate = 100,  -- 每分钟封控次数阈值
+        cache_miss_rate = 0.5,  -- 缓存未命中率阈值（50%）
+        db_failure_count = 3,  -- 数据库连续失败次数阈值
+        pool_usage = 0.9,  -- 连接池使用率阈值（90%）
+        error_rate = 0.1,  -- 错误率阈值（10%）
+    }
+}
+
+-- 功能开关配置（可通过Web界面控制）
+_M.features = {
+    -- 规则管理界面功能
+    rule_management_ui = {
+        enable = true,  -- 是否启用规则管理界面
+        description = "规则管理Web界面，提供规则的CRUD操作"
+    },
+    -- 测试功能
+    testing = {
+        enable = true,  -- 是否启用测试功能
+        description = "单元测试和集成测试功能"
+    },
+    -- 配置验证功能
+    config_validation = {
+        enable = true,  -- 是否启用配置验证
+        description = "配置验证功能，启动时检查配置有效性"
+    },
+    -- 配置检查API
+    config_check_api = {
+        enable = true,  -- 是否启用配置检查API
+        description = "配置检查API端点，提供配置验证结果查询"
+    },
+    -- 统计报表功能
+    stats = {
+        enable = true,  -- 是否启用统计报表
+        description = "封控统计报表功能，提供封控数据统计和分析"
+    },
+    -- 监控面板功能
+    monitor = {
+        enable = true,  -- 是否启用监控面板
+        description = "实时监控面板功能，显示系统运行状态和关键指标"
+    }
+}
+
+-- TOTP 配置
+_M.totp = {
+    -- QR 码生成方式：local（本地SVG生成）或 external（使用外部服务）
+    qr_generator = "local",  -- 内网部署建议使用 "local"
+    -- 外部 QR 码服务 URL（当 qr_generator 为 "external" 时使用）
+    external_qr_url = "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=",
+    -- 是否允许手动输入密钥（当无法扫描 QR 码时）
+    allow_manual_entry = true
+}
+
 return _M
 

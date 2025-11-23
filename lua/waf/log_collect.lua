@@ -3,6 +3,8 @@
 
 local ip_utils = require "waf.ip_utils"
 local mysql_pool = require "waf.mysql_pool"
+local frequency_stats = require "waf.frequency_stats"
+local feature_switches = require "waf.feature_switches"
 local config = require "config"
 local cjson = require "cjson"
 
@@ -25,13 +27,14 @@ local function write_log_direct(log_data)
     
     local sql = [[
         INSERT INTO waf_access_logs 
-        (client_ip, request_path, request_method, status_code, user_agent, referer, request_time, response_time)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        (client_ip, request_domain, request_path, request_method, status_code, user_agent, referer, request_time, response_time)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     ]]
 
     local ok, err = mysql_pool.insert(
         sql,
         log_data.client_ip,
+        log_data.request_domain,
         log_data.request_path,
         log_data.request_method,
         log_data.status_code,
@@ -114,7 +117,7 @@ local function flush_logs(premature, retry_count)
 
     -- 批量插入数据库
     local fields = {
-        "client_ip", "request_path", "request_method", "status_code",
+        "client_ip", "request_domain", "request_path", "request_method", "status_code",
         "user_agent", "referer", "request_time", "response_time"
     }
 
@@ -126,6 +129,7 @@ local function flush_logs(premature, retry_count)
         
         table.insert(values_list, {
             log_data.client_ip or "",
+            log_data.request_domain or "",
             log_data.request_path or "",
             log_data.request_method or "GET",
             log_data.status_code or 200,
@@ -191,6 +195,12 @@ end
 
 -- 采集日志（在 log_by_lua 阶段调用）
 function _M.collect()
+    -- 检查日志采集功能是否启用（优先从数据库读取）
+    local log_collect_enabled = feature_switches.is_enabled("log_collect")
+    if not log_collect_enabled then
+        return
+    end
+    
     -- 获取客户端真实 IP
     local client_ip = ip_utils.get_real_ip()
     if not client_ip then
@@ -203,6 +213,7 @@ function _M.collect()
     local status_code = ngx.status or 200
     local user_agent = ngx.var.http_user_agent or ""
     local referer = ngx.var.http_referer or ""
+    local request_domain = ngx.var.host or ngx.var.http_host or ""
     
     -- 计算响应时间（毫秒）
     local response_time = 0
@@ -216,6 +227,7 @@ function _M.collect()
     -- 构建日志数据
     local log_data = {
         client_ip = client_ip,
+        request_domain = request_domain,
         request_path = request_path,
         request_method = request_method,
         status_code = status_code,
@@ -227,6 +239,15 @@ function _M.collect()
 
     -- 添加到缓冲区或直接写入
     add_to_buffer(log_data)
+
+    -- 更新频率统计（异步，不阻塞）
+    -- 检查自动封控功能是否启用（优先从数据库读取）
+    local auto_block_enabled = feature_switches.is_enabled("auto_block")
+    if auto_block_enabled and config.auto_block.enable then
+        ngx.timer.at(0, function()
+            frequency_stats.update_frequency(client_ip, status_code, request_path)
+        end)
+    end
 end
 
 return _M

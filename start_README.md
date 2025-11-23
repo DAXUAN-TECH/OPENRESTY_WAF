@@ -9,14 +9,71 @@
 ### 自动化安装流程
 
 1. ✅ **收集配置信息** - 交互式输入 MySQL 和 Redis 配置（支持本地/外部选择）
-2. ✅ **安装数据库** - 如果选择本地数据库，自动安装 MySQL 和 Redis
+2. ✅ **安装数据库** - 如果选择本地数据库，自动安装 MySQL 和 Redis（支持多种 Linux 发行版）
 3. ✅ **创建必要目录** - 自动创建日志目录（`logs/`）
-4. ✅ **安装 OpenResty** - 自动检测系统并安装 OpenResty
-5. ✅ **部署配置文件** - 自动部署并处理路径配置
+4. ✅ **安装 OpenResty** - 自动检测系统类型并安装 OpenResty（支持 20+ 种 Linux 发行版）
+5. ✅ **部署配置文件** - 自动部署并处理路径配置（支持环境变量配置路径）
 6. ✅ **配置数据库连接** - 自动更新 `lua/config.lua` 中的连接信息
 7. ✅ **初始化数据库** - 自动执行 SQL 脚本创建数据库和表
 8. ✅ **安装 GeoIP** - 可选，安装地域封控数据库
 9. ✅ **系统优化** - 可选，根据硬件自动优化系统参数
+
+### 系统支持
+
+**支持的 Linux 发行版**（脚本自动检测）：
+- **RedHat 系列**：CentOS、RHEL、Fedora、Rocky Linux、AlmaLinux、Oracle Linux、Amazon Linux
+- **Debian 系列**：Debian、Ubuntu、Linux Mint、Kali Linux、Raspbian
+- **SUSE 系列**：openSUSE、SLES
+- **Arch 系列**：Arch Linux、Manjaro
+- **其他**：Alpine Linux、Gentoo
+
+### 路径配置
+
+**环境变量配置**：
+- 所有脚本支持通过环境变量 `OPENRESTY_PREFIX` 配置 OpenResty 安装路径（默认：`/usr/local/openresty`）
+- 项目路径使用相对路径，通过 `$project_root` 变量在配置文件中引用
+- 无硬编码绝对路径，支持灵活部署
+
+**示例**：
+```bash
+# 使用自定义安装路径
+sudo OPENRESTY_PREFIX=/opt/openresty ./start.sh
+```
+
+### 系统功能特性
+
+安装完成后，系统提供以下功能：
+
+**核心功能**：
+- ✅ IP封控（单个IP、IP段、地域封控）
+- ✅ 白名单机制
+- ✅ 访问日志采集
+- ✅ 自动封控（基于频率和行为）
+- ✅ 自动解封
+
+**管理功能**：
+- ✅ Web管理界面（需要登录）
+- ✅ API接口（需要登录）
+- ✅ 规则管理（CRUD、导入/导出）
+- ✅ 功能开关管理
+- ✅ 反向代理管理
+- ✅ 统计报表
+- ✅ 监控面板
+- ✅ 依赖管理（检查、安装、卸载 Lua 模块）⭐
+
+**安全功能**：
+- ✅ 用户认证（支持TOTP双因素认证）
+- ✅ 密码管理（BCrypt哈希）
+- ✅ 会话管理
+- ✅ X-Forwarded-For安全增强
+- ✅ 所有API和页面都需要登录
+
+**性能优化**：
+- ✅ 多级缓存（共享内存、LRU、Redis）
+- ✅ 数据库连接池
+- ✅ 异步批量日志写入
+- ✅ 缓存预热
+- ✅ 系统自动优化
 
 ### 错误处理机制
 
@@ -55,6 +112,25 @@
 ```bash
 # 运行一键安装脚本
 sudo ./start.sh
+
+# 单独安装某个模块
+sudo ./start.sh mysql
+sudo ./start.sh redis
+sudo ./start.sh geoip
+
+# 依赖管理（检查、安装、卸载）
+sudo ./start.sh dependencies
+
+# 项目检查
+sudo ./start.sh check
+
+# 更新配置
+sudo ./start.sh update-config
+sudo ./start.sh update-geoip
+
+# 卸载模块
+sudo ./start.sh uninstall dependencies
+sudo ./start.sh uninstall mysql
 ```
 
 ### 交互式配置
@@ -178,17 +254,26 @@ sudo ./start.sh
 
 ### 步骤 5: 配置 MySQL 和 Redis
 
-- 自动备份原配置文件（`config.lua.bak.时间戳`）
-- 自动更新 MySQL 连接信息
-- 自动更新 Redis 连接信息（如果启用）
-- 自动转义特殊字符，确保配置正确
+**注意**：此步骤由 `install_mysql.sh` 和 `install_redis.sh` 内部自动完成，无需单独执行。
+
+- `install_mysql.sh` 安装完成后会自动：
+  - 备份原配置文件（`config.lua.bak.时间戳`）
+  - 调用 `set_lua_database_connect.sh` 更新 MySQL 连接信息
+  - 自动转义特殊字符，确保配置正确
+  
+- `install_redis.sh` 安装完成后会自动：
+  - 调用 `set_lua_database_connect.sh` 更新 Redis 连接信息（如果启用）
+  - 自动转义特殊字符，确保配置正确
 
 ### 步骤 6: 初始化数据库
 
-- 自动测试 MySQL 连接
-- 自动执行 `init_file/数据库设计.sql`
-- 创建数据库和所有表结构
-- 如果数据库已存在，会显示警告（这是正常的）
+**注意**：此步骤由 `install_mysql.sh` 内部自动完成，无需单独执行。
+
+- `install_mysql.sh` 在创建数据库和用户后会自动：
+  - 自动测试 MySQL 连接
+  - 自动执行 `init_file/数据库设计.sql`
+  - 创建数据库和所有表结构
+  - 如果数据库或表已存在，会显示警告（这是正常的，不会影响安装）
 
 ### 步骤 7: 安装 GeoIP（可选）
 
@@ -478,6 +563,9 @@ systemctl enable openresty
 - `scripts/install_geoip.sh` - GeoIP 数据库安装脚本
 - `scripts/optimize_system.sh` - 系统优化脚本
 - `scripts/check_all.sh` - 项目检查脚本（可通过 `start.sh check` 调用）
+- `scripts/check_dependencies.sh` - 依赖检查脚本（可通过 `start.sh dependencies` 调用）⭐
+- `scripts/install_dependencies.sh` - 依赖自动安装脚本（可通过 `start.sh dependencies` 调用）⭐
+- `scripts/uninstall_dependencies.sh` - 依赖卸载脚本（可通过 `start.sh uninstall dependencies` 调用）⭐
 - `scripts/set_lua_database_connect.sh` - 数据库连接配置脚本（可通过 `start.sh update-config` 调用）
 - `scripts/update_geoip.sh` - GeoIP 数据库更新脚本（可通过 `start.sh update-geoip` 调用）
 

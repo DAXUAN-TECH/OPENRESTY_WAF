@@ -67,6 +67,13 @@ sudo ./scripts/install_openresty.sh
 sudo OPENRESTY_VERSION=1.21.4.1 ./scripts/install_openresty.sh
 ```
 
+### 指定安装路径
+
+```bash
+# 通过环境变量指定安装路径（默认：/usr/local/openresty）
+sudo OPENRESTY_PREFIX=/opt/openresty ./scripts/install_openresty.sh
+```
+
 ## 安装过程
 
 脚本会执行以下步骤：
@@ -87,10 +94,10 @@ sudo OPENRESTY_VERSION=1.21.4.1 ./scripts/install_openresty.sh
 
 ## 安装位置
 
-OpenResty 将安装到以下位置：
+OpenResty 默认安装到以下位置（可通过环境变量 `OPENRESTY_PREFIX` 自定义）：
 
 ```
-/usr/local/openresty/
+/usr/local/openresty/  (默认路径，可通过 OPENRESTY_PREFIX 环境变量修改)
 ├── bin/
 │   ├── openresty          # 主程序
 │   ├── opm                # 包管理器
@@ -101,6 +108,24 @@ OpenResty 将安装到以下位置：
 │   └── logs/              # 日志目录
 └── lualib/                # Lua 库目录
 ```
+
+### 自定义安装路径
+
+可以通过环境变量 `OPENRESTY_PREFIX` 指定自定义安装路径：
+
+```bash
+# 安装到自定义路径
+sudo OPENRESTY_PREFIX=/opt/openresty ./scripts/install_openresty.sh
+
+# 或导出环境变量后运行
+export OPENRESTY_PREFIX=/opt/openresty
+sudo ./scripts/install_openresty.sh
+```
+
+**注意**：
+- 所有脚本都支持通过环境变量配置路径，无硬编码绝对路径
+- 如果使用自定义路径，其他脚本也需要使用相同的 `OPENRESTY_PREFIX` 值
+- 项目路径使用相对路径，通过 `$project_root` 变量在配置文件中引用
 
 ## 服务管理
 

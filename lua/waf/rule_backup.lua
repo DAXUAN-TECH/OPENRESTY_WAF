@@ -1,0 +1,227 @@
+-- 规则本地备份模块
+-- 路径：项目目录下的 lua/waf/rule_backup.lua（保持在项目目录，不复制到系统目录）
+-- 功能：实现规则本地备份机制，用于数据库故障时的降级
+
+local mysql_pool = require "waf.mysql_pool"
+local config = require "config"
+local path_utils = require "waf.path_utils"
+local serializer = require "waf.serializer"
+local cjson = require "cjson"
+
+local _M = {}
+
+-- 配置
+-- 备份目录（优先使用配置，否则使用项目根目录下的backup目录）
+local BACKUP_DIR = config.rule_backup and config.rule_backup.backup_dir or path_utils.get_backup_path()
+local BACKUP_INTERVAL = config.rule_backup and config.rule_backup.backup_interval or 300  -- 备份间隔（秒，默认5分钟）
+local MAX_BACKUP_FILES = config.rule_backup and config.rule_backup.max_backup_files or 10  -- 最大备份文件数
+local ENABLE_BACKUP = config.rule_backup and config.rule_backup.enable or true
+
+-- 确保备份目录存在
+local function ensure_backup_dir()
+    if not ENABLE_BACKUP then
+        return true
+    end
+    
+    -- 使用path_utils确保目录存在
+    return path_utils.ensure_dir(BACKUP_DIR)
+end
+
+-- 备份规则到本地文件
+function _M.backup_rules()
+    if not ENABLE_BACKUP then
+        return false, "backup disabled"
+    end
+    
+    ensure_backup_dir()
+    
+    -- 查询所有启用的规则
+    local sql = [[
+        SELECT id, rule_type, rule_value, rule_name, description, 
+               status, priority, start_time, end_time, rule_version
+        FROM waf_block_rules
+        WHERE status = 1
+        ORDER BY id
+    ]]
+    
+    local rules, err = mysql_pool.query(sql)
+    if err then
+        ngx.log(ngx.ERR, "backup rules query error: ", err)
+        return false, err
+    end
+    
+    -- 查询白名单规则
+    local whitelist_sql = [[
+        SELECT id, ip_type, ip_value, description, status
+        FROM waf_whitelist
+        WHERE status = 1
+        ORDER BY id
+    ]]
+    
+    local whitelist, err2 = mysql_pool.query(whitelist_sql)
+    if err2 then
+        ngx.log(ngx.ERR, "backup whitelist query error: ", err2)
+        -- 继续备份，即使白名单查询失败
+    end
+    
+    -- 构建备份数据
+    local backup_data = {
+        timestamp = ngx.time(),
+        datetime = os.date("!%Y-%m-%d %H:%M:%S", ngx.time()),
+        rules = rules or {},
+        whitelist = whitelist or {}
+    }
+    
+    -- 序列化数据
+    local serialized, format = serializer.encode(backup_data)
+    if not serialized then
+        return false, "serialization failed"
+    end
+    
+    -- 写入文件
+    local timestamp = os.date("%Y%m%d_%H%M%S", ngx.time())
+    local filename = BACKUP_DIR .. "/rules_backup_" .. timestamp .. "." .. format
+    local file_handle = io.open(filename, "w")
+    if not file_handle then
+        return false, "failed to open backup file"
+    end
+    
+    -- 如果是MessagePack，需要以二进制模式写入
+    if format == "msgpack" then
+        file_handle:write(serialized)
+    else
+        file_handle:write(serialized)
+    end
+    
+    file_handle:close()
+    
+    -- 清理旧备份文件
+    _M.cleanup_old_backups()
+    
+    ngx.log(ngx.INFO, "rules backed up to: ", filename)
+    return true, filename
+end
+
+-- 从本地文件恢复规则
+function _M.restore_rules(filename)
+    if not filename then
+        -- 查找最新的备份文件
+        filename = _M.get_latest_backup()
+        if not filename then
+            return false, "no backup file found"
+        end
+    end
+    
+    local file_handle = io.open(filename, "r")
+    if not file_handle then
+        return false, "failed to open backup file"
+    end
+    
+    local content = file_handle:read("*all")
+    file_handle:close()
+    
+    -- 检测格式并反序列化
+    local backup_data, format = serializer.decode(content)
+    if not backup_data then
+        return false, "deserialization failed"
+    end
+    
+    -- 恢复规则（这里只是返回数据，实际恢复需要调用者处理）
+    return backup_data, format
+end
+
+-- 获取最新的备份文件
+function _M.get_latest_backup()
+    ensure_backup_dir()
+    
+    -- 列出所有备份文件
+    local cmd = "ls -t " .. BACKUP_DIR .. "/rules_backup_*.* 2>/dev/null | head -1"
+    local handle = io.popen(cmd)
+    if not handle then
+        return nil
+    end
+    
+    local filename = handle:read("*line")
+    handle:close()
+    
+    return filename
+end
+
+-- 清理旧备份文件
+function _M.cleanup_old_backups()
+    ensure_backup_dir()
+    
+    -- 列出所有备份文件，按时间排序
+    local cmd = "ls -t " .. BACKUP_DIR .. "/rules_backup_*.* 2>/dev/null"
+    local handle = io.popen(cmd)
+    if not handle then
+        return
+    end
+    
+    local files = {}
+    for line in handle:lines() do
+        table.insert(files, line)
+    end
+    handle:close()
+    
+    -- 删除超出最大数量的文件
+    if #files > MAX_BACKUP_FILES then
+        for i = MAX_BACKUP_FILES + 1, #files do
+            os.remove(files[i])
+            ngx.log(ngx.INFO, "removed old backup file: ", files[i])
+        end
+    end
+end
+
+-- 从备份加载规则到缓存（降级模式）
+function _M.load_rules_from_backup()
+    local backup_data, format = _M.restore_rules()
+    if not backup_data then
+        return false, "failed to restore from backup"
+    end
+    
+    local cache = ngx.shared.waf_cache
+    local cjson = require "cjson"
+    
+    -- 加载封控规则
+    if backup_data.rules and #backup_data.rules > 0 then
+        -- 过滤IP段规则
+        local ip_range_rules = {}
+        for _, rule in ipairs(backup_data.rules) do
+            if rule.rule_type == "ip_range" then
+                table.insert(ip_range_rules, rule)
+            end
+        end
+        
+        if #ip_range_rules > 0 then
+            cache:set("rule_list:ip_range:block", cjson.encode(ip_range_rules), 3600)
+            ngx.log(ngx.INFO, "loaded ", #ip_range_rules, " IP range rules from backup")
+        end
+    end
+    
+    -- 加载白名单规则
+    if backup_data.whitelist and #backup_data.whitelist > 0 then
+        local ip_range_whitelist = {}
+        for _, rule in ipairs(backup_data.whitelist) do
+            if rule.ip_type == "ip_range" then
+                table.insert(ip_range_whitelist, rule)
+            end
+        end
+        
+        if #ip_range_whitelist > 0 then
+            cache:set("rule_list:ip_range:whitelist", cjson.encode(ip_range_whitelist), 3600)
+            ngx.log(ngx.INFO, "loaded ", #ip_range_whitelist, " whitelist rules from backup")
+        end
+    end
+    
+    return true, "rules loaded from backup"
+end
+
+-- 检查备份文件是否存在
+function _M.has_backup()
+    local latest = _M.get_latest_backup()
+    return latest ~= nil
+end
+
+return _M
+

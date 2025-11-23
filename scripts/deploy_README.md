@@ -8,10 +8,12 @@
 
 ### 文件部署位置
 
-1. **init_file/nginx.conf** - 复制到 `/usr/local/openresty/nginx/conf/nginx.conf`
+1. **init_file/nginx.conf** - 复制到 `${OPENRESTY_PREFIX}/nginx/conf/nginx.conf`（默认：`/usr/local/openresty/nginx/conf/nginx.conf`）
 2. **conf.d/** - **保持在项目目录**（不复制，方便配置管理）⭐
 3. **lua/** - **保持在项目目录**（不复制）
 4. **logs/** - **保持在项目目录**（日志文件）
+
+**注意**：所有路径通过环境变量 `OPENRESTY_PREFIX` 配置，无硬编码绝对路径。
 
 ### 路径处理
 
@@ -45,7 +47,7 @@ sudo OPENRESTY_PREFIX=/opt/openresty ./scripts/deploy.sh
    - 项目 lua/geoip 目录
 
 2. **复制配置文件**
-   - init_file/nginx.conf → `/usr/local/openresty/nginx/conf/nginx.conf`
+   - init_file/nginx.conf → `${OPENRESTY_PREFIX}/nginx/conf/nginx.conf`（默认：`/usr/local/openresty/nginx/conf/nginx.conf`）
    - **注意**：conf.d/ 目录保持在项目目录，不复制到系统目录
 
 3. **路径替换**
@@ -94,7 +96,11 @@ OPENRESTY_WAF/
 ### 1. 测试配置
 
 ```bash
+# 使用默认路径
 /usr/local/openresty/bin/openresty -t
+
+# 或使用环境变量指定的路径
+${OPENRESTY_PREFIX}/bin/openresty -t
 ```
 
 ### 2. 检查路径
@@ -215,10 +221,52 @@ sudo chmod 755 /path/to/project/logs
 - 验证配置文件处理完成
 - 设置文件权限
 
+## 脚本与 Lua 代码集成
+
+### 路径集成
+
+1. **项目路径设置**：
+   - `deploy.sh` 在 `nginx.conf` 中设置 `set $project_root "/实际路径"`
+   - Lua 代码通过 `ngx.var.project_root` 获取项目路径
+   - 位置：`lua/waf/init.lua:41-48`
+
+2. **Lua 模块路径**：
+   - `deploy.sh` 确保 `lua_package_path` 指向项目目录
+   - Lua 代码通过 `require` 加载模块
+   - 位置：`conf.d/set_conf/lua.conf:8`
+
+3. **配置文件路径**：
+   - `lua/config.lua` 保持在项目目录
+   - 脚本通过 `set_lua_database_connect.sh` 更新配置
+   - Lua 代码通过 `require("config")` 加载配置
+
+### 数据库集成
+
+1. **数据库初始化**：
+   - `install_mysql.sh` 执行 `init_file/数据库设计.sql`
+   - 创建数据库和表结构
+   - Lua 代码通过 `mysql_pool.lua` 连接数据库
+
+2. **配置更新**：
+   - `install_mysql.sh` 和 `install_redis.sh` 自动调用 `set_lua_database_connect.sh`
+   - 更新 `lua/config.lua` 中的连接信息
+   - Lua 代码读取配置并建立连接
+
+### GeoIP 集成
+
+1. **数据库安装**：
+   - `install_geoip.sh` 下载 GeoIP 数据库到 `lua/geoip/`
+   - `lua/waf/geo_block.lua` 读取 GeoIP 数据库
+   - 位置：`lua/waf/geo_block.lua`
+
 ## 相关脚本
 
+- `start.sh` - 一键安装脚本（推荐使用）
 - `install_openresty.sh` - 安装 OpenResty
+- `install_mysql.sh` - 安装 MySQL（包含数据库初始化和配置更新）
+- `install_redis.sh` - 安装 Redis（包含配置更新）
 - `install_geoip.sh` - 安装 GeoIP 数据库
+- `set_lua_database_connect.sh` - 更新数据库连接配置
 - `update_geoip.sh` - 更新 GeoIP 数据库
 - `optimize_system.sh` - 系统优化（推荐在部署后运行）
 

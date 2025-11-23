@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WAF功能管理</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background-color: #f5f5f5;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            padding: 30px;
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 30px;
+            border-bottom: 2px solid #4CAF50;
+            padding-bottom: 10px;
+        }
+        
+        .alert {
+            padding: 12px;
+            margin-bottom: 20px;
+            border-radius: 4px;
+        }
+        
+        .alert-success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .alert-error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .features-list {
+            display: grid;
+            gap: 20px;
+        }
+        
+        .feature-card {
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 20px;
+            background: #fafafa;
+            transition: all 0.3s;
+        }
+        
+        .feature-card:hover {
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        .feature-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        
+        .feature-name {
+            font-size: 18px;
+            font-weight: 600;
+            color: #333;
+        }
+        
+        .feature-description {
+            color: #666;
+            margin-bottom: 15px;
+            font-size: 14px;
+        }
+        
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 60px;
+            height: 34px;
+        }
+        
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+            border-radius: 34px;
+        }
+        
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 26px;
+            width: 26px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        
+        input:checked + .slider {
+            background-color: #4CAF50;
+        }
+        
+        input:checked + .slider:before {
+            transform: translateX(26px);
+        }
+        
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s;
+            margin-top: 20px;
+        }
+        
+        .btn-primary {
+            background-color: #4CAF50;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background-color: #45a049;
+        }
+        
+        .btn-secondary {
+            background-color: #757575;
+            color: white;
+            margin-left: 10px;
+        }
+        
+        .btn-secondary:hover {
+            background-color: #616161;
+        }
+        
+        .status-badge {
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: bold;
+            margin-left: 10px;
+        }
+        
+        .status-enabled {
+            background-color: #4CAF50;
+            color: white;
+        }
+        
+        .status-disabled {
+            background-color: #f44336;
+            color: white;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>WAF功能管理</h1>
+        
+        <div id="alert-container"></div>
+        
+        <div id="features-container" class="loading">加载中...</div>
+        
+        <div style="margin-top: 30px; text-align: right;">
+            <button class="btn btn-secondary" onclick="loadFeatures()">刷新</button>
+            <button class="btn btn-primary" onclick="saveAllFeatures()">保存所有更改</button>
+        </div>
+    </div>
+    
+    <script>
+        let features = [];
+        
+        // 显示提示信息
+        function showAlert(message, type = 'success') {
+            const container = document.getElementById('alert-container');
+            const alert = document.createElement('div');
+            alert.className = `alert alert-${type}`;
+            alert.textContent = message;
+            container.innerHTML = '';
+            container.appendChild(alert);
+            setTimeout(() => {
+                alert.remove();
+            }, 3000);
+        }
+        
+        // 加载功能列表
+        async function loadFeatures() {
+            try {
+                const response = await fetch('/api/features');
+                const data = await response.json();
+                
+                if (data.success) {
+                    features = data.features;
+                    renderFeatures();
+                } else {
+                    showAlert(data.error || '加载失败', 'error');
+                    document.getElementById('features-container').innerHTML = '<div class="loading">加载失败</div>';
+                }
+            } catch (error) {
+                showAlert('网络错误: ' + error.message, 'error');
+                document.getElementById('features-container').innerHTML = '<div class="loading">网络错误</div>';
+            }
+        }
+        
+        // 渲染功能列表
+        function renderFeatures() {
+            const container = document.getElementById('features-container');
+            
+            if (features.length === 0) {
+                container.innerHTML = '<div class="loading">暂无功能</div>';
+                return;
+            }
+            
+            container.className = 'features-list';
+            container.innerHTML = features.map(feature => `
+                <div class="feature-card">
+                    <div class="feature-header">
+                        <div>
+                            <span class="feature-name">${getFeatureName(feature.key)}</span>
+                            <span class="status-badge ${feature.enable ? 'status-enabled' : 'status-disabled'}">
+                                ${feature.enable ? '已启用' : '已禁用'}
+                            </span>
+                        </div>
+                        <label class="switch">
+                            <input type="checkbox" 
+                                   ${feature.enable ? 'checked' : ''} 
+                                   onchange="toggleFeature('${feature.key}', this.checked)">
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                    <div class="feature-description">${feature.description || ''}</div>
+                </div>
+            `).join('');
+        }
+        
+        // 获取功能中文名称
+        function getFeatureName(key) {
+            const names = {
+                'rule_management_ui': '规则管理界面',
+                'testing': '测试功能',
+                'config_validation': '配置验证',
+                'config_check_api': '配置检查API'
+            };
+            return names[key] || key;
+        }
+        
+        // 切换功能开关
+        function toggleFeature(key, enabled) {
+            const feature = features.find(f => f.key === key);
+            if (feature) {
+                feature.enable = enabled;
+                // 实时更新显示
+                renderFeatures();
+            }
+        }
+        
+        // 保存所有功能更改
+        async function saveAllFeatures() {
+            const featuresToUpdate = features.map(f => ({
+                key: f.key,
+                enable: f.enable
+            }));
+            
+            try {
+                const response = await fetch('/api/features/batch', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ features: featuresToUpdate })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showAlert('所有功能开关已保存');
+                    loadFeatures(); // 重新加载以确保同步
+                } else {
+                    showAlert(data.error || '保存失败', 'error');
+                }
+            } catch (error) {
+                showAlert('网络错误: ' + error.message, 'error');
+            }
+        }
+        
+        // 初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            loadFeatures();
+        });
+    </script>
+</body>
+</html>
+

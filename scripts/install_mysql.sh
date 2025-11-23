@@ -26,11 +26,55 @@ MYSQL_USER=""
 MYSQL_USER_PASSWORD=""
 USE_NEW_USER="N"
 
+# 硬件信息变量（将在检测后填充）
+CPU_CORES=0
+TOTAL_MEM_GB=0
+TOTAL_MEM_MB=0
+
 # 导出变量供父脚本使用
 export CREATED_DB_NAME=""
 export MYSQL_USER_FOR_WAF=""
 export MYSQL_PASSWORD_FOR_WAF=""
 export USE_NEW_USER
+
+# 检测硬件配置
+detect_hardware() {
+    echo -e "${BLUE}检测硬件配置...${NC}"
+    
+    # 检测 CPU 核心数
+    if command -v nproc &> /dev/null; then
+        CPU_CORES=$(nproc)
+    elif [ -f /proc/cpuinfo ]; then
+        CPU_CORES=$(grep -c "^processor" /proc/cpuinfo)
+    else
+        CPU_CORES=2  # 默认值
+    fi
+    
+    # 检测内存大小（GB）
+    if [ -f /proc/meminfo ]; then
+        TOTAL_MEM_KB=$(grep "^MemTotal:" /proc/meminfo | awk '{print $2}')
+        TOTAL_MEM_MB=$((TOTAL_MEM_KB / 1024))
+        TOTAL_MEM_GB=$((TOTAL_MEM_MB / 1024))
+    elif command -v free &> /dev/null; then
+        TOTAL_MEM_MB=$(free -m | grep "^Mem:" | awk '{print $2}')
+        TOTAL_MEM_GB=$((TOTAL_MEM_MB / 1024))
+    else
+        TOTAL_MEM_GB=4  # 默认值
+        TOTAL_MEM_MB=4096
+    fi
+    
+    # 确保最小值
+    if [ $CPU_CORES -lt 1 ]; then
+        CPU_CORES=1
+    fi
+    if [ $TOTAL_MEM_GB -lt 1 ]; then
+        TOTAL_MEM_GB=1
+        TOTAL_MEM_MB=1024
+    fi
+    
+    echo -e "${GREEN}✓ CPU 核心数: ${CPU_CORES}${NC}"
+    echo -e "${GREEN}✓ 总内存: ${TOTAL_MEM_GB}GB (${TOTAL_MEM_MB}MB)${NC}"
+}
 
 # 检测系统类型
 detect_os() {
@@ -462,13 +506,13 @@ install_mysql_redhat() {
     
     # 如果指定版本安装失败，使用默认安装
     if [ $INSTALL_SUCCESS -eq 0 ]; then
-        if command -v dnf &> /dev/null; then
-            if dnf install -y mysql-server mysql 2>&1; then
-                INSTALL_SUCCESS=1
-            fi
-        else
-            if yum install -y mysql-server mysql 2>&1; then
-                INSTALL_SUCCESS=1
+    if command -v dnf &> /dev/null; then
+        if dnf install -y mysql-server mysql 2>&1; then
+            INSTALL_SUCCESS=1
+        fi
+    else
+        if yum install -y mysql-server mysql 2>&1; then
+            INSTALL_SUCCESS=1
             fi
         fi
     fi
@@ -783,8 +827,235 @@ setup_mysql_config() {
             fi
         fi
         
+        # ========== 硬件优化配置 ==========
+        echo -e "${BLUE}根据硬件配置优化 MySQL 参数...${NC}"
+        
+        # 备份配置文件
+        cp "$my_cnf_file" "${my_cnf_file}.bak.$(date +%Y%m%d_%H%M%S)"
+        
+        # 确保有 [mysqld] 段
+        if ! grep -q "^\[mysqld\]" "$my_cnf_file" 2>/dev/null; then
+            echo "" >> "$my_cnf_file"
+            echo "[mysqld]" >> "$my_cnf_file"
+        fi
+        
+        # 1. InnoDB 缓冲池优化（最重要的性能参数）
+        # 根据内存大小设置：小内存（<4GB）使用 50%，中等内存（4-16GB）使用 60%，大内存（>16GB）使用 70%
+        local innodb_buffer_pool_size_mb=0
+        if [ $TOTAL_MEM_GB -lt 4 ]; then
+            innodb_buffer_pool_size_mb=$((TOTAL_MEM_MB * 50 / 100))
+        elif [ $TOTAL_MEM_GB -lt 16 ]; then
+            innodb_buffer_pool_size_mb=$((TOTAL_MEM_MB * 60 / 100))
+        else
+            innodb_buffer_pool_size_mb=$((TOTAL_MEM_MB * 70 / 100))
+        fi
+        
+        # 确保最小值（至少 256MB）
+        if [ $innodb_buffer_pool_size_mb -lt 256 ]; then
+            innodb_buffer_pool_size_mb=256
+        fi
+        
+        # 设置 InnoDB 缓冲池大小
+        if grep -q "^innodb_buffer_pool_size" "$my_cnf_file" 2>/dev/null || grep -q "^[[:space:]]*innodb_buffer_pool_size" "$my_cnf_file" 2>/dev/null; then
+            sed -i "s/^[[:space:]]*innodb_buffer_pool_size[[:space:]]*=.*/innodb_buffer_pool_size = ${innodb_buffer_pool_size_mb}M/" "$my_cnf_file" 2>/dev/null || \
+            sed -i "s/^innodb_buffer_pool_size.*/innodb_buffer_pool_size = ${innodb_buffer_pool_size_mb}M/" "$my_cnf_file" 2>/dev/null
+        else
+            sed -i '/^\[mysqld\]/a innodb_buffer_pool_size = '"${innodb_buffer_pool_size_mb}"'M' "$my_cnf_file" 2>/dev/null
+        fi
+        echo -e "${GREEN}  ✓ innodb_buffer_pool_size: ${innodb_buffer_pool_size_mb}M${NC}"
+        
+        # 2. InnoDB 缓冲池实例数（提高并发性能）
+        # 根据缓冲池大小设置：<1GB 使用 1 个，1-8GB 使用 2-4 个，>8GB 使用 4-8 个
+        local innodb_buffer_pool_instances=1
+        if [ $innodb_buffer_pool_size_mb -ge 8192 ]; then
+            innodb_buffer_pool_instances=8
+        elif [ $innodb_buffer_pool_size_mb -ge 4096 ]; then
+            innodb_buffer_pool_instances=4
+        elif [ $innodb_buffer_pool_size_mb -ge 1024 ]; then
+            innodb_buffer_pool_instances=2
+        fi
+        
+        if grep -q "^innodb_buffer_pool_instances" "$my_cnf_file" 2>/dev/null || grep -q "^[[:space:]]*innodb_buffer_pool_instances" "$my_cnf_file" 2>/dev/null; then
+            sed -i "s/^[[:space:]]*innodb_buffer_pool_instances[[:space:]]*=.*/innodb_buffer_pool_instances = ${innodb_buffer_pool_instances}/" "$my_cnf_file" 2>/dev/null || \
+            sed -i "s/^innodb_buffer_pool_instances.*/innodb_buffer_pool_instances = ${innodb_buffer_pool_instances}/" "$my_cnf_file" 2>/dev/null
+        else
+            sed -i '/^\[mysqld\]/a innodb_buffer_pool_instances = '"${innodb_buffer_pool_instances}"'' "$my_cnf_file" 2>/dev/null
+        fi
+        echo -e "${GREEN}  ✓ innodb_buffer_pool_instances: ${innodb_buffer_pool_instances}${NC}"
+        
+        # 3. 最大连接数优化（根据内存和 CPU 调整）
+        local max_connections=200
+        if [ $TOTAL_MEM_GB -ge 16 ] && [ $CPU_CORES -ge 8 ]; then
+            max_connections=1000
+        elif [ $TOTAL_MEM_GB -ge 8 ] && [ $CPU_CORES -ge 4 ]; then
+            max_connections=500
+        elif [ $TOTAL_MEM_GB -ge 4 ]; then
+            max_connections=300
+        fi
+        
+        if grep -q "^max_connections" "$my_cnf_file" 2>/dev/null || grep -q "^[[:space:]]*max_connections" "$my_cnf_file" 2>/dev/null; then
+            sed -i "s/^[[:space:]]*max_connections[[:space:]]*=.*/max_connections = ${max_connections}/" "$my_cnf_file" 2>/dev/null || \
+            sed -i "s/^max_connections.*/max_connections = ${max_connections}/" "$my_cnf_file" 2>/dev/null
+        else
+            sed -i '/^\[mysqld\]/a max_connections = '"${max_connections}"'' "$my_cnf_file" 2>/dev/null
+        fi
+        echo -e "${GREEN}  ✓ max_connections: ${max_connections}${NC}"
+        
+        # 4. 连接超时和等待时间
+        if ! grep -q "^wait_timeout" "$my_cnf_file" 2>/dev/null && ! grep -q "^[[:space:]]*wait_timeout" "$my_cnf_file" 2>/dev/null; then
+            sed -i '/^\[mysqld\]/a wait_timeout = 28800' "$my_cnf_file" 2>/dev/null
+        fi
+        if ! grep -q "^interactive_timeout" "$my_cnf_file" 2>/dev/null && ! grep -q "^[[:space:]]*interactive_timeout" "$my_cnf_file" 2>/dev/null; then
+            sed -i '/^\[mysqld\]/a interactive_timeout = 28800' "$my_cnf_file" 2>/dev/null
+        fi
+        
+        # 5. InnoDB 日志文件大小（提高写入性能）
+        # 根据缓冲池大小设置：小缓冲池使用 256MB，大缓冲池使用 512MB-1GB
+        local innodb_log_file_size_mb=256
+        if [ $innodb_buffer_pool_size_mb -ge 8192 ]; then
+            innodb_log_file_size_mb=1024
+        elif [ $innodb_buffer_pool_size_mb -ge 4096 ]; then
+            innodb_log_file_size_mb=512
+        fi
+        
+        if grep -q "^innodb_log_file_size" "$my_cnf_file" 2>/dev/null || grep -q "^[[:space:]]*innodb_log_file_size" "$my_cnf_file" 2>/dev/null; then
+            sed -i "s/^[[:space:]]*innodb_log_file_size[[:space:]]*=.*/innodb_log_file_size = ${innodb_log_file_size_mb}M/" "$my_cnf_file" 2>/dev/null || \
+            sed -i "s/^innodb_log_file_size.*/innodb_log_file_size = ${innodb_log_file_size_mb}M/" "$my_cnf_file" 2>/dev/null
+        else
+            sed -i '/^\[mysqld\]/a innodb_log_file_size = '"${innodb_log_file_size_mb}"'M' "$my_cnf_file" 2>/dev/null
+        fi
+        echo -e "${GREEN}  ✓ innodb_log_file_size: ${innodb_log_file_size_mb}M${NC}"
+        
+        # 6. InnoDB 日志缓冲大小
+        local innodb_log_buffer_size_mb=16
+        if [ $TOTAL_MEM_GB -ge 16 ]; then
+            innodb_log_buffer_size_mb=64
+        elif [ $TOTAL_MEM_GB -ge 8 ]; then
+            innodb_log_buffer_size_mb=32
+        fi
+        
+        if grep -q "^innodb_log_buffer_size" "$my_cnf_file" 2>/dev/null || grep -q "^[[:space:]]*innodb_log_buffer_size" "$my_cnf_file" 2>/dev/null; then
+            sed -i "s/^[[:space:]]*innodb_log_buffer_size[[:space:]]*=.*/innodb_log_buffer_size = ${innodb_log_buffer_size_mb}M/" "$my_cnf_file" 2>/dev/null || \
+            sed -i "s/^innodb_log_buffer_size.*/innodb_log_buffer_size = ${innodb_log_buffer_size_mb}M/" "$my_cnf_file" 2>/dev/null
+        else
+            sed -i '/^\[mysqld\]/a innodb_log_buffer_size = '"${innodb_log_buffer_size_mb}"'M' "$my_cnf_file" 2>/dev/null
+        fi
+        echo -e "${GREEN}  ✓ innodb_log_buffer_size: ${innodb_log_buffer_size_mb}M${NC}"
+        
+        # 7. InnoDB 线程并发数（根据 CPU 核心数设置）
+        local innodb_thread_concurrency=$((CPU_CORES * 2))
+        if [ $innodb_thread_concurrency -gt 64 ]; then
+            innodb_thread_concurrency=64
+        fi
+        if [ $innodb_thread_concurrency -lt 4 ]; then
+            innodb_thread_concurrency=4
+        fi
+        
+        if grep -q "^innodb_thread_concurrency" "$my_cnf_file" 2>/dev/null || grep -q "^[[:space:]]*innodb_thread_concurrency" "$my_cnf_file" 2>/dev/null; then
+            sed -i "s/^[[:space:]]*innodb_thread_concurrency[[:space:]]*=.*/innodb_thread_concurrency = ${innodb_thread_concurrency}/" "$my_cnf_file" 2>/dev/null || \
+            sed -i "s/^innodb_thread_concurrency.*/innodb_thread_concurrency = ${innodb_thread_concurrency}/" "$my_cnf_file" 2>/dev/null
+        else
+            sed -i '/^\[mysqld\]/a innodb_thread_concurrency = '"${innodb_thread_concurrency}"'' "$my_cnf_file" 2>/dev/null
+        fi
+        echo -e "${GREEN}  ✓ innodb_thread_concurrency: ${innodb_thread_concurrency}${NC}"
+        
+        # 8. InnoDB IO 线程数（提高 I/O 性能）
+        local innodb_read_io_threads=4
+        local innodb_write_io_threads=4
+        if [ $CPU_CORES -ge 16 ]; then
+            innodb_read_io_threads=8
+            innodb_write_io_threads=8
+        elif [ $CPU_CORES -ge 8 ]; then
+            innodb_read_io_threads=6
+            innodb_write_io_threads=6
+        fi
+        
+        if ! grep -q "^innodb_read_io_threads" "$my_cnf_file" 2>/dev/null && ! grep -q "^[[:space:]]*innodb_read_io_threads" "$my_cnf_file" 2>/dev/null; then
+            sed -i '/^\[mysqld\]/a innodb_read_io_threads = '"${innodb_read_io_threads}"'' "$my_cnf_file" 2>/dev/null
+        fi
+        if ! grep -q "^innodb_write_io_threads" "$my_cnf_file" 2>/dev/null && ! grep -q "^[[:space:]]*innodb_write_io_threads" "$my_cnf_file" 2>/dev/null; then
+            sed -i '/^\[mysqld\]/a innodb_write_io_threads = '"${innodb_write_io_threads}"'' "$my_cnf_file" 2>/dev/null
+        fi
+        echo -e "${GREEN}  ✓ innodb_read_io_threads: ${innodb_read_io_threads}, innodb_write_io_threads: ${innodb_write_io_threads}${NC}"
+        
+        # 9. 表缓存和打开文件限制
+        local table_open_cache=2000
+        local open_files_limit=65535
+        if [ $TOTAL_MEM_GB -ge 16 ]; then
+            table_open_cache=4000
+            open_files_limit=65535
+        elif [ $TOTAL_MEM_GB -ge 8 ]; then
+            table_open_cache=3000
+            open_files_limit=32768
+        fi
+        
+        if ! grep -q "^table_open_cache" "$my_cnf_file" 2>/dev/null && ! grep -q "^[[:space:]]*table_open_cache" "$my_cnf_file" 2>/dev/null; then
+            sed -i '/^\[mysqld\]/a table_open_cache = '"${table_open_cache}"'' "$my_cnf_file" 2>/dev/null
+        fi
+        if ! grep -q "^open_files_limit" "$my_cnf_file" 2>/dev/null && ! grep -q "^[[:space:]]*open_files_limit" "$my_cnf_file" 2>/dev/null; then
+            sed -i '/^\[mysqld\]/a open_files_limit = '"${open_files_limit}"'' "$my_cnf_file" 2>/dev/null
+        fi
+        
+        # 10. 查询缓存（MySQL 8.0 已移除，但为兼容性保留配置注释）
+        # MySQL 8.0 不再支持 query_cache，跳过
+        
+        # 11. 临时表和排序缓冲区
+        local tmp_table_size_mb=64
+        local max_heap_table_size_mb=64
+        local sort_buffer_size_kb=256
+        if [ $TOTAL_MEM_GB -ge 16 ]; then
+            tmp_table_size_mb=256
+            max_heap_table_size_mb=256
+            sort_buffer_size_kb=512
+        elif [ $TOTAL_MEM_GB -ge 8 ]; then
+            tmp_table_size_mb=128
+            max_heap_table_size_mb=128
+            sort_buffer_size_kb=384
+        fi
+        
+        if ! grep -q "^tmp_table_size" "$my_cnf_file" 2>/dev/null && ! grep -q "^[[:space:]]*tmp_table_size" "$my_cnf_file" 2>/dev/null; then
+            sed -i '/^\[mysqld\]/a tmp_table_size = '"${tmp_table_size_mb}"'M' "$my_cnf_file" 2>/dev/null
+        fi
+        if ! grep -q "^max_heap_table_size" "$my_cnf_file" 2>/dev/null && ! grep -q "^[[:space:]]*max_heap_table_size" "$my_cnf_file" 2>/dev/null; then
+            sed -i '/^\[mysqld\]/a max_heap_table_size = '"${max_heap_table_size_mb}"'M' "$my_cnf_file" 2>/dev/null
+        fi
+        if ! grep -q "^sort_buffer_size" "$my_cnf_file" 2>/dev/null && ! grep -q "^[[:space:]]*sort_buffer_size" "$my_cnf_file" 2>/dev/null; then
+            sed -i '/^\[mysqld\]/a sort_buffer_size = '"${sort_buffer_size_kb}"'K' "$my_cnf_file" 2>/dev/null
+        fi
+        
+        # 12. InnoDB 刷新方法（使用 O_DIRECT 提高性能）
+        if ! grep -q "^innodb_flush_method" "$my_cnf_file" 2>/dev/null && ! grep -q "^[[:space:]]*innodb_flush_method" "$my_cnf_file" 2>/dev/null; then
+            sed -i '/^\[mysqld\]/a innodb_flush_method = O_DIRECT' "$my_cnf_file" 2>/dev/null
+        fi
+        
+        # 13. InnoDB 双写缓冲（提高数据安全性，SSD 可以关闭以提高性能）
+        if ! grep -q "^innodb_doublewrite" "$my_cnf_file" 2>/dev/null && ! grep -q "^[[:space:]]*innodb_doublewrite" "$my_cnf_file" 2>/dev/null; then
+            # 默认启用（数据安全优先）
+            sed -i '/^\[mysqld\]/a innodb_doublewrite = ON' "$my_cnf_file" 2>/dev/null
+        fi
+        
+        # 14. 慢查询日志（生产环境建议启用）
+        if ! grep -q "^slow_query_log" "$my_cnf_file" 2>/dev/null && ! grep -q "^[[:space:]]*slow_query_log" "$my_cnf_file" 2>/dev/null; then
+            sed -i '/^\[mysqld\]/a slow_query_log = 1' "$my_cnf_file" 2>/dev/null
+            sed -i '/^\[mysqld\]/a slow_query_log_file = /var/log/mysql/slow.log' "$my_cnf_file" 2>/dev/null
+            sed -i '/^\[mysqld\]/a long_query_time = 2' "$my_cnf_file" 2>/dev/null
+        fi
+        
+        # 15. 二进制日志（用于主从复制和数据恢复）
+        if ! grep -q "^log_bin" "$my_cnf_file" 2>/dev/null && ! grep -q "^[[:space:]]*log_bin" "$my_cnf_file" 2>/dev/null; then
+            sed -i '/^\[mysqld\]/a log_bin = /var/log/mysql/mysql-bin.log' "$my_cnf_file" 2>/dev/null
+            sed -i '/^\[mysqld\]/a expire_logs_days = 7' "$my_cnf_file" 2>/dev/null
+            sed -i '/^\[mysqld\]/a max_binlog_size = 100M' "$my_cnf_file" 2>/dev/null
+        fi
+        
+        # 16. 字符集设置（UTF8MB4）
+        if ! grep -q "^character-set-server" "$my_cnf_file" 2>/dev/null && ! grep -q "^[[:space:]]*character-set-server" "$my_cnf_file" 2>/dev/null; then
+            sed -i '/^\[mysqld\]/a character-set-server = utf8mb4' "$my_cnf_file" 2>/dev/null
+            sed -i '/^\[mysqld\]/a collation-server = utf8mb4_general_ci' "$my_cnf_file" 2>/dev/null
+        fi
+        
         echo -e "${BLUE}  配置文件位置: ${my_cnf_file}${NC}"
-        echo -e "${GREEN}✓ MySQL 配置文件设置完成（初始化前）${NC}"
+        echo -e "${GREEN}✓ MySQL 配置文件设置完成（已根据硬件优化）${NC}"
     else
         echo -e "${YELLOW}⚠ 未找到 MySQL 配置文件，跳过配置${NC}"
     fi
@@ -2315,6 +2586,9 @@ main() {
     
     # 检测操作系统
     detect_os
+    
+    # 检测硬件配置
+    detect_hardware
     
     # 检查现有安装
     check_existing

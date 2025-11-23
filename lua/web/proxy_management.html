@@ -1,0 +1,1097 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WAF反向代理管理界面</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background-color: #f5f5f5;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            padding: 30px;
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 30px;
+            border-bottom: 2px solid #4CAF50;
+            padding-bottom: 10px;
+        }
+        
+        .tabs {
+            display: flex;
+            border-bottom: 2px solid #e0e0e0;
+            margin-bottom: 20px;
+        }
+        
+        .tab {
+            padding: 12px 24px;
+            cursor: pointer;
+            border: none;
+            background: none;
+            font-size: 16px;
+            color: #666;
+            transition: all 0.3s;
+        }
+        
+        .tab.active {
+            color: #4CAF50;
+            border-bottom: 2px solid #4CAF50;
+            font-weight: bold;
+        }
+        
+        .tab:hover {
+            color: #4CAF50;
+        }
+        
+        .tab-content {
+            display: none;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        .toolbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        
+        .filters {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        
+        .filters select,
+        .filters input {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+        
+        .btn-primary {
+            background-color: #4CAF50;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background-color: #45a049;
+        }
+        
+        .btn-danger {
+            background-color: #f44336;
+            color: white;
+        }
+        
+        .btn-danger:hover {
+            background-color: #da190b;
+        }
+        
+        .btn-warning {
+            background-color: #ff9800;
+            color: white;
+        }
+        
+        .btn-warning:hover {
+            background-color: #e68900;
+        }
+        
+        .btn-info {
+            background-color: #2196F3;
+            color: white;
+        }
+        
+        .btn-info:hover {
+            background-color: #0b7dda;
+        }
+        
+        .btn-secondary {
+            background-color: #757575;
+            color: white;
+        }
+        
+        .btn-secondary:hover {
+            background-color: #616161;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        
+        th {
+            background-color: #f5f5f5;
+            font-weight: 600;
+            color: #333;
+        }
+        
+        tr:hover {
+            background-color: #f9f9f9;
+        }
+        
+        .status-badge {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        
+        .status-enabled {
+            background-color: #4CAF50;
+            color: white;
+        }
+        
+        .status-disabled {
+            background-color: #f44336;
+            color: white;
+        }
+        
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+        }
+        
+        .modal-content {
+            background-color: white;
+            margin: 2% auto;
+            padding: 30px;
+            border-radius: 8px;
+            width: 90%;
+            max-width: 800px;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        
+        .close {
+            color: #aaa;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        
+        .close:hover {
+            color: #000;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            color: #333;
+            font-weight: 500;
+        }
+        
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        
+        .form-group textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+        
+        .form-row {
+            display: flex;
+            gap: 15px;
+        }
+        
+        .form-row .form-group {
+            flex: 1;
+        }
+        
+        .form-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        
+        .pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        
+        .pagination button {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            background: white;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+        
+        .pagination button:hover:not(:disabled) {
+            background-color: #f5f5f5;
+        }
+        
+        .pagination button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .alert {
+            padding: 12px;
+            margin-bottom: 20px;
+            border-radius: 4px;
+        }
+        
+        .alert-success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .alert-error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .action-buttons {
+            display: flex;
+            gap: 5px;
+        }
+        
+        .action-buttons button {
+            padding: 4px 8px;
+            font-size: 12px;
+        }
+        
+        .backends-list {
+            margin-top: 10px;
+            padding: 10px;
+            background-color: #f9f9f9;
+            border-radius: 4px;
+        }
+        
+        .backend-item {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+            padding: 10px;
+            background: white;
+            border-radius: 4px;
+            align-items: center;
+        }
+        
+        .backend-item input {
+            flex: 1;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>WAF反向代理管理界面</h1>
+        
+        <div class="tabs">
+            <button class="tab active" onclick="switchTab('proxies')">代理列表</button>
+            <button class="tab" onclick="switchTab('create')">创建代理</button>
+        </div>
+        
+        <div id="alert-container"></div>
+        
+        <!-- 代理列表 -->
+        <div id="proxies-tab" class="tab-content active">
+            <div class="toolbar">
+                <div class="filters">
+                    <select id="filter-type">
+                        <option value="">全部类型</option>
+                        <option value="http">HTTP</option>
+                        <option value="tcp">TCP</option>
+                        <option value="udp">UDP</option>
+                    </select>
+                    <select id="filter-status">
+                        <option value="">全部状态</option>
+                        <option value="1">已启用</option>
+                        <option value="0">已禁用</option>
+                    </select>
+                </div>
+                <button class="btn btn-primary" onclick="loadProxies()">刷新</button>
+            </div>
+            
+            <table id="proxies-table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>代理名称</th>
+                        <th>类型</th>
+                        <th>监听端口</th>
+                        <th>服务器名称</th>
+                        <th>后端地址</th>
+                        <th>状态</th>
+                        <th>创建时间</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody id="proxies-tbody">
+                    <tr>
+                        <td colspan="9" style="text-align: center; padding: 20px;">加载中...</td>
+                    </tr>
+                </tbody>
+            </table>
+            
+            <div class="pagination" id="pagination"></div>
+        </div>
+        
+        <!-- 创建代理 -->
+        <div id="create-tab" class="tab-content">
+            <form id="create-form" onsubmit="createProxy(event)">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>代理名称 *</label>
+                        <input type="text" id="create-proxy-name" required placeholder="例如: web-proxy-80">
+                    </div>
+                    <div class="form-group">
+                        <label>代理类型 *</label>
+                        <select id="create-proxy-type" required onchange="toggleProxyFields()">
+                            <option value="">请选择</option>
+                            <option value="http">HTTP/HTTPS</option>
+                            <option value="tcp">TCP</option>
+                            <option value="udp">UDP</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>监听端口 *</label>
+                        <input type="number" id="create-listen-port" required min="1" max="65535" placeholder="80">
+                    </div>
+                    <div class="form-group">
+                        <label>监听地址</label>
+                        <input type="text" id="create-listen-address" value="0.0.0.0" placeholder="0.0.0.0">
+                    </div>
+                </div>
+                
+                <div class="form-group" id="http-fields">
+                    <label>服务器名称（HTTP代理）*</label>
+                    <input type="text" id="create-server-name" placeholder="example.com www.example.com">
+                    <small style="color: #666;">支持多个域名，用空格分隔</small>
+                </div>
+                
+                <div class="form-group" id="http-path-fields">
+                    <label>路径匹配（HTTP代理）</label>
+                    <input type="text" id="create-location-path" value="/" placeholder="/">
+                </div>
+                
+                <div class="form-group">
+                    <label>后端类型 *</label>
+                    <select id="create-backend-type" required onchange="toggleBackendFields()">
+                        <option value="single">单个后端</option>
+                        <option value="upstream">多个后端（负载均衡）</option>
+                    </select>
+                </div>
+                
+                <div class="form-group" id="single-backend-fields">
+                    <label>后端地址 *</label>
+                    <input type="text" id="create-backend-address" placeholder="127.0.0.1:8080 或 upstream名称">
+                </div>
+                
+                <div class="form-group" id="tcp-udp-backend-port">
+                    <label>后端端口（TCP/UDP）</label>
+                    <input type="number" id="create-backend-port" min="1" max="65535" placeholder="8080">
+                </div>
+                
+                <div class="form-group" id="upstream-fields" style="display: none;">
+                    <label>后端服务器列表</label>
+                    <div class="backends-list" id="backends-list">
+                        <div class="backend-item">
+                            <input type="text" placeholder="IP地址" class="backend-address">
+                            <input type="number" placeholder="端口" class="backend-port" min="1" max="65535">
+                            <input type="number" placeholder="权重" class="backend-weight" value="1" min="1">
+                            <button type="button" class="btn btn-danger" onclick="removeBackend(this)">删除</button>
+                        </div>
+                    </div>
+                    <button type="button" class="btn btn-secondary" onclick="addBackend()">添加后端服务器</button>
+                    <div class="form-group" style="margin-top: 10px;">
+                        <label>负载均衡算法</label>
+                        <select id="create-load-balance">
+                            <option value="round_robin">轮询</option>
+                            <option value="least_conn">最少连接</option>
+                            <option value="ip_hash">IP哈希</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>连接超时（秒）</label>
+                        <input type="number" id="create-proxy-connect-timeout" value="60" min="1">
+                    </div>
+                    <div class="form-group">
+                        <label>发送超时（秒）</label>
+                        <input type="number" id="create-proxy-send-timeout" value="60" min="1">
+                    </div>
+                    <div class="form-group">
+                        <label>读取超时（秒）</label>
+                        <input type="number" id="create-proxy-read-timeout" value="60" min="1">
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label>描述</label>
+                    <textarea id="create-description"></textarea>
+                </div>
+                
+                <div class="form-group">
+                    <label>优先级</label>
+                    <input type="number" id="create-priority" value="0" min="0">
+                </div>
+                
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="resetCreateForm()">重置</button>
+                    <button type="submit" class="btn btn-primary">创建代理</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- 编辑代理模态框 -->
+    <div id="edit-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>编辑代理配置</h2>
+                <span class="close" onclick="closeEditModal()">&times;</span>
+            </div>
+            <form id="edit-form" onsubmit="updateProxy(event)">
+                <input type="hidden" id="edit-id">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>代理名称 *</label>
+                        <input type="text" id="edit-proxy-name" required>
+                    </div>
+                    <div class="form-group">
+                        <label>代理类型</label>
+                        <input type="text" id="edit-proxy-type" disabled>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>监听端口 *</label>
+                        <input type="number" id="edit-listen-port" required min="1" max="65535">
+                    </div>
+                    <div class="form-group">
+                        <label>监听地址</label>
+                        <input type="text" id="edit-listen-address">
+                    </div>
+                </div>
+                <div class="form-group" id="edit-http-fields">
+                    <label>服务器名称（HTTP代理）</label>
+                    <input type="text" id="edit-server-name">
+                </div>
+                <div class="form-group" id="edit-http-path-fields">
+                    <label>路径匹配（HTTP代理）</label>
+                    <input type="text" id="edit-location-path">
+                </div>
+                <div class="form-group">
+                    <label>后端类型</label>
+                    <select id="edit-backend-type" onchange="toggleEditBackendFields()">
+                        <option value="single">单个后端</option>
+                        <option value="upstream">多个后端（负载均衡）</option>
+                    </select>
+                </div>
+                <div class="form-group" id="edit-single-backend-fields">
+                    <label>后端地址 *</label>
+                    <input type="text" id="edit-backend-address">
+                </div>
+                <div class="form-group" id="edit-tcp-udp-backend-port">
+                    <label>后端端口（TCP/UDP）</label>
+                    <input type="number" id="edit-backend-port" min="1" max="65535">
+                </div>
+                <div class="form-group" id="edit-upstream-fields" style="display: none;">
+                    <label>后端服务器列表</label>
+                    <div class="backends-list" id="edit-backends-list"></div>
+                    <button type="button" class="btn btn-secondary" onclick="addEditBackend()">添加后端服务器</button>
+                    <div class="form-group" style="margin-top: 10px;">
+                        <label>负载均衡算法</label>
+                        <select id="edit-load-balance">
+                            <option value="round_robin">轮询</option>
+                            <option value="least_conn">最少连接</option>
+                            <option value="ip_hash">IP哈希</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>连接超时（秒）</label>
+                        <input type="number" id="edit-proxy-connect-timeout" min="1">
+                    </div>
+                    <div class="form-group">
+                        <label>发送超时（秒）</label>
+                        <input type="number" id="edit-proxy-send-timeout" min="1">
+                    </div>
+                    <div class="form-group">
+                        <label>读取超时（秒）</label>
+                        <input type="number" id="edit-proxy-read-timeout" min="1">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>描述</label>
+                    <textarea id="edit-description"></textarea>
+                </div>
+                <div class="form-group">
+                    <label>优先级</label>
+                    <input type="number" id="edit-priority" min="0">
+                </div>
+                <div class="form-group">
+                    <label>状态</label>
+                    <select id="edit-status">
+                        <option value="1">启用</option>
+                        <option value="0">禁用</option>
+                    </select>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeEditModal()">取消</button>
+                    <button type="submit" class="btn btn-primary">保存</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <script>
+        let currentPage = 1;
+        const pageSize = 20;
+        
+        // 切换标签页
+        function switchTab(tab) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            
+            if (tab === 'proxies') {
+                document.querySelectorAll('.tab')[0].classList.add('active');
+                document.getElementById('proxies-tab').classList.add('active');
+                loadProxies();
+            } else if (tab === 'create') {
+                document.querySelectorAll('.tab')[1].classList.add('active');
+                document.getElementById('create-tab').classList.add('active');
+            }
+        }
+        
+        // 显示提示信息
+        function showAlert(message, type = 'success') {
+            const container = document.getElementById('alert-container');
+            const alert = document.createElement('div');
+            alert.className = `alert alert-${type}`;
+            alert.textContent = message;
+            container.innerHTML = '';
+            container.appendChild(alert);
+            setTimeout(() => {
+                alert.remove();
+            }, 3000);
+        }
+        
+        // 切换代理类型相关字段
+        function toggleProxyFields() {
+            const proxyType = document.getElementById('create-proxy-type').value;
+            const httpFields = document.getElementById('http-fields');
+            const httpPathFields = document.getElementById('http-path-fields');
+            const tcpUdpBackendPort = document.getElementById('tcp-udp-backend-port');
+            
+            if (proxyType === 'http') {
+                httpFields.style.display = 'block';
+                httpPathFields.style.display = 'block';
+                tcpUdpBackendPort.style.display = 'none';
+            } else if (proxyType === 'tcp' || proxyType === 'udp') {
+                httpFields.style.display = 'none';
+                httpPathFields.style.display = 'none';
+                tcpUdpBackendPort.style.display = 'block';
+            } else {
+                httpFields.style.display = 'none';
+                httpPathFields.style.display = 'none';
+                tcpUdpBackendPort.style.display = 'none';
+            }
+        }
+        
+        // 切换后端类型相关字段
+        function toggleBackendFields() {
+            const backendType = document.getElementById('create-backend-type').value;
+            const singleFields = document.getElementById('single-backend-fields');
+            const upstreamFields = document.getElementById('upstream-fields');
+            
+            if (backendType === 'single') {
+                singleFields.style.display = 'block';
+                upstreamFields.style.display = 'none';
+            } else {
+                singleFields.style.display = 'none';
+                upstreamFields.style.display = 'block';
+            }
+        }
+        
+        function toggleEditBackendFields() {
+            const backendType = document.getElementById('edit-backend-type').value;
+            const singleFields = document.getElementById('edit-single-backend-fields');
+            const upstreamFields = document.getElementById('edit-upstream-fields');
+            
+            if (backendType === 'single') {
+                singleFields.style.display = 'block';
+                upstreamFields.style.display = 'none';
+            } else {
+                singleFields.style.display = 'none';
+                upstreamFields.style.display = 'block';
+            }
+        }
+        
+        // 添加后端服务器
+        function addBackend() {
+            const list = document.getElementById('backends-list');
+            const item = document.createElement('div');
+            item.className = 'backend-item';
+            item.innerHTML = `
+                <input type="text" placeholder="IP地址" class="backend-address">
+                <input type="number" placeholder="端口" class="backend-port" min="1" max="65535">
+                <input type="number" placeholder="权重" class="backend-weight" value="1" min="1">
+                <button type="button" class="btn btn-danger" onclick="removeBackend(this)">删除</button>
+            `;
+            list.appendChild(item);
+        }
+        
+        function addEditBackend() {
+            const list = document.getElementById('edit-backends-list');
+            const item = document.createElement('div');
+            item.className = 'backend-item';
+            item.innerHTML = `
+                <input type="text" placeholder="IP地址" class="backend-address">
+                <input type="number" placeholder="端口" class="backend-port" min="1" max="65535">
+                <input type="number" placeholder="权重" class="backend-weight" value="1" min="1">
+                <button type="button" class="btn btn-danger" onclick="removeBackend(this)">删除</button>
+            `;
+            list.appendChild(item);
+        }
+        
+        // 删除后端服务器
+        function removeBackend(btn) {
+            btn.parentElement.remove();
+        }
+        
+        // 加载代理列表
+        async function loadProxies(page = 1) {
+            currentPage = page;
+            const proxyType = document.getElementById('filter-type').value;
+            const status = document.getElementById('filter-status').value;
+            
+            let url = `/api/proxy?page=${page}&page_size=${pageSize}`;
+            if (proxyType) url += `&proxy_type=${proxyType}`;
+            if (status) url += `&status=${status}`;
+            
+            try {
+                const response = await fetch(url);
+                const data = await response.json();
+                
+                if (data.success) {
+                    renderProxiesTable(data.data.proxies);
+                    renderPagination(data.data, 'pagination', loadProxies);
+                } else {
+                    showAlert(data.error || '加载失败', 'error');
+                }
+            } catch (error) {
+                showAlert('网络错误: ' + error.message, 'error');
+            }
+        }
+        
+        // 渲染代理表格
+        function renderProxiesTable(proxies) {
+            const tbody = document.getElementById('proxies-tbody');
+            if (proxies.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 20px;">暂无数据</td></tr>';
+                return;
+            }
+            
+            tbody.innerHTML = proxies.map(proxy => `
+                <tr>
+                    <td>${proxy.id}</td>
+                    <td>${proxy.proxy_name}</td>
+                    <td>${getProxyTypeName(proxy.proxy_type)}</td>
+                    <td>${proxy.listen_address}:${proxy.listen_port}</td>
+                    <td>${proxy.server_name || '-'}</td>
+                    <td>${proxy.backend_address}${proxy.backend_port ? ':' + proxy.backend_port : ''}</td>
+                    <td>${getStatusBadge(proxy.status)}</td>
+                    <td>${formatDateTime(proxy.created_at)}</td>
+                    <td>
+                        <div class="action-buttons">
+                            <button class="btn btn-info" onclick="editProxy(${proxy.id})">编辑</button>
+                            ${proxy.status == 1 ? 
+                                `<button class="btn btn-warning" onclick="disableProxy(${proxy.id})">禁用</button>` :
+                                `<button class="btn btn-primary" onclick="enableProxy(${proxy.id})">启用</button>`
+                            }
+                            <button class="btn btn-danger" onclick="deleteProxy(${proxy.id})">删除</button>
+                        </div>
+                    </td>
+                </tr>
+            `).join('');
+        }
+        
+        // 创建代理
+        async function createProxy(event) {
+            event.preventDefault();
+            
+            const proxyData = {
+                proxy_name: document.getElementById('create-proxy-name').value,
+                proxy_type: document.getElementById('create-proxy-type').value,
+                listen_port: parseInt(document.getElementById('create-listen-port').value),
+                listen_address: document.getElementById('create-listen-address').value || '0.0.0.0',
+                backend_type: document.getElementById('create-backend-type').value,
+                backend_address: document.getElementById('create-backend-address').value,
+                description: document.getElementById('create-description').value || null,
+                priority: parseInt(document.getElementById('create-priority').value) || 0,
+                proxy_connect_timeout: parseInt(document.getElementById('create-proxy-connect-timeout').value) || 60,
+                proxy_send_timeout: parseInt(document.getElementById('create-proxy-send-timeout').value) || 60,
+                proxy_read_timeout: parseInt(document.getElementById('create-proxy-read-timeout').value) || 60
+            };
+            
+            if (proxyData.proxy_type === 'http') {
+                proxyData.server_name = document.getElementById('create-server-name').value;
+                proxyData.location_path = document.getElementById('create-location-path').value || '/';
+            } else {
+                proxyData.backend_port = parseInt(document.getElementById('create-backend-port').value);
+            }
+            
+            if (proxyData.backend_type === 'upstream') {
+                const backends = [];
+                const backendItems = document.querySelectorAll('#backends-list .backend-item');
+                backendItems.forEach(item => {
+                    const address = item.querySelector('.backend-address').value;
+                    const port = parseInt(item.querySelector('.backend-port').value);
+                    const weight = parseInt(item.querySelector('.backend-weight').value) || 1;
+                    if (address && port) {
+                        backends.push({backend_address: address, backend_port: port, weight: weight});
+                    }
+                });
+                proxyData.backends = backends;
+                proxyData.load_balance = document.getElementById('create-load-balance').value;
+            }
+            
+            try {
+                const response = await fetch('/api/proxy', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(proxyData)
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showAlert('代理配置创建成功');
+                    resetCreateForm();
+                    switchTab('proxies');
+                    loadProxies();
+                } else {
+                    showAlert(data.error || '创建失败', 'error');
+                }
+            } catch (error) {
+                showAlert('网络错误: ' + error.message, 'error');
+            }
+        }
+        
+        // 编辑代理
+        async function editProxy(id) {
+            try {
+                const response = await fetch(`/api/proxy/${id}`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    const proxy = data.proxy;
+                    document.getElementById('edit-id').value = proxy.id;
+                    document.getElementById('edit-proxy-name').value = proxy.proxy_name;
+                    document.getElementById('edit-proxy-type').value = proxy.proxy_type;
+                    document.getElementById('edit-listen-port').value = proxy.listen_port;
+                    document.getElementById('edit-listen-address').value = proxy.listen_address || '0.0.0.0';
+                    document.getElementById('edit-server-name').value = proxy.server_name || '';
+                    document.getElementById('edit-location-path').value = proxy.location_path || '/';
+                    document.getElementById('edit-backend-type').value = proxy.backend_type;
+                    document.getElementById('edit-backend-address').value = proxy.backend_address;
+                    document.getElementById('edit-backend-port').value = proxy.backend_port || '';
+                    document.getElementById('edit-load-balance').value = proxy.load_balance || 'round_robin';
+                    document.getElementById('edit-proxy-connect-timeout').value = proxy.proxy_connect_timeout || 60;
+                    document.getElementById('edit-proxy-send-timeout').value = proxy.proxy_send_timeout || 60;
+                    document.getElementById('edit-proxy-read-timeout').value = proxy.proxy_read_timeout || 60;
+                    document.getElementById('edit-description').value = proxy.description || '';
+                    document.getElementById('edit-priority').value = proxy.priority || 0;
+                    document.getElementById('edit-status').value = proxy.status;
+                    
+                    // 显示/隐藏相关字段
+                    toggleEditBackendFields();
+                    if (proxy.proxy_type === 'http') {
+                        document.getElementById('edit-http-fields').style.display = 'block';
+                        document.getElementById('edit-http-path-fields').style.display = 'block';
+                        document.getElementById('edit-tcp-udp-backend-port').style.display = 'none';
+                    } else {
+                        document.getElementById('edit-http-fields').style.display = 'none';
+                        document.getElementById('edit-http-path-fields').style.display = 'none';
+                        document.getElementById('edit-tcp-udp-backend-port').style.display = 'block';
+                    }
+                    
+                    // 加载后端服务器列表
+                    if (proxy.backend_type === 'upstream' && proxy.backends) {
+                        const list = document.getElementById('edit-backends-list');
+                        list.innerHTML = '';
+                        proxy.backends.forEach(backend => {
+                            addEditBackend();
+                            const items = list.querySelectorAll('.backend-item');
+                            const lastItem = items[items.length - 1];
+                            lastItem.querySelector('.backend-address').value = backend.backend_address;
+                            lastItem.querySelector('.backend-port').value = backend.backend_port;
+                            lastItem.querySelector('.backend-weight').value = backend.weight || 1;
+                        });
+                    }
+                    
+                    document.getElementById('edit-modal').style.display = 'block';
+                } else {
+                    showAlert(data.error || '加载失败', 'error');
+                }
+            } catch (error) {
+                showAlert('网络错误: ' + error.message, 'error');
+            }
+        }
+        
+        // 更新代理
+        async function updateProxy(event) {
+            event.preventDefault();
+            
+            const id = document.getElementById('edit-id').value;
+            const proxyData = {
+                proxy_name: document.getElementById('edit-proxy-name').value,
+                listen_port: parseInt(document.getElementById('edit-listen-port').value),
+                listen_address: document.getElementById('edit-listen-address').value,
+                backend_type: document.getElementById('edit-backend-type').value,
+                backend_address: document.getElementById('edit-backend-address').value,
+                description: document.getElementById('edit-description').value || '',
+                priority: parseInt(document.getElementById('edit-priority').value) || 0,
+                status: parseInt(document.getElementById('edit-status').value),
+                proxy_connect_timeout: parseInt(document.getElementById('edit-proxy-connect-timeout').value) || 60,
+                proxy_send_timeout: parseInt(document.getElementById('edit-proxy-send-timeout').value) || 60,
+                proxy_read_timeout: parseInt(document.getElementById('edit-proxy-read-timeout').value) || 60
+            };
+            
+            const proxyType = document.getElementById('edit-proxy-type').value;
+            if (proxyType === 'http') {
+                proxyData.server_name = document.getElementById('edit-server-name').value;
+                proxyData.location_path = document.getElementById('edit-location-path').value || '/';
+            } else {
+                proxyData.backend_port = parseInt(document.getElementById('edit-backend-port').value);
+            }
+            
+            if (proxyData.backend_type === 'upstream') {
+                const backends = [];
+                const backendItems = document.querySelectorAll('#edit-backends-list .backend-item');
+                backendItems.forEach(item => {
+                    const address = item.querySelector('.backend-address').value;
+                    const port = parseInt(item.querySelector('.backend-port').value);
+                    const weight = parseInt(item.querySelector('.backend-weight').value) || 1;
+                    if (address && port) {
+                        backends.push({backend_address: address, backend_port: port, weight: weight});
+                    }
+                });
+                proxyData.backends = backends;
+                proxyData.load_balance = document.getElementById('edit-load-balance').value;
+            }
+            
+            try {
+                const response = await fetch(`/api/proxy/${id}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(proxyData)
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showAlert('代理配置更新成功');
+                    closeEditModal();
+                    loadProxies();
+                } else {
+                    showAlert(data.error || '更新失败', 'error');
+                }
+            } catch (error) {
+                showAlert('网络错误: ' + error.message, 'error');
+            }
+        }
+        
+        // 启用代理
+        async function enableProxy(id) {
+            if (!confirm('确定要启用该代理配置吗？')) return;
+            
+            try {
+                const response = await fetch(`/api/proxy/${id}/enable`, { method: 'POST' });
+                const data = await response.json();
+                
+                if (data.success) {
+                    showAlert('代理配置已启用');
+                    loadProxies();
+                } else {
+                    showAlert(data.error || '操作失败', 'error');
+                }
+            } catch (error) {
+                showAlert('网络错误: ' + error.message, 'error');
+            }
+        }
+        
+        // 禁用代理
+        async function disableProxy(id) {
+            if (!confirm('确定要禁用该代理配置吗？')) return;
+            
+            try {
+                const response = await fetch(`/api/proxy/${id}/disable`, { method: 'POST' });
+                const data = await response.json();
+                
+                if (data.success) {
+                    showAlert('代理配置已禁用');
+                    loadProxies();
+                } else {
+                    showAlert(data.error || '操作失败', 'error');
+                }
+            } catch (error) {
+                showAlert('网络错误: ' + error.message, 'error');
+            }
+        }
+        
+        // 删除代理
+        async function deleteProxy(id) {
+            if (!confirm('确定要删除该代理配置吗？此操作不可恢复！')) return;
+            
+            try {
+                const response = await fetch(`/api/proxy/${id}`, { method: 'DELETE' });
+                const data = await response.json();
+                
+                if (data.success) {
+                    showAlert('代理配置已删除');
+                    loadProxies();
+                } else {
+                    showAlert(data.error || '删除失败', 'error');
+                }
+            } catch (error) {
+                showAlert('网络错误: ' + error.message, 'error');
+            }
+        }
+        
+        // 关闭编辑模态框
+        function closeEditModal() {
+            document.getElementById('edit-modal').style.display = 'none';
+        }
+        
+        // 重置创建表单
+        function resetCreateForm() {
+            document.getElementById('create-form').reset();
+            document.getElementById('backends-list').innerHTML = '<div class="backend-item"><input type="text" placeholder="IP地址" class="backend-address"><input type="number" placeholder="端口" class="backend-port" min="1" max="65535"><input type="number" placeholder="权重" class="backend-weight" value="1" min="1"><button type="button" class="btn btn-danger" onclick="removeBackend(this)">删除</button></div>';
+            toggleProxyFields();
+            toggleBackendFields();
+        }
+        
+        // 工具函数
+        function getProxyTypeName(type) {
+            const names = {
+                'http': 'HTTP/HTTPS',
+                'tcp': 'TCP',
+                'udp': 'UDP'
+            };
+            return names[type] || type;
+        }
+        
+        function getStatusBadge(status) {
+            if (status == 1) {
+                return '<span class="status-badge status-enabled">已启用</span>';
+            } else {
+                return '<span class="status-badge status-disabled">已禁用</span>';
+            }
+        }
+        
+        function formatDateTime(datetime) {
+            if (!datetime) return '-';
+            return datetime.replace('T', ' ').substring(0, 19);
+        }
+        
+        function renderPagination(data, containerId, loadFunc) {
+            const container = document.getElementById(containerId);
+            if (data.total_pages <= 1) {
+                container.innerHTML = '';
+                return;
+            }
+            
+            const html = `
+                <button onclick="${loadFunc.name}(${data.page - 1})" ${data.page <= 1 ? 'disabled' : ''}>上一页</button>
+                <span>第 ${data.page} / ${data.total_pages} 页 (共 ${data.total} 条)</span>
+                <button onclick="${loadFunc.name}(${data.page + 1})" ${data.page >= data.total_pages ? 'disabled' : ''}>下一页</button>
+            `;
+            container.innerHTML = html;
+        }
+        
+        // 初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            loadProxies();
+            
+            // 点击模态框外部关闭
+            window.onclick = function(event) {
+                const modal = document.getElementById('edit-modal');
+                if (event.target == modal) {
+                    closeEditModal();
+                }
+            }
+        });
+    </script>
+</body>
+</html>
+

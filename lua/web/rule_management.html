@@ -1,0 +1,860 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WAF规则管理界面</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background-color: #f5f5f5;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            padding: 30px;
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 30px;
+            border-bottom: 2px solid #4CAF50;
+            padding-bottom: 10px;
+        }
+        
+        .tabs {
+            display: flex;
+            border-bottom: 2px solid #e0e0e0;
+            margin-bottom: 20px;
+        }
+        
+        .tab {
+            padding: 12px 24px;
+            cursor: pointer;
+            border: none;
+            background: none;
+            font-size: 16px;
+            color: #666;
+            transition: all 0.3s;
+        }
+        
+        .tab.active {
+            color: #4CAF50;
+            border-bottom: 2px solid #4CAF50;
+            font-weight: bold;
+        }
+        
+        .tab:hover {
+            color: #4CAF50;
+        }
+        
+        .tab-content {
+            display: none;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        .toolbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        
+        .filters {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        
+        .filters select,
+        .filters input {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+        
+        .btn-primary {
+            background-color: #4CAF50;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background-color: #45a049;
+        }
+        
+        .btn-danger {
+            background-color: #f44336;
+            color: white;
+        }
+        
+        .btn-danger:hover {
+            background-color: #da190b;
+        }
+        
+        .btn-warning {
+            background-color: #ff9800;
+            color: white;
+        }
+        
+        .btn-warning:hover {
+            background-color: #e68900;
+        }
+        
+        .btn-info {
+            background-color: #2196F3;
+            color: white;
+        }
+        
+        .btn-info:hover {
+            background-color: #0b7dda;
+        }
+        
+        .btn-secondary {
+            background-color: #757575;
+            color: white;
+        }
+        
+        .btn-secondary:hover {
+            background-color: #616161;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        
+        th {
+            background-color: #f5f5f5;
+            font-weight: 600;
+            color: #333;
+        }
+        
+        tr:hover {
+            background-color: #f9f9f9;
+        }
+        
+        .status-badge {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        
+        .status-enabled {
+            background-color: #4CAF50;
+            color: white;
+        }
+        
+        .status-disabled {
+            background-color: #f44336;
+            color: white;
+        }
+        
+        
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+        }
+        
+        .modal-content {
+            background-color: white;
+            margin: 5% auto;
+            padding: 30px;
+            border-radius: 8px;
+            width: 90%;
+            max-width: 600px;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        
+        .close {
+            color: #aaa;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        
+        .close:hover {
+            color: #000;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            color: #333;
+            font-weight: 500;
+        }
+        
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        
+        .form-group textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+        
+        .form-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        
+        .pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        
+        .pagination button {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            background: white;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+        
+        .pagination button:hover:not(:disabled) {
+            background-color: #f5f5f5;
+        }
+        
+        .pagination button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .alert {
+            padding: 12px;
+            margin-bottom: 20px;
+            border-radius: 4px;
+        }
+        
+        .alert-success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .alert-error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .action-buttons {
+            display: flex;
+            gap: 5px;
+        }
+        
+        .action-buttons button {
+            padding: 4px 8px;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>WAF规则管理界面</h1>
+        
+        <div class="tabs">
+            <button class="tab active" onclick="switchTab('rules')">规则列表</button>
+            <button class="tab" onclick="switchTab('create')">创建规则</button>
+        </div>
+        
+        <div id="alert-container"></div>
+        
+        <!-- 规则列表 -->
+        <div id="rules-tab" class="tab-content active">
+            <div class="toolbar">
+                <div class="filters">
+                    <select id="filter-type">
+                        <option value="">全部类型</option>
+                        <option value="single_ip">单个IP</option>
+                        <option value="ip_range">IP段</option>
+                        <option value="geo">地域</option>
+                    </select>
+                    <select id="filter-status">
+                        <option value="">全部状态</option>
+                        <option value="1">已启用</option>
+                        <option value="0">已禁用</option>
+                    </select>
+                    <select id="filter-group">
+                        <option value="">全部分组</option>
+                    </select>
+                    <input type="text" id="search-input" placeholder="搜索规则名称..." style="width: 200px;">
+                </div>
+                <button class="btn btn-primary" onclick="loadRules()">刷新</button>
+            </div>
+            
+            <table id="rules-table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>规则名称</th>
+                        <th>类型</th>
+                        <th>规则值</th>
+                        <th>分组</th>
+                        <th>优先级</th>
+                        <th>状态</th>
+                        <th>创建时间</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody id="rules-tbody">
+                    <tr>
+                        <td colspan="8" style="text-align: center; padding: 20px;">加载中...</td>
+                    </tr>
+                </tbody>
+            </table>
+            
+            <div class="pagination" id="pagination"></div>
+        </div>
+        
+        <!-- 创建规则 -->
+        <div id="create-tab" class="tab-content">
+            <form id="create-form" onsubmit="createRule(event)">
+                <div class="form-group">
+                    <label>规则类型 *</label>
+                    <select id="create-rule-type" required>
+                        <option value="">请选择</option>
+                        <option value="single_ip">单个IP</option>
+                        <option value="ip_range">IP段</option>
+                        <option value="geo">地域</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label>规则值 *</label>
+                    <input type="text" id="create-rule-value" required placeholder="例如: 192.168.1.100 或 192.168.1.0/24 或 CN:Beijing">
+                    <small style="color: #666;">单个IP: 192.168.1.100 | IP段: 192.168.1.0/24 或 192.168.1.1-192.168.1.100 | 地域: CN 或 CN:Beijing</small>
+                </div>
+                
+                <div class="form-group">
+                    <label>规则名称 *</label>
+                    <input type="text" id="create-rule-name" required>
+                </div>
+                
+                <div class="form-group">
+                    <label>描述</label>
+                    <textarea id="create-description"></textarea>
+                </div>
+                
+                <div class="form-group">
+                    <label>分组</label>
+                    <input type="text" id="create-rule-group" placeholder="例如: 业务A、华东地区、安全防护" list="group-list">
+                    <datalist id="group-list"></datalist>
+                    <small style="color: #666;">可选，用于按业务、地区等维度分组管理规则</small>
+                </div>
+                
+                <div class="form-group">
+                    <label>优先级</label>
+                    <input type="number" id="create-priority" value="0" min="0" max="100">
+                </div>
+                
+                <div class="form-group">
+                    <label>生效开始时间</label>
+                    <input type="datetime-local" id="create-start-time">
+                </div>
+                
+                <div class="form-group">
+                    <label>生效结束时间</label>
+                    <input type="datetime-local" id="create-end-time">
+                </div>
+                
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="resetCreateForm()">重置</button>
+                    <button type="submit" class="btn btn-primary">创建规则</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- 编辑规则模态框 -->
+    <div id="edit-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>编辑规则</h2>
+                <span class="close" onclick="closeEditModal()">&times;</span>
+            </div>
+            <form id="edit-form" onsubmit="updateRule(event)">
+                <input type="hidden" id="edit-id">
+                <div class="form-group">
+                    <label>规则类型</label>
+                    <input type="text" id="edit-rule-type" disabled>
+                </div>
+                <div class="form-group">
+                    <label>规则值 *</label>
+                    <input type="text" id="edit-rule-value" required>
+                </div>
+                <div class="form-group">
+                    <label>规则名称 *</label>
+                    <input type="text" id="edit-rule-name" required>
+                </div>
+                <div class="form-group">
+                    <label>描述</label>
+                    <textarea id="edit-description"></textarea>
+                </div>
+                <div class="form-group">
+                    <label>分组</label>
+                    <input type="text" id="edit-rule-group" placeholder="例如: 业务A、华东地区、安全防护" list="group-list-edit">
+                    <datalist id="group-list-edit"></datalist>
+                    <small style="color: #666;">可选，用于按业务、地区等维度分组管理规则</small>
+                </div>
+                <div class="form-group">
+                    <label>优先级</label>
+                    <input type="number" id="edit-priority" min="0" max="100">
+                </div>
+                <div class="form-group">
+                    <label>生效开始时间</label>
+                    <input type="datetime-local" id="edit-start-time">
+                </div>
+                <div class="form-group">
+                    <label>生效结束时间</label>
+                    <input type="datetime-local" id="edit-end-time">
+                </div>
+                <div class="form-group">
+                    <label>状态</label>
+                    <select id="edit-status">
+                        <option value="1">启用</option>
+                        <option value="0">禁用</option>
+                    </select>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeEditModal()">取消</button>
+                    <button type="submit" class="btn btn-primary">保存</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <script>
+        let currentPage = 1;
+        const pageSize = 20;
+        
+        // 切换标签页
+        function switchTab(tab) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            
+            if (tab === 'rules') {
+                document.querySelectorAll('.tab')[0].classList.add('active');
+                document.getElementById('rules-tab').classList.add('active');
+                loadRules();
+            } else if (tab === 'create') {
+                document.querySelectorAll('.tab')[1].classList.add('active');
+                document.getElementById('create-tab').classList.add('active');
+            }
+        }
+        
+        // 显示提示信息
+        function showAlert(message, type = 'success') {
+            const container = document.getElementById('alert-container');
+            const alert = document.createElement('div');
+            alert.className = `alert alert-${type}`;
+            alert.textContent = message;
+            container.innerHTML = '';
+            container.appendChild(alert);
+            setTimeout(() => {
+                alert.remove();
+            }, 3000);
+        }
+        
+        // 加载规则列表
+        async function loadRules(page = 1) {
+            currentPage = page;
+            const ruleType = document.getElementById('filter-type').value;
+            const status = document.getElementById('filter-status').value;
+            const ruleGroup = document.getElementById('filter-group').value;
+            
+            let url = `/api/rules?page=${page}&page_size=${pageSize}`;
+            if (ruleType) url += `&rule_type=${ruleType}`;
+            if (status) url += `&status=${status}`;
+            if (ruleGroup) url += `&rule_group=${encodeURIComponent(ruleGroup)}`;
+            
+            try {
+                const response = await fetch(url);
+                const data = await response.json();
+                
+                if (data.success) {
+                    renderRulesTable(data.data.rules);
+                    renderPagination(data.data, 'pagination', loadRules);
+                } else {
+                    showAlert(data.error || '加载失败', 'error');
+                }
+            } catch (error) {
+                showAlert('网络错误: ' + error.message, 'error');
+            }
+        }
+        
+        // 渲染规则表格
+        function renderRulesTable(rules) {
+            const tbody = document.getElementById('rules-tbody');
+            if (rules.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 20px;">暂无数据</td></tr>';
+                return;
+            }
+            
+            tbody.innerHTML = rules.map(rule => `
+                <tr>
+                    <td>${rule.id}</td>
+                    <td>${rule.rule_name}</td>
+                    <td>${getRuleTypeName(rule.rule_type)}</td>
+                    <td>${rule.rule_value}</td>
+                    <td>${rule.rule_group || '<span style="color: #999;">未分组</span>'}</td>
+                    <td>${rule.priority}</td>
+                    <td>${getStatusBadge(rule.status)}</td>
+                    <td>${formatDateTime(rule.created_at)}</td>
+                    <td>
+                        <div class="action-buttons">
+                            <button class="btn btn-info" onclick="editRule(${rule.id})">编辑</button>
+                            ${rule.status == 1 ? 
+                                `<button class="btn btn-warning" onclick="disableRule(${rule.id})">禁用</button>` :
+                                `<button class="btn btn-primary" onclick="enableRule(${rule.id})">启用</button>`
+                            }
+                            <button class="btn btn-danger" onclick="deleteRule(${rule.id})">删除</button>
+                        </div>
+                    </td>
+                </tr>
+            `).join('');
+        }
+        
+        // 创建规则
+        async function createRule(event) {
+            event.preventDefault();
+            
+            const ruleData = {
+                rule_type: document.getElementById('create-rule-type').value,
+                rule_value: document.getElementById('create-rule-value').value,
+                rule_name: document.getElementById('create-rule-name').value,
+                description: document.getElementById('create-description').value,
+                rule_group: document.getElementById('create-rule-group').value || null,
+                priority: parseInt(document.getElementById('create-priority').value) || 0
+            };
+            
+            const startTime = document.getElementById('create-start-time').value;
+            const endTime = document.getElementById('create-end-time').value;
+            
+            if (startTime) ruleData.start_time = startTime.replace('T', ' ') + ':00';
+            if (endTime) ruleData.end_time = endTime.replace('T', ' ') + ':00';
+            
+            try {
+                const response = await fetch('/api/rules', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(ruleData)
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showAlert('规则创建成功');
+                    resetCreateForm();
+                    switchTab('rules');
+                    loadGroups(); // 刷新分组列表
+                    loadRules();
+                } else {
+                    showAlert(data.error || '创建失败', 'error');
+                }
+            } catch (error) {
+                showAlert('网络错误: ' + error.message, 'error');
+            }
+        }
+        
+        // 编辑规则
+        async function editRule(id) {
+            try {
+                const response = await fetch(`/api/rules/${id}`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    const rule = data.rule;
+                    document.getElementById('edit-id').value = rule.id;
+                    document.getElementById('edit-rule-type').value = rule.rule_type;
+                    document.getElementById('edit-rule-value').value = rule.rule_value;
+                    document.getElementById('edit-rule-name').value = rule.rule_name;
+                    document.getElementById('edit-description').value = rule.description || '';
+                    document.getElementById('edit-rule-group').value = rule.rule_group || '';
+                    document.getElementById('edit-priority').value = rule.priority;
+                    document.getElementById('edit-status').value = rule.status;
+                    
+                    if (rule.start_time) {
+                        document.getElementById('edit-start-time').value = rule.start_time.replace(' ', 'T').substring(0, 16);
+                    }
+                    if (rule.end_time) {
+                        document.getElementById('edit-end-time').value = rule.end_time.replace(' ', 'T').substring(0, 16);
+                    }
+                    
+                    document.getElementById('edit-modal').style.display = 'block';
+                } else {
+                    showAlert(data.error || '加载失败', 'error');
+                }
+            } catch (error) {
+                showAlert('网络错误: ' + error.message, 'error');
+            }
+        }
+        
+        // 更新规则
+        async function updateRule(event) {
+            event.preventDefault();
+            
+            const id = document.getElementById('edit-id').value;
+            const ruleData = {
+                rule_value: document.getElementById('edit-rule-value').value,
+                rule_name: document.getElementById('edit-rule-name').value,
+                description: document.getElementById('edit-description').value,
+                rule_group: document.getElementById('edit-rule-group').value || '',
+                priority: parseInt(document.getElementById('edit-priority').value) || 0,
+                status: parseInt(document.getElementById('edit-status').value)
+            };
+            
+            const startTime = document.getElementById('edit-start-time').value;
+            const endTime = document.getElementById('edit-end-time').value;
+            
+            if (startTime) ruleData.start_time = startTime.replace('T', ' ') + ':00';
+            else ruleData.start_time = '';
+            if (endTime) ruleData.end_time = endTime.replace('T', ' ') + ':00';
+            else ruleData.end_time = '';
+            
+            try {
+                const response = await fetch(`/api/rules/${id}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(ruleData)
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showAlert('规则更新成功');
+                    closeEditModal();
+                    loadRules();
+                } else {
+                    showAlert(data.error || '更新失败', 'error');
+                }
+            } catch (error) {
+                showAlert('网络错误: ' + error.message, 'error');
+            }
+        }
+        
+        // 启用规则
+        async function enableRule(id) {
+            if (!confirm('确定要启用该规则吗？')) return;
+            
+            try {
+                const response = await fetch(`/api/rules/${id}/enable`, { method: 'POST' });
+                const data = await response.json();
+                
+                if (data.success) {
+                    showAlert('规则已启用');
+                    loadRules();
+                } else {
+                    showAlert(data.error || '操作失败', 'error');
+                }
+            } catch (error) {
+                showAlert('网络错误: ' + error.message, 'error');
+            }
+        }
+        
+        // 禁用规则
+        async function disableRule(id) {
+            if (!confirm('确定要禁用该规则吗？')) return;
+            
+            try {
+                const response = await fetch(`/api/rules/${id}/disable`, { method: 'POST' });
+                const data = await response.json();
+                
+                if (data.success) {
+                    showAlert('规则已禁用');
+                    loadRules();
+                } else {
+                    showAlert(data.error || '操作失败', 'error');
+                }
+            } catch (error) {
+                showAlert('网络错误: ' + error.message, 'error');
+            }
+        }
+        
+        // 删除规则
+        async function deleteRule(id) {
+            if (!confirm('确定要删除该规则吗？此操作不可恢复！')) return;
+            
+            try {
+                const response = await fetch(`/api/rules/${id}`, { method: 'DELETE' });
+                const data = await response.json();
+                
+                if (data.success) {
+                    showAlert('规则已删除');
+                    loadRules();
+                } else {
+                    showAlert(data.error || '删除失败', 'error');
+                }
+            } catch (error) {
+                showAlert('网络错误: ' + error.message, 'error');
+            }
+        }
+        
+        // 关闭编辑模态框
+        function closeEditModal() {
+            document.getElementById('edit-modal').style.display = 'none';
+        }
+        
+        // 重置创建表单
+        function resetCreateForm() {
+            document.getElementById('create-form').reset();
+        }
+        
+        // 工具函数
+        function getRuleTypeName(type) {
+            const names = {
+                'single_ip': '单个IP',
+                'ip_range': 'IP段',
+                'geo': '地域'
+            };
+            return names[type] || type;
+        }
+        
+        function getStatusBadge(status) {
+            if (status == 1) {
+                return '<span class="status-badge status-enabled">已启用</span>';
+            } else {
+                return '<span class="status-badge status-disabled">已禁用</span>';
+            }
+        }
+        
+        function formatDateTime(datetime) {
+            if (!datetime) return '-';
+            return datetime.replace('T', ' ').substring(0, 19);
+        }
+        
+        function renderPagination(data, containerId, loadFunc) {
+            const container = document.getElementById(containerId);
+            if (data.total_pages <= 1) {
+                container.innerHTML = '';
+                return;
+            }
+            
+            const html = `
+                <button onclick="${loadFunc.name}(${data.page - 1})" ${data.page <= 1 ? 'disabled' : ''}>上一页</button>
+                <span>第 ${data.page} / ${data.total_pages} 页 (共 ${data.total} 条)</span>
+                <button onclick="${loadFunc.name}(${data.page + 1})" ${data.page >= data.total_pages ? 'disabled' : ''}>下一页</button>
+            `;
+            container.innerHTML = html;
+        }
+        
+        // 加载分组列表
+        async function loadGroups() {
+            try {
+                const response = await fetch('/api/rules/groups');
+                const data = await response.json();
+                
+                if (data.success && data.data) {
+                    const filterGroup = document.getElementById('filter-group');
+                    const groupList = document.getElementById('group-list');
+                    const groupListEdit = document.getElementById('group-list-edit');
+                    
+                    // 清空现有选项（保留"全部分组"）
+                    filterGroup.innerHTML = '<option value="">全部分组</option>';
+                    groupList.innerHTML = '';
+                    groupListEdit.innerHTML = '';
+                    
+                    // 添加分组选项
+                    data.data.forEach(group => {
+                        const option = document.createElement('option');
+                        option.value = group.group_name;
+                        option.textContent = group.group_name + ' (' + group.rule_count + ')';
+                        filterGroup.appendChild(option);
+                        
+                        const optionList = document.createElement('option');
+                        optionList.value = group.group_name;
+                        groupList.appendChild(optionList);
+                        
+                        const optionListEdit = document.createElement('option');
+                        optionListEdit.value = group.group_name;
+                        groupListEdit.appendChild(optionListEdit);
+                    });
+                }
+            } catch (error) {
+                console.error('加载分组列表失败:', error);
+            }
+        }
+        
+        // 初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            loadGroups();
+            loadRules();
+            
+            // 点击模态框外部关闭
+            window.onclick = function(event) {
+                const modal = document.getElementById('edit-modal');
+                if (event.target == modal) {
+                    closeEditModal();
+                }
+            }
+        });
+    </script>
+</body>
+</html>
+

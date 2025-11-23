@@ -6,12 +6,13 @@
 local config = require "config"
 local ip_utils = require "waf.ip_utils"
 local mysql_pool = require "waf.mysql_pool"
+local feature_switches = require "waf.feature_switches"
 
 local _M = {}
 local maxminddb = nil
 local cache = ngx.shared.waf_cache
 local CACHE_KEY_PREFIX = "geo_block:"
-local CACHE_TTL = config.cache.ttl
+local CACHE_TTL = config.geo.cache_ttl or config.cache.ttl or 3600  -- 使用GeoIP专用缓存时间（默认1小时）
 
 -- 初始化 GeoIP2 数据库
 local function init_geoip()
@@ -130,7 +131,9 @@ end
 -- 2. 国内省市：CN:Beijing, CN:Shanghai, CN:Guangdong 等
 -- 3. 国内城市：CN:Beijing:Beijing, CN:Shanghai:Shanghai 等（精确到城市）
 function _M.check(client_ip)
-    if not config.geo.enable then
+    -- 检查地域封控功能是否启用（优先从数据库读取）
+    local geo_block_enabled = feature_switches.is_enabled("geo_block")
+    if not geo_block_enabled or not config.geo.enable then
         return false, nil
     end
 

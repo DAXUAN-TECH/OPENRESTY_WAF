@@ -164,7 +164,7 @@ if [ -f "$NGINX_CONF_DIR/nginx.conf" ]; then
     if grep -q "\$project_root" "$NGINX_CONF_DIR/nginx.conf"; then
         echo -e "${GREEN}✓ nginx.conf 包含 project_root 变量${NC}"
         # 验证 project_root 路径是否存在
-        local project_root_in_conf=$(grep "set \$project_root" "$NGINX_CONF_DIR/nginx.conf" 2>/dev/null | sed 's/.*"\(.*\)".*/\1/' | head -1)
+        project_root_in_conf=$(grep "set \$project_root" "$NGINX_CONF_DIR/nginx.conf" 2>/dev/null | sed 's/.*"\(.*\)".*/\1/' | head -1)
         if [ -n "$project_root_in_conf" ]; then
             if [ -d "$project_root_in_conf" ]; then
                 echo -e "${GREEN}✓ project_root 路径存在: $project_root_in_conf${NC}"
@@ -181,9 +181,9 @@ if [ -f "$NGINX_CONF_DIR/nginx.conf" ]; then
     if grep -q "include.*conf.d" "$NGINX_CONF_DIR/nginx.conf"; then
         echo -e "${GREEN}✓ nginx.conf 包含 conf.d 配置引用${NC}"
         # 检查引用的配置文件是否存在
-        local include_paths=$(grep "include.*conf.d" "$NGINX_CONF_DIR/nginx.conf" 2>/dev/null | sed "s|.*include.*\$project_root/\(.*\);|\1|" | head -1)
+        include_paths=$(grep "include.*conf.d" "$NGINX_CONF_DIR/nginx.conf" 2>/dev/null | sed "s|.*include.*\$project_root/\(.*\);|\1|" | head -1)
         if [ -n "$include_paths" ]; then
-            local full_include_path="${PROJECT_ROOT_ABS}/${include_paths}"
+            full_include_path="${PROJECT_ROOT_ABS}/${include_paths}"
             if [ -f "$full_include_path" ] || [ -d "$full_include_path" ]; then
                 echo -e "${GREEN}✓ 引用的配置文件存在: $full_include_path${NC}"
             else

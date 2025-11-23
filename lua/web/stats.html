@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>封控统计报表 - WAF管理</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: #f5f5f5;
+            color: #333;
+        }
+        .header {
+            background: #fff;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .header h1 {
+            font-size: 24px;
+            color: #333;
+        }
+        .header .nav {
+            margin-top: 10px;
+        }
+        .header .nav a {
+            color: #0066cc;
+            text-decoration: none;
+            margin-right: 20px;
+        }
+        .header .nav a:hover {
+            text-decoration: underline;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+        .filters {
+            background: #fff;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 4px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .filters label {
+            display: inline-block;
+            margin-right: 10px;
+            font-weight: 500;
+        }
+        .filters input, .filters select {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin-right: 15px;
+        }
+        .filters button {
+            padding: 8px 20px;
+            background: #0066cc;
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .filters button:hover {
+            background: #0052a3;
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        .stat-card {
+            background: #fff;
+            padding: 20px;
+            border-radius: 4px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .stat-card h3 {
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 10px;
+        }
+        .stat-card .value {
+            font-size: 32px;
+            font-weight: bold;
+            color: #333;
+        }
+        .chart-container {
+            background: #fff;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 4px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .chart-container h2 {
+            font-size: 18px;
+            margin-bottom: 20px;
+        }
+        .table-container {
+            background: #fff;
+            padding: 20px;
+            border-radius: 4px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            overflow-x: auto;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #eee;
+        }
+        th {
+            background: #f5f5f5;
+            font-weight: 600;
+        }
+        tr:hover {
+            background: #f9f9f9;
+        }
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+        .error {
+            background: #fee;
+            color: #c33;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>封控统计报表</h1>
+        <div class="nav">
+            <a href="/admin">首页</a>
+            <a href="/admin/rules">规则管理</a>
+            <a href="/admin/features">功能管理</a>
+            <a href="/admin/stats">统计报表</a>
+            <a href="/admin/monitor">监控面板</a>
+            <a href="/api/auth/logout">退出</a>
+        </div>
+    </div>
+    
+    <div class="container">
+        <div class="filters">
+            <label>开始时间：</label>
+            <input type="datetime-local" id="startTime" />
+            <label>结束时间：</label>
+            <input type="datetime-local" id="endTime" />
+            <label>时间间隔：</label>
+            <select id="interval">
+                <option value="hour">按小时</option>
+                <option value="day">按天</option>
+            </select>
+            <button onclick="loadStats()">查询</button>
+        </div>
+        
+        <div id="error" class="error" style="display:none;"></div>
+        
+        <div id="loading" class="loading">加载中...</div>
+        
+        <div id="content" style="display:none;">
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <h3>总封控次数</h3>
+                    <div class="value" id="totalBlocks">0</div>
+                </div>
+                <div class="stat-card">
+                    <h3>被封控IP数</h3>
+                    <div class="value" id="uniqueIPs">0</div>
+                </div>
+                <div class="stat-card">
+                    <h3>手动封控</h3>
+                    <div class="value" id="manualBlocks">0</div>
+                </div>
+                <div class="stat-card">
+                    <h3>自动封控</h3>
+                    <div class="value" id="autoBlocks">0</div>
+                </div>
+            </div>
+            
+            <div class="chart-container">
+                <h2>封控趋势</h2>
+                <canvas id="timeseriesChart"></canvas>
+            </div>
+            
+            <div class="table-container">
+                <h2>TOP 10 规则命中</h2>
+                <table id="topRulesTable">
+                    <thead>
+                        <tr>
+                            <th>规则名称</th>
+                            <th>规则类型</th>
+                            <th>命中次数</th>
+                            <th>封控IP数</th>
+                            <th>最后命中时间</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+            
+            <div class="table-container">
+                <h2>TOP 20 被封控IP</h2>
+                <table id="topIPsTable">
+                    <thead>
+                        <tr>
+                            <th>IP地址</th>
+                            <th>封控次数</th>
+                            <th>匹配规则数</th>
+                            <th>首次封控时间</th>
+                            <th>最后封控时间</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        let timeseriesChart = null;
+        
+        // 设置默认时间范围（最近24小时）
+        function setDefaultTimeRange() {
+            const now = new Date();
+            const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+            
+            document.getElementById('endTime').value = now.toISOString().slice(0, 16);
+            document.getElementById('startTime').value = yesterday.toISOString().slice(0, 16);
+        }
+        
+        // 加载统计数据
+        async function loadStats() {
+            const startTime = document.getElementById('startTime').value;
+            const endTime = document.getElementById('endTime').value;
+            const interval = document.getElementById('interval').value;
+            
+            if (!startTime || !endTime) {
+                showError('请选择时间范围');
+                return;
+            }
+            
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('content').style.display = 'none';
+            document.getElementById('error').style.display = 'none';
+            
+            try {
+                // 加载概览统计
+                const overviewRes = await fetch(`/api/stats/overview?start_time=${encodeURIComponent(startTime)}&end_time=${encodeURIComponent(endTime)}`);
+                const overviewData = await overviewRes.json();
+                
+                if (!overviewData.success) {
+                    throw new Error(overviewData.error || '查询失败');
+                }
+                
+                // 更新概览卡片
+                document.getElementById('totalBlocks').textContent = overviewData.data.total_blocks || 0;
+                document.getElementById('uniqueIPs').textContent = overviewData.data.unique_blocked_ips || 0;
+                document.getElementById('manualBlocks').textContent = overviewData.data.by_reason.manual || 0;
+                const autoBlocks = (overviewData.data.by_reason.auto_frequency || 0) + 
+                                 (overviewData.data.by_reason.auto_error || 0) + 
+                                 (overviewData.data.by_reason.auto_scan || 0);
+                document.getElementById('autoBlocks').textContent = autoBlocks;
+                
+                // 加载时间序列数据
+                const timeseriesRes = await fetch(`/api/stats/timeseries?start_time=${encodeURIComponent(startTime)}&end_time=${encodeURIComponent(endTime)}&interval=${interval}`);
+                const timeseriesData = await timeseriesRes.json();
+                
+                if (timeseriesData.success) {
+                    updateTimeseriesChart(timeseriesData.data);
+                }
+                
+                // 加载规则统计
+                const rulesRes = await fetch(`/api/stats/rules?start_time=${encodeURIComponent(startTime)}&end_time=${encodeURIComponent(endTime)}&limit=10`);
+                const rulesData = await rulesRes.json();
+                
+                if (rulesData.success) {
+                    updateRulesTable(rulesData.data);
+                }
+                
+                // 加载IP统计
+                const ipsRes = await fetch(`/api/stats/ip?start_time=${encodeURIComponent(startTime)}&end_time=${encodeURIComponent(endTime)}&limit=20`);
+                const ipsData = await ipsRes.json();
+                
+                if (ipsData.success) {
+                    updateIPsTable(ipsData.data);
+                }
+                
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('content').style.display = 'block';
+            } catch (error) {
+                document.getElementById('loading').style.display = 'none';
+                showError('加载失败：' + error.message);
+            }
+        }
+        
+        // 更新时间序列图表
+        function updateTimeseriesChart(data) {
+            const ctx = document.getElementById('timeseriesChart').getContext('2d');
+            
+            if (timeseriesChart) {
+                timeseriesChart.destroy();
+            }
+            
+            timeseriesChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: data.map(item => item.time),
+                    datasets: [{
+                        label: '封控次数',
+                        data: data.map(item => item.block_count),
+                        borderColor: '#0066cc',
+                        backgroundColor: 'rgba(0, 102, 204, 0.1)',
+                        tension: 0.4
+                    }, {
+                        label: '被封控IP数',
+                        data: data.map(item => item.unique_ips),
+                        borderColor: '#cc6600',
+                        backgroundColor: 'rgba(204, 102, 0, 0.1)',
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        }
+        
+        // 更新规则表格
+        function updateRulesTable(data) {
+            const tbody = document.querySelector('#topRulesTable tbody');
+            tbody.innerHTML = '';
+            
+            data.forEach(row => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${escapeHtml(row.rule_name || '-')}</td>
+                    <td>${escapeHtml(row.rule_type || '-')}</td>
+                    <td>${row.hit_count || 0}</td>
+                    <td>${row.blocked_ips || 0}</td>
+                    <td>${row.last_hit_time || '-'}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+        
+        // 更新IP表格
+        function updateIPsTable(data) {
+            const tbody = document.querySelector('#topIPsTable tbody');
+            tbody.innerHTML = '';
+            
+            data.forEach(row => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${escapeHtml(row.client_ip)}</td>
+                    <td>${row.block_count || 0}</td>
+                    <td>${row.rule_count || 0}</td>
+                    <td>${row.first_block_time || '-'}</td>
+                    <td>${row.last_block_time || '-'}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+        
+        function showError(message) {
+            const errorDiv = document.getElementById('error');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+        }
+        
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
+        // 页面加载时设置默认时间并加载数据
+        window.onload = function() {
+            setDefaultTimeRange();
+            loadStats();
+        };
+    </script>
+</body>
+</html>
+

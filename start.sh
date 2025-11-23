@@ -36,17 +36,19 @@ show_usage() {
     echo "  deploy       - 部署配置文件"
     echo "  optimize     - 系统优化"
     echo "  check        - 项目全面检查"
+    echo "  dependencies - 安装/检查 Lua 模块依赖"
     echo "  update-config - 更新数据库连接配置"
     echo "  update-geoip - 更新 GeoIP 数据库"
     echo "  all          - 完整安装（默认）"
     echo ""
     echo "可用模块（卸载）:"
-    echo "  uninstall openresty  - 卸载 OpenResty"
-    echo "  uninstall mysql      - 卸载 MySQL"
-    echo "  uninstall redis      - 卸载 Redis"
-    echo "  uninstall geoip      - 卸载 GeoIP 数据库"
-    echo "  uninstall deploy     - 卸载部署的配置文件"
-    echo "  uninstall all        - 完整卸载（交互式）"
+    echo "  uninstall openresty    - 卸载 OpenResty"
+    echo "  uninstall mysql        - 卸载 MySQL"
+    echo "  uninstall redis        - 卸载 Redis"
+    echo "  uninstall geoip        - 卸载 GeoIP 数据库"
+    echo "  uninstall deploy       - 卸载部署的配置文件"
+    echo "  uninstall dependencies - 卸载 Lua 模块依赖"
+    echo "  uninstall all          - 完整卸载（交互式）"
     echo ""
     echo "示例:"
     echo "  sudo $0                    # 完整安装"
@@ -299,6 +301,23 @@ uninstall_deploy() {
     echo ""
 }
 
+# 卸载依赖
+uninstall_dependencies() {
+    echo -e "${BLUE}========================================${NC}"
+    echo -e "${BLUE}卸载 Lua 模块依赖${NC}"
+    echo -e "${BLUE}========================================${NC}"
+    echo ""
+    
+    # 直接调用卸载脚本，所有输入逻辑在脚本内部
+    if ! bash "${SCRIPTS_DIR}/uninstall_dependencies.sh"; then
+        echo -e "${YELLOW}⚠ 依赖卸载完成（可能有警告）${NC}"
+        return 0
+    fi
+    
+    echo -e "${GREEN}✓ 依赖卸载完成${NC}"
+    echo ""
+}
+
 # 完整卸载
 uninstall_all() {
     echo -e "${RED}========================================${NC}"
@@ -334,6 +353,10 @@ uninstall_all() {
     read -p "是否卸载 GeoIP 数据库？[Y/n]: " UNINSTALL_GEOIP
     UNINSTALL_GEOIP="${UNINSTALL_GEOIP:-Y}"
     
+    # 依赖配置
+    read -p "是否卸载 Lua 模块依赖？[y/N]: " UNINSTALL_DEPENDENCIES
+    UNINSTALL_DEPENDENCIES="${UNINSTALL_DEPENDENCIES:-N}"
+    
     echo ""
     echo -e "${GREEN}✓ 卸载选项收集完成${NC}"
     echo ""
@@ -346,6 +369,8 @@ uninstall_all() {
     [[ "$UNINSTALL_MYSQL" =~ ^[Yy]$ ]] && TOTAL_STEPS=$((TOTAL_STEPS + 1))
     [[ "$UNINSTALL_REDIS" =~ ^[Yy]$ ]] && TOTAL_STEPS=$((TOTAL_STEPS + 1))
     [[ "$UNINSTALL_GEOIP" =~ ^[Yy]$ ]] && TOTAL_STEPS=$((TOTAL_STEPS + 1))
+    [[ "$UNINSTALL_DEPENDENCIES" =~ ^[Yy]$ ]] && TOTAL_STEPS=$((TOTAL_STEPS + 1))
+    [[ "$UNINSTALL_DEPENDENCIES" =~ ^[Yy]$ ]] && TOTAL_STEPS=$((TOTAL_STEPS + 1))
     
     # 步骤 1: 卸载 OpenResty
     if [[ "$UNINSTALL_OPENRESTY" =~ ^[Yy]$ ]]; then
@@ -394,6 +419,16 @@ uninstall_all() {
         echo -e "${BLUE}========================================${NC}"
         echo ""
         uninstall_geoip
+        CURRENT_STEP=$((CURRENT_STEP + 1))
+    fi
+    
+    # 步骤 6: 卸载依赖
+    if [[ "$UNINSTALL_DEPENDENCIES" =~ ^[Yy]$ ]]; then
+        echo -e "${BLUE}========================================${NC}"
+        echo -e "${BLUE}步骤 ${CURRENT_STEP}/${TOTAL_STEPS}: 卸载 Lua 模块依赖${NC}"
+        echo -e "${BLUE}========================================${NC}"
+        echo ""
+        uninstall_dependencies
     fi
     
     # 卸载完成
@@ -486,6 +521,11 @@ install_all() {
         echo ""
         install_mysql
         CURRENT_STEP=$((CURRENT_STEP + 1))
+        
+        # 注意：install_mysql.sh 内部已经包含了：
+        # 1. 数据库初始化（执行 SQL 脚本）
+        # 2. WAF 配置文件更新（更新 lua/config.lua）
+        # 如果安装成功，这些步骤会自动完成
     fi
     
     # 步骤 4: 安装 Redis
@@ -574,6 +614,9 @@ main() {
             deploy)
                 uninstall_deploy
                 ;;
+            dependencies)
+                uninstall_dependencies
+                ;;
             all|"")
                 uninstall_all
                 ;;
@@ -612,6 +655,9 @@ main() {
             ;;
         check)
             check_all
+            ;;
+        dependencies)
+            manage_dependencies
             ;;
         update-config)
             update_config

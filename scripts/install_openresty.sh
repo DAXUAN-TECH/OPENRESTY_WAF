@@ -20,7 +20,7 @@ NC='\033[0m' # No Color
 
 # 配置变量
 OPENRESTY_VERSION="${OPENRESTY_VERSION:-1.21.4.1}"
-INSTALL_DIR="/usr/local/openresty"
+INSTALL_DIR="${OPENRESTY_PREFIX:-/usr/local/openresty}"
 NGINX_CONF_DIR="${INSTALL_DIR}/nginx/conf"
 NGINX_LUA_DIR="${INSTALL_DIR}/nginx/lua"
 NGINX_LOG_DIR="${INSTALL_DIR}/nginx/logs"

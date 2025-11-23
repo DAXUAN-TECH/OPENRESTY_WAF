@@ -137,7 +137,7 @@ function _M.batch_insert(table_name, fields, values_list)
         return nil, "empty values list"
     end
 
-    -- 表名白名单检查（安全增强）
+    -- 表名白名单检查（安全增强，防止SQL注入）
     local allowed_tables = {
         ["waf_access_logs"] = true,
         ["waf_block_logs"] = true,
@@ -145,6 +145,15 @@ function _M.batch_insert(table_name, fields, values_list)
         ["waf_whitelist"] = true,
         ["waf_geo_codes"] = true,
         ["waf_system_config"] = true,
+        ["waf_ip_frequency"] = true,
+        ["waf_auto_block_logs"] = true,
+        ["waf_auto_unblock_tasks"] = true,
+        ["waf_users"] = true,
+        ["waf_user_sessions"] = true,
+        ["waf_trusted_proxies"] = true,
+        ["waf_feature_switches"] = true,
+        ["waf_rule_templates"] = true,
+        ["waf_cache_versions"] = true,
     }
     
     if not allowed_tables[table_name] then

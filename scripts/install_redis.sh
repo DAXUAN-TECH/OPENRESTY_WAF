@@ -23,8 +23,52 @@ REDIS_VERSION="${REDIS_VERSION:-7.0}"
 REDIS_PASSWORD="${REDIS_PASSWORD:-}"
 REDIS_PORT="${REDIS_PORT:-6379}"
 
+# 硬件信息变量（将在检测后填充）
+CPU_CORES=0
+TOTAL_MEM_GB=0
+TOTAL_MEM_MB=0
+
 # 导出变量供父脚本使用
 export REDIS_PASSWORD
+
+# 检测硬件配置
+detect_hardware() {
+    echo -e "${BLUE}检测硬件配置...${NC}"
+    
+    # 检测 CPU 核心数
+    if command -v nproc &> /dev/null; then
+        CPU_CORES=$(nproc)
+    elif [ -f /proc/cpuinfo ]; then
+        CPU_CORES=$(grep -c "^processor" /proc/cpuinfo)
+    else
+        CPU_CORES=2  # 默认值
+    fi
+    
+    # 检测内存大小（GB）
+    if [ -f /proc/meminfo ]; then
+        TOTAL_MEM_KB=$(grep "^MemTotal:" /proc/meminfo | awk '{print $2}')
+        TOTAL_MEM_MB=$((TOTAL_MEM_KB / 1024))
+        TOTAL_MEM_GB=$((TOTAL_MEM_MB / 1024))
+    elif command -v free &> /dev/null; then
+        TOTAL_MEM_MB=$(free -m | grep "^Mem:" | awk '{print $2}')
+        TOTAL_MEM_GB=$((TOTAL_MEM_MB / 1024))
+    else
+        TOTAL_MEM_GB=4  # 默认值
+        TOTAL_MEM_MB=4096
+    fi
+    
+    # 确保最小值
+    if [ $CPU_CORES -lt 1 ]; then
+        CPU_CORES=1
+    fi
+    if [ $TOTAL_MEM_GB -lt 1 ]; then
+        TOTAL_MEM_GB=1
+        TOTAL_MEM_MB=1024
+    fi
+    
+    echo -e "${GREEN}✓ CPU 核心数: ${CPU_CORES}${NC}"
+    echo -e "${GREEN}✓ 总内存: ${TOTAL_MEM_GB}GB (${TOTAL_MEM_MB}MB)${NC}"
+}
 
 # 检测系统类型
 detect_os() {
@@ -494,6 +538,8 @@ configure_redis() {
         # 备份原配置
         cp "$REDIS_CONF" "${REDIS_CONF}.bak.$(date +%Y%m%d_%H%M%S)"
         
+        echo -e "${BLUE}根据硬件配置优化 Redis 参数...${NC}"
+        
         # 配置端口
         if grep -q "^port " "$REDIS_CONF"; then
             sed -i "s/^port .*/port ${REDIS_PORT}/" "$REDIS_CONF"
@@ -510,26 +556,147 @@ configure_redis() {
             fi
         fi
         
-        # 配置持久化（启用 RDB）
-        sed -i 's/^save 900 1/save 900 1/' "$REDIS_CONF" || echo "save 900 1" >> "$REDIS_CONF"
-        sed -i 's/^save 300 10/save 300 10/' "$REDIS_CONF" || echo "save 300 10" >> "$REDIS_CONF"
-        sed -i 's/^save 60 10000/save 60 10000/' "$REDIS_CONF" || echo "save 60 10000" >> "$REDIS_CONF"
+        # ========== 硬件优化配置 ==========
         
-        # 配置数据目录
+        # 1. 内存优化：根据总内存设置 maxmemory
+        # 小内存（<4GB）：使用 50% 内存
+        # 中等内存（4-16GB）：使用 60% 内存
+        # 大内存（>16GB）：使用 70% 内存，但不超过 32GB
+        local redis_maxmemory_mb=0
+        if [ $TOTAL_MEM_GB -lt 4 ]; then
+            redis_maxmemory_mb=$((TOTAL_MEM_MB * 50 / 100))
+        elif [ $TOTAL_MEM_GB -lt 16 ]; then
+            redis_maxmemory_mb=$((TOTAL_MEM_MB * 60 / 100))
+        else
+            redis_maxmemory_mb=$((TOTAL_MEM_MB * 70 / 100))
+            # 限制最大为 32GB
+            if [ $redis_maxmemory_mb -gt 32768 ]; then
+                redis_maxmemory_mb=32768
+            fi
+        fi
+        
+        # 设置 maxmemory（至少 256MB）
+        if [ $redis_maxmemory_mb -lt 256 ]; then
+            redis_maxmemory_mb=256
+        fi
+        
+        if grep -q "^maxmemory " "$REDIS_CONF"; then
+            sed -i "s/^maxmemory .*/maxmemory ${redis_maxmemory_mb}mb/" "$REDIS_CONF"
+        else
+            echo "maxmemory ${redis_maxmemory_mb}mb" >> "$REDIS_CONF"
+        fi
+        echo -e "${GREEN}  ✓ maxmemory: ${redis_maxmemory_mb}MB${NC}"
+        
+        # 2. 内存淘汰策略：allkeys-lru（适合缓存场景）
+        if grep -q "^maxmemory-policy " "$REDIS_CONF"; then
+            sed -i "s/^maxmemory-policy .*/maxmemory-policy allkeys-lru/" "$REDIS_CONF"
+        else
+            echo "maxmemory-policy allkeys-lru" >> "$REDIS_CONF"
+        fi
+        echo -e "${GREEN}  ✓ maxmemory-policy: allkeys-lru${NC}"
+        
+        # 3. 网络优化：TCP backlog（根据 CPU 核心数调整）
+        local tcp_backlog=$((CPU_CORES * 128))
+        if [ $tcp_backlog -lt 511 ]; then
+            tcp_backlog=511
+        elif [ $tcp_backlog -gt 65535 ]; then
+            tcp_backlog=65535
+        fi
+        
+        if grep -q "^tcp-backlog " "$REDIS_CONF"; then
+            sed -i "s/^tcp-backlog .*/tcp-backlog ${tcp_backlog}/" "$REDIS_CONF"
+        else
+            echo "tcp-backlog ${tcp_backlog}" >> "$REDIS_CONF"
+        fi
+        echo -e "${GREEN}  ✓ tcp-backlog: ${tcp_backlog}${NC}"
+        
+        # 4. 客户端连接数优化
+        local maxclients=10000
+        if [ $TOTAL_MEM_GB -ge 16 ]; then
+            maxclients=50000
+        elif [ $TOTAL_MEM_GB -ge 8 ]; then
+            maxclients=20000
+        fi
+        
+        if grep -q "^maxclients " "$REDIS_CONF"; then
+            sed -i "s/^maxclients .*/maxclients ${maxclients}/" "$REDIS_CONF"
+        else
+            echo "maxclients ${maxclients}" >> "$REDIS_CONF"
+        fi
+        echo -e "${GREEN}  ✓ maxclients: ${maxclients}${NC}"
+        
+        # 5. 持久化优化：根据内存大小选择策略
+        # 小内存：使用 RDB（节省内存）
+        # 大内存：启用 AOF + RDB（数据安全）
+        if [ $TOTAL_MEM_GB -ge 8 ]; then
+            # 启用 AOF
+            if grep -q "^appendonly " "$REDIS_CONF"; then
+                sed -i "s/^appendonly .*/appendonly yes/" "$REDIS_CONF"
+            else
+                echo "appendonly yes" >> "$REDIS_CONF"
+            fi
+            
+            # AOF 同步策略：每秒同步（平衡性能和数据安全）
+            if grep -q "^appendfsync " "$REDIS_CONF"; then
+                sed -i "s/^appendfsync .*/appendfsync everysec/" "$REDIS_CONF"
+            else
+                echo "appendfsync everysec" >> "$REDIS_CONF"
+            fi
+            echo -e "${GREEN}  ✓ AOF 持久化: 已启用（everysec）${NC}"
+        fi
+        
+        # RDB 持久化配置（所有配置都启用）
+        sed -i '/^save /d' "$REDIS_CONF"  # 删除旧的 save 配置
+        echo "save 900 1" >> "$REDIS_CONF"
+        echo "save 300 10" >> "$REDIS_CONF"
+        echo "save 60 10000" >> "$REDIS_CONF"
+        echo -e "${GREEN}  ✓ RDB 持久化: 已配置${NC}"
+        
+        # 6. 性能优化：禁用一些不必要的功能以提升性能
+        # 禁用慢查询日志（高并发场景）
+        if grep -q "^slowlog-log-slower-than " "$REDIS_CONF"; then
+            sed -i "s/^slowlog-log-slower-than .*/slowlog-log-slower-than 10000/" "$REDIS_CONF"
+        else
+            echo "slowlog-log-slower-than 10000" >> "$REDIS_CONF"
+        fi
+        
+        # 7. 超时优化
+        if grep -q "^timeout " "$REDIS_CONF"; then
+            sed -i "s/^timeout .*/timeout 300/" "$REDIS_CONF"
+        else
+            echo "timeout 300" >> "$REDIS_CONF"
+        fi
+        
+        # 8. 数据库数量（默认 16 个，保持默认）
+        # 9. 配置数据目录
         if grep -q "^dir " "$REDIS_CONF"; then
             sed -i "s|^dir .*|dir /var/lib/redis|" "$REDIS_CONF"
         else
             echo "dir /var/lib/redis" >> "$REDIS_CONF"
         fi
         
-        # 配置日志
+        # 10. 配置日志
         if grep -q "^logfile " "$REDIS_CONF"; then
             sed -i "s|^logfile .*|logfile /var/log/redis/redis-server.log|" "$REDIS_CONF"
         else
             echo "logfile /var/log/redis/redis-server.log" >> "$REDIS_CONF"
         fi
         
-        echo -e "${GREEN}✓ Redis 配置完成${NC}"
+        # 11. 日志级别（生产环境使用 notice）
+        if grep -q "^loglevel " "$REDIS_CONF"; then
+            sed -i "s/^loglevel .*/loglevel notice/" "$REDIS_CONF"
+        else
+            echo "loglevel notice" >> "$REDIS_CONF"
+        fi
+        
+        # 12. 禁用保护模式（如果绑定到本地）
+        if grep -q "^protected-mode " "$REDIS_CONF"; then
+            sed -i "s/^protected-mode .*/protected-mode yes/" "$REDIS_CONF"
+        else
+            echo "protected-mode yes" >> "$REDIS_CONF"
+        fi
+        
+        echo -e "${GREEN}✓ Redis 配置完成（已根据硬件优化）${NC}"
     else
         echo -e "${YELLOW}⚠ 未找到 Redis 配置文件，使用默认配置${NC}"
     fi
@@ -774,6 +941,9 @@ main() {
     
     # 检测操作系统
     detect_os
+    
+    # 检测硬件配置
+    detect_hardware
     
     # 检查现有安装
     check_existing

@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WAF 管理后台 - 登录</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        
+        .login-container {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+            padding: 40px;
+            width: 100%;
+            max-width: 400px;
+        }
+        
+        .login-header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .login-header h1 {
+            color: #333;
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+        
+        .login-header p {
+            color: #666;
+            font-size: 14px;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        
+        .form-group input {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+        
+        .form-group input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .form-group input::placeholder {
+            color: #999;
+        }
+        
+        .error-message {
+            background: #fee;
+            color: #c33;
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            font-size: 14px;
+            display: none;
+        }
+        
+        .error-message.show {
+            display: block;
+        }
+        
+        .login-button {
+            width: 100%;
+            padding: 12px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: opacity 0.3s;
+        }
+        
+        .login-button:hover {
+            opacity: 0.9;
+        }
+        
+        .login-button:active {
+            opacity: 0.8;
+        }
+        
+        .login-button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        
+        .loading {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #fff;
+            border-top-color: transparent;
+            border-radius: 50%;
+            animation: spin 0.6s linear infinite;
+            margin-right: 8px;
+            vertical-align: middle;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .footer {
+            text-align: center;
+            margin-top: 20px;
+            color: #999;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="login-header">
+            <h1>WAF 管理后台</h1>
+            <p>请登录以访问管理界面</p>
+        </div>
+        
+        <div class="error-message" id="errorMessage"></div>
+        
+        <form id="loginForm">
+            <div class="form-group">
+                <label for="username">用户名</label>
+                <input 
+                    type="text" 
+                    id="username" 
+                    name="username" 
+                    placeholder="请输入用户名" 
+                    required 
+                    autocomplete="username"
+                >
+            </div>
+            
+            <div class="form-group">
+                <label for="password">密码</label>
+                <input 
+                    type="password" 
+                    id="password" 
+                    name="password" 
+                    placeholder="请输入密码" 
+                    required 
+                    autocomplete="current-password"
+                >
+            </div>
+            
+            <div class="form-group" id="totpGroup" style="display: none;">
+                <label for="totp_code">双因素认证代码</label>
+                <input 
+                    type="text" 
+                    id="totp_code" 
+                    name="totp_code" 
+                    placeholder="请输入6位验证码" 
+                    maxlength="6"
+                    pattern="[0-9]{6}"
+                    autocomplete="one-time-code"
+                >
+                <small style="color: #666; font-size: 12px; display: block; margin-top: 5px;">
+                    请输入 Google Authenticator 显示的6位验证码
+                </small>
+            </div>
+            
+            <button type="submit" class="login-button" id="loginButton">
+                登录
+            </button>
+        </form>
+        
+        <div class="footer">
+            <p>默认账号: admin / admin123</p>
+        </div>
+    </div>
+    
+    <script>
+        const loginForm = document.getElementById('loginForm');
+        const errorMessage = document.getElementById('errorMessage');
+        const loginButton = document.getElementById('loginButton');
+        
+        // 检查是否已登录
+        function checkAuth() {
+            fetch('/api/auth/check')
+                .then(response => {
+                    if (response.ok) {
+                        // 已登录，跳转到管理首页
+                        window.location.href = '/admin';
+                    }
+                })
+                .catch(() => {
+                    // 未登录，继续显示登录页面
+                });
+        }
+        
+        // 显示错误信息
+        function showError(message) {
+            errorMessage.textContent = message;
+            errorMessage.classList.add('show');
+        }
+        
+        // 隐藏错误信息
+        function hideError() {
+            errorMessage.classList.remove('show');
+        }
+        
+        // 处理登录表单提交
+        loginForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            hideError();
+            
+            const username = document.getElementById('username').value.trim();
+            const password = document.getElementById('password').value;
+            const totpCode = document.getElementById('totp_code').value.trim();
+            
+            if (!username || !password) {
+                showError('请输入用户名和密码');
+                return;
+            }
+            
+            // 禁用按钮并显示加载状态
+            loginButton.disabled = true;
+            loginButton.innerHTML = '<span class="loading"></span>登录中...';
+            
+            try {
+                const requestBody = {
+                    username: username,
+                    password: password
+                };
+                
+                // 如果显示了 TOTP 输入框，添加验证码
+                if (document.getElementById('totpGroup').style.display !== 'none') {
+                    if (!totpCode || totpCode.length !== 6) {
+                        showError('请输入6位双因素认证代码');
+                        loginButton.disabled = false;
+                        loginButton.innerHTML = '登录';
+                        return;
+                    }
+                    requestBody.totp_code = totpCode;
+                }
+                
+                const response = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(requestBody)
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    // 检查是否需要 TOTP
+                    if (data.requires_totp) {
+                        // 显示 TOTP 输入框
+                        document.getElementById('totpGroup').style.display = 'block';
+                        document.getElementById('totp_code').focus();
+                        showError('请输入双因素认证代码');
+                        loginButton.disabled = false;
+                        loginButton.innerHTML = '登录';
+                        return;
+                    }
+                    
+                    // 登录成功，跳转到管理首页
+                    window.location.href = '/admin';
+                } else {
+                    // 登录失败，显示错误信息
+                    showError(data.message || data.error || '登录失败，请检查用户名和密码');
+                    loginButton.disabled = false;
+                    loginButton.innerHTML = '登录';
+                }
+            } catch (error) {
+                showError('网络错误，请稍后重试');
+                loginButton.disabled = false;
+                loginButton.innerHTML = '登录';
+            }
+        });
+        
+        // 页面加载时检查是否已登录
+        checkAuth();
+    </script>
+</body>
+</html>
+

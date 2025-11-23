@@ -1,131 +1,138 @@
--- OpenResty WAF 数据库设计
+-- ============================================
+-- OpenResty WAF 数据库设计（优化版）
+-- ============================================
 -- 数据库名：waf_db
--- 字符集：utf8mb4
--- 排序规则：utf8mb4_general_ci
+-- 字符集：utf8mb4（支持完整的UTF-8字符集，包括emoji等特殊字符）
+-- 排序规则：utf8mb4_general_ci（通用排序规则，适合大多数场景）
+-- 存储引擎：InnoDB（支持事务和外键约束）
+-- 
+-- 优化说明：
+-- 1. 兼容 MySQL 5.7 和 8.0
+-- 2. 优化索引结构，去除冗余索引
+-- 3. 优化字段类型，提高查询性能
+-- 4. 添加覆盖索引，减少回表查询
+-- 5. 优化SQL语句，提高执行效率
+-- 
+-- 数据库用途：
+-- 1. 存储WAF封控规则、白名单规则
+-- 2. 记录访问日志和封控日志
+-- 3. 存储用户信息和会话信息
+-- 4. 存储系统配置和功能开关
+-- 5. 存储反向代理配置
+-- 6. 存储IP频率统计和自动封控记录
+-- ============================================
 
 CREATE DATABASE IF NOT EXISTS waf_db DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
 
 USE waf_db;
 
--- 1. 访问日志表
+-- ============================================
+-- 1. 访问日志表（高频写入表，优化索引）
+-- ============================================
 CREATE TABLE IF NOT EXISTS waf_access_logs (
     id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '主键ID',
     client_ip VARCHAR(45) NOT NULL COMMENT '客户端IP地址（支持IPv6）',
+    request_domain VARCHAR(255) DEFAULT NULL COMMENT '请求域名（Host头，用于区分不同域名的访问）',
     request_path VARCHAR(512) NOT NULL COMMENT '请求路径',
     request_method VARCHAR(10) NOT NULL DEFAULT 'GET' COMMENT '请求方法',
-    status_code INT NOT NULL COMMENT 'HTTP响应状态码',
+    status_code SMALLINT UNSIGNED NOT NULL COMMENT 'HTTP响应状态码（使用SMALLINT节省空间）',
     user_agent VARCHAR(512) DEFAULT NULL COMMENT 'User-Agent',
     referer VARCHAR(512) DEFAULT NULL COMMENT 'Referer',
     request_time DATETIME NOT NULL COMMENT '请求时间',
-    response_time INT DEFAULT NULL COMMENT '响应时间（毫秒）',
+    response_time MEDIUMINT UNSIGNED DEFAULT NULL COMMENT '响应时间（毫秒，使用MEDIUMINT节省空间）',
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     PRIMARY KEY (id),
-    KEY idx_client_ip (client_ip),
-    KEY idx_request_time (request_time),
-    KEY idx_status_code (status_code),
-    KEY idx_client_ip_time (client_ip, request_time)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='访问日志表';
+    -- 优化：去除冗余索引，使用联合索引覆盖常用查询
+    KEY idx_client_ip_time (client_ip, request_time) COMMENT 'IP和时间联合索引，覆盖按IP和时间范围查询',
+    KEY idx_request_time (request_time) COMMENT '请求时间索引，用于时间范围查询和清理',
+    KEY idx_status_code_time (status_code, request_time) COMMENT '状态码和时间联合索引，用于错误统计',
+    KEY idx_domain_time (request_domain, request_time) COMMENT '域名和时间联合索引，用于按域名统计',
+    KEY idx_request_path (request_path(100)) COMMENT '请求路径前缀索引，用于路径统计'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci 
+ROW_FORMAT=DYNAMIC COMMENT='访问日志表：记录所有访问日志，包含域名信息';
 
--- 重命名表（兼容旧表名，如果存在）
--- RENAME TABLE access_logs TO waf_access_logs;
-
--- 2. 封控规则表
+-- ============================================
+-- 2. 封控规则表（高频查询表，优化索引顺序）
+-- ============================================
 CREATE TABLE IF NOT EXISTS waf_block_rules (
-    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '主键ID，自增',
     rule_type VARCHAR(20) NOT NULL COMMENT '规则类型：single_ip-单个IP, ip_range-IP段, geo-地域',
-    rule_value VARCHAR(255) NOT NULL COMMENT '规则值：
-        - single_ip: IP地址，如 192.168.1.100
-        - ip_range: CIDR格式（如 192.168.1.0/24）或IP范围（如 192.168.1.1-192.168.1.100）
-        - geo: 地域代码
-            * 国家级别：CN, US, JP 等（ISO 3166-1 alpha-2）
-            * 国内省份：CN:Beijing, CN:Shanghai, CN:Guangdong 等
-            * 国内城市：CN:Beijing:Beijing, CN:Shanghai:Shanghai 等（国家:省份:城市）',
-    rule_name VARCHAR(100) NOT NULL COMMENT '规则名称',
-    description TEXT DEFAULT NULL COMMENT '规则描述',
-    status TINYINT NOT NULL DEFAULT 1 COMMENT '状态：1-启用，0-禁用',
-    priority INT NOT NULL DEFAULT 0 COMMENT '优先级（数字越大优先级越高）',
-    start_time DATETIME DEFAULT NULL COMMENT '生效开始时间（NULL表示立即生效）',
-    end_time DATETIME DEFAULT NULL COMMENT '生效结束时间（NULL表示永久生效）',
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    rule_value VARCHAR(255) NOT NULL COMMENT '规则值',
+    rule_name VARCHAR(100) NOT NULL COMMENT '规则名称，用于标识规则用途',
+    description TEXT DEFAULT NULL COMMENT '规则描述，详细说明规则的用途和来源',
+    rule_group VARCHAR(50) DEFAULT NULL COMMENT '规则分组，用于按业务、地区等维度分组管理规则',
+    status TINYINT NOT NULL DEFAULT 1 COMMENT '状态：1-启用（规则生效），0-禁用（规则不生效）',
+    priority INT NOT NULL DEFAULT 0 COMMENT '优先级（数字越大优先级越高），相同条件下优先级高的规则优先匹配',
+    rule_version INT UNSIGNED NOT NULL DEFAULT 1 COMMENT '规则版本号（用于缓存失效），规则更新时自动递增',
+    start_time DATETIME DEFAULT NULL COMMENT '生效开始时间（NULL表示立即生效），用于定时生效规则',
+    end_time DATETIME DEFAULT NULL COMMENT '生效结束时间（NULL表示永久生效），用于临时规则',
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '记录创建时间',
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '记录最后更新时间',
     PRIMARY KEY (id),
-    KEY idx_status (status),
-    KEY idx_rule_type (rule_type),
-    KEY idx_status_type (status, rule_type),
-    KEY idx_start_end_time (start_time, end_time)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='封控规则表';
+    -- 优化：使用覆盖索引，索引顺序按查询频率排序
+    KEY idx_status_priority_type (status, priority DESC, rule_type) COMMENT '状态、优先级、类型联合索引，覆盖最常用查询',
+    KEY idx_status_type (status, rule_type) COMMENT '状态和类型联合索引，用于组合查询',
+    KEY idx_rule_version (rule_version) COMMENT '版本号索引，用于缓存失效检查',
+    KEY idx_start_end_time (start_time, end_time) COMMENT '时间范围索引，用于查询定时规则',
+    KEY idx_rule_group (rule_group) COMMENT '规则分组索引，用于按分组查询和统计'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci 
+ROW_FORMAT=DYNAMIC COMMENT='封控规则表：存储所有封控规则，支持单个IP、IP段、地域封控，支持规则分组管理';
 
--- 重命名表（兼容旧表名，如果存在）
--- RENAME TABLE block_rules TO waf_block_rules;
-
--- 插入地域封控规则示例
--- 注意：以下示例仅供参考，实际使用时请根据需求修改
-
--- 封控整个国家（国外）
--- INSERT INTO waf_block_rules (rule_type, rule_value, rule_name, description, status, priority)
--- VALUES ('geo', 'US', '封控美国', '封控所有来自美国的访问', 0, 80);
-
--- 封控国内省份
--- INSERT INTO waf_block_rules (rule_type, rule_value, rule_name, description, status, priority)
--- VALUES ('geo', 'CN:Beijing', '封控北京', '封控所有来自北京的访问', 0, 90);
-
--- 封控国内城市（精确到城市）
--- INSERT INTO waf_block_rules (rule_type, rule_value, rule_name, description, status, priority)
--- VALUES ('geo', 'CN:Shanghai:Shanghai', '封控上海市', '封控所有来自上海市的访问', 0, 100);
-
--- 3. 白名单表
+-- ============================================
+-- 3. 白名单表（高频查询表，优化索引）
+-- ============================================
 CREATE TABLE IF NOT EXISTS waf_whitelist (
-    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '主键ID',
-    ip_type VARCHAR(20) NOT NULL COMMENT '类型：single_ip-单个IP, ip_range-IP段',
-    ip_value VARCHAR(255) NOT NULL COMMENT 'IP值：IP地址或CIDR',
-    description TEXT DEFAULT NULL COMMENT '说明',
-    status TINYINT NOT NULL DEFAULT 1 COMMENT '状态：1-启用，0-禁用',
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '主键ID，自增',
+    ip_type VARCHAR(20) NOT NULL COMMENT 'IP类型：single_ip-单个IP地址, ip_range-IP段（CIDR格式）',
+    ip_value VARCHAR(255) NOT NULL COMMENT 'IP值',
+    description TEXT DEFAULT NULL COMMENT '白名单说明，用于记录添加白名单的原因或来源',
+    status TINYINT NOT NULL DEFAULT 1 COMMENT '状态：1-启用（白名单生效），0-禁用（白名单不生效）',
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '记录创建时间',
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '记录最后更新时间',
     PRIMARY KEY (id),
-    KEY idx_status (status),
-    KEY idx_ip_type (ip_type),
-    KEY idx_status_type (status, ip_type)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='白名单表';
+    -- 优化：使用覆盖索引，覆盖常用查询
+    KEY idx_status_type_value (status, ip_type, ip_value(20)) COMMENT '状态、类型、IP值联合索引，覆盖白名单查询',
+    KEY idx_ip_value (ip_value(20)) COMMENT 'IP值索引，用于快速匹配IP'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci 
+ROW_FORMAT=DYNAMIC COMMENT='白名单表：存储IP白名单规则，白名单优先级高于封控规则';
 
--- 重命名表（兼容旧表名，如果存在）
--- RENAME TABLE whitelist TO waf_whitelist;
-
--- 4. 封控日志表
+-- ============================================
+-- 4. 封控日志表（高频写入表，优化索引）
+-- ============================================
 CREATE TABLE IF NOT EXISTS waf_block_logs (
-    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '主键ID',
-    client_ip VARCHAR(45) NOT NULL COMMENT '被封控的IP地址',
-    rule_id BIGINT UNSIGNED DEFAULT NULL COMMENT '匹配的规则ID',
-    rule_name VARCHAR(100) DEFAULT NULL COMMENT '规则名称（冗余字段，便于查询）',
-    block_time DATETIME NOT NULL COMMENT '封控时间',
-    request_path VARCHAR(512) DEFAULT NULL COMMENT '请求路径',
-    user_agent VARCHAR(512) DEFAULT NULL COMMENT 'User-Agent',
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '主键ID，自增',
+    client_ip VARCHAR(45) NOT NULL COMMENT '被封控的客户端IP地址（支持IPv6）',
+    rule_id BIGINT UNSIGNED DEFAULT NULL COMMENT '匹配的封控规则ID（关联waf_block_rules表）',
+    rule_name VARCHAR(100) DEFAULT NULL COMMENT '规则名称（冗余字段，便于查询，避免关联查询）',
+    block_reason VARCHAR(50) NOT NULL DEFAULT 'manual' COMMENT '封控原因：manual-手动封控, auto_frequency-自动频率封控, auto_error-自动错误率封控, auto_scan-自动扫描封控',
+    block_time DATETIME NOT NULL COMMENT '封控发生时间（记录IP被封控的具体时间）',
+    request_path VARCHAR(512) DEFAULT NULL COMMENT '触发封控的请求路径（记录触发封控的具体URL）',
+    user_agent VARCHAR(512) DEFAULT NULL COMMENT 'User-Agent信息（记录客户端浏览器或工具信息）',
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '记录创建时间',
     PRIMARY KEY (id),
-    KEY idx_client_ip (client_ip),
-    KEY idx_block_time (block_time),
-    KEY idx_rule_id (rule_id),
-    KEY idx_client_ip_time (client_ip, block_time)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='封控日志表';
+    -- 优化：使用覆盖索引，减少回表查询
+    KEY idx_client_ip_time (client_ip, block_time) COMMENT 'IP和时间联合索引，用于查询特定IP的时间序列',
+    KEY idx_block_time (block_time) COMMENT '封控时间索引，用于按时间范围查询',
+    KEY idx_rule_id_time (rule_id, block_time) COMMENT '规则和时间联合索引，用于查询特定规则的时间序列',
+    KEY idx_block_reason_time (block_reason, block_time) COMMENT '封控原因和时间联合索引，用于按原因统计'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci 
+ROW_FORMAT=DYNAMIC COMMENT='封控日志表：记录所有被封控的IP访问记录，用于审计和统计分析';
 
--- 重命名表（兼容旧表名，如果存在）
--- RENAME TABLE block_logs TO waf_block_logs;
-
--- 5. 地域代码表（可选，用于地域封控）
+-- ============================================
+-- 5. 地域代码表（低频更新表）
+-- ============================================
 CREATE TABLE IF NOT EXISTS waf_geo_codes (
-    id INT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '主键ID',
-    country_code VARCHAR(2) NOT NULL COMMENT '国家代码（ISO 3166-1 alpha-2）',
-    country_name VARCHAR(100) NOT NULL COMMENT '国家名称',
-    region_code VARCHAR(10) DEFAULT NULL COMMENT '省份/地区代码',
-    region_name VARCHAR(100) DEFAULT NULL COMMENT '省份/地区名称',
-    city_name VARCHAR(100) DEFAULT NULL COMMENT '城市名称',
+    id INT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '主键ID，自增',
+    country_code VARCHAR(2) NOT NULL COMMENT '国家代码（ISO 3166-1 alpha-2标准，如CN、US、JP等）',
+    country_name VARCHAR(100) NOT NULL COMMENT '国家名称（中文或英文名称）',
+    region_code VARCHAR(10) DEFAULT NULL COMMENT '省份/地区代码（可选，用于国内省份或国外州/省）',
+    region_name VARCHAR(100) DEFAULT NULL COMMENT '省份/地区名称（可选，如Beijing、Shanghai等）',
+    city_name VARCHAR(100) DEFAULT NULL COMMENT '城市名称（可选，用于精确到城市级别的地域封控）',
     PRIMARY KEY (id),
-    UNIQUE KEY uk_country_code (country_code),
-    KEY idx_country_region (country_code, region_code)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='地域代码表';
-
--- 重命名表（兼容旧表名，如果存在）
--- RENAME TABLE geo_codes TO waf_geo_codes;
+    UNIQUE KEY uk_country_code (country_code) COMMENT '国家代码唯一索引，确保每个国家代码只出现一次',
+    KEY idx_country_region (country_code, region_code) COMMENT '国家和省份联合索引，用于按国家+省份查询'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci 
+ROW_FORMAT=DYNAMIC COMMENT='地域代码表：存储地域代码映射关系，支持国家、省份、城市三级地域封控';
 
 -- 插入一些常用的地域代码示例
 INSERT INTO waf_geo_codes (country_code, country_name) VALUES
@@ -141,30 +148,325 @@ INSERT INTO waf_geo_codes (country_code, country_name) VALUES
 ('BR', '巴西')
 ON DUPLICATE KEY UPDATE country_name = VALUES(country_name);
 
--- 6. 系统配置表（可选，用于系统参数配置）
+-- ============================================
+-- 6. 系统配置表（低频更新表）
+-- ============================================
 CREATE TABLE IF NOT EXISTS waf_system_config (
-    id INT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '主键ID',
-    config_key VARCHAR(100) NOT NULL COMMENT '配置键',
-    config_value TEXT NOT NULL COMMENT '配置值',
-    description VARCHAR(255) DEFAULT NULL COMMENT '配置说明',
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    id INT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '主键ID，自增',
+    config_key VARCHAR(100) NOT NULL COMMENT '配置键（唯一标识配置项，如cache_ttl、log_batch_size等）',
+    config_value TEXT NOT NULL COMMENT '配置值（配置项的具体值，支持文本、数字、JSON等格式）',
+    description VARCHAR(255) DEFAULT NULL COMMENT '配置说明（描述配置项的用途和取值范围）',
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '配置最后更新时间',
     PRIMARY KEY (id),
-    UNIQUE KEY uk_config_key (config_key)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='系统配置表';
-
--- 重命名表（兼容旧表名，如果存在）
--- RENAME TABLE system_config TO waf_system_config;
+    UNIQUE KEY uk_config_key (config_key) COMMENT '配置键唯一索引，确保每个配置项只出现一次'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci 
+ROW_FORMAT=DYNAMIC COMMENT='系统配置表：存储系统运行时配置参数，支持动态修改';
 
 -- 插入默认配置
 INSERT INTO waf_system_config (config_key, config_value, description) VALUES
 ('cache_ttl', '60', '缓存过期时间（秒）'),
 ('log_batch_size', '100', '日志批量写入大小'),
 ('log_batch_interval', '1', '日志批量写入间隔（秒）'),
-('enable_geo_block', '0', '是否启用地域封控（1-启用，0-禁用）')
+('enable_geo_block', '0', '是否启用地域封控（1-启用，0-禁用）'),
+('enable_auto_block', '1', '是否启用自动封控（1-启用，0-禁用）'),
+('auto_block_threshold', '100', '自动封控阈值（每分钟访问次数）'),
+('auto_block_duration', '3600', '自动封控时长（秒，默认1小时）'),
+('rule_version', '1', '规则版本号（用于缓存失效）')
 ON DUPLICATE KEY UPDATE config_value = VALUES(config_value);
 
+-- ============================================
+-- 7. IP频率统计表（高频更新表，优化索引）
+-- ============================================
+CREATE TABLE IF NOT EXISTS waf_ip_frequency (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '主键ID，自增',
+    client_ip VARCHAR(45) NOT NULL COMMENT '客户端IP地址（支持IPv6）',
+    window_start DATETIME NOT NULL COMMENT '统计窗口开始时间（时间窗口的起始时间）',
+    window_end DATETIME NOT NULL COMMENT '统计窗口结束时间（时间窗口的结束时间）',
+    access_count INT UNSIGNED NOT NULL DEFAULT 0 COMMENT '访问次数（该时间窗口内的总访问次数）',
+    error_count INT UNSIGNED NOT NULL DEFAULT 0 COMMENT '错误次数（该时间窗口内4xx/5xx错误响应次数）',
+    unique_path_count INT UNSIGNED NOT NULL DEFAULT 0 COMMENT '唯一路径数量（该时间窗口内访问的不同URL路径数量，用于检测扫描行为）',
+    total_bytes BIGINT UNSIGNED DEFAULT 0 COMMENT '总字节数（该时间窗口内的总传输字节数）',
+    avg_response_time MEDIUMINT UNSIGNED DEFAULT 0 COMMENT '平均响应时间（毫秒，该时间窗口内的平均响应时间）',
+    max_response_time MEDIUMINT UNSIGNED DEFAULT 0 COMMENT '最大响应时间（毫秒，该时间窗口内的最大响应时间）',
+    last_access_time DATETIME NOT NULL COMMENT '最后访问时间（该IP最后一次访问的时间）',
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '记录创建时间',
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '记录最后更新时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_ip_window (client_ip, window_start) COMMENT 'IP和窗口开始时间唯一索引，确保每个IP在每个时间窗口只有一条记录',
+    -- 优化：使用覆盖索引，优化查询性能
+    KEY idx_window_end (window_end) COMMENT '窗口结束时间索引，用于清理过期数据',
+    KEY idx_client_ip_window_end (client_ip, window_end) COMMENT 'IP和窗口结束时间联合索引，用于查询特定IP的最新统计',
+    KEY idx_access_count (access_count) COMMENT '访问次数索引，用于查询高频访问IP',
+    KEY idx_error_count (error_count) COMMENT '错误次数索引，用于查询高错误率IP',
+    KEY idx_unique_path_count (unique_path_count) COMMENT '唯一路径数量索引，用于检测扫描行为'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci 
+ROW_FORMAT=DYNAMIC COMMENT='IP频率统计表：按时间窗口统计IP访问频率、错误率、扫描行为等指标';
+
+-- ============================================
+-- 8. 自动封控记录表（中频更新表）
+-- ============================================
+CREATE TABLE IF NOT EXISTS waf_auto_block_logs (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '主键ID，自增',
+    client_ip VARCHAR(45) NOT NULL COMMENT '被封控的客户端IP地址（支持IPv6）',
+    block_reason VARCHAR(50) NOT NULL COMMENT '封控原因：frequency-频率过高, error_rate-错误率过高, scan-扫描行为',
+    block_threshold VARCHAR(100) DEFAULT NULL COMMENT '触发阈值（JSON格式，记录触发封控的具体阈值）',
+    auto_unblock_time DATETIME DEFAULT NULL COMMENT '自动解封时间（NULL表示永久封控，否则在指定时间自动解封）',
+    status TINYINT NOT NULL DEFAULT 1 COMMENT '状态：1-已封控（IP当前处于封控状态），0-已解封（IP已被解封）',
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '记录创建时间（封控发生时间）',
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '记录最后更新时间（解封时更新）',
+    PRIMARY KEY (id),
+    KEY idx_client_ip_status (client_ip, status) COMMENT 'IP和状态联合索引，用于查询特定IP的当前封控状态',
+    KEY idx_status_unblock_time (status, auto_unblock_time) COMMENT '状态和解封时间联合索引，用于查询待解封的记录',
+    KEY idx_block_reason (block_reason) COMMENT '封控原因索引，用于按原因统计'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci 
+ROW_FORMAT=DYNAMIC COMMENT='自动封控记录表：记录由自动封控功能触发的封控记录，包含封控原因和触发阈值';
+
+-- ============================================
+-- 9. 受信任代理IP表（低频更新表）
+-- ============================================
+CREATE TABLE IF NOT EXISTS waf_trusted_proxies (
+    id INT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '主键ID，自增',
+    proxy_ip VARCHAR(45) NOT NULL COMMENT '代理IP地址（支持CIDR格式，如192.168.1.0/24或单个IP）',
+    description VARCHAR(255) DEFAULT NULL COMMENT '代理说明，用于标识代理的用途或位置',
+    status TINYINT NOT NULL DEFAULT 1 COMMENT '状态：1-启用（信任此代理），0-禁用（不信任）',
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '记录创建时间',
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '记录最后更新时间',
+    PRIMARY KEY (id),
+    KEY idx_status (status) COMMENT '状态索引，用于快速查询启用的代理',
+    KEY idx_proxy_ip (proxy_ip) COMMENT '代理IP索引，用于快速匹配'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci 
+ROW_FORMAT=DYNAMIC COMMENT='受信任代理IP表：存储受信任的代理服务器IP，用于安全获取客户端真实IP';
+
+-- 插入默认受信任代理IP（本地回环和私有网络）
+INSERT INTO waf_trusted_proxies (proxy_ip, description, status) VALUES
+('127.0.0.1/32', '本地回环', 1),
+('::1/128', 'IPv6本地回环', 1),
+('10.0.0.0/8', '私有网络A类', 1),
+('172.16.0.0/12', '私有网络B类', 1),
+('192.168.0.0/16', '私有网络C类', 1)
+ON DUPLICATE KEY UPDATE description = VALUES(description);
+
+-- ============================================
+-- 10. 规则模板表（低频更新表）
+-- ============================================
+CREATE TABLE IF NOT EXISTS waf_rule_templates (
+    id INT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    template_name VARCHAR(100) NOT NULL COMMENT '模板名称',
+    template_description TEXT DEFAULT NULL COMMENT '模板描述',
+    category VARCHAR(50) DEFAULT NULL COMMENT '模板分类：security-安全, testing-测试等',
+    template_data TEXT NOT NULL COMMENT '模板数据（JSON格式，包含规则列表）',
+    status TINYINT NOT NULL DEFAULT 1 COMMENT '状态：1-启用，0-禁用',
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_template_name (template_name),
+    KEY idx_category_status (category, status) COMMENT '分类和状态联合索引'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci 
+ROW_FORMAT=DYNAMIC COMMENT='规则模板表';
+
+-- ============================================
+-- 11. 功能开关表（低频更新表）
+-- ============================================
+CREATE TABLE IF NOT EXISTS waf_feature_switches (
+    id INT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    feature_key VARCHAR(100) NOT NULL COMMENT '功能键（唯一标识）',
+    feature_name VARCHAR(100) NOT NULL COMMENT '功能名称',
+    description TEXT DEFAULT NULL COMMENT '功能描述',
+    enable TINYINT NOT NULL DEFAULT 1 COMMENT '是否启用：1-启用，0-禁用',
+    config_source VARCHAR(20) NOT NULL DEFAULT 'database' COMMENT '配置来源：database-数据库, file-配置文件',
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_feature_key (feature_key),
+    KEY idx_enable_source (enable, config_source) COMMENT '启用状态和配置来源联合索引'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci 
+ROW_FORMAT=DYNAMIC COMMENT='功能开关表';
+
+-- 插入默认功能开关配置
+INSERT INTO waf_feature_switches (feature_key, feature_name, description, enable, config_source) VALUES
+('rule_management_ui', '规则管理界面', '规则管理Web界面，提供规则的CRUD操作和审批流程', 1, 'database'),
+('testing', '测试功能', '单元测试和集成测试功能', 1, 'database'),
+('config_validation', '配置验证', '配置验证功能，启动时检查配置有效性', 1, 'database'),
+('config_check_api', '配置检查API', '配置检查API端点，提供配置验证结果查询', 1, 'database'),
+('ip_block', 'IP封控', 'IP封控功能，包括单个IP、IP段封控', 1, 'database'),
+('geo_block', '地域封控', '基于地理位置封控功能', 1, 'database'),
+('auto_block', '自动封控', '基于频率和行为的自动封控功能', 1, 'database'),
+('whitelist', '白名单', 'IP白名单功能', 1, 'database'),
+('log_collect', '日志采集', '访问日志采集功能', 1, 'database'),
+('metrics', '监控指标', 'Prometheus监控指标导出功能', 1, 'database'),
+('alert', '告警功能', '系统告警功能', 1, 'database'),
+('cache_warmup', '缓存预热', '缓存预热功能', 1, 'database'),
+('rule_backup', '规则备份', '规则备份功能', 1, 'database'),
+('stats', '统计报表', '封控统计报表功能，提供封控数据统计和分析', 1, 'database'),
+('monitor', '监控面板', '实时监控面板功能，显示系统运行状态和关键指标', 1, 'database')
+ON DUPLICATE KEY UPDATE 
+    feature_name = VALUES(feature_name),
+    description = VALUES(description),
+    config_source = 'database';
+
+-- ============================================
+-- 12. 用户表（中频更新表）
+-- ============================================
+CREATE TABLE IF NOT EXISTS waf_users (
+    id INT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '主键ID，自增',
+    username VARCHAR(50) NOT NULL COMMENT '用户名（唯一标识，用于登录）',
+    password_hash VARCHAR(255) NOT NULL COMMENT '密码哈希值（使用BCrypt算法加密存储，不存储明文密码）',
+    role VARCHAR(20) NOT NULL DEFAULT 'user' COMMENT '用户角色：admin-管理员, user-普通用户',
+    totp_secret VARCHAR(32) DEFAULT NULL COMMENT 'TOTP密钥（Base32编码的双因素认证密钥，NULL表示未启用双因素认证）',
+    status TINYINT NOT NULL DEFAULT 1 COMMENT '用户状态：1-启用（用户可以登录），0-禁用（用户无法登录）',
+    last_login_time DATETIME DEFAULT NULL COMMENT '最后登录时间（记录用户最后一次成功登录的时间）',
+    last_login_ip VARCHAR(45) DEFAULT NULL COMMENT '最后登录IP（记录用户最后一次登录的IP地址，支持IPv6）',
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '用户创建时间',
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '用户信息最后更新时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_username (username) COMMENT '用户名唯一索引，确保每个用户名只出现一次',
+    KEY idx_status_role (status, role) COMMENT '状态和角色联合索引，用于权限查询'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci 
+ROW_FORMAT=DYNAMIC COMMENT='用户表：存储系统用户信息，支持角色权限和双因素认证';
+
+-- ============================================
+-- 13. 用户会话表（高频更新表，优化索引）
+-- ============================================
+CREATE TABLE IF NOT EXISTS waf_user_sessions (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '主键ID，自增',
+    user_id INT UNSIGNED NOT NULL COMMENT '用户ID（关联waf_users表，标识会话所属的用户）',
+    session_id VARCHAR(64) NOT NULL COMMENT '会话ID（唯一标识，存储在Cookie中用于会话验证）',
+    ip_address VARCHAR(45) DEFAULT NULL COMMENT '登录IP地址（记录用户登录时的IP地址，支持IPv6，用于安全审计）',
+    user_agent VARCHAR(512) DEFAULT NULL COMMENT 'User-Agent信息（记录用户登录时的浏览器或客户端信息，用于安全审计）',
+    expires_at DATETIME NOT NULL COMMENT '会话过期时间（会话在此时间后自动失效，需要重新登录）',
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '会话创建时间（用户登录时间）',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_session_id (session_id) COMMENT '会话ID唯一索引，确保每个会话ID只出现一次',
+    KEY idx_user_id_expires (user_id, expires_at) COMMENT '用户和过期时间联合索引，用于查询特定用户的活跃会话',
+    KEY idx_expires_at (expires_at) COMMENT '过期时间索引，用于清理过期会话',
+    FOREIGN KEY (user_id) REFERENCES waf_users(id) ON DELETE CASCADE COMMENT '外键约束，用户删除时自动删除其所有会话'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci 
+ROW_FORMAT=DYNAMIC COMMENT='用户会话表：存储用户登录会话信息，用于会话管理和安全审计';
+
+-- ============================================
+-- 14. 自动解封任务表（中频更新表）
+-- ============================================
+CREATE TABLE IF NOT EXISTS waf_auto_unblock_tasks (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    rule_id BIGINT UNSIGNED DEFAULT NULL COMMENT '规则ID（如果是规则过期解封）',
+    client_ip VARCHAR(45) DEFAULT NULL COMMENT 'IP地址（如果是IP自动解封）',
+    unblock_type VARCHAR(20) NOT NULL COMMENT '解封类型：rule_expired-规则过期, auto_unblock-自动解封',
+    scheduled_time DATETIME NOT NULL COMMENT '计划解封时间',
+    status VARCHAR(20) NOT NULL DEFAULT 'pending' COMMENT '状态：pending-待处理, completed-已完成, failed-失败',
+    executed_at DATETIME DEFAULT NULL COMMENT '执行时间',
+    error_message TEXT DEFAULT NULL COMMENT '错误信息',
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (id),
+    KEY idx_status_scheduled (status, scheduled_time) COMMENT '状态和计划时间联合索引，用于查询待处理任务',
+    KEY idx_rule_id (rule_id) COMMENT '规则ID索引',
+    KEY idx_client_ip (client_ip) COMMENT 'IP地址索引'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci 
+ROW_FORMAT=DYNAMIC COMMENT='自动解封任务表';
+
+-- ============================================
+-- 15. 缓存版本控制表（低频更新表）
+-- ============================================
+CREATE TABLE IF NOT EXISTS waf_cache_versions (
+    id INT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    cache_type VARCHAR(50) NOT NULL COMMENT '缓存类型：rules-规则缓存, whitelist-白名单缓存, geo-地域缓存等',
+    version INT UNSIGNED NOT NULL DEFAULT 1 COMMENT '版本号',
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_cache_type (cache_type)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci 
+ROW_FORMAT=DYNAMIC COMMENT='缓存版本控制表';
+
+-- 插入默认缓存版本
+INSERT INTO waf_cache_versions (cache_type, version) VALUES
+('rules', 1),
+('whitelist', 1),
+('geo', 1),
+('frequency', 1)
+ON DUPLICATE KEY UPDATE version = version;
+
+-- ============================================
+-- 16. 反向代理配置表（低频更新表）
+-- ============================================
+CREATE TABLE IF NOT EXISTS waf_proxy_configs (
+    id INT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '主键ID，自增',
+    proxy_name VARCHAR(100) NOT NULL COMMENT '代理配置名称（唯一标识，用于区分不同代理配置）',
+    proxy_type VARCHAR(20) NOT NULL COMMENT '代理类型：http-HTTP/HTTPS代理, tcp-TCP代理, udp-UDP代理',
+    listen_port INT UNSIGNED NOT NULL COMMENT '监听端口（代理服务器监听的端口）',
+    listen_address VARCHAR(45) DEFAULT '0.0.0.0' COMMENT '监听地址（0.0.0.0表示监听所有接口，127.0.0.1表示仅本地）',
+    server_name VARCHAR(255) DEFAULT NULL COMMENT '服务器名称（HTTP代理时使用，支持多个域名，用空格分隔）',
+    location_path VARCHAR(255) DEFAULT '/' COMMENT '路径匹配（HTTP代理时使用，如/、/api/等）',
+    backend_type VARCHAR(20) NOT NULL DEFAULT 'single' COMMENT '后端类型：single-单个后端服务器, upstream-多个后端服务器（负载均衡）',
+    backend_address VARCHAR(255) NOT NULL COMMENT '后端地址（单个后端：IP:端口，多个后端：upstream名称）',
+    backend_port INT UNSIGNED DEFAULT NULL COMMENT '后端端口（TCP/UDP代理时使用，HTTP代理时从backend_address解析）',
+    load_balance VARCHAR(20) DEFAULT 'round_robin' COMMENT '负载均衡算法：round_robin-轮询, least_conn-最少连接, ip_hash-IP哈希',
+    health_check_enable TINYINT NOT NULL DEFAULT 1 COMMENT '是否启用健康检查：1-启用，0-禁用',
+    health_check_interval INT DEFAULT 10 COMMENT '健康检查间隔（秒）',
+    health_check_timeout INT DEFAULT 3 COMMENT '健康检查超时（秒）',
+    max_fails INT DEFAULT 3 COMMENT '最大失败次数（超过此次数后标记为不可用）',
+    fail_timeout INT DEFAULT 30 COMMENT '失败超时（秒，失败后在此时间内不再尝试）',
+    proxy_timeout INT DEFAULT 60 COMMENT '代理超时（秒，连接后端超时时间）',
+    proxy_connect_timeout INT DEFAULT 60 COMMENT '连接超时（秒，建立连接超时时间）',
+    proxy_send_timeout INT DEFAULT 60 COMMENT '发送超时（秒，发送请求超时时间）',
+    proxy_read_timeout INT DEFAULT 60 COMMENT '读取超时（秒，读取响应超时时间）',
+    ssl_enable TINYINT NOT NULL DEFAULT 0 COMMENT '是否启用SSL：1-启用，0-禁用（HTTP代理时使用）',
+    ssl_cert_path VARCHAR(512) DEFAULT NULL COMMENT 'SSL证书路径（启用SSL时使用）',
+    ssl_key_path VARCHAR(512) DEFAULT NULL COMMENT 'SSL密钥路径（启用SSL时使用）',
+    description TEXT DEFAULT NULL COMMENT '配置说明（描述代理配置的用途和来源）',
+    status TINYINT NOT NULL DEFAULT 1 COMMENT '状态：1-启用（代理生效），0-禁用（代理不生效）',
+    priority INT NOT NULL DEFAULT 0 COMMENT '优先级（数字越大优先级越高，用于匹配顺序）',
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '配置创建时间',
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '配置最后更新时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_proxy_name (proxy_name) COMMENT '代理名称唯一索引，确保每个代理配置名称只出现一次',
+    KEY idx_status_priority (status, priority) COMMENT '状态和优先级联合索引，用于排序查询',
+    KEY idx_proxy_type (proxy_type) COMMENT '代理类型索引，用于按类型查询',
+    KEY idx_listen_port (listen_port) COMMENT '监听端口索引，用于快速查找端口配置',
+    KEY idx_server_name (server_name(100)) COMMENT '服务器名称索引，用于HTTP代理匹配'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci 
+ROW_FORMAT=DYNAMIC COMMENT='反向代理配置表：存储反向代理配置，支持HTTP、TCP、UDP代理';
+
+-- ============================================
+-- 17. 反向代理后端服务器表（低频更新表）
+-- ============================================
+CREATE TABLE IF NOT EXISTS waf_proxy_backends (
+    id INT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '主键ID，自增',
+    proxy_id INT UNSIGNED NOT NULL COMMENT '代理配置ID（关联waf_proxy_configs表）',
+    backend_address VARCHAR(255) NOT NULL COMMENT '后端服务器地址（IP地址或域名）',
+    backend_port INT UNSIGNED NOT NULL COMMENT '后端服务器端口',
+    weight INT UNSIGNED DEFAULT 1 COMMENT '权重（负载均衡时使用，数字越大权重越高）',
+    max_fails INT DEFAULT 3 COMMENT '最大失败次数（超过此次数后标记为不可用）',
+    fail_timeout INT DEFAULT 30 COMMENT '失败超时（秒，失败后在此时间内不再尝试）',
+    backup TINYINT NOT NULL DEFAULT 0 COMMENT '是否为备用服务器：1-是，0-否（主服务器不可用时使用）',
+    down TINYINT NOT NULL DEFAULT 0 COMMENT '是否手动下线：1-是，0-否（手动标记为不可用）',
+    status TINYINT NOT NULL DEFAULT 1 COMMENT '状态：1-启用，0-禁用',
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '记录创建时间',
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '记录最后更新时间',
+    PRIMARY KEY (id),
+    KEY idx_proxy_id_status (proxy_id, status) COMMENT '代理ID和状态联合索引，用于查询特定代理的启用后端',
+    FOREIGN KEY (proxy_id) REFERENCES waf_proxy_configs(id) ON DELETE CASCADE COMMENT '外键约束，代理配置删除时自动删除其所有后端服务器'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci 
+ROW_FORMAT=DYNAMIC COMMENT='反向代理后端服务器表：存储upstream类型的多个后端服务器配置';
+
+-- 插入反向代理功能开关
+INSERT INTO waf_feature_switches (feature_key, feature_name, description, enable, config_source) VALUES
+('proxy_management', '反向代理管理', '反向代理配置管理功能，支持HTTP、TCP、UDP代理配置', 1, 'database')
+ON DUPLICATE KEY UPDATE 
+    feature_name = VALUES(feature_name),
+    description = VALUES(description),
+    config_source = 'database';
+
+-- ============================================
+-- 视图定义（兼容MySQL 5.7和8.0）
+-- ============================================
+
+-- 删除视图（如果存在，兼容MySQL 5.7）
+DROP VIEW IF EXISTS waf_v_block_rule_stats;
+DROP VIEW IF EXISTS waf_v_ip_access_stats;
+DROP VIEW IF EXISTS waf_v_pending_unblock_tasks;
+
 -- 创建视图：封控规则统计视图
-CREATE OR REPLACE VIEW waf_v_block_rule_stats AS
+CREATE VIEW waf_v_block_rule_stats AS
 SELECT 
     br.id,
     br.rule_name,
@@ -178,7 +480,7 @@ WHERE br.status = 1
 GROUP BY br.id, br.rule_name, br.rule_type, br.status;
 
 -- 创建视图：IP 访问统计视图（最近24小时）
-CREATE OR REPLACE VIEW waf_v_ip_access_stats AS
+CREATE VIEW waf_v_ip_access_stats AS
 SELECT 
     client_ip,
     COUNT(*) AS access_count,
@@ -190,3 +492,52 @@ WHERE request_time >= DATE_SUB(NOW(), INTERVAL 24 HOUR)
 GROUP BY client_ip
 ORDER BY access_count DESC;
 
+-- 创建视图：待解封任务视图
+CREATE VIEW waf_v_pending_unblock_tasks AS
+SELECT 
+    id,
+    rule_id,
+    client_ip,
+    unblock_type,
+    scheduled_time,
+    status,
+    TIMESTAMPDIFF(SECOND, NOW(), scheduled_time) AS seconds_until_unblock
+FROM waf_auto_unblock_tasks
+WHERE status = 'pending'
+AND scheduled_time <= NOW()
+ORDER BY scheduled_time ASC;
+
+-- ============================================
+-- 兼容性处理：为已存在的表添加缺失字段和索引
+-- ============================================
+-- 注意：MySQL 5.7 不支持 IF NOT EXISTS，使用存储过程或手动检查
+-- 这里提供兼容的ALTER语句，如果字段已存在会报错，需要手动处理
+
+-- 访问日志表：添加域名字段（如果不存在）
+-- 注意：如果字段已存在，此语句会失败，需要手动注释或删除
+-- ALTER TABLE waf_access_logs 
+-- ADD COLUMN request_domain VARCHAR(255) DEFAULT NULL COMMENT '请求域名（Host头，用于区分不同域名的访问）' AFTER client_ip,
+-- ADD KEY idx_request_domain (request_domain),
+-- ADD KEY idx_domain_time (request_domain, request_time);
+
+-- 封控日志表：添加封控原因字段（如果不存在）
+-- ALTER TABLE waf_block_logs 
+-- ADD COLUMN block_reason VARCHAR(50) NOT NULL DEFAULT 'manual' COMMENT '封控原因' AFTER rule_name,
+-- ADD KEY idx_block_reason (block_reason),
+-- ADD KEY idx_rule_id_time (rule_id, block_time);
+
+-- 封控规则表：添加规则版本号和分组字段（如果不存在）
+-- ALTER TABLE waf_block_rules
+-- ADD COLUMN rule_version INT UNSIGNED NOT NULL DEFAULT 1 COMMENT '规则版本号（用于缓存失效）' AFTER priority,
+-- ADD COLUMN rule_group VARCHAR(50) DEFAULT NULL COMMENT '规则分组' AFTER description,
+-- ADD KEY idx_rule_version (rule_version),
+-- ADD KEY idx_status_priority (status, priority),
+-- ADD KEY idx_rule_group (rule_group);
+
+-- IP频率统计表：添加统计字段（如果不存在）
+-- ALTER TABLE waf_ip_frequency
+-- ADD COLUMN total_bytes BIGINT UNSIGNED DEFAULT 0 COMMENT '总字节数',
+-- ADD COLUMN avg_response_time MEDIUMINT UNSIGNED DEFAULT 0 COMMENT '平均响应时间（毫秒）',
+-- ADD COLUMN max_response_time MEDIUMINT UNSIGNED DEFAULT 0 COMMENT '最大响应时间（毫秒）',
+-- ADD KEY idx_error_count (error_count),
+-- ADD KEY idx_unique_path_count (unique_path_count);

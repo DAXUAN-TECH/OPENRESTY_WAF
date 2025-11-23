@@ -13,13 +13,17 @@
 
 ## ✨ 核心特性
 
-- 🚀 **高性能**：基于 OpenResty，支持 10,000+ QPS
+- 🚀 **高性能**：基于 OpenResty，理论最大并发可达 200 万+（32核配置），实际支持 10,000-100,000 QPS
 - 🔒 **灵活封控**：支持单个 IP、IP 段（CIDR）、地域封控
 - 📊 **实时采集**：异步批量写入，不阻塞请求
 - 🎯 **精确识别**：支持代理环境下的真实 IP 识别
 - 💾 **数据持久化**：MySQL 存储，支持复杂查询
 - ⚡ **缓存优化**：本地 LRU 缓存 + Redis 分布式缓存
 - 🛡️ **白名单机制**：防止误封正常用户
+- 🔐 **安全加固**：所有API和页面都需要登录认证，支持TOTP双因素认证
+- 🎛️ **功能开关**：所有功能都可通过数据库动态控制开启/关闭
+- 📦 **可移植性**：代码使用相对路径，支持环境变量配置，易于部署
+- 💻 **硬件友好**：最低配置 2核4GB 即可运行，支持 5,000-10,000 并发
 
 ## 🏗️ 系统架构
 
@@ -90,15 +94,71 @@ OPENRESTY_WAF/
 │   └── common_README.md     # 公共函数库说明
 ├── lua/                     # Lua 脚本目录（保持在项目目录）
 │   ├── config.lua           # 配置文件（数据库连接等）
+│   ├── api/                 # API接口模块
+│   │   ├── handler.lua     # API路由分发器
+│   │   ├── auth.lua        # 认证API
+│   │   ├── rules.lua       # 规则管理API
+│   │   ├── stats.lua        # 统计报表API
+│   │   ├── proxy.lua       # 反向代理管理API
+│   │   ├── features.lua    # 功能开关管理API
+│   │   ├── templates.lua   # 模板管理API
+│   │   ├── batch.lua       # 批量操作API
+│   │   ├── config_check.lua # 配置检查API
+│   │   ├── system.lua      # 系统管理API
+│   │   ├── utils.lua       # API工具函数
+│   │   └── README.md       # API模块说明
+│   ├── web/                 # Web前端文件
+│   │   ├── handler.lua    # Web路由分发器
+│   │   ├── login.html      # 登录页面
+│   │   ├── features.html   # 功能管理界面
+│   │   ├── rule_management.html # 规则管理界面
+│   │   ├── proxy_management.html # 反向代理管理界面
+│   │   ├── stats.html      # 统计报表界面
+│   │   ├── monitor.html    # 监控面板界面
+│   │   └── README.md       # Web模块说明
+│   ├── tests/               # 测试文件
+│   │   ├── unit/           # 单元测试
+│   │   ├── integration/    # 集成测试
+│   │   ├── run_tests.lua   # 测试运行器
+│   │   └── README.md       # 测试说明
 │   ├── geoip/               # GeoIP 数据库目录
 │   │   └── README.md        # GeoIP 使用说明
-│   └── waf/                 # WAF 模块
+│   └── waf/                 # WAF 核心模块
 │       ├── init.lua         # 初始化模块
 │       ├── ip_block.lua     # IP 封控模块
 │       ├── ip_utils.lua     # IP 工具函数
+│       ├── ip_trie.lua      # IP Trie树（高效IP匹配）
 │       ├── log_collect.lua  # 日志采集模块
+│       ├── log_queue.lua    # 日志队列模块
 │       ├── mysql_pool.lua   # MySQL 连接池
-│       └── geo_block.lua    # 地域封控模块
+│       ├── geo_block.lua    # 地域封控模块
+│       ├── auto_block.lua   # 自动封控模块
+│       ├── auto_unblock.lua # 自动解封模块
+│       ├── auth.lua         # 用户认证模块
+│       ├── totp.lua         # TOTP双因素认证
+│       ├── password_utils.lua # 密码工具模块
+│       ├── rule_management.lua # 规则管理模块
+│       ├── rule_templates.lua # 规则模板模块
+│       ├── rule_backup.lua  # 规则备份模块
+│       ├── rule_notification.lua # 规则更新通知
+│       ├── batch_operations.lua # 批量操作模块
+│       ├── feature_switches.lua # 功能开关模块
+│       ├── proxy_management.lua # 反向代理管理
+│       ├── frequency_stats.lua # 频率统计模块
+│       ├── lru_cache.lua    # LRU缓存模块
+│       ├── redis_cache.lua  # Redis缓存模块
+│       ├── cache_warmup.lua # 缓存预热模块
+│       ├── cache_invalidation.lua # 缓存失效模块
+│       ├── cache_protection.lua # 缓存穿透防护
+│       ├── serializer.lua  # 序列化模块
+│       ├── metrics.lua      # 监控指标模块
+│       ├── alert.lua        # 告警模块
+│       ├── health_check.lua # 健康检查模块
+│       ├── fallback.lua     # 降级机制模块
+│       ├── pool_monitor.lua # 连接池监控模块
+│       ├── path_utils.lua   # 路径工具模块
+│       ├── config_validator.lua # 配置验证模块
+│       └── test_framework.lua # 测试框架模块
 └── logs/                    # 日志文件目录（保持在项目目录）
     ├── error.log            # 错误日志
     ├── access.log           # 访问日志
@@ -106,11 +166,16 @@ OPENRESTY_WAF/
 ```
 
 **部署策略说明**：
-- ✅ `init_file/nginx.conf` - 复制到 `/usr/local/openresty/nginx/conf/nginx.conf`
+- ✅ `init_file/nginx.conf` - 复制到 `${OPENRESTY_PREFIX}/nginx/conf/nginx.conf`（默认：`/usr/local/openresty/nginx/conf/nginx.conf`）
 - ✅ `init_file/数据库设计.sql` - 用于初始化数据库
 - ✅ `conf.d/` - **保持在项目目录**（方便配置管理，修改后无需重新部署）
 - ✅ `lua/` - **保持在项目目录**（不复制）
 - ✅ `logs/` - **保持在项目目录**（日志文件）
+
+**路径配置说明**：
+- 所有脚本支持通过环境变量 `OPENRESTY_PREFIX` 配置 OpenResty 安装路径（默认：`/usr/local/openresty`）
+- 项目路径使用相对路径，通过 `$project_root` 变量在配置文件中引用
+- 无硬编码绝对路径，支持灵活部署
 
 ## 🚀 快速开始
 
@@ -154,7 +219,15 @@ sudo ./start.sh
 
 ### 1. 环境要求
 
-- OpenResty 1.21.4.1+（脚本自动安装）
+**操作系统支持**：
+- **RedHat 系列**：CentOS、RHEL、Fedora、Rocky Linux、AlmaLinux、Oracle Linux、Amazon Linux
+- **Debian 系列**：Debian、Ubuntu、Linux Mint、Kali Linux、Raspbian
+- **SUSE 系列**：openSUSE、SLES
+- **Arch 系列**：Arch Linux、Manjaro
+- **其他**：Alpine Linux、Gentoo
+
+**软件要求**：
+- OpenResty 1.21.4.1+（脚本自动安装，支持多种 Linux 发行版）
 - MySQL 8.0+ 或 MariaDB 10.6+（可选择本地安装或使用外部数据库）
 - Redis 5.0+（可选，可选择本地安装或使用外部数据库）
 
@@ -172,6 +245,13 @@ sudo ./scripts/install_openresty.sh
 # - 安装常用 Lua 模块
 ```
 
+**自定义安装路径**：
+
+```bash
+# 通过环境变量指定安装路径（默认：/usr/local/openresty）
+sudo OPENRESTY_PREFIX=/opt/openresty ./scripts/install_openresty.sh
+```
+
 **或者手动安装**：
 
 ```bash
@@ -181,12 +261,19 @@ sudo yum install -y openresty openresty-resty
 # Ubuntu/Debian
 sudo apt-get install -y openresty
 
-# 安装 Lua 模块
+# 安装 Lua 模块（推荐使用依赖管理脚本）
+sudo ./scripts/install_dependencies.sh
+
+# 或手动安装
 opm get openresty/lua-resty-mysql
 opm get openresty/lua-resty-redis  # 可选
 ```
 
-详细说明请参考：[install_openresty_README.md](scripts/install_openresty_README.md)
+**注意**：所有脚本都支持通过环境变量 `OPENRESTY_PREFIX` 配置路径，无硬编码绝对路径。
+
+详细说明请参考：
+- [install_openresty_README.md](scripts/install_openresty_README.md) - OpenResty 安装说明
+- [dependencies_README.md](scripts/dependencies_README.md) - 依赖管理说明（推荐）⭐
 
 ### 3. 数据库配置
 
@@ -250,8 +337,11 @@ sudo ./scripts/deploy.sh
 ### 6. 启动服务
 
 ```bash
-# 测试配置
+# 测试配置（使用默认路径）
 sudo /usr/local/openresty/bin/openresty -t
+
+# 或使用环境变量指定的路径
+sudo ${OPENRESTY_PREFIX:-/usr/local/openresty}/bin/openresty -t
 
 # 启动服务
 sudo /usr/local/openresty/bin/openresty
@@ -303,11 +393,14 @@ sudo ./scripts/optimize_system.sh
 - [GeoIP 更新说明](scripts/update_geoip_README.md) - GeoIP 数据库更新说明
 - [系统优化说明](scripts/optimize_system_README.md) - 系统优化脚本说明
 - [项目检查说明](scripts/check_all_README.md) - 项目检查脚本说明
+- [依赖管理说明](scripts/dependencies_README.md) - 第三方依赖管理和自动安装 ⭐
+- [依赖卸载说明](scripts/uninstall_dependencies_README.md) - 依赖卸载脚本说明 ⭐
 - [代码审计报告](docs/代码审计报告.md) - 全方位代码审计报告
 
 ### 功能文档
 - [地域封控使用示例](docs/地域封控使用示例.md) - 地域封控功能使用示例
 - [性能优化指南](docs/性能优化指南.md) - 性能优化配置和调优指南
+- [硬件开销与并发量分析](docs/硬件开销与并发量分析.md) - 硬件配置方案和并发支持能力分析 ⭐
 
 ### 配置说明
 - [配置文件说明](conf.d/README.md) - Nginx 配置文件结构说明
@@ -444,31 +537,75 @@ ORDER BY count DESC;
 
 ### IP 采集功能
 
-- ✅ 采集客户端真实 IP（支持代理环境）
-- ✅ 采集请求路径、方法、状态码
+- ✅ 采集客户端真实 IP（支持代理环境，X-Forwarded-For安全增强）
+- ✅ 采集请求路径、方法、状态码、域名
 - ✅ 采集 User-Agent、Referer
 - ✅ 异步批量写入，不阻塞请求
-- ✅ 支持高并发场景
+- ✅ 日志队列机制，防止日志丢失
+- ✅ 支持高并发场景（10,000+ QPS）
 
 ### IP 封控功能
 
 - ✅ 单个 IP 精确封控
 - ✅ IP 段封控（CIDR 格式）
 - ✅ IP 范围封控（起始-结束）
-- ✅ 地域封控（基于 GeoIP2）
+- ✅ IP Trie树高效匹配
+- ✅ 地域封控（基于 GeoIP2，支持国家/省/市三级）
 - ✅ 白名单机制（优先级最高）
 - ✅ 规则优先级管理
+- ✅ 规则分组管理
 - ✅ 定时生效/失效
+- ✅ 自动封控（基于频率、错误率、扫描行为）
+- ✅ 自动解封机制
+
+### 管理功能
+
+- ✅ Web管理界面（登录认证）
+- ✅ RESTful API接口（完整CRUD）
+- ✅ 规则管理（创建、查询、更新、删除、启用/禁用）
+- ✅ 规则导入/导出（JSON、CSV格式）
+- ✅ 规则模板管理
+- ✅ 规则备份和恢复
+- ✅ 功能开关管理（动态启用/禁用功能）
+- ✅ 反向代理管理（HTTP/TCP/UDP）
+- ✅ 统计报表（概览、时间序列、IP统计、规则统计）
+- ✅ 实时监控面板（系统状态、性能指标）
+- ✅ Prometheus指标导出
+
+### 安全功能
+
+- ✅ 用户认证（用户名密码登录）
+- ✅ TOTP双因素认证（支持本地QR码生成）
+- ✅ BCrypt密码哈希
+- ✅ 会话管理（Cookie-based）
+- ✅ 密码强度检查
+- ✅ 密码生成工具
+- ✅ X-Forwarded-For安全增强（受信任代理检查）
+- ✅ 所有API和页面都需要登录认证
 
 ### 性能优化
 
-- ✅ 本地 LRU 缓存
-- ✅ Redis 分布式缓存（可选）
-- ✅ 数据库连接池
+- ✅ 多级缓存（共享内存、LRU、Redis二级缓存）
+- ✅ 缓存预热机制
+- ✅ 缓存失效机制（版本号检查）
+- ✅ 缓存穿透防护（布隆过滤器、频率限制）
+- ✅ 数据库连接池（可监控、可自动调整）
 - ✅ 异步批量写入
 - ✅ IP 整数比较优化
+- ✅ IP Trie树高效匹配
 - ✅ 系统级优化脚本（自动优化内核参数和 Nginx 配置）
 - ✅ 高并发配置（支持数十万并发连接）
+- ✅ 降级机制（数据库故障时自动降级）
+
+### 监控与运维
+
+- ✅ 实时监控指标（Prometheus格式）
+- ✅ 告警功能（封控率、缓存未命中率、数据库故障等）
+- ✅ 健康检查（数据库连接状态）
+- ✅ 连接池监控（使用率、自动调整）
+- ✅ 日志采集和统计
+- ✅ 配置验证（启动时和运行时）
+- ✅ 规则更新通知（Redis Pub/Sub）
 
 ## 🔍 监控与运维
 
@@ -535,25 +672,55 @@ mysql -u waf_user -p -e "SHOW PROCESSLIST;"
 - [x] 单个 IP 封控
 - [x] IP 段封控（CIDR）
 - [x] IP 范围封控
+- [x] IP Trie树高效匹配
 - [x] 白名单机制
-- [x] 地域封控（基于 GeoIP2，支持省市级别）
+- [x] 地域封控（基于 GeoIP2，支持国家/省/市三级）
 - [x] 异步批量日志写入
-- [x] 本地 LRU 缓存
-- [x] MySQL 连接池
+- [x] 日志队列机制
+- [x] 多级缓存（共享内存、LRU、Redis）
+- [x] MySQL 连接池（可监控、可自动调整）
 - [x] 一键安装脚本（统一安装脚本）⭐
 - [x] OpenResty 自动安装脚本
 - [x] 自动部署脚本
 - [x] GeoIP 数据库自动安装和更新
 - [x] 系统自动优化脚本（根据硬件自动优化）
 - [x] 项目检查脚本
+- [x] 管理 API 接口（完整的RESTful API）
+- [x] Web 管理界面（登录、功能管理、规则管理、代理管理、统计、监控）
+- [x] 自动封控规则（基于访问频率、错误率、扫描行为）
+- [x] 自动解封机制
+- [x] Redis 分布式缓存集成
+- [x] 实时监控面板
+- [x] 统计报表功能（概览、时间序列、IP统计、规则统计）
+- [x] 用户认证和权限管理
+- [x] TOTP双因素认证（支持本地QR码生成）
+- [x] BCrypt密码哈希
+- [x] 密码强度检查
+- [x] 密码生成工具
+- [x] 功能开关管理（动态控制功能启用/禁用）
+- [x] 反向代理管理（HTTP/TCP/UDP）
+- [x] 规则模板管理
+- [x] 规则备份和恢复
+- [x] 规则分组管理
+- [x] 规则导入/导出（JSON、CSV）
+- [x] 配置验证功能（启动时和运行时）
+- [x] 告警功能（封控率、缓存未命中率、数据库故障等）
+- [x] Prometheus指标导出
+- [x] X-Forwarded-For安全增强（受信任代理检查）
+- [x] 缓存预热机制
+- [x] 缓存失效机制（版本号检查）
+- [x] 缓存穿透防护（布隆过滤器、频率限制）
+- [x] 健康检查（数据库连接状态）
+- [x] 连接池监控（使用率、自动调整）
+- [x] 降级机制（数据库故障时自动降级）
+- [x] 规则更新通知（Redis Pub/Sub）
+- [x] 测试框架（单元测试、集成测试）
 
 ### 计划功能 🚧
-- [ ] 管理 API 接口
-- [ ] Web 管理界面
-- [ ] 自动封控规则（基于访问频率）
-- [ ] Redis 分布式缓存集成
-- [ ] 实时监控面板
-- [ ] 日志分析报表
+- [ ] 更全面的测试覆盖
+- [ ] API文档自动生成
+- [ ] 更多监控指标
+- [ ] 日志分析报表增强
 
 ## 🤝 贡献
 

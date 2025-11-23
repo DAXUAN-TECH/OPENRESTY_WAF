@@ -501,8 +501,61 @@ else
     check_ok "nginx.conf 未部署或已清理"
 fi
 
-# 8. 检查服务状态和依赖关系
-echo -e "${BLUE}[8/8] 检查服务状态和依赖关系...${NC}"
+# 8. 检查 Lua 模块依赖
+echo -e "${BLUE}[8/9] 检查 Lua 模块依赖...${NC}"
+
+OPENRESTY_PREFIX="${OPENRESTY_PREFIX:-/usr/local/openresty}"
+LUALIB_DIR="${OPENRESTY_PREFIX}/site/lualib"
+
+if [ -f "${OPENRESTY_PREFIX}/bin/openresty" ]; then
+    # 检查必需模块
+    if [ -f "${LUALIB_DIR}/resty/mysql.lua" ] || [ -d "${LUALIB_DIR}/resty/mysql" ]; then
+        check_ok "resty.mysql (必需) - 已安装"
+    else
+        check_error "resty.mysql (必需) - 未安装，请运行: sudo ./scripts/install_dependencies.sh"
+    fi
+    
+    # 检查可选模块
+    if [ -f "${LUALIB_DIR}/resty/redis.lua" ] || [ -d "${LUALIB_DIR}/resty/redis" ]; then
+        check_ok "resty.redis (可选) - 已安装"
+    else
+        check_warning "resty.redis (可选) - 未安装，Redis 二级缓存功能将受限"
+    fi
+    
+    if [ -f "${LUALIB_DIR}/resty/maxminddb.lua" ] || [ -d "${LUALIB_DIR}/resty/maxminddb" ]; then
+        check_ok "resty.maxminddb (可选) - 已安装"
+    else
+        check_warning "resty.maxminddb (可选) - 未安装，地域封控功能将受限"
+    fi
+    
+    if [ -f "${LUALIB_DIR}/resty/http.lua" ] || [ -d "${LUALIB_DIR}/resty/http" ]; then
+        check_ok "resty.http (可选) - 已安装"
+    else
+        check_warning "resty.http (可选) - 未安装，告警 Webhook 功能将受限"
+    fi
+    
+    if [ -f "${LUALIB_DIR}/resty/file.lua" ] || [ -d "${LUALIB_DIR}/resty/file" ]; then
+        check_ok "resty.file (可选) - 已安装"
+    else
+        check_warning "resty.file (可选) - 未安装，日志队列本地备份功能将受限"
+    fi
+    
+    if [ -f "${LUALIB_DIR}/resty/msgpack.lua" ] || [ -d "${LUALIB_DIR}/resty/msgpack" ]; then
+        check_ok "resty.msgpack (可选) - 已安装"
+    else
+        check_warning "resty.msgpack (可选) - 未安装，将使用 JSON 序列化"
+    fi
+    
+    echo ""
+    echo -e "${BLUE}提示: 运行 sudo ./scripts/check_dependencies.sh 进行详细依赖检查${NC}"
+else
+    check_warning "OpenResty 未安装，无法检查 Lua 模块依赖"
+fi
+
+echo ""
+
+# 9. 检查服务状态和依赖关系
+echo -e "${BLUE}[9/9] 检查服务状态和依赖关系...${NC}"
 
 # 检查 OpenResty 服务状态
 if [ -f "${OPENRESTY_PREFIX}/bin/openresty" ]; then

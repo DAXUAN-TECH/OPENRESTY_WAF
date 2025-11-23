@@ -52,11 +52,14 @@ echo -e "${YELLOW}  注意: conf.d 目录保持在项目目录，不复制到系
 echo -e "${GREEN}[3/4] 处理路径配置...${NC}"
 
 # 更新 nginx.conf 中的项目根目录变量和日志路径
-sed -i "s|set \$project_root \"/path/to/project\"|set \$project_root \"$PROJECT_ROOT\"|g" "$NGINX_CONF_DIR/nginx.conf"
+# 注意：转义 $ 符号，避免被 shell 解释为变量
+# 使用单引号包裹模式部分，双引号包裹替换部分
+sed -i 's|set $project_root "/path/to/project"|set $project_root "'"$PROJECT_ROOT"'"|g' "$NGINX_CONF_DIR/nginx.conf"
 sed -i "s|/path/to/project/logs/error.log|$PROJECT_ROOT/logs/error.log|g" "$NGINX_CONF_DIR/nginx.conf"
 sed -i "s|/path/to/project/logs/nginx.pid|$PROJECT_ROOT/logs/nginx.pid|g" "$NGINX_CONF_DIR/nginx.conf"
 
 # 更新 nginx.conf 中的 conf.d include 路径（指向项目目录）
+# 转义 * 和 . 避免被 shell 解释为正则表达式
 sed -i "s|include /path/to/project/conf.d/set_conf/\*\.conf|include $PROJECT_ROOT/conf.d/set_conf/*.conf|g" "$NGINX_CONF_DIR/nginx.conf"
 sed -i "s|include /path/to/project/conf.d/vhost_conf/\*\.conf|include $PROJECT_ROOT/conf.d/vhost_conf/*.conf|g" "$NGINX_CONF_DIR/nginx.conf"
 

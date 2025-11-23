@@ -176,6 +176,72 @@ check_root() {
     fi
 }
 
+# 彻底卸载 MySQL/MariaDB
+completely_uninstall_mysql() {
+    echo -e "${BLUE}开始彻底卸载 MySQL/MariaDB...${NC}"
+    
+    # 确保已检测操作系统（如果未检测，先检测）
+    if [ -z "$OS" ]; then
+        detect_os
+    fi
+    
+    # 停止 MySQL 服务
+    echo "停止 MySQL 服务..."
+    if command -v systemctl &> /dev/null; then
+        systemctl stop mysqld 2>/dev/null || systemctl stop mysql 2>/dev/null || true
+        systemctl disable mysqld 2>/dev/null || systemctl disable mysql 2>/dev/null || true
+    elif command -v service &> /dev/null; then
+        service mysqld stop 2>/dev/null || service mysql stop 2>/dev/null || true
+        chkconfig mysqld off 2>/dev/null || chkconfig mysql off 2>/dev/null || true
+    fi
+    
+    # 确保进程已停止
+    sleep 2
+    pkill -9 mysqld 2>/dev/null || true
+    pkill -9 mysql_safe 2>/dev/null || true
+    
+    # 卸载 MySQL/MariaDB 软件包
+    echo "卸载 MySQL/MariaDB 软件包..."
+    case $OS in
+        centos|rhel|fedora|rocky|almalinux|oraclelinux|amazonlinux)
+            if command -v dnf &> /dev/null; then
+                dnf remove -y mysql-server mysql mysql-common mysql-community-server mysql-community-client mariadb-server mariadb 2>/dev/null || true
+            elif command -v yum &> /dev/null; then
+                yum remove -y mysql-server mysql mysql-common mysql-community-server mysql-community-client mariadb-server mariadb 2>/dev/null || true
+            fi
+            ;;
+        ubuntu|debian|linuxmint|raspbian|kali)
+            if command -v apt-get &> /dev/null; then
+                apt-get remove -y mysql-server mysql-client mysql-common mysql-server-core-* mysql-client-core-* mariadb-server mariadb-client 2>/dev/null || true
+                apt-get purge -y mysql-server mysql-client mysql-common mysql-server-core-* mysql-client-core-* mariadb-server mariadb-client 2>/dev/null || true
+                apt-get autoremove -y 2>/dev/null || true
+            fi
+            ;;
+        opensuse*|sles)
+            if command -v zypper &> /dev/null; then
+                zypper remove -y mariadb mariadb-server mysql mysql-server 2>/dev/null || true
+            fi
+            ;;
+        arch|manjaro)
+            if command -v pacman &> /dev/null; then
+                pacman -R --noconfirm mysql mariadb 2>/dev/null || true
+            fi
+            ;;
+        alpine)
+            if command -v apk &> /dev/null; then
+                apk del mysql mysql-client mariadb mariadb-client 2>/dev/null || true
+            fi
+            ;;
+        gentoo)
+            if command -v emerge &> /dev/null; then
+                emerge --unmerge dev-db/mysql dev-db/mariadb 2>/dev/null || true
+            fi
+            ;;
+    esac
+    
+    echo -e "${GREEN}✓ MySQL/MariaDB 软件包已卸载${NC}"
+}
+
 # 检查 MySQL 是否已安装
 check_existing() {
     echo -e "${BLUE}[2/8] 检查是否已安装 MySQL...${NC}"
@@ -214,8 +280,8 @@ check_existing() {
             echo ""
             echo "请选择操作："
             echo "  1. 保留现有数据和配置，跳过安装"
-            echo "  2. 重新安装 MySQL（保留数据目录）"
-            echo "  3. 完全重新安装（删除所有数据和配置）"
+            echo "  2. 重新安装 MySQL（先卸载，保留数据目录）"
+            echo "  3. 完全重新安装（先卸载，删除所有数据和配置）"
             read -p "请选择 [1-3]: " REINSTALL_CHOICE
             
             case "$REINSTALL_CHOICE" in
@@ -230,10 +296,12 @@ check_existing() {
                             echo -e "${YELLOW}⚠ 建议重新安装以匹配版本要求${NC}"
                         fi
                     fi
-                    exit 0
+                    # 设置跳过安装标志，但继续执行后续步骤
+                    SKIP_INSTALL=1
+                    echo -e "${BLUE}将跳过安装步骤，继续执行数据库创建和用户设置等后续步骤${NC}"
                     ;;
                 2)
-                    echo -e "${YELLOW}将重新安装 MySQL，但保留数据目录${NC}"
+                    echo -e "${YELLOW}将重新安装 MySQL，先卸载现有安装，但保留数据目录${NC}"
                     echo -e "${YELLOW}注意: 如果版本不兼容，可能导致数据无法使用${NC}"
                     echo -e "${YELLOW}建议: 在重新安装前备份数据目录${NC}"
                     read -p "是否先备份数据目录？[Y/n]: " BACKUP_DATA
@@ -248,6 +316,8 @@ check_existing() {
                         echo -e "${GREEN}✓ 备份完成${NC}"
                     fi
                     REINSTALL_MODE="keep_data"
+                    # 先卸载软件包
+                    completely_uninstall_mysql
                     ;;
                 3)
                     echo -e "${RED}警告: 将删除所有 MySQL 数据和配置！${NC}"
@@ -259,20 +329,14 @@ check_existing() {
                     read -p "确认删除所有数据？[y/N]: " CONFIRM_DELETE
                     CONFIRM_DELETE="${CONFIRM_DELETE:-N}"
                     if [[ "$CONFIRM_DELETE" =~ ^[Yy]$ ]]; then
-                        echo -e "${YELLOW}将完全重新安装 MySQL，删除所有数据${NC}"
+                        echo -e "${YELLOW}将完全重新安装 MySQL，先卸载现有安装并删除所有数据${NC}"
                         REINSTALL_MODE="delete_all"
                         
-                        # 停止 MySQL 服务
-                        if command -v systemctl &> /dev/null; then
-                            systemctl stop mysqld 2>/dev/null || systemctl stop mysql 2>/dev/null || true
-                        elif command -v service &> /dev/null; then
-                            service mysqld stop 2>/dev/null || service mysql stop 2>/dev/null || true
-                        fi
-                        sleep 2
+                        # 先卸载软件包
+                        completely_uninstall_mysql
                         
                         # 检查是否有其他服务依赖 MySQL
                         echo -e "${BLUE}检查是否有其他服务依赖 MySQL...${NC}"
-                        local dependent_services=()
                         if systemctl list-units --type=service --state=running 2>/dev/null | grep -qiE "php-fpm|wordpress|owncloud|nextcloud"; then
                             echo -e "${YELLOW}⚠ 检测到可能依赖 MySQL 的服务正在运行${NC}"
                             echo -e "${YELLOW}⚠ 删除 MySQL 可能导致这些服务无法正常工作${NC}"
@@ -286,19 +350,27 @@ check_existing() {
                         fi
                         
                         # 删除数据目录
-                        if [ -n "$mysql_data_dir" ] && [ -d "$mysql_data_dir" ]; then
-                            echo -e "${YELLOW}正在删除数据目录: ${mysql_data_dir}${NC}"
-                            rm -rf "${mysql_data_dir}"/*
-                            rm -rf "${mysql_data_dir}"/.* 2>/dev/null || true
-                            echo -e "${GREEN}✓ 数据目录已删除${NC}"
-                        fi
+                        local data_dirs=(
+                            "/var/lib/mysql"
+                            "/var/lib/mysqld"
+                            "/usr/local/mysql/data"
+                        )
+                        for dir in "${data_dirs[@]}"; do
+                            if [ -d "$dir" ] && [ -n "$(ls -A "$dir" 2>/dev/null)" ]; then
+                                echo -e "${YELLOW}正在删除数据目录: ${dir}${NC}"
+                                rm -rf "$dir"
+                                echo -e "${GREEN}✓ 数据目录已删除: $dir${NC}"
+                            fi
+                        done
                         
                         # 删除配置文件
                         local config_files=(
                             "/etc/my.cnf"
+                            "/etc/my.cnf.d"
                             "/etc/mysql/my.cnf"
                             "/etc/mysql/conf.d"
                             "/etc/mysql/mysql.conf.d"
+                            "/etc/mysql/mariadb.conf.d"
                         )
                         for file in "${config_files[@]}"; do
                             if [ -f "$file" ] || [ -d "$file" ]; then
@@ -311,6 +383,7 @@ check_existing() {
                         local log_files=(
                             "/var/log/mysqld.log"
                             "/var/log/mysql"
+                            "/var/log/mariadb"
                         )
                         for log_file in "${log_files[@]}"; do
                             if [ -f "$log_file" ] || [ -d "$log_file" ]; then
@@ -318,9 +391,16 @@ check_existing() {
                                 echo -e "${GREEN}✓ 已删除: $log_file${NC}"
                             fi
                         done
+                        
+                        # 删除其他可能的残留文件
+                        rm -rf /var/run/mysqld 2>/dev/null || true
+                        rm -rf /var/run/mysql 2>/dev/null || true
+                        rm -rf /tmp/mysql* 2>/dev/null || true
                     else
                         echo -e "${GREEN}取消删除，将保留数据重新安装${NC}"
                         REINSTALL_MODE="keep_data"
+                        # 仍然需要卸载软件包
+                        completely_uninstall_mysql
                     fi
                     ;;
                 *)
@@ -338,6 +418,8 @@ check_existing() {
                 exit 0
             fi
             REINSTALL_MODE="update"
+            # 先卸载软件包
+            completely_uninstall_mysql
         fi
     else
         echo -e "${GREEN}✓ MySQL 未安装，将进行全新安装${NC}"
@@ -350,9 +432,14 @@ check_existing() {
         echo "  1. MySQL 8.0（推荐，最新稳定版）"
         echo "  2. MySQL 5.7（兼容性更好）"
         echo "  3. MySQL 8.0.35（指定小版本）"
-        echo "  4. MySQL 5.7.44（指定小版本）"
-        echo "  5. 使用系统默认版本"
-        read -p "请选择 [1-5]: " VERSION_CHOICE
+        echo "  4. MySQL 8.0.36（指定小版本）"
+        echo "  5. MySQL 8.0.37（指定小版本）"
+        echo "  6. MySQL 8.0.38（指定小版本）"
+        echo "  7. MySQL 5.7.44（指定小版本）"
+        echo "  8. MySQL 5.7.43（指定小版本）"
+        echo "  9. 自定义版本（手动输入版本号，如 8.0.39）"
+        echo "  10. 使用系统默认版本"
+        read -p "请选择 [1-10]: " VERSION_CHOICE
         
         case "$VERSION_CHOICE" in
             1)
@@ -368,10 +455,42 @@ check_existing() {
                 echo -e "${GREEN}✓ 已选择 MySQL 8.0.35${NC}"
                 ;;
             4)
+                MYSQL_VERSION="8.0.36"
+                echo -e "${GREEN}✓ 已选择 MySQL 8.0.36${NC}"
+                ;;
+            5)
+                MYSQL_VERSION="8.0.37"
+                echo -e "${GREEN}✓ 已选择 MySQL 8.0.37${NC}"
+                ;;
+            6)
+                MYSQL_VERSION="8.0.38"
+                echo -e "${GREEN}✓ 已选择 MySQL 8.0.38${NC}"
+                ;;
+            7)
                 MYSQL_VERSION="5.7.44"
                 echo -e "${GREEN}✓ 已选择 MySQL 5.7.44${NC}"
                 ;;
-            5)
+            8)
+                MYSQL_VERSION="5.7.43"
+                echo -e "${GREEN}✓ 已选择 MySQL 5.7.43${NC}"
+                ;;
+            9)
+                echo ""
+                echo -e "${BLUE}请输入 MySQL 版本号（格式：主版本.次版本.修订版本，如 8.0.39）${NC}"
+                read -p "版本号: " CUSTOM_VERSION
+                CUSTOM_VERSION=$(echo "$CUSTOM_VERSION" | tr -d '[:space:]')
+                
+                # 验证版本号格式
+                if echo "$CUSTOM_VERSION" | grep -qE '^[0-9]+\.[0-9]+(\.[0-9]+)?$'; then
+                    MYSQL_VERSION="$CUSTOM_VERSION"
+                    echo -e "${GREEN}✓ 已选择 MySQL ${MYSQL_VERSION}${NC}"
+                else
+                    echo -e "${RED}✗ 版本号格式错误，应为主版本.次版本.修订版本（如 8.0.39）${NC}"
+                    echo -e "${YELLOW}⚠ 默认使用 MySQL 8.0${NC}"
+                    MYSQL_VERSION="8.0"
+                fi
+                ;;
+            10)
                 MYSQL_VERSION="default"
                 echo -e "${GREEN}✓ 将使用系统默认版本${NC}"
                 ;;
@@ -492,28 +611,86 @@ install_mysql_redhat() {
     
     # 如果指定了具体版本，尝试安装指定版本
     if [ "$MYSQL_VERSION" != "default" ] && echo "$MYSQL_VERSION" | grep -qE "^[0-9]+\.[0-9]+"; then
-        local version_package="mysql-community-server-${MYSQL_VERSION}"
-        echo "尝试安装指定版本: $version_package"
+        # 提取主版本号和次版本号（如 8.0.39 -> 8.0）
+        local major_minor=$(echo "$MYSQL_VERSION" | grep -oE '^[0-9]+\.[0-9]+')
+        local full_version="$MYSQL_VERSION"
+        
+        echo -e "${BLUE}尝试安装指定版本: MySQL ${full_version}${NC}"
+        
+        # 方法1: 尝试安装完整版本号
+        local version_package="mysql-community-server-${full_version}"
+        echo "尝试安装包: $version_package"
         if command -v dnf &> /dev/null; then
-            if dnf install -y "$version_package" mysql-community-client 2>&1; then
+            if dnf install -y "$version_package" "mysql-community-client-${full_version}" 2>&1 | tee /tmp/mysql_install.log; then
                 INSTALL_SUCCESS=1
+                echo -e "${GREEN}✓ MySQL ${full_version} 安装成功${NC}"
             fi
         else
-            if yum install -y "$version_package" mysql-community-client 2>&1; then
+            if yum install -y "$version_package" "mysql-community-client-${full_version}" 2>&1 | tee /tmp/mysql_install.log; then
                 INSTALL_SUCCESS=1
+                echo -e "${GREEN}✓ MySQL ${full_version} 安装成功${NC}"
+            fi
+        fi
+        
+        # 方法2: 如果完整版本号失败，尝试只指定主次版本号
+        if [ $INSTALL_SUCCESS -eq 0 ]; then
+            echo -e "${YELLOW}⚠ 完整版本号安装失败，尝试使用主次版本号: ${major_minor}${NC}"
+            if command -v dnf &> /dev/null; then
+                # 使用 dnf 安装指定版本（dnf 支持版本锁定）
+                if dnf install -y "mysql-community-server-${major_minor}*" "mysql-community-client-${major_minor}*" 2>&1 | tee /tmp/mysql_install.log; then
+                    INSTALL_SUCCESS=1
+                    echo -e "${GREEN}✓ MySQL ${major_minor} 系列安装成功${NC}"
+                fi
+            else
+                # 使用 yum 安装指定版本
+                if yum install -y "mysql-community-server-${major_minor}*" "mysql-community-client-${major_minor}*" 2>&1 | tee /tmp/mysql_install.log; then
+                    INSTALL_SUCCESS=1
+                    echo -e "${GREEN}✓ MySQL ${major_minor} 系列安装成功${NC}"
+                fi
+            fi
+        fi
+        
+        # 方法3: 如果还是失败，尝试启用对应版本的仓库后安装
+        if [ $INSTALL_SUCCESS -eq 0 ] && [ -f /etc/yum.repos.d/mysql-community.repo ]; then
+            echo -e "${YELLOW}⚠ 直接安装失败，尝试启用对应版本的仓库...${NC}"
+            # 根据主次版本号启用对应仓库
+            if echo "$major_minor" | grep -qE "^5\.7"; then
+                # 启用 MySQL 5.7 仓库
+                sed -i 's/enabled=1/enabled=0/g' /etc/yum.repos.d/mysql-community*.repo
+                sed -i '/\[mysql57-community\]/,/\[/ { /enabled=/ s/enabled=0/enabled=1/ }' /etc/yum.repos.d/mysql-community*.repo
+                echo -e "${BLUE}已启用 MySQL 5.7 仓库${NC}"
+            elif echo "$major_minor" | grep -qE "^8\.0"; then
+                # 启用 MySQL 8.0 仓库
+                sed -i 's/enabled=1/enabled=0/g' /etc/yum.repos.d/mysql-community*.repo
+                sed -i '/\[mysql80-community\]/,/\[/ { /enabled=/ s/enabled=0/enabled=1/ }' /etc/yum.repos.d/mysql-community*.repo
+                echo -e "${BLUE}已启用 MySQL 8.0 仓库${NC}"
+            fi
+            
+            # 再次尝试安装
+            if command -v dnf &> /dev/null; then
+                if dnf install -y mysql-community-server mysql-community-client 2>&1 | tee /tmp/mysql_install.log; then
+                    INSTALL_SUCCESS=1
+                    echo -e "${GREEN}✓ MySQL ${major_minor} 系列安装成功${NC}"
+                fi
+            else
+                if yum install -y mysql-community-server mysql-community-client 2>&1 | tee /tmp/mysql_install.log; then
+                    INSTALL_SUCCESS=1
+                    echo -e "${GREEN}✓ MySQL ${major_minor} 系列安装成功${NC}"
+                fi
             fi
         fi
     fi
     
     # 如果指定版本安装失败，使用默认安装
     if [ $INSTALL_SUCCESS -eq 0 ]; then
-    if command -v dnf &> /dev/null; then
-        if dnf install -y mysql-server mysql 2>&1; then
-            INSTALL_SUCCESS=1
-        fi
-    else
-        if yum install -y mysql-server mysql 2>&1; then
-            INSTALL_SUCCESS=1
+        echo -e "${YELLOW}⚠ 指定版本安装失败，尝试使用默认安装${NC}"
+        if command -v dnf &> /dev/null; then
+            if dnf install -y mysql-server mysql 2>&1; then
+                INSTALL_SUCCESS=1
+            fi
+        else
+            if yum install -y mysql-server mysql 2>&1; then
+                INSTALL_SUCCESS=1
             fi
         fi
     fi
@@ -560,12 +737,82 @@ install_mysql_debian() {
     echo "mysql-server mysql-server/root_password password ${MYSQL_ROOT_PASSWORD:-}" | debconf-set-selections 2>/dev/null || true
     echo "mysql-server mysql-server/root_password_again password ${MYSQL_ROOT_PASSWORD:-}" | debconf-set-selections 2>/dev/null || true
     
-    # 安装 MySQL
-    if DEBIAN_FRONTEND=noninteractive apt-get install -y mysql-server mysql-client 2>&1; then
-        echo -e "${GREEN}✓ MySQL 安装完成${NC}"
-    else
-        echo -e "${YELLOW}⚠ 包管理器安装失败，请检查错误信息${NC}"
-        exit 1
+    INSTALL_SUCCESS=0
+    
+    # 如果指定了具体版本，尝试安装指定版本
+    if [ "$MYSQL_VERSION" != "default" ] && echo "$MYSQL_VERSION" | grep -qE "^[0-9]+\.[0-9]+"; then
+        # 提取主版本号和次版本号（如 8.0.39 -> 8.0）
+        local major_minor=$(echo "$MYSQL_VERSION" | grep -oE '^[0-9]+\.[0-9]+')
+        local full_version="$MYSQL_VERSION"
+        
+        echo -e "${BLUE}尝试安装指定版本: MySQL ${full_version}${NC}"
+        
+        # 方法1: 尝试安装完整版本号
+        local version_package="mysql-server=${full_version}*"
+        echo "尝试安装包: $version_package"
+        if DEBIAN_FRONTEND=noninteractive apt-get install -y "$version_package" "mysql-client=${full_version}*" 2>&1 | tee /tmp/mysql_install.log; then
+            INSTALL_SUCCESS=1
+            echo -e "${GREEN}✓ MySQL ${full_version} 安装成功${NC}"
+        fi
+        
+        # 方法2: 如果完整版本号失败，尝试只指定主次版本号
+        if [ $INSTALL_SUCCESS -eq 0 ]; then
+            echo -e "${YELLOW}⚠ 完整版本号安装失败，尝试使用主次版本号: ${major_minor}${NC}"
+            version_package="mysql-server=${major_minor}*"
+            if DEBIAN_FRONTEND=noninteractive apt-get install -y "$version_package" "mysql-client=${major_minor}*" 2>&1 | tee /tmp/mysql_install.log; then
+                INSTALL_SUCCESS=1
+                echo -e "${GREEN}✓ MySQL ${major_minor} 系列安装成功${NC}"
+            fi
+        fi
+        
+        # 方法3: 如果还是失败，尝试添加 MySQL 官方仓库后安装
+        if [ $INSTALL_SUCCESS -eq 0 ]; then
+            echo -e "${YELLOW}⚠ 系统仓库安装失败，尝试添加 MySQL 官方仓库...${NC}"
+            
+            # 安装必要的工具
+            apt-get install -y wget gnupg lsb-release 2>/dev/null || true
+            
+            # 下载并安装 MySQL APT 仓库配置
+            local repo_file="mysql-apt-config_0.8.28-1_all.deb"
+            if wget -q "https://dev.mysql.com/get/${repo_file}" -O /tmp/${repo_file} 2>/dev/null && [ -s /tmp/${repo_file} ]; then
+                # 安装仓库配置（非交互式）
+                DEBIAN_FRONTEND=noninteractive dpkg -i /tmp/${repo_file} 2>/dev/null || true
+                apt-get update
+                
+                # 根据版本选择仓库
+                if echo "$major_minor" | grep -qE "^5\.7"; then
+                    # 配置 MySQL 5.7 仓库
+                    echo "mysql-apt-config mysql-apt-config/select-server select mysql-5.7" | debconf-set-selections 2>/dev/null || true
+                elif echo "$major_minor" | grep -qE "^8\.0"; then
+                    # 配置 MySQL 8.0 仓库
+                    echo "mysql-apt-config mysql-apt-config/select-server select mysql-8.0" | debconf-set-selections 2>/dev/null || true
+                fi
+                
+                # 重新更新包列表
+                apt-get update
+                
+                # 尝试安装指定版本
+                if DEBIAN_FRONTEND=noninteractive apt-get install -y mysql-server mysql-client 2>&1 | tee /tmp/mysql_install.log; then
+                    INSTALL_SUCCESS=1
+                    echo -e "${GREEN}✓ MySQL ${major_minor} 系列安装成功${NC}"
+                fi
+                
+                rm -f /tmp/${repo_file}
+            fi
+        fi
+    fi
+    
+    # 如果指定版本安装失败，使用默认安装
+    if [ $INSTALL_SUCCESS -eq 0 ]; then
+        echo -e "${YELLOW}⚠ 指定版本安装失败，尝试使用默认安装${NC}"
+        if DEBIAN_FRONTEND=noninteractive apt-get install -y mysql-server mysql-client 2>&1; then
+            INSTALL_SUCCESS=1
+            echo -e "${GREEN}✓ MySQL 安装完成（使用系统默认版本）${NC}"
+        else
+            echo -e "${RED}✗ MySQL 安装失败${NC}"
+            echo -e "${YELLOW}⚠ 请检查错误信息${NC}"
+            exit 1
+        fi
     fi
 }
 
@@ -692,8 +939,17 @@ install_mysql() {
 }
 
 # 设置 MySQL 配置文件（在初始化前）
+# 重要：所有 my.cnf 等配置文件的改动必须在数据库初始化前完成
+# 包括：
+#   1. 基础配置（lower_case_table_names、default_time_zone 等）
+#   2. 硬件优化配置（InnoDB 缓冲池、连接数、IO 线程等）
+# 因为 MySQL 首次启动时会根据配置文件初始化数据字典，之后修改某些配置（如 lower_case_table_names）
+# 需要重新初始化数据目录，否则会导致启动失败
+# 硬件优化配置（如 innodb_buffer_pool_size）虽然可以在运行时修改，但为了最佳性能，
+# 应该在初始化前就设置好，避免初始化后再调整导致性能波动
 setup_mysql_config() {
     echo -e "${BLUE}[4/8] 设置 MySQL 配置文件（初始化前）...${NC}"
+    echo -e "${YELLOW}注意: 所有配置优化（包括硬件优化）必须在数据库初始化前完成${NC}"
     
     # 检查 MySQL 数据目录是否已初始化
     local mysql_data_dirs=(
@@ -829,7 +1085,10 @@ setup_mysql_config() {
         fi
         
         # ========== 硬件优化配置 ==========
-        echo -e "${BLUE}根据硬件配置优化 MySQL 参数...${NC}"
+        # 重要：硬件优化配置必须在数据库初始化前完成
+        # 这些配置包括：InnoDB 缓冲池、连接数、IO 线程、日志文件大小等
+        # 虽然部分配置可以在运行时修改，但为了最佳性能和稳定性，应在初始化前设置
+        echo -e "${BLUE}根据硬件配置优化 MySQL 参数（初始化前）...${NC}"
         
         # 备份配置文件
         cp "$my_cnf_file" "${my_cnf_file}.bak.$(date +%Y%m%d_%H%M%S)"
@@ -1063,8 +1322,11 @@ setup_mysql_config() {
 }
 
 # 配置 MySQL（启动服务）
+# 重要：此函数会在首次启动时根据配置文件初始化数据库
+# 因此 setup_mysql_config 必须在此函数之前执行
 configure_mysql() {
     echo -e "${BLUE}[5/8] 配置 MySQL（启动服务）...${NC}"
+    echo -e "${YELLOW}注意: 首次启动时会根据配置文件初始化数据库${NC}"
     
     # 启动 MySQL 服务（首次启动会自动初始化）
     if command -v systemctl &> /dev/null; then
@@ -1113,7 +1375,7 @@ configure_mysql() {
             if [ -f "$log_file" ]; then
                 echo -e "${BLUE}  日志文件: ${log_file}${NC}"
                 echo -e "${YELLOW}  最后几行错误：${NC}"
-                tail -20 "$log_file" | grep -i "error" | tail -5
+                tail -30 "$log_file" | tail -10
                 break
             fi
         done
@@ -1175,7 +1437,7 @@ configure_mysql() {
                 # 再次检查是否启动成功
                 local retry_count=0
                 while [ $retry_count -lt 15 ]; do
-    if mysqladmin ping -h localhost --silent 2>/dev/null; then
+                    if mysqladmin ping -h localhost --silent 2>/dev/null; then
                         echo -e "${GREEN}✓ MySQL 重新初始化成功并已启动${NC}"
                         start_failed=0
                         break
@@ -1185,12 +1447,16 @@ configure_mysql() {
                     echo -n "."
                 done
                 echo ""
-    else
+            else
                 echo -e "${YELLOW}⚠ 未清理数据目录，请手动处理${NC}"
             fi
         fi
         
         if [ $start_failed -eq 1 ]; then
+            echo ""
+            echo -e "${RED}========================================${NC}"
+            echo -e "${RED}MySQL 启动失败，停止后续步骤${NC}"
+            echo -e "${RED}========================================${NC}"
             echo ""
             echo -e "${BLUE}如果看到 'Different lower_case_table_names settings' 或时区错误：${NC}"
             echo "  1. 停止 MySQL 服务"
@@ -1203,7 +1469,9 @@ configure_mysql() {
             echo "  rm -rf /var/lib/mysql/*"
             echo "  systemctl start mysqld"
             echo ""
-            echo -e "${YELLOW}⚠ 如果 MySQL 仍未启动，请手动检查错误日志${NC}"
+            echo -e "${YELLOW}⚠ 请修复 MySQL 启动问题后重新运行安装脚本${NC}"
+            echo ""
+            exit 1
         fi
         sleep 2
     else
@@ -2522,10 +2790,19 @@ init_database() {
 # 显示后续步骤
 show_next_steps() {
     echo ""
-    echo -e "${GREEN}========================================${NC}"
-    echo -e "${GREEN}MySQL 安装完成！${NC}"
-    echo -e "${GREEN}========================================${NC}"
-    echo ""
+    if [ "${SKIP_INSTALL:-0}" -eq 1 ]; then
+        echo -e "${GREEN}========================================${NC}"
+        echo -e "${GREEN}MySQL 配置完成！${NC}"
+        echo -e "${GREEN}========================================${NC}"
+        echo ""
+        echo -e "${BLUE}注意: 已跳过安装步骤，使用的是现有 MySQL 安装${NC}"
+        echo ""
+    else
+        echo -e "${GREEN}========================================${NC}"
+        echo -e "${GREEN}MySQL 安装完成！${NC}"
+        echo -e "${GREEN}========================================${NC}"
+        echo ""
+    fi
     
     # 显示创建的数据库和用户信息
     if [ -n "$MYSQL_DATABASE" ]; then
@@ -2594,32 +2871,168 @@ main() {
     # 检查现有安装
     check_existing
     
-    # 安装 MySQL
-    install_mysql
-    
-    # 设置 MySQL 配置文件（在初始化前）
-    setup_mysql_config
-    
-    # 配置 MySQL（启动服务，首次启动会自动初始化）
-    configure_mysql
-    
-    # 设置 root 密码
-    if ! set_root_password; then
+    # 如果选择跳过安装，只执行后续步骤
+    if [ "${SKIP_INSTALL:-0}" -eq 1 ]; then
+        echo -e "${BLUE}[跳过安装步骤] 检测到已安装 MySQL，跳过安装步骤${NC}"
         echo ""
-        echo -e "${RED}========================================${NC}"
-        echo -e "${RED}MySQL 安装失败：root 密码设置失败${NC}"
-        echo -e "${RED}========================================${NC}"
+        
+        # 确保 MySQL 服务已启动
+        echo -e "${BLUE}检查 MySQL 服务状态...${NC}"
+        if ! mysqladmin ping -h localhost --silent 2>/dev/null; then
+            echo -e "${YELLOW}MySQL 服务未运行，尝试启动...${NC}"
+            if command -v systemctl &> /dev/null; then
+                systemctl start mysqld 2>/dev/null || systemctl start mysql 2>/dev/null || true
+            elif command -v service &> /dev/null; then
+                service mysqld start 2>/dev/null || service mysql start 2>/dev/null || true
+            fi
+            
+            # 等待 MySQL 启动
+            echo "等待 MySQL 启动..."
+            local max_wait=30
+            local waited=0
+            while [ $waited -lt $max_wait ]; do
+                if mysqladmin ping -h localhost --silent 2>/dev/null; then
+                    echo -e "${GREEN}✓ MySQL 服务已启动${NC}"
+                    break
+                fi
+                sleep 2
+                waited=$((waited + 2))
+                echo -n "."
+            done
+            echo ""
+            
+            if ! mysqladmin ping -h localhost --silent 2>/dev/null; then
+                echo -e "${RED}✗ MySQL 服务启动失败${NC}"
+                echo -e "${YELLOW}请手动启动 MySQL 服务后重新运行脚本${NC}"
+                exit 1
+            fi
+        else
+            echo -e "${GREEN}✓ MySQL 服务正在运行${NC}"
+        fi
+        
+        # 如果未设置 root 密码，尝试多种方式获取
+        if [ -z "$MYSQL_ROOT_PASSWORD" ]; then
+            echo ""
+            echo -e "${BLUE}需要 MySQL root 密码以执行后续操作${NC}"
+            
+            # 先尝试无密码连接（某些 MariaDB 可能无密码）
+            if mysql -u root -e "SELECT 1;" > /dev/null 2>&1; then
+                echo -e "${GREEN}✓ MySQL root 用户无密码，可以使用无密码连接${NC}"
+                MYSQL_ROOT_PASSWORD=""
+            else
+                # 尝试从日志中查找临时密码（MySQL 8.0）
+                TEMP_PASSWORD=""
+                for log_file in /var/log/mysqld.log /var/log/mysql/error.log /var/log/mysql/mysql.log; do
+                    if [ -f "$log_file" ]; then
+                        TEMP_PASSWORD=$(grep 'temporary password' "$log_file" 2>/dev/null | awk '{print $NF}' | tail -1)
+                        if [ -n "$TEMP_PASSWORD" ]; then
+                            echo -e "${YELLOW}⚠ 检测到 MySQL 临时密码: ${TEMP_PASSWORD}${NC}"
+                            echo -e "${YELLOW}⚠ 建议先修改临时密码${NC}"
+                            break
+                        fi
+                    fi
+                done
+                
+                # 提示用户输入密码
+                read -sp "请输入 MySQL root 密码（直接回车使用临时密码或无密码）: " MYSQL_ROOT_PASSWORD
+                echo ""
+                
+                # 如果用户没有输入，使用临时密码或尝试无密码
+                if [ -z "$MYSQL_ROOT_PASSWORD" ]; then
+                    if [ -n "$TEMP_PASSWORD" ]; then
+                        MYSQL_ROOT_PASSWORD="$TEMP_PASSWORD"
+                        echo -e "${BLUE}使用临时密码连接 MySQL${NC}"
+                    else
+                        echo -e "${YELLOW}⚠ 未输入密码，尝试无密码连接${NC}"
+                    fi
+                fi
+                
+                # 验证密码是否正确
+                if [ -n "$MYSQL_ROOT_PASSWORD" ]; then
+                    if mysql -u root -p"${MYSQL_ROOT_PASSWORD}" -e "SELECT 1;" > /dev/null 2>&1; then
+                        echo -e "${GREEN}✓ 密码验证成功${NC}"
+                    elif mysql --connect-expired-password -u root -p"${MYSQL_ROOT_PASSWORD}" -e "SELECT 1;" > /dev/null 2>&1; then
+                        echo -e "${YELLOW}⚠ 使用的是临时密码（已过期），后续操作可能需要先修改密码${NC}"
+                    else
+                        echo -e "${RED}✗ 密码验证失败${NC}"
+                        echo -e "${YELLOW}请检查密码是否正确，或手动测试连接${NC}"
+                        exit 1
+                    fi
+                else
+                    # 尝试无密码连接
+                    if ! mysql -u root -e "SELECT 1;" > /dev/null 2>&1; then
+                        echo -e "${RED}✗ 无密码连接失败${NC}"
+                        echo -e "${YELLOW}请提供正确的 root 密码${NC}"
+                        exit 1
+                    fi
+                fi
+            fi
+        else
+            # 如果已设置密码，验证密码
+            if ! mysql -u root -p"${MYSQL_ROOT_PASSWORD}" -e "SELECT 1;" > /dev/null 2>&1; then
+                if mysql --connect-expired-password -u root -p"${MYSQL_ROOT_PASSWORD}" -e "SELECT 1;" > /dev/null 2>&1; then
+                    echo -e "${YELLOW}⚠ 使用的是临时密码（已过期），后续操作可能需要先修改密码${NC}"
+                else
+                    echo -e "${RED}✗ 密码验证失败${NC}"
+                    echo -e "${YELLOW}请检查密码是否正确${NC}"
+                    exit 1
+                fi
+            else
+                echo -e "${GREEN}✓ 密码验证成功${NC}"
+            fi
+        fi
+        
+        # 验证安装（检查 MySQL 是否可用）
+        echo -e "${BLUE}验证 MySQL 连接...${NC}"
+        if mysqladmin ping -h localhost --silent 2>/dev/null; then
+            echo -e "${GREEN}✓ MySQL 连接正常${NC}"
+        else
+            echo -e "${RED}✗ MySQL 连接失败${NC}"
+            exit 1
+        fi
+        
         echo ""
-        echo -e "${YELLOW}请按照上面的错误提示手动修改密码，然后重新运行安装脚本${NC}"
+        echo -e "${GREEN}✓ 跳过安装步骤完成，继续执行后续步骤${NC}"
+        echo -e "${BLUE}注意: 已跳过配置优化步骤，使用现有 MySQL 配置${NC}"
+        echo -e "${BLUE}      如需优化配置，请手动修改 /etc/my.cnf 或 /etc/mysql/my.cnf${NC}"
         echo ""
-        exit 1
+    else
+        # 正常安装流程
+        # 安装 MySQL
+        install_mysql
+        
+        # 设置 MySQL 配置文件（必须在初始化前完成）
+        # 重要：所有 my.cnf 等配置文件的改动必须在数据库初始化前完成
+        # 包括：
+        #   - 基础配置（lower_case_table_names、default_time_zone 等）
+        #   - 硬件优化配置（InnoDB 缓冲池、连接数、IO 线程等）
+        # 因为 MySQL 首次启动时会根据配置文件初始化数据字典
+        # 硬件优化配置虽然可以在运行时修改，但为了最佳性能，应在初始化前设置
+        setup_mysql_config
+        
+        # 配置 MySQL（启动服务，首次启动会自动初始化）
+        # 注意：首次启动时会根据配置文件初始化数据库
+        # 所有配置优化（包括硬件优化）必须在此步骤之前完成
+        configure_mysql
+        
+        # 设置 root 密码
+        if ! set_root_password; then
+            echo ""
+            echo -e "${RED}========================================${NC}"
+            echo -e "${RED}MySQL 安装失败：root 密码设置失败${NC}"
+            echo -e "${RED}========================================${NC}"
+            echo ""
+            echo -e "${YELLOW}请按照上面的错误提示手动修改密码，然后重新运行安装脚本${NC}"
+            echo ""
+            exit 1
+        fi
+        
+        # 安全配置
+        secure_mysql
+        
+        # 验证安装
+        verify_installation
     fi
-    
-    # 安全配置
-    secure_mysql
-    
-    # 验证安装
-    verify_installation
     
     # 创建数据库
     create_database

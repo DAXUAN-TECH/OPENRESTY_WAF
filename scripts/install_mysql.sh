@@ -1930,6 +1930,34 @@ EOF
     fi
 }
 
+# 更新 WAF 配置文件
+update_waf_config() {
+    # 检查是否有数据库和用户信息
+    if [ -z "$CREATED_DB_NAME" ] || [ -z "$MYSQL_USER_FOR_WAF" ] || [ -z "$MYSQL_PASSWORD_FOR_WAF" ]; then
+        return 0  # 如果没有创建数据库和用户，跳过配置更新
+    fi
+    
+    echo -e "${BLUE}更新 WAF 配置文件...${NC}"
+    
+    # 获取脚本目录
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    UPDATE_CONFIG_SCRIPT="${SCRIPT_DIR}/set_lua_database_connect.sh"
+    
+    # 检查配置更新脚本是否存在
+    if [ ! -f "$UPDATE_CONFIG_SCRIPT" ]; then
+        echo -e "${YELLOW}⚠ 配置更新脚本不存在: $UPDATE_CONFIG_SCRIPT${NC}"
+        echo -e "${YELLOW}  请手动更新 lua/config.lua 文件${NC}"
+        return 0
+    fi
+    
+    # 更新配置文件
+    if bash "$UPDATE_CONFIG_SCRIPT" mysql "127.0.0.1" "3306" "$CREATED_DB_NAME" "$MYSQL_USER_FOR_WAF" "$MYSQL_PASSWORD_FOR_WAF"; then
+        echo -e "${GREEN}✓ WAF 配置文件已更新${NC}"
+    else
+        echo -e "${YELLOW}⚠ 配置文件更新失败，请手动更新 lua/config.lua${NC}"
+    fi
+}
+
 # 初始化数据库数据
 init_database() {
     echo -e "${BLUE}[10/10] 初始化数据库数据...${NC}"
@@ -2090,6 +2118,9 @@ main() {
     
     # 初始化数据库数据
     init_database
+    
+    # 更新 WAF 配置文件（如果创建了数据库和用户）
+    update_waf_config
     
     # 显示后续步骤
     show_next_steps

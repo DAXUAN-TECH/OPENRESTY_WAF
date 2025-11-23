@@ -661,6 +661,29 @@ start_redis() {
     fi
 }
 
+# 更新 WAF 配置文件
+update_waf_config() {
+    echo -e "${BLUE}更新 WAF 配置文件...${NC}"
+    
+    # 获取脚本目录
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    UPDATE_CONFIG_SCRIPT="${SCRIPT_DIR}/set_lua_database_connect.sh"
+    
+    # 检查配置更新脚本是否存在
+    if [ ! -f "$UPDATE_CONFIG_SCRIPT" ]; then
+        echo -e "${YELLOW}⚠ 配置更新脚本不存在: $UPDATE_CONFIG_SCRIPT${NC}"
+        echo -e "${YELLOW}  请手动更新 lua/config.lua 文件${NC}"
+        return 0
+    fi
+    
+    # 更新配置文件（使用默认的本地 Redis 配置）
+    if bash "$UPDATE_CONFIG_SCRIPT" redis "127.0.0.1" "6379" "0" "${REDIS_PASSWORD:-}"; then
+        echo -e "${GREEN}✓ WAF 配置文件已更新${NC}"
+    else
+        echo -e "${YELLOW}⚠ 配置文件更新失败，请手动更新 lua/config.lua${NC}"
+    fi
+}
+
 # 验证安装
 verify_installation() {
     echo -e "${BLUE}[8/8] 验证安装...${NC}"
@@ -772,6 +795,9 @@ main() {
     
     # 验证安装
     verify_installation
+    
+    # 更新 WAF 配置文件
+    update_waf_config
     
     # 显示后续步骤
     show_next_steps

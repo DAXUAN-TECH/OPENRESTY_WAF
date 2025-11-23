@@ -40,8 +40,8 @@ MySQL 数据库
 ```
 OPENRESTY_WAF/
 ├── README.md                # 项目说明（本文件）
-├── install.sh               # 一键安装脚本（推荐使用）⭐
-├── install_README.md        # 一键安装脚本说明
+├── start.sh                 # 一键启动脚本（推荐使用）⭐
+├── start_README.md          # 一键启动脚本说明
 ├── init_file/               # 初始配置文件目录
 │   ├── nginx.conf           # Nginx 主配置文件（部署时复制到系统目录）
 │   └── 数据库设计.sql       # 数据库表结构
@@ -120,7 +120,7 @@ OPENRESTY_WAF/
 
 ```bash
 # 运行一键安装脚本
-sudo ./install.sh
+sudo ./start.sh
 ```
 
 **脚本会自动完成**：
@@ -192,7 +192,7 @@ opm get openresty/lua-resty-redis  # 可选
 
 **方式一：使用一键安装脚本（推荐）**
 
-如果使用 `install.sh` 一键安装，可以选择：
+如果使用 `start.sh` 一键安装，可以选择：
 - **本地数据库**（默认）：输入 `Y` 或直接回车，脚本会自动安装 MySQL 和 Redis，并创建数据库和用户
 - **外部数据库**：输入 `n`，然后填写外部数据库连接信息
 
@@ -320,13 +320,13 @@ sudo ./scripts/optimize_system.sh
 编辑 `lua/config.lua`（配置文件保持在项目目录）：
 
 **Shell 脚本关联**：
-- `install.sh` - 自动更新 MySQL 和 Redis 配置，自动验证配置文件语法（推荐）
+- `start.sh update-config` - 自动更新 MySQL 和 Redis 配置，自动验证配置文件语法（推荐）
 - `scripts/deploy.sh` - 更新 Lua 脚本路径配置（`conf.d/set_conf/lua.conf`）
 - `scripts/install_geoip.sh` - 安装 GeoIP 数据库到 `lua/geoip/`，提示启用地域封控
 - `scripts/optimize_system.sh` - 优化共享内存配置（`conf.d/set_conf/waf.conf`）
 
 **配置验证**：
-- `install.sh` 在更新配置后会自动验证 Lua 配置文件语法
+- `start.sh update-config` 在更新配置后会自动验证 Lua 配置文件语法
 - 使用 `luajit -bl` 或 `luac -p` 检查语法
 - 如果语法错误，会显示警告信息
 

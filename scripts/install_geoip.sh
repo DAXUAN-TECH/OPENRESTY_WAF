@@ -403,36 +403,82 @@ verify_installation() {
     echo -e "${GREEN}========================================${NC}"
     
     local target_file="$GEOIP_DIR/GeoLite2-City.mmdb"
+    local install_success=false
+    local error_messages=()
     
-    if [ -f "$target_file" ]; then
-        local file_size=$(stat -f%z "$target_file" 2>/dev/null || stat -c%s "$target_file" 2>/dev/null || echo "0")
-        echo -e "${GREEN}✓ 数据库文件已安装${NC}"
-        echo "  路径: $target_file"
-        echo "  大小: $(du -h "$target_file" | cut -f1)"
-        
-        if [ "$file_size" -gt 1048576 ]; then
-            echo -e "${GREEN}✓ 文件大小正常${NC}"
-        else
-            echo -e "${YELLOW}⚠ 警告: 文件大小异常小，可能有问题${NC}"
-        fi
-        
-        echo ""
-        echo -e "${GREEN}下一步:${NC}"
-        echo "1. 在 lua/config.lua 中启用地域封控:"
-        echo "   _M.geo = {"
-        echo "       enable = true,"
-        echo "       -- geoip_db_path 会在运行时自动设置，无需手动配置"
-        echo "   }"
-        echo ""
-        echo "2. 运行部署脚本（如果还未运行）:"
-        echo "   sudo ./scripts/deploy.sh"
-        echo ""
-        echo "3. 重启 OpenResty 服务"
-        echo "4. 添加地域封控规则（参考 docs/地域封控使用示例.md）"
-    else
+    # 1. 检查文件是否存在
+    if [ ! -f "$target_file" ]; then
+        error_messages+=("数据库文件不存在: $target_file")
         echo -e "${RED}✗ 安装失败: 数据库文件不存在${NC}"
-        exit 1
+        echo "  预期路径: $target_file"
+        return 1
     fi
+    
+    # 2. 检查文件大小
+    local file_size=$(stat -f%z "$target_file" 2>/dev/null || stat -c%s "$target_file" 2>/dev/null || echo "0")
+    local file_size_mb=$((file_size / 1048576))
+    local file_size_human=$(du -h "$target_file" | cut -f1)
+    
+    if [ "$file_size" -lt 1048576 ]; then
+        error_messages+=("文件大小异常小: ${file_size_human} (${file_size} 字节)，可能下载不完整")
+        echo -e "${RED}✗ 安装失败: 文件大小异常小${NC}"
+        echo "  文件大小: ${file_size_human} (${file_size} 字节)"
+        echo "  预期大小: 应大于 1MB"
+        return 1
+    fi
+    
+    # 3. 检查文件是否可读
+    if [ ! -r "$target_file" ]; then
+        error_messages+=("文件不可读，权限可能有问题")
+        echo -e "${RED}✗ 安装失败: 文件不可读${NC}"
+        return 1
+    fi
+    
+    # 4. 检查文件类型（简单检查：.mmdb 文件应该不是文本文件）
+    local file_type=$(file "$target_file" 2>/dev/null || echo "")
+    if echo "$file_type" | grep -qi "text\|empty\|ascii"; then
+        error_messages+=("文件类型异常，可能是错误响应而非数据库文件")
+        echo -e "${RED}✗ 安装失败: 文件类型异常${NC}"
+        echo "  文件类型: $file_type"
+        return 1
+    fi
+    
+    # 5. 获取绝对路径
+    local abs_path=$(cd "$(dirname "$target_file")" && pwd)/$(basename "$target_file")
+    
+    # 所有检查通过
+    install_success=true
+    
+    echo -e "${GREEN}✓ 安装成功！${NC}"
+    echo ""
+    echo -e "${GREEN}安装结果:${NC}"
+    echo "  状态: 成功"
+    echo "  数据库文件路径: $abs_path"
+    echo "  文件大小: ${file_size_human} (${file_size_mb} MB)"
+    echo "  文件权限: $(ls -l "$target_file" | awk '{print $1}')"
+    
+    if [ -n "$file_type" ]; then
+        echo "  文件类型: $file_type"
+    fi
+    
+    echo ""
+    echo -e "${GREEN}下一步:${NC}"
+    echo "1. 在 lua/config.lua 中启用地域封控:"
+    echo "   _M.geo = {"
+    echo "       enable = true,"
+    echo "       -- geoip_db_path 会在运行时自动设置，无需手动配置"
+    echo "   }"
+    echo ""
+    echo "2. 运行部署脚本（如果还未运行）:"
+    echo "   sudo ./scripts/deploy.sh"
+    echo ""
+    echo "3. 重启 OpenResty 服务"
+    echo "4. 添加地域封控规则（参考 docs/地域封控使用示例.md）"
+    echo ""
+    echo -e "${GREEN}数据库文件位置:${NC}"
+    echo "  $abs_path"
+    
+    return 0
 }
 
 # 主函数
@@ -461,13 +507,36 @@ main() {
     install_database
     save_config  # 保存配置用于后续自动更新
     cleanup
-    verify_installation
-    setup_crontab  # 设置计划任务
     
-    echo ""
-    echo -e "${GREEN}========================================${NC}"
-    echo -e "${GREEN}安装完成！${NC}"
-    echo -e "${GREEN}========================================${NC}"
+    # 验证安装并获取结果
+    if verify_installation; then
+        local target_file="$GEOIP_DIR/GeoLite2-City.mmdb"
+        local abs_path=$(cd "$(dirname "$target_file")" && pwd)/$(basename "$target_file")
+        
+        setup_crontab  # 设置计划任务
+        
+        echo ""
+        echo -e "${GREEN}========================================${NC}"
+        echo -e "${GREEN}安装完成！${NC}"
+        echo -e "${GREEN}========================================${NC}"
+        echo ""
+        echo -e "${GREEN}安装结果: 成功${NC}"
+        echo -e "${GREEN}数据库文件路径: $abs_path${NC}"
+        
+        # 返回成功状态码
+        exit 0
+    else
+        echo ""
+        echo -e "${RED}========================================${NC}"
+        echo -e "${RED}安装失败！${NC}"
+        echo -e "${RED}========================================${NC}"
+        echo ""
+        echo -e "${RED}安装结果: 失败${NC}"
+        echo -e "${YELLOW}请检查错误信息并重试${NC}"
+        
+        # 返回失败状态码
+        exit 1
+    fi
 }
 
 # 执行主函数

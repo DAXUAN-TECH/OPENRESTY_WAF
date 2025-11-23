@@ -529,43 +529,93 @@ set_root_password() {
         if [ -n "$TEMP_PASSWORD" ]; then
             echo "正在使用临时密码修改 root 密码..."
             
-            # 首先检查 MySQL 版本并设置密码策略
-            echo "检查 MySQL 版本并设置密码策略..."
+            # 首先检查 MySQL 版本
+            echo "检查 MySQL 版本..."
             local mysql_version_output=$(mysql --version 2>&1 || echo "")
             local mysql_version=""
             if echo "$mysql_version_output" | grep -qi "8\.0"; then
                 mysql_version="8.0"
+                echo -e "${GREEN}✓ 检测到 MySQL 8.0${NC}"
             elif echo "$mysql_version_output" | grep -qi "5\.7"; then
                 mysql_version="5.7"
+                echo -e "${GREEN}✓ 检测到 MySQL 5.7${NC}"
+            else
+                echo -e "${YELLOW}⚠ 未检测到 MySQL 8.0 或 5.7，跳过密码策略设置${NC}"
             fi
             
-            # 使用 Python 安全地生成 SQL（转义单引号，避免 SQL 注入和 shell 解析问题）
+            # 先设置密码策略（如果检测到版本）
+            if [ -n "$mysql_version" ]; then
+                echo "设置密码策略..."
+                local policy_sql=""
+                if [ "$mysql_version" = "8.0" ]; then
+                    policy_sql="SET GLOBAL validate_password.policy = LOW; SET GLOBAL validate_password.length = 4;"
+                elif [ "$mysql_version" = "5.7" ]; then
+                    policy_sql="SET GLOBAL validate_password_policy = LOW; SET GLOBAL validate_password_length = 4;"
+                fi
+                
+                if [ -n "$policy_sql" ]; then
+                    # 创建临时配置文件用于传递临时密码
+                    local temp_cnf=$(mktemp)
+                    cat > "$temp_cnf" <<CNF_EOF
+[client]
+user=root
+password=${TEMP_PASSWORD}
+CNF_EOF
+                    chmod 600 "$temp_cnf"
+                    
+                    # 先测试配置文件方式是否可用
+                    local test_output=$(mysql --connect-expired-password --defaults-file="$temp_cnf" -e "SELECT 1;" 2>&1)
+                    local test_exit_code=$?
+                    local use_defaults_file=1
+                    
+                    if [ $test_exit_code -ne 0 ] && echo "$test_output" | grep -qi "unknown variable.*defaults-file"; then
+                        use_defaults_file=0
+                    fi
+                    
+                    # 执行密码策略设置
+                    local policy_output=""
+                    local policy_exit_code=1
+                    if [ $use_defaults_file -eq 1 ]; then
+                        policy_output=$(mysql --connect-expired-password --defaults-file="$temp_cnf" -e "$policy_sql" 2>&1)
+                        policy_exit_code=$?
+                        if [ $policy_exit_code -ne 0 ] && echo "$policy_output" | grep -qi "unknown variable.*defaults-file"; then
+                            policy_output=$(mysql --connect-expired-password -u root -p"${TEMP_PASSWORD}" -e "$policy_sql" 2>&1)
+                            policy_exit_code=$?
+                        fi
+                    else
+                        policy_output=$(mysql --connect-expired-password -u root -p"${TEMP_PASSWORD}" -e "$policy_sql" 2>&1)
+                        policy_exit_code=$?
+                    fi
+                    
+                    rm -f "$temp_cnf"
+                    
+                    if [ $policy_exit_code -eq 0 ]; then
+                        echo -e "${GREEN}✓ 密码策略设置成功${NC}"
+                    else
+                        # 检查是否是"变量不存在"的错误（某些版本可能没有密码验证插件）
+                        if echo "$policy_output" | grep -qi "Unknown system variable\|Unknown variable"; then
+                            echo -e "${YELLOW}⚠ 密码验证插件未安装，跳过密码策略设置${NC}"
+                        else
+                            echo -e "${YELLOW}⚠ 密码策略设置失败，但继续尝试修改密码${NC}"
+                            echo -e "${YELLOW}错误信息: $(echo "$policy_output" | grep -vE 'Warning: Using a password' | head -2)${NC}"
+                        fi
+                    fi
+                fi
+            fi
+            
+            # 生成修改密码的 SQL 文件
+            echo "准备修改密码..."
             local sql_file=$(mktemp)
             if command -v python3 &> /dev/null; then
                 # 使用 Python 安全地转义密码并生成 SQL
-                NEW_MYSQL_PASSWORD="$MYSQL_ROOT_PASSWORD" MYSQL_VERSION="$mysql_version" python3 <<'PYTHON_EOF' > "$sql_file"
+                NEW_MYSQL_PASSWORD="$MYSQL_ROOT_PASSWORD" python3 <<'PYTHON_EOF' > "$sql_file"
 import os
 import sys
 new_password = os.environ.get('NEW_MYSQL_PASSWORD', '')
-mysql_version = os.environ.get('MYSQL_VERSION', '')
 # 转义 SQL 中的单引号（将 ' 替换为 ''）
 escaped_password = new_password.replace("'", "''")
-
-# 根据 MySQL 版本设置密码策略
-sql = ""
-if mysql_version == "8.0":
-    # MySQL 8.0 使用 validate_password.policy
-    sql = """SET GLOBAL validate_password.policy = LOW;
-SET GLOBAL validate_password.length = 4;
-"""
-elif mysql_version == "5.7":
-    # MySQL 5.7 使用 validate_password_policy
-    sql = """SET GLOBAL validate_password_policy = LOW;
-SET GLOBAL validate_password_length = 4;
-"""
-
 # 生成修改所有 root 用户密码的 SQL
-sql += f"""ALTER USER 'root'@'localhost' IDENTIFIED BY '{escaped_password}';
+sql = f"""ALTER USER 'root'@'localhost' IDENTIFIED BY '{escaped_password}';
 ALTER USER 'root'@'127.0.0.1' IDENTIFIED BY '{escaped_password}';
 ALTER USER 'root'@'::1' IDENTIFIED BY '{escaped_password}';
 FLUSH PRIVILEGES;"""
@@ -574,41 +624,16 @@ PYTHON_EOF
             else
                 # 如果没有 Python，使用 sed 转义单引号
                 local escaped_password=$(echo "$MYSQL_ROOT_PASSWORD" | sed "s/'/''/g")
-                # 根据 MySQL 版本设置密码策略
-                if echo "$mysql_version_output" | grep -qi "8\.0"; then
-                    cat > "$sql_file" <<SQL_EOF
--- MySQL 8.0 密码策略
-SET GLOBAL validate_password.policy = LOW;
-SET GLOBAL validate_password.length = 4;
--- 修改密码
+                cat > "$sql_file" <<SQL_EOF
 ALTER USER 'root'@'localhost' IDENTIFIED BY '${escaped_password}';
 ALTER USER 'root'@'127.0.0.1' IDENTIFIED BY '${escaped_password}';
 ALTER USER 'root'@'::1' IDENTIFIED BY '${escaped_password}';
 FLUSH PRIVILEGES;
 SQL_EOF
-                elif echo "$mysql_version_output" | grep -qi "5\.7"; then
-                    cat > "$sql_file" <<SQL_EOF
--- MySQL 5.7 密码策略
-SET GLOBAL validate_password_policy = LOW;
-SET GLOBAL validate_password_length = 4;
--- 修改密码
-ALTER USER 'root'@'localhost' IDENTIFIED BY '${escaped_password}';
-ALTER USER 'root'@'127.0.0.1' IDENTIFIED BY '${escaped_password}';
-ALTER USER 'root'@'::1' IDENTIFIED BY '${escaped_password}';
-FLUSH PRIVILEGES;
-SQL_EOF
-                else
-                    # 其他版本，不设置密码策略
-                    cat > "$sql_file" <<SQL_EOF
-ALTER USER 'root'@'localhost' IDENTIFIED BY '${escaped_password}';
-ALTER USER 'root'@'127.0.0.1' IDENTIFIED BY '${escaped_password}';
-ALTER USER 'root'@'::1' IDENTIFIED BY '${escaped_password}';
-FLUSH PRIVILEGES;
-SQL_EOF
-                fi
             fi
             
-            # 尝试多种方式执行密码修改（兼容不同的 MySQL 版本）
+            # 执行密码修改（兼容不同的 MySQL 版本）
+            echo "正在修改密码..."
             local error_output=""
             local exit_code=1
             local has_error=1

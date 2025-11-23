@@ -572,15 +572,52 @@ CNF_EOF
             local test_output=$(mysql --connect-expired-password --defaults-file="$temp_cnf" -e "SELECT 1;" 2>&1)
             local test_exit_code=$?
             
-            if [ $test_exit_code -eq 0 ] || ! echo "$test_output" | grep -qi "unknown variable.*defaults-file"; then
-                # 配置文件方式可用，使用它执行密码修改
+            # 检查是否是因为 --defaults-file 不支持而失败
+            local use_defaults_file=1
+            if [ $test_exit_code -ne 0 ] && echo "$test_output" | grep -qi "unknown variable.*defaults-file"; then
+                # 配置文件方式不可用
+                use_defaults_file=0
+                echo -e "${YELLOW}⚠ 检测到 --defaults-file 不可用，使用直接传递密码方式${NC}"
+            elif [ $test_exit_code -ne 0 ]; then
+                # 其他错误，但先尝试使用配置文件方式，如果失败再回退
+                use_defaults_file=1
+            fi
+            
+            # 执行密码修改（尝试多种方式）
+            # 方法1: 尝试使用 SQL 文件 + 配置文件方式
+            if [ $use_defaults_file -eq 1 ]; then
                 error_output=$(mysql --connect-expired-password --defaults-file="$temp_cnf" < "$sql_file" 2>&1)
                 exit_code=$?
+                
+                # 如果失败且是因为 --defaults-file 不支持，回退到直接传递密码
+                if [ $exit_code -ne 0 ] && echo "$error_output" | grep -qi "unknown variable.*defaults-file"; then
+                    echo -e "${YELLOW}⚠ 配置文件方式失败，尝试直接传递密码方式${NC}"
+                    error_output=$(mysql --connect-expired-password -u root -p"${TEMP_PASSWORD}" < "$sql_file" 2>&1)
+                    exit_code=$?
+                fi
             else
-                # 配置文件方式不可用，使用直接传递密码的方式（会有警告，但可以工作）
-                echo -e "${YELLOW}⚠ 检测到 --defaults-file 不可用，使用直接传递密码方式${NC}"
+                # 直接使用传递密码方式
                 error_output=$(mysql --connect-expired-password -u root -p"${TEMP_PASSWORD}" < "$sql_file" 2>&1)
                 exit_code=$?
+            fi
+            
+            # 如果 SQL 文件方式失败，尝试使用 -e 参数直接执行（更直接）
+            if [ $exit_code -ne 0 ]; then
+                echo -e "${YELLOW}⚠ SQL 文件方式失败，尝试使用 -e 参数直接执行${NC}"
+                # 读取 SQL 文件内容
+                local sql_content=$(cat "$sql_file")
+                # 使用 -e 参数直接执行
+                if [ $use_defaults_file -eq 1 ]; then
+                    error_output=$(mysql --connect-expired-password --defaults-file="$temp_cnf" -e "$sql_content" 2>&1)
+                    exit_code=$?
+                    if [ $exit_code -ne 0 ] && echo "$error_output" | grep -qi "unknown variable.*defaults-file"; then
+                        error_output=$(mysql --connect-expired-password -u root -p"${TEMP_PASSWORD}" -e "$sql_content" 2>&1)
+                        exit_code=$?
+                    fi
+                else
+                    error_output=$(mysql --connect-expired-password -u root -p"${TEMP_PASSWORD}" -e "$sql_content" 2>&1)
+                    exit_code=$?
+                fi
             fi
             
             rm -f "$temp_cnf"
@@ -588,11 +625,15 @@ CNF_EOF
             # 检查错误输出中是否包含真正的错误（不仅仅是警告）
             if [ $exit_code -eq 0 ]; then
                 has_error=0
-            elif echo "$error_output" | grep -qiE "error|failed|denied|syntax" && ! echo "$error_output" | grep -qi "Warning: Using a password"; then
-                has_error=1
             else
-                # 如果只有警告信息，可能实际上成功了
-                has_error=0
+                # 检查是否是真正的错误（排除警告）
+                local real_error=$(echo "$error_output" | grep -viE "Warning: Using a password|Using a password on the command line" | grep -iE "error|failed|denied|syntax|access denied" || true)
+                if [ -n "$real_error" ]; then
+                    has_error=1
+                else
+                    # 如果只有警告信息，可能实际上成功了
+                    has_error=0
+                fi
             fi
             
             rm -f "$sql_file"
@@ -698,19 +739,33 @@ CNF_EOF
                 fi
             else
                 echo -e "${RED}✗ 使用临时密码修改密码失败${NC}"
-                echo -e "${YELLOW}错误信息:${NC}"
-                echo "$error_output" | grep -v "Warning: Using a password" || echo "$error_output"
+                echo -e "${YELLOW}详细错误信息:${NC}"
+                # 显示所有错误信息（过滤掉密码警告）
+                echo "$error_output" | grep -vE "Warning: Using a password|Using a password on the command line" || echo "$error_output"
+                echo ""
+                echo -e "${YELLOW}退出代码: ${exit_code}${NC}"
                 echo ""
                 echo -e "${YELLOW}可能的原因:${NC}"
                 echo "  1. MySQL 服务未完全启动"
                 echo "  2. 临时密码已过期或无效"
                 echo "  3. 临时密码不正确"
                 echo "  4. 新密码包含特殊字符导致 SQL 执行失败"
+                echo "  5. SQL 文件格式问题"
+                echo ""
+                echo -e "${BLUE}调试信息:${NC}"
+                echo "  临时密码: ${TEMP_PASSWORD}"
+                echo "  SQL 文件: $sql_file"
+                if [ -f "$sql_file" ]; then
+                    echo "  SQL 内容预览:"
+                    head -3 "$sql_file" | sed 's/^/    /'
+                fi
                 echo ""
                 echo -e "${YELLOW}建议:${NC}"
                 echo "  1. 检查 MySQL 服务状态: systemctl status mysqld"
-                echo "  2. 检查 MySQL 日志: tail -f /var/log/mysqld.log"
-                echo "  3. 手动修改密码（推荐）:"
+                echo "  2. 检查 MySQL 日志: tail -20 /var/log/mysqld.log"
+                echo "  3. 手动测试临时密码连接:"
+                echo "     mysql --connect-expired-password -u root -p'${TEMP_PASSWORD}' -e 'SELECT 1;'"
+                echo "  4. 手动修改密码（推荐）:"
                 echo "     mysql --connect-expired-password -u root -p'${TEMP_PASSWORD}'"
                 echo "     # 然后在 MySQL 中执行:"
                 echo "     ALTER USER 'root'@'localhost' IDENTIFIED BY 'your_new_password';"
@@ -722,8 +777,16 @@ CNF_EOF
                 if [[ ! "$CONTINUE_TRY" =~ ^[Yy]$ ]]; then
                     # 清除错误的密码，让后续步骤重新提示输入
                     MYSQL_ROOT_PASSWORD=""
+                    rm -f "$sql_file" 2>/dev/null || true
                     return 1
                 fi
+                # 如果用户选择继续，尝试使用交互式方式
+                echo -e "${BLUE}尝试交互式修改密码...${NC}"
+                # 这里可以添加交互式修改的逻辑，但比较复杂，建议用户手动修改
+                echo -e "${YELLOW}请按照上面的建议手动修改密码，然后重新运行安装脚本${NC}"
+                MYSQL_ROOT_PASSWORD=""
+                rm -f "$sql_file" 2>/dev/null || true
+                return 1
             fi
         fi
         

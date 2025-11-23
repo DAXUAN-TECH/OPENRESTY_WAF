@@ -34,7 +34,7 @@ export USE_NEW_USER
 
 # 检测系统类型
 detect_os() {
-    echo -e "${BLUE}[1/7] 检测操作系统...${NC}"
+    echo -e "${BLUE}[1/8] 检测操作系统...${NC}"
     
     # 优先使用 /etc/os-release (标准方法)
     if [ -f /etc/os-release ]; then
@@ -134,7 +134,7 @@ check_root() {
 
 # 检查 MySQL 是否已安装
 check_existing() {
-    echo -e "${BLUE}[2/7] 检查是否已安装 MySQL...${NC}"
+    echo -e "${BLUE}[2/8] 检查是否已安装 MySQL...${NC}"
     
     if command -v mysql &> /dev/null || command -v mysqld &> /dev/null; then
         local mysql_version=$(mysql --version 2>/dev/null || mysqld --version 2>/dev/null | head -n 1)
@@ -152,7 +152,7 @@ check_existing() {
 
 # 安装 MySQL（CentOS/RHEL/Fedora/Rocky/AlmaLinux/Oracle Linux/Amazon Linux）
 install_mysql_redhat() {
-    echo -e "${BLUE}[3/7] 安装 MySQL（RedHat 系列）...${NC}"
+    echo -e "${BLUE}[3/8] 安装 MySQL（RedHat 系列）...${NC}"
     
     # 确定仓库版本（根据实际系统）
     local el_version="el7"
@@ -264,7 +264,7 @@ install_mysql_redhat() {
 
 # 安装 MySQL（Ubuntu/Debian/Linux Mint/Kali Linux）
 install_mysql_debian() {
-    echo -e "${BLUE}[3/7] 安装 MySQL（Debian 系列）...${NC}"
+    echo -e "${BLUE}[3/8] 安装 MySQL（Debian 系列）...${NC}"
     
     # 更新包列表
     apt-get update
@@ -290,7 +290,7 @@ install_mysql_debian() {
 
 # 安装 MySQL（openSUSE）
 install_mysql_suse() {
-    echo -e "${BLUE}[3/7] 安装 MySQL（openSUSE）...${NC}"
+    echo -e "${BLUE}[3/8] 安装 MySQL（openSUSE）...${NC}"
     
     # openSUSE 使用 MariaDB 或从源码编译 MySQL
     echo -e "${YELLOW}注意: openSUSE 通常使用 MariaDB，如果需要 MySQL 请从源码编译${NC}"
@@ -306,7 +306,7 @@ install_mysql_suse() {
 
 # 安装 MySQL（Arch Linux/Manjaro）
 install_mysql_arch() {
-    echo -e "${BLUE}[3/7] 安装 MySQL（Arch Linux）...${NC}"
+    echo -e "${BLUE}[3/8] 安装 MySQL（Arch Linux）...${NC}"
     
     INSTALL_SUCCESS=0
     
@@ -339,7 +339,7 @@ install_mysql_arch() {
 
 # 安装 MySQL（Alpine Linux）
 install_mysql_alpine() {
-    echo -e "${BLUE}[3/7] 安装 MySQL（Alpine Linux）...${NC}"
+    echo -e "${BLUE}[3/8] 安装 MySQL（Alpine Linux）...${NC}"
     
     # Alpine Linux 使用 MariaDB（MySQL 兼容）
     apk add --no-cache mariadb mariadb-client mariadb-server-utils
@@ -349,7 +349,7 @@ install_mysql_alpine() {
 
 # 安装 MySQL（Gentoo）
 install_mysql_gentoo() {
-    echo -e "${BLUE}[3/7] 安装 MySQL（Gentoo）...${NC}"
+    echo -e "${BLUE}[3/8] 安装 MySQL（Gentoo）...${NC}"
     
     # Gentoo 使用 emerge
     emerge --ask=n --quiet-build y dev-db/mysql || {
@@ -410,12 +410,59 @@ install_mysql() {
     esac
 }
 
-# 配置 MySQL
-configure_mysql() {
-    echo -e "${BLUE}[4/7] 配置 MySQL...${NC}"
+# 设置 MySQL 配置文件（在初始化前）
+setup_mysql_config() {
+    echo -e "${BLUE}[4/8] 设置 MySQL 配置文件（初始化前）...${NC}"
     
-    # 在启动 MySQL 前修改配置文件（lower_case_table_names 必须在首次启动前设置）
-    echo "修改 MySQL 配置文件（启动前）..."
+    # 检查 MySQL 数据目录是否已初始化
+    local mysql_data_dirs=(
+        "/var/lib/mysql"
+        "/usr/local/mysql/data"
+        "/opt/mysql/data"
+    )
+    
+    local mysql_initialized=0
+    local mysql_data_dir=""
+    for dir in "${mysql_data_dirs[@]}"; do
+        if [ -d "$dir" ] && [ -n "$(ls -A "$dir" 2>/dev/null)" ]; then
+            # 检查是否包含 mysql 系统数据库（说明已初始化）
+            if [ -d "$dir/mysql" ] && ([ -f "$dir/mysql/user.MYD" ] || [ -f "$dir/mysql/user.ibd" ] || [ -d "$dir/mysql.ibd" ]); then
+                mysql_initialized=1
+                mysql_data_dir="$dir"
+                break
+            fi
+        fi
+    done
+    
+    if [ $mysql_initialized -eq 1 ]; then
+        echo -e "${YELLOW}⚠ 检测到 MySQL 数据目录已初始化: ${mysql_data_dir}${NC}"
+        echo -e "${YELLOW}⚠ 如果 lower_case_table_names 设置不一致，MySQL 将无法启动${NC}"
+        echo ""
+        echo -e "${BLUE}解决方案：${NC}"
+        echo "  1. 如果这是新安装，可以删除数据目录并重新初始化"
+        echo "  2. 如果已有重要数据，需要备份后重新初始化"
+        echo ""
+        read -p "是否删除现有数据目录并重新初始化？[y/N]: " RECREATE_DATA
+        RECREATE_DATA="${RECREATE_DATA:-N}"
+        if [[ "$RECREATE_DATA" =~ ^[Yy]$ ]]; then
+            echo -e "${YELLOW}正在停止 MySQL 服务...${NC}"
+            if command -v systemctl &> /dev/null; then
+                systemctl stop mysqld 2>/dev/null || systemctl stop mysql 2>/dev/null || true
+            elif command -v service &> /dev/null; then
+                service mysqld stop 2>/dev/null || service mysql stop 2>/dev/null || true
+            fi
+            sleep 2
+            
+            echo -e "${YELLOW}正在删除数据目录: ${mysql_data_dir}${NC}"
+            rm -rf "${mysql_data_dir}"/*
+            rm -rf "${mysql_data_dir}"/.* 2>/dev/null || true
+            echo -e "${GREEN}✓ 数据目录已清空${NC}"
+            mysql_initialized=0
+        else
+            echo -e "${YELLOW}⚠ 保留现有数据目录，如果 lower_case_table_names 不一致，MySQL 可能无法启动${NC}"
+        fi
+    fi
+    
     local my_cnf_files=(
         "/etc/my.cnf"
         "/etc/mysql/my.cnf"
@@ -498,11 +545,17 @@ configure_mysql() {
         fi
         
         echo -e "${BLUE}  配置文件位置: ${my_cnf_file}${NC}"
+        echo -e "${GREEN}✓ MySQL 配置文件设置完成（初始化前）${NC}"
     else
         echo -e "${YELLOW}⚠ 未找到 MySQL 配置文件，跳过配置${NC}"
     fi
+}
+
+# 配置 MySQL（启动服务）
+configure_mysql() {
+    echo -e "${BLUE}[5/8] 配置 MySQL（启动服务）...${NC}"
     
-    # 启动 MySQL 服务
+    # 启动 MySQL 服务（首次启动会自动初始化）
     if command -v systemctl &> /dev/null; then
         systemctl enable mysqld 2>/dev/null || systemctl enable mysql 2>/dev/null || true
         systemctl start mysqld 2>/dev/null || systemctl start mysql 2>/dev/null || true
@@ -515,6 +568,8 @@ configure_mysql() {
     echo "等待 MySQL 启动..."
     local max_wait=30
     local waited=0
+    local start_failed=0
+    
     while [ $waited -lt $max_wait ]; do
         if mysqladmin ping -h localhost --silent 2>/dev/null; then
             echo -e "${GREEN}✓ MySQL 服务已启动${NC}"
@@ -526,12 +581,48 @@ configure_mysql() {
     done
     echo ""
     
-    # 额外等待几秒确保 MySQL 完全就绪
-    if mysqladmin ping -h localhost --silent 2>/dev/null; then
-        sleep 3
-    else
-        echo -e "${YELLOW}⚠ MySQL 服务可能还在启动中，继续等待...${NC}"
+    # 检查 MySQL 是否启动成功
+    if ! mysqladmin ping -h localhost --silent 2>/dev/null; then
+        start_failed=1
+        echo -e "${RED}✗ MySQL 服务启动失败${NC}"
+        echo ""
+        echo -e "${YELLOW}可能的原因：${NC}"
+        echo "  1. lower_case_table_names 设置与数据字典不一致"
+        echo "  2. 配置文件语法错误"
+        echo "  3. 端口被占用"
+        echo "  4. 权限问题"
+        echo ""
+        echo -e "${BLUE}检查 MySQL 错误日志：${NC}"
+        local error_logs=(
+            "/var/log/mysqld.log"
+            "/var/log/mysql/error.log"
+            "/var/log/mysql/mysql.log"
+        )
+        for log_file in "${error_logs[@]}"; do
+            if [ -f "$log_file" ]; then
+                echo -e "${BLUE}  日志文件: ${log_file}${NC}"
+                echo -e "${YELLOW}  最后几行错误：${NC}"
+                tail -20 "$log_file" | grep -i "error" | tail -5
+                break
+            fi
+        done
+        echo ""
+        echo -e "${BLUE}如果看到 'Different lower_case_table_names settings' 错误：${NC}"
+        echo "  1. 停止 MySQL 服务"
+        echo "  2. 删除数据目录（如果有重要数据请先备份）"
+        echo "  3. 确保配置文件中 lower_case_table_names=1"
+        echo "  4. 重新启动 MySQL 服务"
+        echo ""
+        echo -e "${YELLOW}示例命令：${NC}"
+        echo "  systemctl stop mysqld"
+        echo "  rm -rf /var/lib/mysql/*"
+        echo "  systemctl start mysqld"
+        echo ""
+        echo -e "${YELLOW}⚠ 继续等待，如果 MySQL 仍未启动，请手动检查错误日志${NC}"
         sleep 5
+    else
+        # 额外等待几秒确保 MySQL 完全就绪
+        sleep 3
     fi
     
     # 获取临时 root 密码（MySQL 8.0）
@@ -565,7 +656,7 @@ set_root_password() {
     # 临时禁用 set -e，以便更好地处理错误
     set +e
     
-    echo -e "${BLUE}[5/7] 设置 MySQL root 密码...${NC}"
+    echo -e "${BLUE}[6/8] 设置 MySQL root 密码...${NC}"
     
     # 如果检测到临时密码，主动提示用户设置密码
     if [ -z "$MYSQL_ROOT_PASSWORD" ] && [ -n "$TEMP_PASSWORD" ]; then
@@ -1213,7 +1304,7 @@ CNF_EOF
 
 # 配置安全设置（可选）
 secure_mysql() {
-    echo -e "${BLUE}[6/7] 配置 MySQL 安全设置...${NC}"
+    echo -e "${BLUE}[7/8] 配置 MySQL 安全设置...${NC}"
     
     read -p "是否运行 mysql_secure_installation？（推荐）[Y/n]: " -n 1 -r
     echo
@@ -1402,7 +1493,7 @@ EOF
 
 # 验证安装
 verify_installation() {
-    echo -e "${BLUE}[7/7] 验证安装...${NC}"
+    echo -e "${BLUE}[8/8] 验证安装...${NC}"
     
     if command -v mysql &> /dev/null; then
         local version=$(mysql --version 2>&1 | head -n 1)
@@ -1890,7 +1981,10 @@ main() {
     # 安装 MySQL
     install_mysql
     
-    # 配置 MySQL
+    # 设置 MySQL 配置文件（在初始化前）
+    setup_mysql_config
+    
+    # 配置 MySQL（启动服务，首次启动会自动初始化）
     configure_mysql
     
     # 设置 root 密码

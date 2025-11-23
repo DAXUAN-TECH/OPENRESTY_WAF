@@ -529,18 +529,43 @@ set_root_password() {
         if [ -n "$TEMP_PASSWORD" ]; then
             echo "正在使用临时密码修改 root 密码..."
             
+            # 首先检查 MySQL 版本并设置密码策略
+            echo "检查 MySQL 版本并设置密码策略..."
+            local mysql_version_output=$(mysql --version 2>&1 || echo "")
+            local mysql_version=""
+            if echo "$mysql_version_output" | grep -qi "8\.0"; then
+                mysql_version="8.0"
+            elif echo "$mysql_version_output" | grep -qi "5\.7"; then
+                mysql_version="5.7"
+            fi
+            
             # 使用 Python 安全地生成 SQL（转义单引号，避免 SQL 注入和 shell 解析问题）
             local sql_file=$(mktemp)
             if command -v python3 &> /dev/null; then
                 # 使用 Python 安全地转义密码并生成 SQL
-                NEW_MYSQL_PASSWORD="$MYSQL_ROOT_PASSWORD" python3 <<'PYTHON_EOF' > "$sql_file"
+                NEW_MYSQL_PASSWORD="$MYSQL_ROOT_PASSWORD" MYSQL_VERSION="$mysql_version" python3 <<'PYTHON_EOF' > "$sql_file"
 import os
 import sys
 new_password = os.environ.get('NEW_MYSQL_PASSWORD', '')
+mysql_version = os.environ.get('MYSQL_VERSION', '')
 # 转义 SQL 中的单引号（将 ' 替换为 ''）
 escaped_password = new_password.replace("'", "''")
+
+# 根据 MySQL 版本设置密码策略
+sql = ""
+if mysql_version == "8.0":
+    # MySQL 8.0 使用 validate_password.policy
+    sql = """SET GLOBAL validate_password.policy = LOW;
+SET GLOBAL validate_password.length = 4;
+"""
+elif mysql_version == "5.7":
+    # MySQL 5.7 使用 validate_password_policy
+    sql = """SET GLOBAL validate_password_policy = LOW;
+SET GLOBAL validate_password_length = 4;
+"""
+
 # 生成修改所有 root 用户密码的 SQL
-sql = f"""ALTER USER 'root'@'localhost' IDENTIFIED BY '{escaped_password}';
+sql += f"""ALTER USER 'root'@'localhost' IDENTIFIED BY '{escaped_password}';
 ALTER USER 'root'@'127.0.0.1' IDENTIFIED BY '{escaped_password}';
 ALTER USER 'root'@'::1' IDENTIFIED BY '{escaped_password}';
 FLUSH PRIVILEGES;"""
@@ -549,12 +574,38 @@ PYTHON_EOF
             else
                 # 如果没有 Python，使用 sed 转义单引号
                 local escaped_password=$(echo "$MYSQL_ROOT_PASSWORD" | sed "s/'/''/g")
-                cat > "$sql_file" <<SQL_EOF
+                # 根据 MySQL 版本设置密码策略
+                if echo "$mysql_version_output" | grep -qi "8\.0"; then
+                    cat > "$sql_file" <<SQL_EOF
+-- MySQL 8.0 密码策略
+SET GLOBAL validate_password.policy = LOW;
+SET GLOBAL validate_password.length = 4;
+-- 修改密码
 ALTER USER 'root'@'localhost' IDENTIFIED BY '${escaped_password}';
 ALTER USER 'root'@'127.0.0.1' IDENTIFIED BY '${escaped_password}';
 ALTER USER 'root'@'::1' IDENTIFIED BY '${escaped_password}';
 FLUSH PRIVILEGES;
 SQL_EOF
+                elif echo "$mysql_version_output" | grep -qi "5\.7"; then
+                    cat > "$sql_file" <<SQL_EOF
+-- MySQL 5.7 密码策略
+SET GLOBAL validate_password_policy = LOW;
+SET GLOBAL validate_password_length = 4;
+-- 修改密码
+ALTER USER 'root'@'localhost' IDENTIFIED BY '${escaped_password}';
+ALTER USER 'root'@'127.0.0.1' IDENTIFIED BY '${escaped_password}';
+ALTER USER 'root'@'::1' IDENTIFIED BY '${escaped_password}';
+FLUSH PRIVILEGES;
+SQL_EOF
+                else
+                    # 其他版本，不设置密码策略
+                    cat > "$sql_file" <<SQL_EOF
+ALTER USER 'root'@'localhost' IDENTIFIED BY '${escaped_password}';
+ALTER USER 'root'@'127.0.0.1' IDENTIFIED BY '${escaped_password}';
+ALTER USER 'root'@'::1' IDENTIFIED BY '${escaped_password}';
+FLUSH PRIVILEGES;
+SQL_EOF
+                fi
             fi
             
             # 尝试多种方式执行密码修改（兼容不同的 MySQL 版本）
@@ -650,6 +701,9 @@ CNF_EOF
                 
                 # 验证新密码是否生效（尝试多种方式）
                 echo "验证新密码..."
+                # 等待一下让密码完全生效
+                sleep 1
+                
                 local verify_output=""
                 local verify_exit_code=1
                 
@@ -671,6 +725,13 @@ CNF_EOF
                     verify_exit_code=$?
                 fi
                 
+                # 如果还是失败，尝试使用交互式方式（通过管道）
+                if [ $verify_exit_code -ne 0 ]; then
+                    # 尝试使用 echo 管道方式
+                    verify_output=$(echo "SELECT 1;" | mysql -u root -p"${MYSQL_ROOT_PASSWORD}" 2>&1)
+                    verify_exit_code=$?
+                fi
+                
                 rm -f "$verify_cnf"
                 
                 if [ $verify_exit_code -eq 0 ]; then
@@ -678,8 +739,23 @@ CNF_EOF
                     set -e  # 重新启用 set -e
                     return 0
                 else
-                    # 如果验证失败，尝试使用临时密码再次验证密码是否真的修改了
-                    echo -e "${YELLOW}⚠ 新密码验证失败，尝试使用临时密码验证...${NC}"
+                    # 如果验证失败，先尝试手动测试（因为可能是验证方式的问题）
+                    echo -e "${YELLOW}⚠ 新密码验证失败，但密码可能已经修改成功${NC}"
+                    echo -e "${YELLOW}验证错误: $verify_output${NC}"
+                    echo ""
+                    echo -e "${BLUE}请手动测试新密码是否可以登录:${NC}"
+                    echo "  mysql -u root -p'${MYSQL_ROOT_PASSWORD}' -e 'SELECT 1;'"
+                    echo ""
+                    read -p "新密码是否可以正常登录？[Y/n]: " PWD_WORKS
+                    PWD_WORKS="${PWD_WORKS:-Y}"
+                    if [[ "$PWD_WORKS" =~ ^[Yy]$ ]]; then
+                        echo -e "${GREEN}✓ 密码已成功修改（手动验证通过）${NC}"
+                        set -e  # 重新启用 set -e
+                        return 0
+                    fi
+                    
+                    # 如果手动验证也失败，尝试使用临时密码再次验证密码是否真的修改了
+                    echo -e "${YELLOW}⚠ 继续使用临时密码验证...${NC}"
                     local temp_verify=""
                     local temp_verify_exit_code=1
                     

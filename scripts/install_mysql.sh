@@ -457,7 +457,7 @@ check_existing() {
                             echo -e "${YELLOW}⚠ 当前版本 ($current_major) 与要求版本 ($required_major) 不匹配${NC}"
                             echo -e "${YELLOW}⚠ 建议重新安装以匹配版本要求${NC}"
                         fi
-                    fi
+            fi
                     # 设置跳过安装标志，但继续执行后续步骤
                     SKIP_INSTALL=1
                     echo -e "${BLUE}将跳过安装步骤，继续执行数据库创建和用户设置等后续步骤${NC}"
@@ -466,8 +466,8 @@ check_existing() {
                     echo -e "${YELLOW}将重新安装 MySQL，先卸载现有安装，但保留数据目录${NC}"
                     echo -e "${YELLOW}注意: 如果版本不兼容，可能导致数据无法使用${NC}"
                     REINSTALL_MODE="keep_data"
-                    # 先卸载软件包
-                    completely_uninstall_mysql
+            # 先卸载软件包
+            completely_uninstall_mysql
                     # 卸载后清除版本选择，让用户重新选择
                     if [ -z "${MYSQL_VERSION_FROM_ENV:-}" ]; then
                         unset MYSQL_VERSION
@@ -768,19 +768,19 @@ check_existing() {
             # 关闭 RedHat 系列的 if 块（第591行）
         else
             # 非RedHat系列，使用原来的选择方式
-            echo ""
-            echo "请选择 MySQL 版本："
-            echo "  1. MySQL 8.0（推荐，最新稳定版）"
-            echo "  2. MySQL 5.7（兼容性更好）"
-            echo "  3. MySQL 8.0.35（指定小版本）"
-            echo "  4. MySQL 8.0.36（指定小版本）"
-            echo "  5. MySQL 8.0.37（指定小版本）"
-            echo "  6. MySQL 8.0.38（指定小版本）"
-            echo "  7. MySQL 5.7.44（指定小版本）"
-            echo "  8. MySQL 5.7.43（指定小版本）"
-            echo "  9. 自定义版本（手动输入版本号，如 8.0.39）"
-            echo "  10. 使用系统默认版本"
-            read -p "请选择 [1-10]: " VERSION_CHOICE
+        echo ""
+        echo "请选择 MySQL 版本："
+        echo "  1. MySQL 8.0（推荐，最新稳定版）"
+        echo "  2. MySQL 5.7（兼容性更好）"
+        echo "  3. MySQL 8.0.35（指定小版本）"
+        echo "  4. MySQL 8.0.36（指定小版本）"
+        echo "  5. MySQL 8.0.37（指定小版本）"
+        echo "  6. MySQL 8.0.38（指定小版本）"
+        echo "  7. MySQL 5.7.44（指定小版本）"
+        echo "  8. MySQL 5.7.43（指定小版本）"
+        echo "  9. 自定义版本（手动输入版本号，如 8.0.39）"
+        echo "  10. 使用系统默认版本"
+        read -p "请选择 [1-10]: " VERSION_CHOICE
         
         case "$VERSION_CHOICE" in
             1)
@@ -843,7 +843,7 @@ check_existing() {
         fi
     else
         if [ -n "${MYSQL_VERSION_FROM_ENV:-}" ] && [ "$MYSQL_VERSION" = "${MYSQL_VERSION_FROM_ENV:-}" ]; then
-            echo -e "${BLUE}使用环境变量指定的版本: ${MYSQL_VERSION}${NC}"
+        echo -e "${BLUE}使用环境变量指定的版本: ${MYSQL_VERSION}${NC}"
         else
             echo -e "${BLUE}使用已选择的版本: ${MYSQL_VERSION}${NC}"
         fi
@@ -1129,8 +1129,8 @@ install_mysql_redhat() {
             if dnf install -y "$version_package" "mysql-community-client-${full_version}" 2>&1 | tee /tmp/mysql_install.log; then
                 # 验证是否真正安装成功
                 if verify_mysql_installation /tmp/mysql_install.log; then
-                    INSTALL_SUCCESS=1
-                    echo -e "${GREEN}✓ MySQL ${full_version} 安装成功${NC}"
+                INSTALL_SUCCESS=1
+                echo -e "${GREEN}✓ MySQL ${full_version} 安装成功${NC}"
                 else
                     echo -e "${RED}✗ MySQL ${full_version} 安装失败${NC}"
                     INSTALL_SUCCESS=0
@@ -1142,8 +1142,8 @@ install_mysql_redhat() {
             if yum install -y "$version_package" "mysql-community-client-${full_version}" 2>&1 | tee /tmp/mysql_install.log; then
                 # 验证是否真正安装成功
                 if verify_mysql_installation /tmp/mysql_install.log; then
-                    INSTALL_SUCCESS=1
-                    echo -e "${GREEN}✓ MySQL ${full_version} 安装成功${NC}"
+                INSTALL_SUCCESS=1
+                echo -e "${GREEN}✓ MySQL ${full_version} 安装成功${NC}"
                 else
                     echo -e "${RED}✗ MySQL ${full_version} 安装失败${NC}"
                     INSTALL_SUCCESS=0
@@ -1161,8 +1161,8 @@ install_mysql_redhat() {
                 if dnf install -y "mysql-community-server-${major_minor}*" "mysql-community-client-${major_minor}*" 2>&1 | tee /tmp/mysql_install.log; then
                     # 验证是否真正安装成功
                     if verify_mysql_installation /tmp/mysql_install.log; then
-                        INSTALL_SUCCESS=1
-                        echo -e "${GREEN}✓ MySQL ${major_minor} 系列安装成功${NC}"
+                    INSTALL_SUCCESS=1
+                    echo -e "${GREEN}✓ MySQL ${major_minor} 系列安装成功${NC}"
                     else
                         echo -e "${RED}✗ MySQL ${major_minor} 系列安装失败${NC}"
                         INSTALL_SUCCESS=0
@@ -1175,8 +1175,8 @@ install_mysql_redhat() {
                 if yum install -y "mysql-community-server-${major_minor}*" "mysql-community-client-${major_minor}*" 2>&1 | tee /tmp/mysql_install.log; then
                     # 验证是否真正安装成功
                     if verify_mysql_installation /tmp/mysql_install.log; then
-                        INSTALL_SUCCESS=1
-                        echo -e "${GREEN}✓ MySQL ${major_minor} 系列安装成功${NC}"
+                    INSTALL_SUCCESS=1
+                    echo -e "${GREEN}✓ MySQL ${major_minor} 系列安装成功${NC}"
                     else
                         echo -e "${RED}✗ MySQL ${major_minor} 系列安装失败${NC}"
                         INSTALL_SUCCESS=0
@@ -1208,8 +1208,8 @@ install_mysql_redhat() {
                 if dnf install -y mysql-community-server mysql-community-client 2>&1 | tee /tmp/mysql_install.log; then
                     # 验证是否真正安装成功
                     if verify_mysql_installation /tmp/mysql_install.log; then
-                        INSTALL_SUCCESS=1
-                        echo -e "${GREEN}✓ MySQL ${major_minor} 系列安装成功${NC}"
+                    INSTALL_SUCCESS=1
+                    echo -e "${GREEN}✓ MySQL ${major_minor} 系列安装成功${NC}"
                     else
                         echo -e "${RED}✗ MySQL ${major_minor} 系列安装失败${NC}"
                         INSTALL_SUCCESS=0
@@ -1221,8 +1221,8 @@ install_mysql_redhat() {
                 if yum install -y mysql-community-server mysql-community-client 2>&1 | tee /tmp/mysql_install.log; then
                     # 验证是否真正安装成功
                     if verify_mysql_installation /tmp/mysql_install.log; then
-                        INSTALL_SUCCESS=1
-                        echo -e "${GREEN}✓ MySQL ${major_minor} 系列安装成功${NC}"
+                    INSTALL_SUCCESS=1
+                    echo -e "${GREEN}✓ MySQL ${major_minor} 系列安装成功${NC}"
                     else
                         echo -e "${RED}✗ MySQL ${major_minor} 系列安装失败${NC}"
                         INSTALL_SUCCESS=0
@@ -1241,19 +1241,19 @@ install_mysql_redhat() {
             if dnf install -y mysql-server mysql 2>&1 | tee /tmp/mysql_install.log; then
                 # 验证是否真正安装成功
                 if verify_mysql_installation /tmp/mysql_install.log; then
-                    INSTALL_SUCCESS=1
+                INSTALL_SUCCESS=1
                     echo -e "${GREEN}✓ MySQL 默认版本安装成功${NC}"
                 else
                     INSTALL_SUCCESS=0
-                fi
-            else
+            fi
+        else
                 INSTALL_SUCCESS=0
             fi
         else
             if yum install -y mysql-server mysql 2>&1 | tee /tmp/mysql_install.log; then
                 # 验证是否真正安装成功
                 if verify_mysql_installation /tmp/mysql_install.log; then
-                    INSTALL_SUCCESS=1
+                INSTALL_SUCCESS=1
                     echo -e "${GREEN}✓ MySQL 默认版本安装成功${NC}"
                 else
                     INSTALL_SUCCESS=0
@@ -1271,20 +1271,20 @@ install_mysql_redhat() {
             if dnf install -y mariadb-server mariadb 2>&1 | tee /tmp/mysql_install.log; then
                 # 验证是否真正安装成功
                 if verify_mysql_installation /tmp/mysql_install.log; then
-                    INSTALL_SUCCESS=1
-                    echo -e "${GREEN}✓ MariaDB 安装完成（MySQL 兼容）${NC}"
+                INSTALL_SUCCESS=1
+                echo -e "${GREEN}✓ MariaDB 安装完成（MySQL 兼容）${NC}"
                 else
                     INSTALL_SUCCESS=0
-                fi
-            else
+            fi
+        else
                 INSTALL_SUCCESS=0
             fi
         else
             if yum install -y mariadb-server mariadb 2>&1 | tee /tmp/mysql_install.log; then
                 # 验证是否真正安装成功
                 if verify_mysql_installation /tmp/mysql_install.log; then
-                    INSTALL_SUCCESS=1
-                    echo -e "${GREEN}✓ MariaDB 安装完成（MySQL 兼容）${NC}"
+                INSTALL_SUCCESS=1
+                echo -e "${GREEN}✓ MariaDB 安装完成（MySQL 兼容）${NC}"
                 else
                     INSTALL_SUCCESS=0
                 fi
@@ -1919,7 +1919,7 @@ setup_mysql_config() {
                 sed -i '/^\[mysqld\]/a binlog_expire_logs_seconds = 604800' "$my_cnf_file" 2>/dev/null
             else
                 # MySQL 5.7: 使用 expire_logs_days
-                sed -i '/^\[mysqld\]/a expire_logs_days = 7' "$my_cnf_file" 2>/dev/null
+            sed -i '/^\[mysqld\]/a expire_logs_days = 7' "$my_cnf_file" 2>/dev/null
             fi
             sed -i '/^\[mysqld\]/a max_binlog_size = 100M' "$my_cnf_file" 2>/dev/null
         else
@@ -2253,12 +2253,64 @@ set_root_password() {
                 echo -e "${YELLOW}提示: 如果刚才输入的密码是正确的，请直接按回车继续${NC}"
                 read -p "是否重新输入密码？[Y/n]: " REENTER_PWD
                 REENTER_PWD="${REENTER_PWD:-Y}"
+                # 如果用户输入的内容看起来像密码（包含特殊字符或长度较长），直接当作密码处理
+                if [ ${#REENTER_PWD} -gt 3 ] || echo "$REENTER_PWD" | grep -q '[^YyNn]'; then
+                    # 用户可能直接输入了密码而不是选择
+                    if echo "$REENTER_PWD" | grep -qE '[^YyNn]'; then
+                        echo -e "${YELLOW}⚠ 检测到您可能直接输入了密码，将使用该密码${NC}"
+                        MYSQL_ROOT_PASSWORD="$REENTER_PWD"
+                        # 重新验证密码复杂度
+                        password_valid=0
+                        local pwd_len=${#MYSQL_ROOT_PASSWORD}
+                        if [ $pwd_len -lt 8 ]; then
+                            password_check_msg="密码长度至少 8 位（当前: ${pwd_len} 字符）"
+                        elif ! echo "$MYSQL_ROOT_PASSWORD" | grep -q '[A-Z]'; then
+                            password_check_msg="密码必须包含至少一个大写字母 (A-Z)"
+                        elif ! echo "$MYSQL_ROOT_PASSWORD" | grep -q '[a-z]'; then
+                            password_check_msg="密码必须包含至少一个小写字母 (a-z)"
+                        elif ! echo "$MYSQL_ROOT_PASSWORD" | grep -q '[0-9]'; then
+                            password_check_msg="密码必须包含至少一个数字 (0-9)"
+                        elif ! echo "$MYSQL_ROOT_PASSWORD" | grep -q '[^A-Za-z0-9]'; then
+                            password_check_msg="密码必须包含至少一个特殊字符 (!@#$%^&*等)"
+                        else
+                            password_valid=1
+                        fi
+                        if [ $password_valid -eq 0 ]; then
+                            echo -e "${RED}✗ 密码不满足复杂度要求: ${password_check_msg}${NC}"
+                            echo -e "${YELLOW}请重新输入满足要求的密码${NC}"
+                            set -e
+                            return 1
+                        else
+                            # 密码验证通过，跳过后续的重新输入流程
+                            echo -e "${GREEN}✓ 密码复杂度验证通过${NC}"
+                            REENTER_PWD="N"
+                        fi
+                    else
+                        # 如果输入的是Y/y，继续重新输入流程
+                        REENTER_PWD="Y"
+                    fi
+                fi
+                
                 if [[ "$REENTER_PWD" =~ ^[Yy]$ ]]; then
+                    # 询问是否显示密码输入
+                    echo -e "${BLUE}密码输入方式：${NC}"
+                    echo "  1. 隐藏输入（推荐，更安全）"
+                    echo "  2. 显示输入（可以看到输入的字符）"
+                    read -p "请选择 [1-2，默认1]: " SHOW_PASSWORD
+                    SHOW_PASSWORD="${SHOW_PASSWORD:-1}"
+                    
+                    if [[ "$SHOW_PASSWORD" == "2" ]]; then
+                        echo -n "请输入新的 MySQL root 密码（必须满足复杂度要求，将显示输入）: "
+                        IFS= read -r MYSQL_ROOT_PASSWORD
+                        echo ""
+                    else
                     echo -n "请输入新的 MySQL root 密码（必须满足复杂度要求）: "
                     stty -echo
                     IFS= read -r MYSQL_ROOT_PASSWORD
                     stty echo
                     echo ""
+                    fi
+                    
                     if [ -z "$MYSQL_ROOT_PASSWORD" ]; then
                         echo -e "${RED}错误: 密码不能为空${NC}"
                         set -e
@@ -3056,6 +3108,56 @@ create_database() {
     read -p "请输入数据库名称 [waf_db]: " DB_NAME
     DB_NAME="${DB_NAME:-waf_db}"
     
+    # 检测是否存在同名数据库
+    local db_exists=0
+    local check_db_query="SELECT SCHEMA_NAME FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME='${DB_NAME}';"
+    
+    if [ -n "$MYSQL_ROOT_PASSWORD" ]; then
+        # 使用配置文件方式查询
+        local temp_cnf=$(mktemp)
+        cat > "$temp_cnf" <<CNF_EOF
+[client]
+user=root
+password=${MYSQL_ROOT_PASSWORD}
+CNF_EOF
+        chmod 600 "$temp_cnf"
+        local db_check_result=$(mysql --defaults-file="$temp_cnf" -e "$check_db_query" 2>/dev/null | grep -v "SCHEMA_NAME" | grep -v "^$")
+        rm -f "$temp_cnf"
+        
+        if [ -z "$db_check_result" ]; then
+            # 如果配置文件方式失败，尝试直接传递密码
+            db_check_result=$(mysql -u root -p"${MYSQL_ROOT_PASSWORD}" -e "$check_db_query" 2>/dev/null | grep -v "SCHEMA_NAME" | grep -v "^$")
+        fi
+        
+        if [ -n "$db_check_result" ]; then
+            db_exists=1
+        fi
+    else
+        db_check_result=$(mysql -u root -e "$check_db_query" 2>/dev/null | grep -v "SCHEMA_NAME" | grep -v "^$")
+        if [ -n "$db_check_result" ]; then
+            db_exists=1
+        fi
+    fi
+    
+    if [ $db_exists -eq 1 ]; then
+        echo -e "${YELLOW}⚠ 检测到数据库 ${DB_NAME} 已存在${NC}"
+        read -p "是否使用现有数据库？[Y/n]: " USE_EXISTING_DB
+        USE_EXISTING_DB="${USE_EXISTING_DB:-Y}"
+        if [[ "$USE_EXISTING_DB" =~ ^[Yy]$ ]]; then
+            echo -e "${GREEN}✓ 将使用现有数据库 ${DB_NAME}${NC}"
+            MYSQL_DATABASE="$DB_NAME"
+            export CREATED_DB_NAME="$DB_NAME"
+            return 0
+        else
+            echo -e "${YELLOW}请重新输入数据库名称${NC}"
+            read -p "请输入新的数据库名称: " DB_NAME
+            if [ -z "$DB_NAME" ]; then
+                echo -e "${RED}错误: 数据库名称不能为空${NC}"
+                return 1
+            fi
+        fi
+    fi
+    
     # 创建数据库
     echo "正在创建数据库 ${DB_NAME}..."
     local db_create_output=""
@@ -3279,6 +3381,105 @@ create_database_user() {
     read -p "请输入数据库用户名 [waf_user]: " DB_USER
     DB_USER="${DB_USER:-waf_user}"
     
+    # 检测是否存在同名用户
+    local user_exists=0
+    local check_user_query="SELECT CONCAT(User, '@', Host) as 'User@Host' FROM mysql.user WHERE User='${DB_USER}';"
+    
+    if [ -n "$MYSQL_ROOT_PASSWORD" ]; then
+        # 使用配置文件方式查询
+        local temp_cnf=$(mktemp)
+        cat > "$temp_cnf" <<CNF_EOF
+[client]
+user=root
+password=${MYSQL_ROOT_PASSWORD}
+CNF_EOF
+        chmod 600 "$temp_cnf"
+        local user_check_result=$(mysql --defaults-file="$temp_cnf" -e "$check_user_query" 2>/dev/null | grep -v "User@Host" | grep -v "^$" | grep -E "${DB_USER}@")
+        rm -f "$temp_cnf"
+        
+        if [ -z "$user_check_result" ]; then
+            # 如果配置文件方式失败，尝试直接传递密码
+            user_check_result=$(mysql -u root -p"${MYSQL_ROOT_PASSWORD}" -e "$check_user_query" 2>/dev/null | grep -v "User@Host" | grep -v "^$" | grep -E "${DB_USER}@")
+        fi
+        
+        if [ -n "$user_check_result" ]; then
+            user_exists=1
+        fi
+    else
+        user_check_result=$(mysql -u root -e "$check_user_query" 2>/dev/null | grep -v "User@Host" | grep -v "^$" | grep -E "${DB_USER}@")
+        if [ -n "$user_check_result" ]; then
+            user_exists=1
+        fi
+    fi
+    
+    if [ $user_exists -eq 1 ]; then
+        echo -e "${YELLOW}⚠ 检测到用户 ${DB_USER} 已存在${NC}"
+        echo "  现有用户:"
+        while IFS= read -r line; do
+            if [ -n "$line" ]; then
+                echo "    ${line}"
+            fi
+        done <<< "$user_check_result"
+        echo ""
+        read -p "是否使用现有用户？[Y/n]: " USE_EXISTING_USER
+        USE_EXISTING_USER="${USE_EXISTING_USER:-Y}"
+        if [[ "$USE_EXISTING_USER" =~ ^[Yy]$ ]]; then
+            echo -e "${GREEN}✓ 将使用现有用户 ${DB_USER}${NC}"
+            read -sp "请输入用户 ${DB_USER} 的密码: " DB_USER_PASSWORD
+            echo ""
+            if [ -z "$DB_USER_PASSWORD" ]; then
+                echo -e "${RED}错误: 用户密码不能为空${NC}"
+                return 1
+            fi
+            # 验证用户密码是否正确
+            local verify_user_cnf=$(mktemp)
+            cat > "$verify_user_cnf" <<CNF_EOF
+[client]
+user=${DB_USER}
+password=${DB_USER_PASSWORD}
+CNF_EOF
+            chmod 600 "$verify_user_cnf"
+            local verify_result=$(mysql --defaults-file="$verify_user_cnf" -e "SELECT 1;" 2>/dev/null)
+            rm -f "$verify_user_cnf"
+            
+            if [ -z "$verify_result" ]; then
+                verify_result=$(mysql -u "${DB_USER}" -p"${DB_USER_PASSWORD}" -e "SELECT 1;" 2>/dev/null)
+            fi
+            
+            if [ -n "$verify_result" ]; then
+                echo -e "${GREEN}✓ 用户密码验证成功${NC}"
+                # 确保用户有数据库权限
+                if [ -n "$MYSQL_ROOT_PASSWORD" ]; then
+                    mysql -u root -p"${MYSQL_ROOT_PASSWORD}" <<EOF 2>/dev/null
+GRANT ALL PRIVILEGES ON ${MYSQL_DATABASE}.* TO '${DB_USER}'@'localhost';
+FLUSH PRIVILEGES;
+EOF
+                else
+                    mysql -u root <<EOF 2>/dev/null
+GRANT ALL PRIVILEGES ON ${MYSQL_DATABASE}.* TO '${DB_USER}'@'localhost';
+FLUSH PRIVILEGES;
+EOF
+                fi
+                MYSQL_USER="$DB_USER"
+                MYSQL_USER_PASSWORD="$DB_USER_PASSWORD"
+                export MYSQL_USER_FOR_WAF="$DB_USER"
+                export MYSQL_PASSWORD_FOR_WAF="$DB_USER_PASSWORD"
+                export USE_NEW_USER="Y"
+                return 0
+            else
+                echo -e "${RED}✗ 用户密码验证失败，请重新输入${NC}"
+                return 1
+            fi
+        else
+            echo -e "${YELLOW}请重新输入用户名${NC}"
+            read -p "请输入新的数据库用户名: " DB_USER
+            if [ -z "$DB_USER" ]; then
+                echo -e "${RED}错误: 用户名不能为空${NC}"
+                return 1
+            fi
+        fi
+    fi
+    
     # 交互式输入密码
     read -sp "请输入数据库用户密码: " DB_USER_PASSWORD
     echo ""
@@ -3391,6 +3592,52 @@ init_database() {
         return 1
     fi
     
+    # 检测数据库内是否有数据
+    local has_data=0
+    local check_data_query="SELECT COUNT(*) as table_count FROM information_schema.tables WHERE table_schema='${MYSQL_DATABASE}';"
+    
+    if [ -n "$MYSQL_USER_PASSWORD" ]; then
+        # 使用配置文件方式查询
+        local temp_cnf=$(mktemp)
+        cat > "$temp_cnf" <<CNF_EOF
+[client]
+user=${MYSQL_USER}
+password=${MYSQL_USER_PASSWORD}
+CNF_EOF
+        chmod 600 "$temp_cnf"
+        local table_count=$(mysql --defaults-file="$temp_cnf" -e "$check_data_query" 2>/dev/null | grep -v "table_count" | grep -v "^$" | awk '{print $1}')
+        rm -f "$temp_cnf"
+        
+        if [ -z "$table_count" ]; then
+            # 如果配置文件方式失败，尝试直接传递密码
+            table_count=$(mysql -h"127.0.0.1" -u"${MYSQL_USER}" -p"${MYSQL_USER_PASSWORD}" -e "$check_data_query" 2>/dev/null | grep -v "table_count" | grep -v "^$" | awk '{print $1}')
+        fi
+        
+        if [ -n "$table_count" ] && [ "$table_count" -gt 0 ]; then
+            has_data=1
+        fi
+    else
+        table_count=$(mysql -h"127.0.0.1" -u"${MYSQL_USER}" -e "$check_data_query" 2>/dev/null | grep -v "table_count" | grep -v "^$" | awk '{print $1}')
+        if [ -n "$table_count" ] && [ "$table_count" -gt 0 ]; then
+            has_data=1
+        fi
+    fi
+    
+    if [ $has_data -eq 1 ]; then
+        echo -e "${YELLOW}⚠ 检测到数据库 ${MYSQL_DATABASE} 中已有数据（${table_count} 个表）${NC}"
+        echo -e "${RED}警告: 导入 SQL 脚本可能会覆盖现有数据！${NC}"
+        echo ""
+        read -p "是否继续导入 SQL 脚本（将覆盖现有数据）？[y/N]: " OVERWRITE_DATA
+        OVERWRITE_DATA="${OVERWRITE_DATA:-N}"
+        if [[ ! "$OVERWRITE_DATA" =~ ^[Yy]$ ]]; then
+            echo -e "${YELLOW}跳过 SQL 脚本导入${NC}"
+            echo -e "${BLUE}提示: 如需导入，可以稍后手动执行:${NC}"
+            echo "  mysql -u ${MYSQL_USER} -p ${MYSQL_DATABASE} < ${SQL_FILE}"
+            return 0
+        fi
+        echo -e "${YELLOW}⚠ 将覆盖数据库中的现有数据${NC}"
+    fi
+    
     # 导入 SQL 脚本
     echo "正在导入 SQL 脚本: ${SQL_FILE}"
     if [ -n "$MYSQL_USER_PASSWORD" ]; then
@@ -3403,17 +3650,132 @@ init_database() {
     
     if [ $SQL_EXIT_CODE -eq 0 ]; then
         echo -e "${GREEN}✓ 数据库初始化成功${NC}"
+        # 显示安装总结
+        show_installation_summary
     else
         # 检查是否是"表已存在"的错误（这是正常的）
         if echo "$SQL_OUTPUT" | grep -qi "already exists\|Duplicate\|exists"; then
             echo -e "${YELLOW}⚠ 部分表可能已存在，这是正常的${NC}"
             echo -e "${GREEN}✓ 数据库初始化完成${NC}"
+            # 显示安装总结
+            show_installation_summary
         else
             echo -e "${YELLOW}⚠ 数据库初始化可能有问题，请检查错误信息${NC}"
             echo "错误信息："
             echo "$SQL_OUTPUT" | head -20
         fi
     fi
+}
+
+# 显示安装总结信息
+show_installation_summary() {
+    echo ""
+    echo -e "${GREEN}========================================${NC}"
+    echo -e "${GREEN}数据库安装已完成，SQL已全部导入${NC}"
+    echo -e "${GREEN}========================================${NC}"
+    echo ""
+    
+    # 显示root密码
+    if [ -n "$MYSQL_ROOT_PASSWORD" ]; then
+        echo -e "${BLUE}MySQL Root 密码:${NC}"
+        echo "  ${MYSQL_ROOT_PASSWORD}"
+        echo ""
+    else
+        echo -e "${YELLOW}⚠ MySQL Root 密码未设置${NC}"
+        echo ""
+    fi
+    
+    # 显示数据库信息
+    if [ -n "$MYSQL_DATABASE" ]; then
+        echo -e "${BLUE}创建的数据库:${NC}"
+        echo "  数据库名称: ${MYSQL_DATABASE}"
+        echo ""
+    else
+        echo -e "${YELLOW}⚠ 未创建数据库${NC}"
+        echo ""
+    fi
+    
+    # 显示用户信息（用户名@host格式）
+    echo -e "${BLUE}用户信息:${NC}"
+    
+    # 查询并显示root用户的host信息
+    local root_hosts=""
+    if [ -n "$MYSQL_ROOT_PASSWORD" ]; then
+        # 使用配置文件方式查询，避免密码泄露
+        local temp_cnf=$(mktemp)
+        cat > "$temp_cnf" <<CNF_EOF
+[client]
+user=root
+password=${MYSQL_ROOT_PASSWORD}
+CNF_EOF
+        chmod 600 "$temp_cnf"
+        root_hosts=$(mysql --defaults-file="$temp_cnf" -e "SELECT CONCAT(User, '@', Host) as 'User@Host' FROM mysql.user WHERE User='root' ORDER BY Host;" 2>/dev/null | grep -v "User@Host" | grep -v "^$" | grep -E "root@")
+        rm -f "$temp_cnf"
+        
+        # 如果配置文件方式失败，尝试直接传递密码
+        if [ -z "$root_hosts" ]; then
+            root_hosts=$(mysql -u root -p"${MYSQL_ROOT_PASSWORD}" -e "SELECT CONCAT(User, '@', Host) as 'User@Host' FROM mysql.user WHERE User='root' ORDER BY Host;" 2>/dev/null | grep -v "User@Host" | grep -v "^$" | grep -E "root@")
+        fi
+    else
+        root_hosts=$(mysql -u root -e "SELECT CONCAT(User, '@', Host) as 'User@Host' FROM mysql.user WHERE User='root' ORDER BY Host;" 2>/dev/null | grep -v "User@Host" | grep -v "^$" | grep -E "root@")
+    fi
+    
+    if [ -n "$root_hosts" ]; then
+        echo "  root用户:"
+        while IFS= read -r line; do
+            if [ -n "$line" ]; then
+                echo "    ${line}"
+            fi
+        done <<< "$root_hosts"
+        if [ -n "$MYSQL_ROOT_PASSWORD" ]; then
+            echo "    密码: ${MYSQL_ROOT_PASSWORD}"
+        fi
+        echo ""
+    fi
+    
+    # 显示创建的用户（如果不是root）
+    if [ -n "$MYSQL_USER" ] && [ "$MYSQL_USER" != "root" ]; then
+        # 查询用户的host信息
+        local user_hosts=""
+        if [ -n "$MYSQL_ROOT_PASSWORD" ]; then
+            local temp_cnf=$(mktemp)
+            cat > "$temp_cnf" <<CNF_EOF
+[client]
+user=root
+password=${MYSQL_ROOT_PASSWORD}
+CNF_EOF
+            chmod 600 "$temp_cnf"
+            user_hosts=$(mysql --defaults-file="$temp_cnf" -e "SELECT CONCAT(User, '@', Host) as 'User@Host' FROM mysql.user WHERE User='${MYSQL_USER}' ORDER BY Host;" 2>/dev/null | grep -v "User@Host" | grep -v "^$" | grep -E "${MYSQL_USER}@")
+            rm -f "$temp_cnf"
+            
+            # 如果配置文件方式失败，尝试直接传递密码
+            if [ -z "$user_hosts" ]; then
+                user_hosts=$(mysql -u root -p"${MYSQL_ROOT_PASSWORD}" -e "SELECT CONCAT(User, '@', Host) as 'User@Host' FROM mysql.user WHERE User='${MYSQL_USER}' ORDER BY Host;" 2>/dev/null | grep -v "User@Host" | grep -v "^$" | grep -E "${MYSQL_USER}@")
+            fi
+        else
+            user_hosts=$(mysql -u root -e "SELECT CONCAT(User, '@', Host) as 'User@Host' FROM mysql.user WHERE User='${MYSQL_USER}' ORDER BY Host;" 2>/dev/null | grep -v "User@Host" | grep -v "^$" | grep -E "${MYSQL_USER}@")
+        fi
+        
+        if [ -n "$user_hosts" ]; then
+            echo "  创建的用户:"
+            while IFS= read -r line; do
+                if [ -n "$line" ]; then
+                    echo "    ${line}"
+                fi
+            done <<< "$user_hosts"
+            echo "    密码: ${MYSQL_USER_PASSWORD}"
+            echo ""
+        else
+            # 如果查询失败，使用默认值
+            echo "  创建的用户:"
+            echo "    ${MYSQL_USER}@localhost"
+            echo "    密码: ${MYSQL_USER_PASSWORD}"
+            echo ""
+        fi
+    fi
+    
+    echo -e "${GREEN}========================================${NC}"
+    echo ""
 }
 
 # 显示后续步骤
@@ -3433,15 +3795,19 @@ show_next_steps() {
         echo ""
     fi
     
-    # 显示创建的数据库和用户信息
+    # 显示创建的数据库和用户信息（如果已经显示过总结，这里只显示简要信息）
     if [ -n "$MYSQL_DATABASE" ]; then
         echo -e "${BLUE}数据库信息:${NC}"
         echo "  数据库名称: ${MYSQL_DATABASE}"
         if [ -n "$MYSQL_USER" ] && [ "$MYSQL_USER" != "root" ]; then
             echo "  用户名: ${MYSQL_USER}"
             echo "  密码: ${MYSQL_USER_PASSWORD}"
+            echo "  Host: localhost"
         else
             echo "  使用 root 用户"
+            if [ -n "$MYSQL_ROOT_PASSWORD" ]; then
+                echo "  Root 密码: ${MYSQL_ROOT_PASSWORD}"
+            fi
         fi
         echo ""
     fi

@@ -54,6 +54,7 @@ echo -e "${GREEN}[3/4] 处理路径配置...${NC}"
 # 更新 nginx.conf 中的项目根目录变量和日志路径
 # 注意：转义 $ 符号，避免被 shell 解释为变量
 # 使用单引号包裹模式部分，双引号包裹替换部分
+# 确保替换后的格式正确：set $project_root "/actual/path";
 sed -i 's|set $project_root "/path/to/project"|set $project_root "'"$PROJECT_ROOT"'"|g' "$NGINX_CONF_DIR/nginx.conf"
 sed -i "s|/path/to/project/logs/error.log|$PROJECT_ROOT/logs/error.log|g" "$NGINX_CONF_DIR/nginx.conf"
 sed -i "s|/path/to/project/logs/nginx.pid|$PROJECT_ROOT/logs/nginx.pid|g" "$NGINX_CONF_DIR/nginx.conf"
@@ -62,6 +63,16 @@ sed -i "s|/path/to/project/logs/nginx.pid|$PROJECT_ROOT/logs/nginx.pid|g" "$NGIN
 # 转义 * 和 . 避免被 shell 解释为正则表达式
 sed -i "s|include /path/to/project/conf.d/set_conf/\*\.conf|include $PROJECT_ROOT/conf.d/set_conf/*.conf|g" "$NGINX_CONF_DIR/nginx.conf"
 sed -i "s|include /path/to/project/conf.d/vhost_conf/\*\.conf|include $PROJECT_ROOT/conf.d/vhost_conf/*.conf|g" "$NGINX_CONF_DIR/nginx.conf"
+
+# 验证替换后的内容（调试用）
+if [ -f "$NGINX_CONF_DIR/nginx.conf" ]; then
+    # 检查 set 指令是否在 http 块内
+    if ! grep -q "^http {" "$NGINX_CONF_DIR/nginx.conf" || ! awk '/^http {/,/^}/ {if (/set \$project_root/) print}' "$NGINX_CONF_DIR/nginx.conf" | grep -q "set \$project_root"; then
+        echo -e "${YELLOW}⚠ 警告: set \$project_root 可能不在 http 块内，检查配置文件...${NC}"
+        # 显示第 29-35 行内容
+        sed -n '29,35p' "$NGINX_CONF_DIR/nginx.conf"
+    fi
+fi
 
 # 更新 conf.d 配置文件中的路径（在项目目录中直接修改）
 # 检查并替换所有配置文件中的路径占位符
@@ -105,12 +116,38 @@ echo -e "${GREEN}[4/4] 验证配置...${NC}"
 # 验证 nginx.conf 语法
 if [ -f "${OPENRESTY_PREFIX}/bin/openresty" ]; then
     echo "验证 nginx.conf 语法..."
+    
+    # 先检查配置文件结构，确保 set 指令在 http 块内
+    if [ -f "$NGINX_CONF_DIR/nginx.conf" ]; then
+        # 检查 set 指令是否在 http 块内
+        local set_line=$(grep -n "set \$project_root" "$NGINX_CONF_DIR/nginx.conf" | cut -d: -f1 | head -1)
+        local http_start=$(grep -n "^http {" "$NGINX_CONF_DIR/nginx.conf" | cut -d: -f1 | head -1)
+        
+        if [ -n "$set_line" ] && [ -n "$http_start" ]; then
+            # 检查 set 指令是否在 http 块之后
+            if [ "$set_line" -lt "$http_start" ]; then
+                echo -e "${YELLOW}⚠ 检测到 set 指令在 http 块前，尝试修复...${NC}"
+                # 删除原来的 set 指令
+                sed -i "${set_line}d" "$NGINX_CONF_DIR/nginx.conf"
+                # 在 http 块内第一行添加 set 指令
+                sed -i "${http_start}a\    set \$project_root \"$PROJECT_ROOT\";" "$NGINX_CONF_DIR/nginx.conf"
+                echo -e "${GREEN}✓ 已修复: 将 set 指令移动到 http 块内${NC}"
+            fi
+        fi
+    fi
+    
     if ${OPENRESTY_PREFIX}/bin/openresty -t > /dev/null 2>&1; then
         echo -e "${GREEN}✓ nginx.conf 语法正确${NC}"
     else
         echo -e "${RED}✗ nginx.conf 语法错误${NC}"
         echo "错误信息："
         ${OPENRESTY_PREFIX}/bin/openresty -t 2>&1 | head -20
+        echo ""
+        echo -e "${YELLOW}显示配置文件相关部分（第 29-35 行）：${NC}"
+        if [ -f "$NGINX_CONF_DIR/nginx.conf" ]; then
+            sed -n '29,35p' "$NGINX_CONF_DIR/nginx.conf"
+        fi
+        echo ""
         echo -e "${YELLOW}⚠ 请修复配置文件后重新部署${NC}"
         exit 1
     fi

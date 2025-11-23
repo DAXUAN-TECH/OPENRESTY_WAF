@@ -487,8 +487,12 @@ set_root_password() {
         read -p "是否现在设置 root 密码？[Y/n]: " SET_PASSWORD
         SET_PASSWORD="${SET_PASSWORD:-Y}"
         if [[ "$SET_PASSWORD" =~ ^[Yy]$ ]]; then
-            # 使用 IFS= 确保密码中的空格等字符不会被截断
-            IFS= read -rsp "请输入新的 MySQL root 密码: " MYSQL_ROOT_PASSWORD
+            # 使用更可靠的方法读取密码（避免特殊字符问题）
+            echo -n "请输入新的 MySQL root 密码: "
+            # 禁用 echo，读取密码
+            stty -echo
+            IFS= read -r MYSQL_ROOT_PASSWORD
+            stty echo
             echo ""
             if [ -z "$MYSQL_ROOT_PASSWORD" ]; then
                 echo -e "${RED}错误: 密码不能为空${NC}"
@@ -588,7 +592,10 @@ set_root_password() {
                 read -p "是否重新输入密码？[Y/n]: " REENTER_PWD
                 REENTER_PWD="${REENTER_PWD:-Y}"
                 if [[ "$REENTER_PWD" =~ ^[Yy]$ ]]; then
-                    IFS= read -rsp "请输入新的 MySQL root 密码（必须满足复杂度要求）: " MYSQL_ROOT_PASSWORD
+                    echo -n "请输入新的 MySQL root 密码（必须满足复杂度要求）: "
+                    stty -echo
+                    IFS= read -r MYSQL_ROOT_PASSWORD
+                    stty echo
                     echo ""
                     if [ -z "$MYSQL_ROOT_PASSWORD" ]; then
                         echo -e "${RED}错误: 密码不能为空${NC}"
@@ -627,42 +634,16 @@ set_root_password() {
             
             echo -e "${GREEN}✓ 密码复杂度验证通过${NC}"
             
-            # 生成修改密码的 SQL 文件
-            echo "准备修改密码..."
-            local sql_file=$(mktemp)
-            if command -v python3 &> /dev/null; then
-                # 使用 Python 安全地转义密码并生成 SQL
-                NEW_MYSQL_PASSWORD="$MYSQL_ROOT_PASSWORD" python3 <<'PYTHON_EOF' > "$sql_file"
-import os
-import sys
-new_password = os.environ.get('NEW_MYSQL_PASSWORD', '')
-# 转义 SQL 中的单引号（将 ' 替换为 ''）
-escaped_password = new_password.replace("'", "''")
-# 生成修改所有 root 用户密码的 SQL
-sql = f"""ALTER USER 'root'@'localhost' IDENTIFIED BY '{escaped_password}';
-ALTER USER 'root'@'127.0.0.1' IDENTIFIED BY '{escaped_password}';
-ALTER USER 'root'@'::1' IDENTIFIED BY '{escaped_password}';
-FLUSH PRIVILEGES;"""
-print(sql)
-PYTHON_EOF
-            else
-                # 如果没有 Python，使用 sed 转义单引号
-                local escaped_password=$(echo "$MYSQL_ROOT_PASSWORD" | sed "s/'/''/g")
-                cat > "$sql_file" <<SQL_EOF
-ALTER USER 'root'@'localhost' IDENTIFIED BY '${escaped_password}';
-ALTER USER 'root'@'127.0.0.1' IDENTIFIED BY '${escaped_password}';
-ALTER USER 'root'@'::1' IDENTIFIED BY '${escaped_password}';
-FLUSH PRIVILEGES;
-SQL_EOF
-            fi
+            # 步骤 1: 修改 root 密码（必须满足密码复杂度）
+            echo ""
+            echo -e "${BLUE}步骤 1: 修改 root 密码...${NC}"
             
-            # 执行密码修改（兼容不同的 MySQL 版本）
-            echo "正在修改密码..."
+            # 执行密码修改（使用临时密码）
             local error_output=""
             local exit_code=1
             local has_error=1
             
-            # 方法1: 使用配置文件方式（推荐，但某些版本可能不支持）
+            # 创建临时配置文件用于传递临时密码
             local temp_cnf=$(mktemp)
             cat > "$temp_cnf" <<CNF_EOF
 [client]
@@ -678,90 +659,65 @@ CNF_EOF
             # 检查是否是因为 --defaults-file 不支持而失败
             local use_defaults_file=1
             if [ $test_exit_code -ne 0 ] && echo "$test_output" | grep -qi "unknown variable.*defaults-file"; then
-                # 配置文件方式不可用
                 use_defaults_file=0
                 echo -e "${YELLOW}⚠ 检测到 --defaults-file 不可用，使用直接传递密码方式${NC}"
             elif [ $test_exit_code -ne 0 ]; then
-                # 其他错误，但先尝试使用配置文件方式，如果失败再回退
                 use_defaults_file=1
             fi
             
-            # 执行密码修改（尝试多种方式）
-            # 方法1: 尝试使用 SQL 文件 + 配置文件方式
-            if [ $use_defaults_file -eq 1 ]; then
-                error_output=$(mysql --connect-expired-password --defaults-file="$temp_cnf" < "$sql_file" 2>&1)
-                exit_code=$?
-                
-                # 如果失败且是因为 --defaults-file 不支持，回退到直接传递密码
-                if [ $exit_code -ne 0 ] && echo "$error_output" | grep -qi "unknown variable.*defaults-file"; then
-                    echo -e "${YELLOW}⚠ 配置文件方式失败，尝试直接传递密码方式${NC}"
-                    error_output=$(mysql --connect-expired-password -u root -p"${TEMP_PASSWORD}" < "$sql_file" 2>&1)
-                    exit_code=$?
-                fi
-            else
-                # 直接使用传递密码方式
-                error_output=$(mysql --connect-expired-password -u root -p"${TEMP_PASSWORD}" < "$sql_file" 2>&1)
-                exit_code=$?
-            fi
+            # 转义密码中的单引号
+            local escaped_password=$(echo "$MYSQL_ROOT_PASSWORD" | sed "s/'/''/g")
+            local alter_sql="ALTER USER 'root'@'localhost' IDENTIFIED BY '${escaped_password}';"
             
-            # 如果 SQL 文件方式失败，尝试使用 -e 参数直接执行（更直接，类似手动执行的方式）
-            if [ $exit_code -ne 0 ]; then
-                echo -e "${YELLOW}⚠ SQL 文件方式失败，尝试使用 -e 参数直接执行（类似手动执行方式）${NC}"
-                # 使用 -e 参数直接执行单个 ALTER USER 命令（最可靠的方式）
-                local alter_sql="ALTER USER 'root'@'localhost' IDENTIFIED BY '$(echo "$MYSQL_ROOT_PASSWORD" | sed "s/'/''/g")';"
-                
-                if [ $use_defaults_file -eq 1 ]; then
-                    error_output=$(mysql --connect-expired-password --defaults-file="$temp_cnf" -e "$alter_sql" 2>&1)
-                    exit_code=$?
-                    if [ $exit_code -ne 0 ] && echo "$error_output" | grep -qi "unknown variable.*defaults-file"; then
-                        # 使用直接传递密码的方式（类似用户手动执行的方式）
-                        error_output=$(mysql --connect-expired-password -u root -p"${TEMP_PASSWORD}" -e "$alter_sql" 2>&1)
-                        exit_code=$?
-                    fi
-                else
-                    # 使用直接传递密码的方式（类似用户手动执行的方式）
+            # 执行密码修改（使用 -e 参数，类似手动执行方式）
+            if [ $use_defaults_file -eq 1 ]; then
+                error_output=$(mysql --connect-expired-password --defaults-file="$temp_cnf" -e "$alter_sql" 2>&1)
+                exit_code=$?
+                if [ $exit_code -ne 0 ] && echo "$error_output" | grep -qi "unknown variable.*defaults-file"; then
                     error_output=$(mysql --connect-expired-password -u root -p"${TEMP_PASSWORD}" -e "$alter_sql" 2>&1)
                     exit_code=$?
                 fi
+            else
+                error_output=$(mysql --connect-expired-password -u root -p"${TEMP_PASSWORD}" -e "$alter_sql" 2>&1)
+                exit_code=$?
+            fi
+            
+            # 如果第一个用户修改成功，继续修改其他用户
+            if [ $exit_code -eq 0 ]; then
+                local alter_sql2="ALTER USER 'root'@'127.0.0.1' IDENTIFIED BY '${escaped_password}';"
+                local alter_sql3="ALTER USER 'root'@'::1' IDENTIFIED BY '${escaped_password}';"
+                local flush_sql="FLUSH PRIVILEGES;"
                 
-                # 如果第一个用户修改成功，继续修改其他用户
-                if [ $exit_code -eq 0 ]; then
-                    local alter_sql2="ALTER USER 'root'@'127.0.0.1' IDENTIFIED BY '$(echo "$MYSQL_ROOT_PASSWORD" | sed "s/'/''/g")';"
-                    local alter_sql3="ALTER USER 'root'@'::1' IDENTIFIED BY '$(echo "$MYSQL_ROOT_PASSWORD" | sed "s/'/''/g")';"
-                    local flush_sql="FLUSH PRIVILEGES;"
-                    
-                    if [ $use_defaults_file -eq 1 ]; then
-                        mysql --connect-expired-password --defaults-file="$temp_cnf" -e "$alter_sql2" 2>/dev/null
-                        mysql --connect-expired-password --defaults-file="$temp_cnf" -e "$alter_sql3" 2>/dev/null
-                        mysql --connect-expired-password --defaults-file="$temp_cnf" -e "$flush_sql" 2>/dev/null
-                    else
-                        mysql --connect-expired-password -u root -p"${TEMP_PASSWORD}" -e "$alter_sql2" 2>/dev/null
-                        mysql --connect-expired-password -u root -p"${TEMP_PASSWORD}" -e "$alter_sql3" 2>/dev/null
-                        mysql --connect-expired-password -u root -p"${TEMP_PASSWORD}" -e "$flush_sql" 2>/dev/null
-                    fi
+                if [ $use_defaults_file -eq 1 ]; then
+                    mysql --connect-expired-password --defaults-file="$temp_cnf" -e "$alter_sql2" 2>/dev/null
+                    mysql --connect-expired-password --defaults-file="$temp_cnf" -e "$alter_sql3" 2>/dev/null
+                    mysql --connect-expired-password --defaults-file="$temp_cnf" -e "$flush_sql" 2>/dev/null
+                else
+                    mysql --connect-expired-password -u root -p"${TEMP_PASSWORD}" -e "$alter_sql2" 2>/dev/null
+                    mysql --connect-expired-password -u root -p"${TEMP_PASSWORD}" -e "$alter_sql3" 2>/dev/null
+                    mysql --connect-expired-password -u root -p"${TEMP_PASSWORD}" -e "$flush_sql" 2>/dev/null
+                fi
+                has_error=0
+            else
+                # 检查是否是密码策略错误（ERROR 1819）
+                if echo "$error_output" | grep -qi "1819\|does not satisfy.*policy\|policy requirements"; then
+                    echo -e "${YELLOW}⚠ 密码不满足当前策略要求，需要先设置密码策略${NC}"
+                    echo -e "${YELLOW}错误信息: $(echo "$error_output" | grep -vE 'Warning: Using a password' | head -1)${NC}"
+                    echo ""
+                    echo -e "${YELLOW}提示: 密码必须满足 MySQL 当前的密码策略要求${NC}"
+                    echo -e "${YELLOW}请重新输入一个满足策略要求的密码，或手动修改密码策略后重试${NC}"
+                    rm -f "$temp_cnf"
+                    set -e
+                    return 1
+                else
+                    has_error=1
                 fi
             fi
             
             rm -f "$temp_cnf"
             
-            # 检查错误输出中是否包含真正的错误（不仅仅是警告）
-            if [ $exit_code -eq 0 ]; then
-                has_error=0
-            else
-                # 检查是否是真正的错误（排除警告）
-                local real_error=$(echo "$error_output" | grep -viE "Warning: Using a password|Using a password on the command line" | grep -iE "error|failed|denied|syntax|access denied" || true)
-                if [ -n "$real_error" ]; then
-                    has_error=1
-                else
-                    # 如果只有警告信息，可能实际上成功了
-                    has_error=0
-                fi
-            fi
-            
-            rm -f "$sql_file"
-            
             if [ $has_error -eq 0 ]; then
-                echo -e "${GREEN}✓ root 密码修改命令执行成功${NC}"
+                echo -e "${GREEN}✓ root 密码修改成功${NC}"
                 # 等待一下让密码生效
                 sleep 2
                 
@@ -805,12 +761,12 @@ CNF_EOF
                 if [ $verify_exit_code -eq 0 ]; then
                     echo -e "${GREEN}✓ 新密码验证成功${NC}"
                     
-                    # 步骤 2-7: 设置密码策略、修改配置文件、重启服务、验证
+                    # 步骤 2-7: 使用新密码设置密码策略、修改配置文件、重启服务、验证
                     if [ -n "$mysql_version" ]; then
                         echo ""
-                        echo -e "${BLUE}步骤 2: 设置密码策略...${NC}"
+                        echo -e "${BLUE}步骤 2: 设置密码策略为 LOW（使用新密码）...${NC}"
                         
-                        # 创建新密码的配置文件
+                        # 创建新密码的配置文件（用于后续步骤）
                         local new_pwd_cnf=$(mktemp)
                         cat > "$new_pwd_cnf" <<CNF_EOF
 [client]
@@ -828,19 +784,15 @@ CNF_EOF
                             use_new_defaults_file=0
                         fi
                         
-                        # 设置密码策略
+                        # 设置密码策略为 LOW
                         local policy_sql=""
-                        local policy_length_sql=""
                         if [ "$mysql_version" = "8.0" ]; then
                             policy_sql="SET GLOBAL validate_password.policy = LOW;"
-                            policy_length_sql="SET GLOBAL validate_password.length = 6;"
                         elif [ "$mysql_version" = "5.7" ]; then
                             policy_sql="SET GLOBAL validate_password_policy = LOW;"
-                            policy_length_sql="SET GLOBAL validate_password_length = 6;"
                         fi
                         
                         if [ -n "$policy_sql" ]; then
-                            # 设置密码策略为 LOW
                             local policy_output=""
                             local policy_exit_code=1
                             if [ $use_new_defaults_file -eq 1 ]; then
@@ -864,9 +816,18 @@ CNF_EOF
                                     echo -e "${YELLOW}⚠ 密码策略设置失败: $(echo "$policy_output" | grep -vE 'Warning: Using a password' | head -1)${NC}"
                                 fi
                             fi
-                            
-                            # 设置密码最小长度为 6
-                            echo -e "${BLUE}步骤 3: 设置密码最小长度为 6...${NC}"
+                        fi
+                        
+                        # 步骤 3: 设置密码最小长度为 6
+                        echo -e "${BLUE}步骤 3: 设置密码最小长度为 6（使用新密码）...${NC}"
+                        local policy_length_sql=""
+                        if [ "$mysql_version" = "8.0" ]; then
+                            policy_length_sql="SET GLOBAL validate_password.length = 6;"
+                        elif [ "$mysql_version" = "5.7" ]; then
+                            policy_length_sql="SET GLOBAL validate_password_length = 6;"
+                        fi
+                        
+                        if [ -n "$policy_length_sql" ]; then
                             local length_output=""
                             local length_exit_code=1
                             if [ $use_new_defaults_file -eq 1 ]; then
@@ -892,7 +853,7 @@ CNF_EOF
                             fi
                         fi
                         
-                        rm -f "$new_pwd_cnf"
+                        # 保留 new_pwd_cnf 用于后续验证步骤
                         
                         # 步骤 4: 修改 my.cnf 配置文件
                         echo -e "${BLUE}步骤 4: 修改 MySQL 配置文件 my.cnf...${NC}"
@@ -976,25 +937,13 @@ CNF_EOF
                         # 步骤 6: 验证修改的内容
                         echo -e "${BLUE}步骤 6: 验证修改的内容...${NC}"
                         
-                        # 验证密码策略
-                        local verify_cnf=$(mktemp)
-                        cat > "$verify_cnf" <<CNF_EOF
-[client]
-user=root
-password=${MYSQL_ROOT_PASSWORD}
-CNF_EOF
-                        chmod 600 "$verify_cnf"
-                        
-                        local verify_use_defaults=1
-                        local verify_test=$(mysql --defaults-file="$verify_cnf" -e "SELECT 1;" 2>&1)
-                        if [ $? -ne 0 ] && echo "$verify_test" | grep -qi "unknown variable.*defaults-file"; then
-                            verify_use_defaults=0
-                        fi
+                        # 使用已有的 new_pwd_cnf 进行验证
+                        local verify_use_defaults=$use_new_defaults_file
                         
                         if [ "$mysql_version" = "8.0" ]; then
                             local policy_check=""
                             if [ $verify_use_defaults -eq 1 ]; then
-                                policy_check=$(mysql --defaults-file="$verify_cnf" -e "SHOW VARIABLES LIKE 'validate_password.policy';" 2>&1 | grep -i "validate_password.policy" | awk '{print $2}')
+                                policy_check=$(mysql --defaults-file="$new_pwd_cnf" -e "SHOW VARIABLES LIKE 'validate_password.policy';" 2>&1 | grep -i "validate_password.policy" | awk '{print $2}')
                             else
                                 policy_check=$(mysql -u root -p"${MYSQL_ROOT_PASSWORD}" -e "SHOW VARIABLES LIKE 'validate_password.policy';" 2>&1 | grep -i "validate_password.policy" | awk '{print $2}')
                             fi
@@ -1006,7 +955,7 @@ CNF_EOF
                             
                             local length_check=""
                             if [ $verify_use_defaults -eq 1 ]; then
-                                length_check=$(mysql --defaults-file="$verify_cnf" -e "SHOW VARIABLES LIKE 'validate_password.length';" 2>&1 | grep -i "validate_password.length" | awk '{print $2}')
+                                length_check=$(mysql --defaults-file="$new_pwd_cnf" -e "SHOW VARIABLES LIKE 'validate_password.length';" 2>&1 | grep -i "validate_password.length" | awk '{print $2}')
                             else
                                 length_check=$(mysql -u root -p"${MYSQL_ROOT_PASSWORD}" -e "SHOW VARIABLES LIKE 'validate_password.length';" 2>&1 | grep -i "validate_password.length" | awk '{print $2}')
                             fi
@@ -1018,7 +967,7 @@ CNF_EOF
                         elif [ "$mysql_version" = "5.7" ]; then
                             local policy_check=""
                             if [ $verify_use_defaults -eq 1 ]; then
-                                policy_check=$(mysql --defaults-file="$verify_cnf" -e "SHOW VARIABLES LIKE 'validate_password_policy';" 2>&1 | grep -i "validate_password_policy" | awk '{print $2}')
+                                policy_check=$(mysql --defaults-file="$new_pwd_cnf" -e "SHOW VARIABLES LIKE 'validate_password_policy';" 2>&1 | grep -i "validate_password_policy" | awk '{print $2}')
                             else
                                 policy_check=$(mysql -u root -p"${MYSQL_ROOT_PASSWORD}" -e "SHOW VARIABLES LIKE 'validate_password_policy';" 2>&1 | grep -i "validate_password_policy" | awk '{print $2}')
                             fi
@@ -1030,7 +979,7 @@ CNF_EOF
                             
                             local length_check=""
                             if [ $verify_use_defaults -eq 1 ]; then
-                                length_check=$(mysql --defaults-file="$verify_cnf" -e "SHOW VARIABLES LIKE 'validate_password_length';" 2>&1 | grep -i "validate_password_length" | awk '{print $2}')
+                                length_check=$(mysql --defaults-file="$new_pwd_cnf" -e "SHOW VARIABLES LIKE 'validate_password_length';" 2>&1 | grep -i "validate_password_length" | awk '{print $2}')
                             else
                                 length_check=$(mysql -u root -p"${MYSQL_ROOT_PASSWORD}" -e "SHOW VARIABLES LIKE 'validate_password_length';" 2>&1 | grep -i "validate_password_length" | awk '{print $2}')
                             fi
@@ -1044,7 +993,7 @@ CNF_EOF
                         # 验证 lower_case_table_names
                         local case_check=""
                         if [ $verify_use_defaults -eq 1 ]; then
-                            case_check=$(mysql --defaults-file="$verify_cnf" -e "SHOW VARIABLES LIKE 'lower_case_table_names';" 2>&1 | grep -i "lower_case_table_names" | awk '{print $2}')
+                            case_check=$(mysql --defaults-file="$new_pwd_cnf" -e "SHOW VARIABLES LIKE 'lower_case_table_names';" 2>&1 | grep -i "lower_case_table_names" | awk '{print $2}')
                         else
                             case_check=$(mysql -u root -p"${MYSQL_ROOT_PASSWORD}" -e "SHOW VARIABLES LIKE 'lower_case_table_names';" 2>&1 | grep -i "lower_case_table_names" | awk '{print $2}')
                         fi
@@ -1054,7 +1003,7 @@ CNF_EOF
                             echo -e "${YELLOW}⚠ lower_case_table_names 验证: ${case_check:-未设置}（需要重启 MySQL 服务后生效）${NC}"
                         fi
                         
-                        rm -f "$verify_cnf"
+                        rm -f "$new_pwd_cnf"
                         
                         echo -e "${BLUE}步骤 7: 继续下一步...${NC}"
                     fi

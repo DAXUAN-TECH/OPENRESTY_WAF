@@ -765,6 +765,7 @@ check_existing() {
                         ;;
                 esac
             fi
+            # 关闭 RedHat 系列的 if 块（第591行）
         else
             # 非RedHat系列，使用原来的选择方式
             echo ""
@@ -839,6 +840,7 @@ check_existing() {
                 echo -e "${YELLOW}无效选择，默认使用 MySQL 8.0${NC}"
                 ;;
         esac
+        fi
     else
         if [ -n "${MYSQL_VERSION_FROM_ENV:-}" ] && [ "$MYSQL_VERSION" = "${MYSQL_VERSION_FROM_ENV:-}" ]; then
             echo -e "${BLUE}使用环境变量指定的版本: ${MYSQL_VERSION}${NC}"

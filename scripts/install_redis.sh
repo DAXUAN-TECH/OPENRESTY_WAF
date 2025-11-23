@@ -177,8 +177,9 @@ check_existing() {
     if command -v redis-server &> /dev/null; then
         local redis_version=$(redis-server --version 2>&1 | head -n 1)
         echo -e "${YELLOW}检测到已安装 Redis: ${redis_version}${NC}"
-        read -p "是否继续安装/更新？(y/N): " -n 1 -r
+        read -p "是否继续安装/更新？[Y/n]: " -n 1 -r
         echo
+        REPLY="${REPLY:-Y}"
         if [[ ! $REPLY =~ ^[Yy]$ ]]; then
             echo -e "${YELLOW}安装已取消${NC}"
             exit 0

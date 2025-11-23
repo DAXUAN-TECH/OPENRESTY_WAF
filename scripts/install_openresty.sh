@@ -261,63 +261,17 @@ check_existing() {
         fi
         
         echo ""
-        echo "请选择操作："
-        echo "  1. 保留现有安装和配置，跳过安装"
-        echo "  2. 重新安装 OpenResty（保留配置文件）"
-        echo "  3. 完全重新安装（删除所有文件和配置）"
-        read -p "请选择 [1-3]: " REINSTALL_CHOICE
+        read -p "是否重新安装？[Y/n]: " REINSTALL_CHOICE
+        REINSTALL_CHOICE="${REINSTALL_CHOICE:-Y}"
         
-        case "$REINSTALL_CHOICE" in
-            1)
-                echo -e "${GREEN}跳过 OpenResty 安装，保留现有配置${NC}"
-                exit 0
-                ;;
-            2)
-                echo -e "${YELLOW}将重新安装 OpenResty，但保留配置文件${NC}"
-                REINSTALL_MODE="keep_config"
-                ;;
-            3)
-                echo -e "${RED}警告: 将删除所有 OpenResty 文件和配置！${NC}"
-                read -p "确认删除所有文件？[y/N]: " CONFIRM_DELETE
-                CONFIRM_DELETE="${CONFIRM_DELETE:-N}"
-                if [[ "$CONFIRM_DELETE" =~ ^[Yy]$ ]]; then
-                    echo -e "${YELLOW}将完全重新安装 OpenResty，删除所有文件${NC}"
-                    REINSTALL_MODE="delete_all"
-                    
-                    # 停止服务
-                    if command -v systemctl &> /dev/null; then
-                        systemctl stop openresty 2>/dev/null || true
-                    elif [ -f "${INSTALL_DIR}/nginx/logs/nginx.pid" ]; then
-                        ${INSTALL_DIR}/bin/openresty -s quit 2>/dev/null || true
-                    fi
-                    sleep 2
-                    
-                    # 删除安装目录
-                    if [ -d "$INSTALL_DIR" ]; then
-                        echo -e "${YELLOW}正在删除安装目录: ${INSTALL_DIR}${NC}"
-                        rm -rf "$INSTALL_DIR"
-                        echo -e "${GREEN}✓ 安装目录已删除${NC}"
-                    fi
-                    
-                    # 删除服务文件
-                    if [ -f /etc/systemd/system/openresty.service ]; then
-                        rm -f /etc/systemd/system/openresty.service
-                        systemctl daemon-reload 2>/dev/null || true
-                        echo -e "${GREEN}✓ 服务文件已删除${NC}"
-                    fi
-                    
-                    # 删除符号链接
-                    rm -f /usr/local/bin/openresty /usr/local/bin/opm /usr/local/bin/resty 2>/dev/null || true
-                else
-                    echo -e "${GREEN}取消删除，将保留文件重新安装${NC}"
-                    REINSTALL_MODE="keep_config"
-                fi
-                ;;
-            *)
-                echo -e "${YELLOW}无效选择，将跳过安装${NC}"
-                exit 0
-                ;;
-        esac
+        if [[ ! "$REINSTALL_CHOICE" =~ ^[Yy]$ ]]; then
+            echo -e "${GREEN}跳过 OpenResty 安装，保留现有配置${NC}"
+            exit 0
+        fi
+        
+        # 默认重新安装，保留配置文件
+        echo -e "${YELLOW}将重新安装 OpenResty，但保留配置文件${NC}"
+        REINSTALL_MODE="keep_config"
     else
         echo -e "${GREEN}✓ OpenResty 未安装，将进行全新安装${NC}"
     fi

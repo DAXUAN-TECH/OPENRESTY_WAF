@@ -330,8 +330,9 @@ check_existing() {
             esac
         else
             echo -e "${YELLOW}MySQL 已安装但数据目录未初始化${NC}"
-            read -p "是否继续安装/更新？(y/N): " -n 1 -r
+            read -p "是否继续安装/更新？[Y/n]: " -n 1 -r
             echo
+            REPLY="${REPLY:-Y}"
             if [[ ! $REPLY =~ ^[Yy]$ ]]; then
                 echo -e "${YELLOW}安装已取消${NC}"
                 exit 0

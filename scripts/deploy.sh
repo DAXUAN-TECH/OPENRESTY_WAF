@@ -86,20 +86,49 @@ echo -e "${GREEN}[3/4] 验证配置...${NC}"
 if [ -f "${OPENRESTY_PREFIX}/bin/openresty" ]; then
     echo "验证 nginx.conf 语法..."
     
-    # 检查 set 指令是否在 http 块内
+    # 确保 set 指令在 http 块内的正确位置
     if [ -f "$NGINX_CONF_DIR/nginx.conf" ]; then
-        set_line=$(grep -n "set \$project_root" "$NGINX_CONF_DIR/nginx.conf" | cut -d: -f1 | head -1)
+        # 查找所有 set 指令行（可能有多行）
+        set_lines=$(grep -n "set \$project_root" "$NGINX_CONF_DIR/nginx.conf" | cut -d: -f1)
+        
+        # 删除所有现有的 set 指令及其相关注释
+        if [ -n "$set_lines" ]; then
+            echo -e "${YELLOW}⚠ 清理现有的 set 指令...${NC}"
+            for set_line in $(echo "$set_lines" | tac); do
+                # 删除 set 指令行
+                sed -i "${set_line}d" "$NGINX_CONF_DIR/nginx.conf"
+                # 如果上一行是注释，也删除
+                if [ "$set_line" -gt 1 ]; then
+                    prev_line=$((set_line - 1))
+                    if sed -n "${prev_line}p" "$NGINX_CONF_DIR/nginx.conf" 2>/dev/null | grep -qE "^[[:space:]]*#.*project_root|^[[:space:]]*#.*项目根目录"; then
+                        sed -i "${prev_line}d" "$NGINX_CONF_DIR/nginx.conf"
+                    fi
+                fi
+            done
+        fi
+        
+        # 重新查找 http 块开始行（因为可能删除了行）
         http_start=$(grep -n "^http {" "$NGINX_CONF_DIR/nginx.conf" | cut -d: -f1 | head -1)
         
-        if [ -n "$set_line" ] && [ -n "$http_start" ]; then
-            # 检查 set 指令是否在 http 块之后
-            if [ "$set_line" -lt "$http_start" ]; then
-                echo -e "${YELLOW}⚠ 检测到 set 指令在 http 块前，尝试修复...${NC}"
-                # 删除原来的 set 指令
-                sed -i "${set_line}d" "$NGINX_CONF_DIR/nginx.conf"
-                # 在 http 块内第一行添加 set 指令
-                sed -i "${http_start}a\    set \$project_root \"$PROJECT_ROOT_ABS\";" "$NGINX_CONF_DIR/nginx.conf"
-                echo -e "${GREEN}✓ 已修复: 将 set 指令移动到 http 块内${NC}"
+        if [ -n "$http_start" ]; then
+            # 检查是否已经有 set 指令在 http 块内
+            http_end=$(grep -n "^}" "$NGINX_CONF_DIR/nginx.conf" | awk -v start="$http_start" '$1 > start {print $1; exit}' | cut -d: -f1)
+            if [ -z "$http_end" ]; then
+                # 如果没有找到 http 块的结束，使用文件末尾
+                http_end=$(wc -l < "$NGINX_CONF_DIR/nginx.conf")
+            fi
+            
+            # 检查 http 块内是否已有 set 指令
+            set_in_http=$(sed -n "${http_start},${http_end}p" "$NGINX_CONF_DIR/nginx.conf" | grep -c "set \$project_root" || echo "0")
+            
+            if [ "$set_in_http" -eq 0 ]; then
+                # 在 http 块内第一行添加 set 指令（确保正确的缩进）
+                echo -e "${YELLOW}⚠ 在 http 块内添加 set 指令...${NC}"
+                # 使用 sed 在 http { 行后插入 set 指令
+                sed -i "${http_start}a\    # 项目根目录变量\n    set \$project_root \"$PROJECT_ROOT_ABS\";" "$NGINX_CONF_DIR/nginx.conf"
+                echo -e "${GREEN}✓ 已确保 set 指令在 http 块内的正确位置${NC}"
+            else
+                echo -e "${GREEN}✓ set 指令已在 http 块内${NC}"
             fi
         fi
     fi
@@ -113,7 +142,12 @@ if [ -f "${OPENRESTY_PREFIX}/bin/openresty" ]; then
         echo ""
         echo -e "${YELLOW}显示配置文件相关部分：${NC}"
         if [ -f "$NGINX_CONF_DIR/nginx.conf" ]; then
-            grep -A 5 "set \$project_root" "$NGINX_CONF_DIR/nginx.conf" || true
+            # 显示 http 块和 set 指令周围的内容
+            http_start=$(grep -n "^http {" "$NGINX_CONF_DIR/nginx.conf" | cut -d: -f1 | head -1)
+            if [ -n "$http_start" ]; then
+                sed -n "${http_start},$((http_start + 10))p" "$NGINX_CONF_DIR/nginx.conf" || true
+            fi
+            grep -B 2 -A 5 "set \$project_root" "$NGINX_CONF_DIR/nginx.conf" || true
         fi
         echo ""
         echo -e "${YELLOW}⚠ 请修复配置文件后重新部署${NC}"

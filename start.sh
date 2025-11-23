@@ -26,8 +26,9 @@ show_usage() {
     echo "使用方法:"
     echo "  sudo $0                    # 完整安装（交互式）"
     echo "  sudo $0 <module>           # 单独安装某个模块"
+    echo "  sudo $0 uninstall <module> # 卸载某个模块"
     echo ""
-    echo "可用模块:"
+    echo "可用模块（安装）:"
     echo "  openresty    - 安装 OpenResty"
     echo "  mysql        - 安装 MySQL"
     echo "  redis        - 安装 Redis"
@@ -39,10 +40,19 @@ show_usage() {
     echo "  update-geoip - 更新 GeoIP 数据库"
     echo "  all          - 完整安装（默认）"
     echo ""
+    echo "可用模块（卸载）:"
+    echo "  uninstall openresty  - 卸载 OpenResty"
+    echo "  uninstall mysql      - 卸载 MySQL"
+    echo "  uninstall redis      - 卸载 Redis"
+    echo "  uninstall geoip      - 卸载 GeoIP 数据库"
+    echo "  uninstall deploy     - 卸载部署的配置文件"
+    echo "  uninstall all        - 完整卸载（交互式）"
+    echo ""
     echo "示例:"
-    echo "  sudo $0              # 完整安装"
-    echo "  sudo $0 mysql        # 只安装 MySQL"
-    echo "  sudo $0 geoip        # 只安装 GeoIP"
+    echo "  sudo $0                    # 完整安装"
+    echo "  sudo $0 mysql              # 只安装 MySQL"
+    echo "  sudo $0 uninstall mysql    # 卸载 MySQL"
+    echo "  sudo $0 uninstall all      # 完整卸载"
     exit 0
 }
 
@@ -62,15 +72,7 @@ install_openresty() {
     echo -e "${BLUE}========================================${NC}"
     echo ""
     
-    if [ -f "${OPENRESTY_PREFIX}/bin/openresty" ]; then
-        echo -e "${YELLOW}检测到 OpenResty 已安装${NC}"
-        read -p "是否重新安装？[y/N]: " REINSTALL
-        if [[ ! "$REINSTALL" =~ ^[Yy]$ ]]; then
-            echo -e "${GREEN}跳过 OpenResty 安装${NC}"
-            return 0
-        fi
-    fi
-    
+    # 直接调用安装脚本，所有检测逻辑在脚本内部
     if ! bash "${SCRIPTS_DIR}/install_openresty.sh"; then
         echo -e "${RED}✗ OpenResty 安装失败${NC}"
         return 1
@@ -121,16 +123,8 @@ install_geoip() {
     echo -e "${BLUE}========================================${NC}"
     echo ""
     
-    read -p "MaxMind Account ID: " GEOIP_ACCOUNT_ID
-    read -sp "MaxMind License Key: " GEOIP_LICENSE_KEY
-    echo ""
-    
-    if [ -z "$GEOIP_ACCOUNT_ID" ] || [ -z "$GEOIP_LICENSE_KEY" ]; then
-        echo -e "${YELLOW}警告: Account ID 或 License Key 为空，跳过 GeoIP 安装${NC}"
-        return 0
-    fi
-    
-    if ! bash "${SCRIPTS_DIR}/install_geoip.sh" "$GEOIP_ACCOUNT_ID" "$GEOIP_LICENSE_KEY"; then
+    # 直接调用安装脚本，所有输入逻辑在脚本内部
+    if ! bash "${SCRIPTS_DIR}/install_geoip.sh"; then
         echo -e "${YELLOW}⚠ GeoIP 安装失败，但这是可选步骤${NC}"
         return 0
     fi
@@ -194,56 +188,11 @@ update_config() {
     echo -e "${BLUE}========================================${NC}"
     echo ""
     
-    echo "请选择要更新的配置:"
-    echo "1. MySQL 配置"
-    echo "2. Redis 配置"
-    echo "3. 验证配置文件语法"
-    read -p "请选择 [1-3]: " CONFIG_CHOICE
-    
-    case "$CONFIG_CHOICE" in
-        1)
-            read -p "MySQL Host [127.0.0.1]: " MYSQL_HOST
-            MYSQL_HOST="${MYSQL_HOST:-127.0.0.1}"
-            read -p "MySQL Port [3306]: " MYSQL_PORT
-            MYSQL_PORT="${MYSQL_PORT:-3306}"
-            read -p "MySQL Database [waf_db]: " MYSQL_DB
-            MYSQL_DB="${MYSQL_DB:-waf_db}"
-            read -p "MySQL User [waf_user]: " MYSQL_USER
-            MYSQL_USER="${MYSQL_USER:-waf_user}"
-            read -sp "MySQL Password: " MYSQL_PASS
-            echo ""
-            
-            if ! bash "${SCRIPTS_DIR}/set_lua_database_connect.sh" mysql "$MYSQL_HOST" "$MYSQL_PORT" "$MYSQL_DB" "$MYSQL_USER" "$MYSQL_PASS"; then
-                echo -e "${RED}✗ MySQL 配置更新失败${NC}"
-                return 1
-            fi
-            ;;
-        2)
-            read -p "Redis Host [127.0.0.1]: " REDIS_HOST
-            REDIS_HOST="${REDIS_HOST:-127.0.0.1}"
-            read -p "Redis Port [6379]: " REDIS_PORT
-            REDIS_PORT="${REDIS_PORT:-6379}"
-            read -p "Redis DB [0]: " REDIS_DB
-            REDIS_DB="${REDIS_DB:-0}"
-            read -sp "Redis Password (留空表示无密码): " REDIS_PASS
-            echo ""
-            
-            if ! bash "${SCRIPTS_DIR}/set_lua_database_connect.sh" redis "$REDIS_HOST" "$REDIS_PORT" "$REDIS_DB" "$REDIS_PASS"; then
-                echo -e "${RED}✗ Redis 配置更新失败${NC}"
-                return 1
-            fi
-            ;;
-        3)
-            if ! bash "${SCRIPTS_DIR}/set_lua_database_connect.sh" verify; then
-                echo -e "${RED}✗ 配置文件验证失败${NC}"
-                return 1
-            fi
-            ;;
-        *)
-            echo -e "${RED}错误: 无效的选择${NC}"
-            return 1
-            ;;
-    esac
+    # 直接调用配置更新脚本，所有输入逻辑在脚本内部（交互式模式）
+    if ! bash "${SCRIPTS_DIR}/set_lua_database_connect.sh"; then
+        echo -e "${RED}✗ 配置更新失败${NC}"
+        return 1
+    fi
     
     echo -e "${GREEN}✓ 配置更新完成${NC}"
     echo ""
@@ -262,6 +211,195 @@ update_geoip() {
     fi
     
     echo -e "${GREEN}✓ GeoIP 数据库更新完成${NC}"
+    echo ""
+}
+
+# 卸载 OpenResty
+uninstall_openresty() {
+    echo -e "${BLUE}========================================${NC}"
+    echo -e "${BLUE}卸载 OpenResty${NC}"
+    echo -e "${BLUE}========================================${NC}"
+    echo ""
+    
+    # 直接调用卸载脚本，所有输入逻辑在脚本内部
+    if ! bash "${SCRIPTS_DIR}/uninstall_openresty.sh"; then
+        echo -e "${RED}✗ OpenResty 卸载失败${NC}"
+        return 1
+    fi
+    
+    echo -e "${GREEN}✓ OpenResty 卸载完成${NC}"
+    echo ""
+}
+
+# 卸载 MySQL
+uninstall_mysql() {
+    echo -e "${BLUE}========================================${NC}"
+    echo -e "${BLUE}卸载 MySQL${NC}"
+    echo -e "${BLUE}========================================${NC}"
+    echo ""
+    
+    # 直接调用卸载脚本，所有输入逻辑在脚本内部
+    if ! bash "${SCRIPTS_DIR}/uninstall_mysql.sh"; then
+        echo -e "${RED}✗ MySQL 卸载失败${NC}"
+        return 1
+    fi
+    
+    echo -e "${GREEN}✓ MySQL 卸载完成${NC}"
+    echo ""
+}
+
+# 卸载 Redis
+uninstall_redis() {
+    echo -e "${BLUE}========================================${NC}"
+    echo -e "${BLUE}卸载 Redis${NC}"
+    echo -e "${BLUE}========================================${NC}"
+    echo ""
+    
+    # 直接调用卸载脚本，所有输入逻辑在脚本内部
+    if ! bash "${SCRIPTS_DIR}/uninstall_redis.sh"; then
+        echo -e "${RED}✗ Redis 卸载失败${NC}"
+        return 1
+    fi
+    
+    echo -e "${GREEN}✓ Redis 卸载完成${NC}"
+    echo ""
+}
+
+# 卸载 GeoIP
+uninstall_geoip() {
+    echo -e "${BLUE}========================================${NC}"
+    echo -e "${BLUE}卸载 GeoIP 数据库${NC}"
+    echo -e "${BLUE}========================================${NC}"
+    echo ""
+    
+    # 直接调用卸载脚本，所有输入逻辑在脚本内部
+    if ! bash "${SCRIPTS_DIR}/uninstall_geoip.sh"; then
+        echo -e "${RED}✗ GeoIP 数据库卸载失败${NC}"
+        return 1
+    fi
+    
+    echo -e "${GREEN}✓ GeoIP 数据库卸载完成${NC}"
+    echo ""
+}
+
+# 卸载部署的配置文件
+uninstall_deploy() {
+    echo -e "${BLUE}========================================${NC}"
+    echo -e "${BLUE}卸载部署的配置文件${NC}"
+    echo -e "${BLUE}========================================${NC}"
+    echo ""
+    
+    # 直接调用卸载脚本，所有输入逻辑在脚本内部
+    if ! bash "${SCRIPTS_DIR}/uninstall_deploy.sh"; then
+        echo -e "${RED}✗ 配置文件卸载失败${NC}"
+        return 1
+    fi
+    
+    echo -e "${GREEN}✓ 配置文件卸载完成${NC}"
+    echo ""
+}
+
+# 完整卸载
+uninstall_all() {
+    echo -e "${RED}========================================${NC}"
+    echo -e "${RED}OpenResty WAF 一键卸载脚本${NC}"
+    echo -e "${RED}========================================${NC}"
+    echo ""
+    echo -e "${YELLOW}警告: 此操作将卸载已安装的组件，请确认！${NC}"
+    echo ""
+    
+    # 收集卸载信息
+    echo -e "${BLUE}========================================${NC}"
+    echo -e "${BLUE}步骤 1: 选择要卸载的组件${NC}"
+    echo -e "${BLUE}========================================${NC}"
+    echo ""
+    
+    # OpenResty 配置
+    read -p "是否卸载 OpenResty？[Y/n]: " UNINSTALL_OPENRESTY
+    UNINSTALL_OPENRESTY="${UNINSTALL_OPENRESTY:-Y}"
+    
+    # 部署配置
+    read -p "是否卸载部署的配置文件？[Y/n]: " UNINSTALL_DEPLOY
+    UNINSTALL_DEPLOY="${UNINSTALL_DEPLOY:-Y}"
+    
+    # MySQL 配置
+    read -p "是否卸载 MySQL？[Y/n]: " UNINSTALL_MYSQL
+    UNINSTALL_MYSQL="${UNINSTALL_MYSQL:-Y}"
+    
+    # Redis 配置
+    read -p "是否卸载 Redis？[Y/n]: " UNINSTALL_REDIS
+    UNINSTALL_REDIS="${UNINSTALL_REDIS:-Y}"
+    
+    # GeoIP 配置
+    read -p "是否卸载 GeoIP 数据库？[Y/n]: " UNINSTALL_GEOIP
+    UNINSTALL_GEOIP="${UNINSTALL_GEOIP:-Y}"
+    
+    echo ""
+    echo -e "${GREEN}✓ 卸载选项收集完成${NC}"
+    echo ""
+    
+    # 计算步骤
+    CURRENT_STEP=2
+    TOTAL_STEPS=0
+    [[ "$UNINSTALL_OPENRESTY" =~ ^[Yy]$ ]] && TOTAL_STEPS=$((TOTAL_STEPS + 1))
+    [[ "$UNINSTALL_DEPLOY" =~ ^[Yy]$ ]] && TOTAL_STEPS=$((TOTAL_STEPS + 1))
+    [[ "$UNINSTALL_MYSQL" =~ ^[Yy]$ ]] && TOTAL_STEPS=$((TOTAL_STEPS + 1))
+    [[ "$UNINSTALL_REDIS" =~ ^[Yy]$ ]] && TOTAL_STEPS=$((TOTAL_STEPS + 1))
+    [[ "$UNINSTALL_GEOIP" =~ ^[Yy]$ ]] && TOTAL_STEPS=$((TOTAL_STEPS + 1))
+    
+    # 步骤 1: 卸载 OpenResty
+    if [[ "$UNINSTALL_OPENRESTY" =~ ^[Yy]$ ]]; then
+        echo -e "${BLUE}========================================${NC}"
+        echo -e "${BLUE}步骤 ${CURRENT_STEP}/${TOTAL_STEPS}: 卸载 OpenResty${NC}"
+        echo -e "${BLUE}========================================${NC}"
+        echo ""
+        uninstall_openresty
+        CURRENT_STEP=$((CURRENT_STEP + 1))
+    fi
+    
+    # 步骤 2: 卸载部署的配置文件
+    if [[ "$UNINSTALL_DEPLOY" =~ ^[Yy]$ ]]; then
+        echo -e "${BLUE}========================================${NC}"
+        echo -e "${BLUE}步骤 ${CURRENT_STEP}/${TOTAL_STEPS}: 卸载部署的配置文件${NC}"
+        echo -e "${BLUE}========================================${NC}"
+        echo ""
+        uninstall_deploy
+        CURRENT_STEP=$((CURRENT_STEP + 1))
+    fi
+    
+    # 步骤 3: 卸载 MySQL
+    if [[ "$UNINSTALL_MYSQL" =~ ^[Yy]$ ]]; then
+        echo -e "${BLUE}========================================${NC}"
+        echo -e "${BLUE}步骤 ${CURRENT_STEP}/${TOTAL_STEPS}: 卸载 MySQL${NC}"
+        echo -e "${BLUE}========================================${NC}"
+        echo ""
+        uninstall_mysql
+        CURRENT_STEP=$((CURRENT_STEP + 1))
+    fi
+    
+    # 步骤 4: 卸载 Redis
+    if [[ "$UNINSTALL_REDIS" =~ ^[Yy]$ ]]; then
+        echo -e "${BLUE}========================================${NC}"
+        echo -e "${BLUE}步骤 ${CURRENT_STEP}/${TOTAL_STEPS}: 卸载 Redis${NC}"
+        echo -e "${BLUE}========================================${NC}"
+        echo ""
+        uninstall_redis
+        CURRENT_STEP=$((CURRENT_STEP + 1))
+    fi
+    
+    # 步骤 5: 卸载 GeoIP
+    if [[ "$UNINSTALL_GEOIP" =~ ^[Yy]$ ]]; then
+        echo -e "${BLUE}========================================${NC}"
+        echo -e "${BLUE}步骤 ${CURRENT_STEP}/${TOTAL_STEPS}: 卸载 GeoIP 数据库${NC}"
+        echo -e "${BLUE}========================================${NC}"
+        echo ""
+        uninstall_geoip
+    fi
+    
+    # 卸载完成
+    echo -e "${GREEN}========================================${NC}"
+    echo -e "${GREEN}卸载完成！${NC}"
+    echo -e "${GREEN}========================================${NC}"
     echo ""
 }
 
@@ -285,17 +423,21 @@ install_all() {
     echo -e "${BLUE}========================================${NC}"
     echo ""
     
+    # OpenResty 配置
+    read -p "是否安装 OpenResty？[Y/n]: " INSTALL_OPENRESTY
+    INSTALL_OPENRESTY="${INSTALL_OPENRESTY:-Y}"
+    
     # MySQL 配置
     read -p "是否安装 MySQL？[Y/n]: " INSTALL_MYSQL
     INSTALL_MYSQL="${INSTALL_MYSQL:-Y}"
     
     # Redis 配置
-    read -p "是否安装 Redis？[y/N]: " INSTALL_REDIS
-    INSTALL_REDIS="${INSTALL_REDIS:-N}"
+    read -p "是否安装 Redis？[Y/n]: " INSTALL_REDIS
+    INSTALL_REDIS="${INSTALL_REDIS:-Y}"
     
     # GeoIP 配置
-    read -p "是否安装 GeoIP 数据库？[y/N]: " INSTALL_GEOIP
-    INSTALL_GEOIP="${INSTALL_GEOIP:-N}"
+    read -p "是否安装 GeoIP 数据库？[Y/n]: " INSTALL_GEOIP
+    INSTALL_GEOIP="${INSTALL_GEOIP:-Y}"
     
     # 系统优化
     read -p "是否执行系统优化？[Y/n]: " OPTIMIZE_SYSTEM
@@ -307,27 +449,34 @@ install_all() {
     
     # 计算步骤
     CURRENT_STEP=2
-    TOTAL_STEPS=3  # OpenResty + Deploy + 其他可选步骤
+    TOTAL_STEPS=0
+    [[ "$INSTALL_OPENRESTY" =~ ^[Yy]$ ]] && TOTAL_STEPS=$((TOTAL_STEPS + 1))  # OpenResty
+    [[ "$INSTALL_OPENRESTY" =~ ^[Yy]$ ]] && TOTAL_STEPS=$((TOTAL_STEPS + 1))  # Deploy（需要 OpenResty）
     [[ "$INSTALL_MYSQL" =~ ^[Yy]$ ]] && TOTAL_STEPS=$((TOTAL_STEPS + 1))
     [[ "$INSTALL_REDIS" =~ ^[Yy]$ ]] && TOTAL_STEPS=$((TOTAL_STEPS + 1))
     [[ "$INSTALL_GEOIP" =~ ^[Yy]$ ]] && TOTAL_STEPS=$((TOTAL_STEPS + 1))
     [[ "$OPTIMIZE_SYSTEM" =~ ^[Yy]$ ]] && TOTAL_STEPS=$((TOTAL_STEPS + 1))
     
     # 步骤 1: 安装 OpenResty
-    echo -e "${BLUE}========================================${NC}"
-    echo -e "${BLUE}步骤 ${CURRENT_STEP}/${TOTAL_STEPS}: 安装 OpenResty${NC}"
-    echo -e "${BLUE}========================================${NC}"
-    echo ""
-    install_openresty
-    CURRENT_STEP=$((CURRENT_STEP + 1))
-    
-    # 步骤 2: 部署配置文件
-    echo -e "${BLUE}========================================${NC}"
-    echo -e "${BLUE}步骤 ${CURRENT_STEP}/${TOTAL_STEPS}: 部署配置文件${NC}"
-    echo -e "${BLUE}========================================${NC}"
-    echo ""
-    deploy_config
-    CURRENT_STEP=$((CURRENT_STEP + 1))
+    if [[ "$INSTALL_OPENRESTY" =~ ^[Yy]$ ]]; then
+        echo -e "${BLUE}========================================${NC}"
+        echo -e "${BLUE}步骤 ${CURRENT_STEP}/${TOTAL_STEPS}: 安装 OpenResty${NC}"
+        echo -e "${BLUE}========================================${NC}"
+        echo ""
+        install_openresty
+        CURRENT_STEP=$((CURRENT_STEP + 1))
+        
+        # 步骤 2: 部署配置文件（需要 OpenResty）
+        echo -e "${BLUE}========================================${NC}"
+        echo -e "${BLUE}步骤 ${CURRENT_STEP}/${TOTAL_STEPS}: 部署配置文件${NC}"
+        echo -e "${BLUE}========================================${NC}"
+        echo ""
+        deploy_config
+        CURRENT_STEP=$((CURRENT_STEP + 1))
+    else
+        echo -e "${YELLOW}跳过 OpenResty 安装，配置文件部署也将跳过${NC}"
+        echo ""
+    fi
     
     # 步骤 3: 安装 MySQL
     if [[ "$INSTALL_MYSQL" =~ ^[Yy]$ ]]; then
@@ -403,9 +552,43 @@ main() {
     check_root
     
     # 处理参数
-    local module="${1:-all}"
+    local action="${1:-all}"
+    local module="${2:-}"
     
-    case "$module" in
+    # 处理卸载命令
+    if [ "$action" = "uninstall" ]; then
+        # 直接调用卸载脚本，所有输入逻辑在脚本内部
+        case "$module" in
+            openresty)
+                uninstall_openresty
+                ;;
+            mysql)
+                uninstall_mysql
+                ;;
+            redis)
+                uninstall_redis
+                ;;
+            geoip)
+                uninstall_geoip
+                ;;
+            deploy)
+                uninstall_deploy
+                ;;
+            all|"")
+                uninstall_all
+                ;;
+            *)
+                echo -e "${RED}错误: 未知卸载模块 '$module'${NC}"
+                echo ""
+                show_usage
+                exit 1
+                ;;
+        esac
+        return 0
+    fi
+    
+    # 处理安装和维护命令
+    case "$action" in
         -h|--help|help)
             show_usage
             ;;
@@ -440,7 +623,7 @@ main() {
             install_all
             ;;
         *)
-            echo -e "${RED}错误: 未知模块 '$module'${NC}"
+            echo -e "${RED}错误: 未知模块 '$action'${NC}"
             echo ""
             show_usage
             exit 1

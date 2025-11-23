@@ -80,7 +80,7 @@ echo -e "${GREEN}✓ 主配置文件已复制并配置${NC}"
 echo -e "${YELLOW}  注意: conf.d、lua、logs、cert 目录保持在项目目录，使用相对路径引用${NC}"
 
 # 验证配置文件
-echo -e "${GREEN}[3/3] 验证配置...${NC}"
+echo -e "${GREEN}[3/4] 验证配置...${NC}"
 
 # 验证 nginx.conf 语法
 if [ -f "${OPENRESTY_PREFIX}/bin/openresty" ]; then
@@ -122,6 +122,116 @@ if [ -f "${OPENRESTY_PREFIX}/bin/openresty" ]; then
 else
     echo -e "${YELLOW}⚠ OpenResty 未安装，跳过语法验证${NC}"
 fi
+
+# 检查部署路径完整性
+echo -e "${GREEN}[4/5] 检查部署路径完整性...${NC}"
+
+# 检查所有必需的路径是否存在
+REQUIRED_PATHS=(
+    "${PROJECT_ROOT}/conf.d"
+    "${PROJECT_ROOT}/lua"
+    "${PROJECT_ROOT}/logs"
+    "${PROJECT_ROOT}/conf.d/set_conf"
+    "${PROJECT_ROOT}/conf.d/vhost_conf"
+    "${PROJECT_ROOT}/lua/waf"
+)
+
+ALL_PATHS_OK=1
+for path in "${REQUIRED_PATHS[@]}"; do
+    if [ ! -d "$path" ]; then
+        echo -e "${YELLOW}⚠ 路径不存在: $path${NC}"
+        ALL_PATHS_OK=0
+        # 尝试创建缺失的目录
+        read -p "是否创建缺失的目录？[Y/n]: " CREATE_MISSING
+        CREATE_MISSING="${CREATE_MISSING:-Y}"
+        if [[ "$CREATE_MISSING" =~ ^[Yy]$ ]]; then
+            mkdir -p "$path"
+            echo -e "${GREEN}✓ 已创建: $path${NC}"
+            ALL_PATHS_OK=1
+        fi
+    fi
+done
+
+if [ $ALL_PATHS_OK -eq 1 ]; then
+    echo -e "${GREEN}✓ 所有必需路径存在${NC}"
+else
+    echo -e "${YELLOW}⚠ 部分路径不存在，可能影响功能${NC}"
+fi
+
+# 检查配置文件中的路径引用是否正确
+if [ -f "$NGINX_CONF_DIR/nginx.conf" ]; then
+    # 检查是否包含 project_root 变量
+    if grep -q "\$project_root" "$NGINX_CONF_DIR/nginx.conf"; then
+        echo -e "${GREEN}✓ nginx.conf 包含 project_root 变量${NC}"
+        # 验证 project_root 路径是否存在
+        local project_root_in_conf=$(grep "set \$project_root" "$NGINX_CONF_DIR/nginx.conf" 2>/dev/null | sed 's/.*"\(.*\)".*/\1/' | head -1)
+        if [ -n "$project_root_in_conf" ]; then
+            if [ -d "$project_root_in_conf" ]; then
+                echo -e "${GREEN}✓ project_root 路径存在: $project_root_in_conf${NC}"
+            else
+                echo -e "${RED}✗ project_root 路径不存在: $project_root_in_conf${NC}"
+                echo -e "${YELLOW}  建议修复为: $PROJECT_ROOT_ABS${NC}"
+            fi
+        fi
+    else
+        echo -e "${RED}✗ nginx.conf 未找到 project_root 变量${NC}"
+    fi
+    
+    # 检查 include 路径是否正确
+    if grep -q "include.*conf.d" "$NGINX_CONF_DIR/nginx.conf"; then
+        echo -e "${GREEN}✓ nginx.conf 包含 conf.d 配置引用${NC}"
+        # 检查引用的配置文件是否存在
+        local include_paths=$(grep "include.*conf.d" "$NGINX_CONF_DIR/nginx.conf" 2>/dev/null | sed "s|.*include.*\$project_root/\(.*\);|\1|" | head -1)
+        if [ -n "$include_paths" ]; then
+            local full_include_path="${PROJECT_ROOT_ABS}/${include_paths}"
+            if [ -f "$full_include_path" ] || [ -d "$full_include_path" ]; then
+                echo -e "${GREEN}✓ 引用的配置文件存在: $full_include_path${NC}"
+            else
+                echo -e "${YELLOW}⚠ 引用的配置文件不存在: $full_include_path${NC}"
+            fi
+        fi
+    else
+        echo -e "${YELLOW}⚠ nginx.conf 未找到 conf.d 配置引用${NC}"
+    fi
+    
+    # 检查是否还有未替换的路径占位符
+    if grep -q "/path/to/project" "$NGINX_CONF_DIR/nginx.conf"; then
+        echo -e "${RED}✗ nginx.conf 仍包含路径占位符 /path/to/project${NC}"
+        echo -e "${YELLOW}  请检查路径替换是否完整${NC}"
+    else
+        echo -e "${GREEN}✓ 所有路径占位符已替换${NC}"
+    fi
+fi
+
+# 5. 检查配置文件语法和完整性
+echo -e "${GREEN}[5/5] 检查配置文件语法和完整性...${NC}"
+
+# 验证 nginx.conf 语法
+if [ -f "${OPENRESTY_PREFIX}/bin/openresty" ]; then
+    if ${OPENRESTY_PREFIX}/bin/openresty -t > /dev/null 2>&1; then
+        echo -e "${GREEN}✓ nginx.conf 语法正确${NC}"
+    else
+        echo -e "${RED}✗ nginx.conf 语法错误${NC}"
+        echo -e "${YELLOW}错误信息：${NC}"
+        ${OPENRESTY_PREFIX}/bin/openresty -t 2>&1 | head -10
+    fi
+fi
+
+# 检查关键配置文件是否存在
+CRITICAL_CONFIGS=(
+    "${PROJECT_ROOT}/conf.d/set_conf/waf.conf"
+    "${PROJECT_ROOT}/conf.d/set_conf/lua.conf"
+    "${PROJECT_ROOT}/lua/config.lua"
+    "${PROJECT_ROOT}/lua/waf/init.lua"
+)
+
+for config in "${CRITICAL_CONFIGS[@]}"; do
+    if [ -f "$config" ]; then
+        echo -e "${GREEN}✓ 配置文件存在: $(basename $config)${NC}"
+    else
+        echo -e "${RED}✗ 关键配置文件不存在: $config${NC}"
+    fi
+done
 
 # 设置权限
 echo -e "${GREEN}设置文件权限...${NC}"

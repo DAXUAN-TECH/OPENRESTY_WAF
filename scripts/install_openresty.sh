@@ -243,15 +243,114 @@ install_dependencies() {
 check_existing() {
     echo -e "${BLUE}[3/8] 检查是否已安装 OpenResty...${NC}"
     
+    local openresty_installed=0
+    local current_version=""
+    local config_deployed=0
+    
     if [ -f "${INSTALL_DIR}/bin/openresty" ]; then
-        local current_version=$(${INSTALL_DIR}/bin/openresty -v 2>&1 | grep -oP 'openresty/\K[0-9.]+' || echo "unknown")
+        openresty_installed=1
+        current_version=$(${INSTALL_DIR}/bin/openresty -v 2>&1 | grep -oP 'openresty/\K[0-9.]+' || echo "unknown")
         echo -e "${YELLOW}检测到已安装 OpenResty 版本: ${current_version}${NC}"
-        read -p "是否继续安装/更新？(y/N): " -n 1 -r
-        echo
-        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-            echo -e "${YELLOW}安装已取消${NC}"
-            exit 0
+        
+        # 检查配置文件是否已部署
+        if [ -f "${INSTALL_DIR}/nginx/conf/nginx.conf" ]; then
+            if grep -q "project_root\|project_root" "${INSTALL_DIR}/nginx/conf/nginx.conf" 2>/dev/null; then
+                config_deployed=1
+                echo -e "${YELLOW}检测到配置文件已部署${NC}"
+            fi
         fi
+        
+        echo ""
+        echo "请选择操作："
+        echo "  1. 保留现有安装和配置，跳过安装"
+        echo "  2. 重新安装 OpenResty（保留配置文件）"
+        echo "  3. 完全重新安装（删除所有文件和配置）"
+        read -p "请选择 [1-3]: " REINSTALL_CHOICE
+        
+        case "$REINSTALL_CHOICE" in
+            1)
+                echo -e "${GREEN}跳过 OpenResty 安装，保留现有配置${NC}"
+                exit 0
+                ;;
+            2)
+                echo -e "${YELLOW}将重新安装 OpenResty，但保留配置文件${NC}"
+                REINSTALL_MODE="keep_config"
+                ;;
+            3)
+                echo -e "${RED}警告: 将删除所有 OpenResty 文件和配置！${NC}"
+                read -p "确认删除所有文件？[y/N]: " CONFIRM_DELETE
+                CONFIRM_DELETE="${CONFIRM_DELETE:-N}"
+                if [[ "$CONFIRM_DELETE" =~ ^[Yy]$ ]]; then
+                    echo -e "${YELLOW}将完全重新安装 OpenResty，删除所有文件${NC}"
+                    REINSTALL_MODE="delete_all"
+                    
+                    # 停止服务
+                    if command -v systemctl &> /dev/null; then
+                        systemctl stop openresty 2>/dev/null || true
+                    elif [ -f "${INSTALL_DIR}/nginx/logs/nginx.pid" ]; then
+                        ${INSTALL_DIR}/bin/openresty -s quit 2>/dev/null || true
+                    fi
+                    sleep 2
+                    
+                    # 删除安装目录
+                    if [ -d "$INSTALL_DIR" ]; then
+                        echo -e "${YELLOW}正在删除安装目录: ${INSTALL_DIR}${NC}"
+                        rm -rf "$INSTALL_DIR"
+                        echo -e "${GREEN}✓ 安装目录已删除${NC}"
+                    fi
+                    
+                    # 删除服务文件
+                    if [ -f /etc/systemd/system/openresty.service ]; then
+                        rm -f /etc/systemd/system/openresty.service
+                        systemctl daemon-reload 2>/dev/null || true
+                        echo -e "${GREEN}✓ 服务文件已删除${NC}"
+                    fi
+                    
+                    # 删除符号链接
+                    rm -f /usr/local/bin/openresty /usr/local/bin/opm /usr/local/bin/resty 2>/dev/null || true
+                else
+                    echo -e "${GREEN}取消删除，将保留文件重新安装${NC}"
+                    REINSTALL_MODE="keep_config"
+                fi
+                ;;
+            *)
+                echo -e "${YELLOW}无效选择，将跳过安装${NC}"
+                exit 0
+                ;;
+        esac
+    else
+        echo -e "${GREEN}✓ OpenResty 未安装，将进行全新安装${NC}"
+    fi
+    
+    # 版本选择（如果未设置环境变量）
+    if [ -z "$OPENRESTY_VERSION" ]; then
+        echo ""
+        echo "请选择 OpenResty 版本："
+        echo "  1. OpenResty 1.21.4.1（推荐，最新稳定版）"
+        echo "  2. OpenResty 1.19.9.1（兼容性更好）"
+        echo "  3. 使用系统默认版本（如果可用）"
+        read -p "请选择 [1-3]: " VERSION_CHOICE
+        
+        case "$VERSION_CHOICE" in
+            1)
+                OPENRESTY_VERSION="1.21.4.1"
+                echo -e "${GREEN}✓ 已选择 OpenResty 1.21.4.1${NC}"
+                ;;
+            2)
+                OPENRESTY_VERSION="1.19.9.1"
+                echo -e "${GREEN}✓ 已选择 OpenResty 1.19.9.1${NC}"
+                ;;
+            3)
+                OPENRESTY_VERSION="default"
+                echo -e "${GREEN}✓ 将使用系统默认版本${NC}"
+                ;;
+            *)
+                OPENRESTY_VERSION="1.21.4.1"
+                echo -e "${YELLOW}无效选择，默认使用 OpenResty 1.21.4.1${NC}"
+                ;;
+        esac
+    else
+        echo -e "${BLUE}使用环境变量指定的版本: ${OPENRESTY_VERSION}${NC}"
     fi
     
     echo -e "${GREEN}✓ 检查完成${NC}"

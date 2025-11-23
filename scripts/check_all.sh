@@ -67,7 +67,7 @@ done
 echo ""
 
 # 2. 检查重复逻辑
-echo -e "${BLUE}[2/6] 检查重复逻辑...${NC}"
+echo -e "${BLUE}[2/7] 检查重复逻辑...${NC}"
 
 # 检查重复的函数名
 echo "检查函数定义..."
@@ -92,7 +92,7 @@ fi
 echo ""
 
 # 3. 检查路径引用
-echo -e "${BLUE}[3/6] 检查路径引用...${NC}"
+echo -e "${BLUE}[3/7] 检查路径引用...${NC}"
 
 # 检查硬编码路径
 HARDCODED_PATHS=$(grep -r "/usr/local/openresty" scripts/*.sh 2>/dev/null | grep -v "OPENRESTY_PREFIX" | grep -v "INSTALL_DIR" | wc -l)
@@ -114,7 +114,7 @@ fi
 echo ""
 
 # 4. 检查脚本逻辑完整性和关键修复项
-echo -e "${BLUE}[4/6] 检查脚本逻辑完整性和关键修复项...${NC}"
+echo -e "${BLUE}[4/7] 检查脚本逻辑完整性和关键修复项...${NC}"
 
 # 检查函数调用关系
 check_script_logic() {
@@ -159,23 +159,27 @@ done
 # 检查关键脚本的特定函数和修复项
 echo "检查关键修复项..."
 
-# install.sh 关键修复项检查
-if grep -q "TEMP_VARS_FILE\|CREATED_DB_NAME\|MYSQL_USER_FOR_WAF" install.sh; then
-    check_ok "install.sh 变量传递机制存在"
-else
-    check_error "install.sh 变量传递机制缺失"
-fi
+# start.sh 关键修复项检查
+if [ -f "start.sh" ]; then
+    if grep -q "TEMP_VARS_FILE\|CREATED_DB_NAME\|MYSQL_USER_FOR_WAF" start.sh; then
+        check_ok "start.sh 变量传递机制存在"
+    else
+        check_warning "start.sh 变量传递机制可能缺失"
+    fi
 
-if grep -q "CURRENT_STEP\|TOTAL_STEPS" install.sh; then
-    check_ok "install.sh 动态步骤编号存在"
-else
-    check_error "install.sh 动态步骤编号缺失"
-fi
+    if grep -q "CURRENT_STEP\|TOTAL_STEPS" start.sh; then
+        check_ok "start.sh 动态步骤编号存在"
+    else
+        check_warning "start.sh 动态步骤编号可能缺失"
+    fi
 
-if grep -q "python3.*redis_password\|Redis 密码已设置" install.sh; then
-    check_ok "install.sh Redis 密码 Python 更新存在"
+    if grep -q "uninstall\|卸载" start.sh; then
+        check_ok "start.sh 卸载功能存在"
+    else
+        check_warning "start.sh 卸载功能可能缺失"
+    fi
 else
-    check_error "install.sh Redis 密码 Python 更新缺失"
+    check_warning "start.sh 文件不存在（可能已重命名）"
 fi
 
 # install_mysql.sh 关键修复项检查
@@ -298,7 +302,7 @@ fi
 echo ""
 
 # 5. 检查错误处理机制
-echo -e "${BLUE}[5/6] 检查错误处理机制...${NC}"
+echo -e "${BLUE}[5/7] 检查错误处理机制...${NC}"
 
 # 检查关键脚本的错误处理
 check_error_handling() {
@@ -328,7 +332,7 @@ check_error_handling() {
 }
 
 # 检查关键脚本
-for script in install.sh scripts/install_mysql.sh scripts/install_redis.sh scripts/deploy.sh; do
+for script in start.sh scripts/install_mysql.sh scripts/install_redis.sh scripts/deploy.sh scripts/install_openresty.sh; do
     if [ -f "$script" ]; then
         check_error_handling "$script"
     fi
@@ -337,7 +341,7 @@ done
 echo ""
 
 # 6. 检查文件存在性
-echo -e "${BLUE}[6/6] 检查必要文件...${NC}"
+echo -e "${BLUE}[6/7] 检查必要文件...${NC}"
 
 REQUIRED_FILES=(
     "init_file/nginx.conf"
@@ -365,12 +369,211 @@ for file in "${REQUIRED_FILES[@]}"; do
 done
 
 echo ""
+
+# 7. 检查卸载后残留
+echo -e "${BLUE}[7/8] 检查卸载后残留（如果已卸载）...${NC}"
+
+# 检查 OpenResty 残留
+OPENRESTY_PREFIX="${OPENRESTY_PREFIX:-/usr/local/openresty}"
+if [ ! -f "${OPENRESTY_PREFIX}/bin/openresty" ]; then
+    if [ -d "${OPENRESTY_PREFIX}" ]; then
+        check_warning "OpenResty 已卸载但安装目录仍存在: ${OPENRESTY_PREFIX}"
+        # 检查目录大小
+        local dir_size=$(du -sh "${OPENRESTY_PREFIX}" 2>/dev/null | cut -f1 || echo "未知")
+        echo -e "${BLUE}  目录大小: $dir_size${NC}"
+    fi
+    if [ -f "/etc/systemd/system/openresty.service" ]; then
+        check_warning "OpenResty 服务文件仍存在: /etc/systemd/system/openresty.service"
+    fi
+    if [ -L "/usr/local/bin/openresty" ] || [ -L "/usr/local/bin/opm" ] || [ -L "/usr/local/bin/resty" ]; then
+        check_warning "OpenResty 符号链接仍存在: /usr/local/bin/openresty, /usr/local/bin/opm, /usr/local/bin/resty"
+    fi
+else
+    check_ok "OpenResty 已安装: ${OPENRESTY_PREFIX}/bin/openresty"
+fi
+
+# 检查 MySQL 残留
+if ! command -v mysql &> /dev/null && ! command -v mysqld &> /dev/null; then
+    local mysql_data_dirs=(
+        "/var/lib/mysql"
+        "/var/lib/mysqld"
+        "/usr/local/mysql/data"
+    )
+    for dir in "${mysql_data_dirs[@]}"; do
+        if [ -d "$dir" ] && [ -n "$(ls -A "$dir" 2>/dev/null)" ]; then
+            check_warning "MySQL 已卸载但数据目录仍存在: $dir"
+            local dir_size=$(du -sh "$dir" 2>/dev/null | cut -f1 || echo "未知")
+            echo -e "${BLUE}  目录大小: $dir_size${NC}"
+            # 检查是否有用户数据库
+            local user_dbs=$(find "$dir" -mindepth 1 -maxdepth 1 -type d ! -name "mysql" ! -name "sys" ! -name "information_schema" ! -name "performance_schema" 2>/dev/null | wc -l)
+            if [ "$user_dbs" -gt 0 ]; then
+                echo -e "${YELLOW}  包含 $user_dbs 个用户数据库${NC}"
+            fi
+        fi
+    done
+    
+    local mysql_config_files=(
+        "/etc/my.cnf"
+        "/etc/mysql/my.cnf"
+        "/etc/mysql/conf.d"
+        "/etc/mysql/mysql.conf.d"
+    )
+    for file in "${mysql_config_files[@]}"; do
+        if [ -f "$file" ] || [ -d "$file" ]; then
+            check_warning "MySQL 配置文件仍存在: $file"
+        fi
+    done
+    
+    if [ -f "/var/log/mysqld.log" ] || [ -d "/var/log/mysql" ]; then
+        check_warning "MySQL 日志文件仍存在"
+    fi
+else
+    check_ok "MySQL 已安装: $(command -v mysql 2>/dev/null || command -v mysqld 2>/dev/null)"
+fi
+
+# 检查 Redis 残留
+if ! command -v redis-server &> /dev/null; then
+    local redis_data_dirs=(
+        "/var/lib/redis"
+        "/var/db/redis"
+    )
+    for dir in "${redis_data_dirs[@]}"; do
+        if [ -d "$dir" ] && [ -n "$(ls -A "$dir" 2>/dev/null)" ]; then
+            check_warning "Redis 已卸载但数据目录仍存在: $dir"
+            local dir_size=$(du -sh "$dir" 2>/dev/null | cut -f1 || echo "未知")
+            echo -e "${BLUE}  目录大小: $dir_size${NC}"
+        fi
+    done
+    
+    local redis_config_files=(
+        "/etc/redis/redis.conf"
+        "/etc/redis.conf"
+        "/usr/local/etc/redis.conf"
+    )
+    for file in "${redis_config_files[@]}"; do
+        if [ -f "$file" ]; then
+            check_warning "Redis 配置文件仍存在: $file"
+        fi
+    done
+    
+    if [ -d "/var/log/redis" ]; then
+        check_warning "Redis 日志目录仍存在: /var/log/redis"
+    fi
+    
+    if [ -f "/etc/systemd/system/redis.service" ]; then
+        check_warning "Redis 服务文件仍存在: /etc/systemd/system/redis.service"
+    fi
+else
+    check_ok "Redis 已安装: $(command -v redis-server 2>/dev/null)"
+fi
+
+# 检查 GeoIP 残留
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+GEOIP_DIR="${SCRIPT_DIR}/../lua/geoip"
+if [ ! -f "${GEOIP_DIR}/GeoLite2-City.mmdb" ]; then
+    if [ -d "${GEOIP_DIR}" ] && [ -n "$(ls -A "${GEOIP_DIR}" 2>/dev/null)" ]; then
+        check_warning "GeoIP 数据库已卸载但目录仍存在: ${GEOIP_DIR}"
+    fi
+    if [ -f "${SCRIPT_DIR}/.geoip_config" ]; then
+        check_warning "GeoIP 配置文件仍存在: ${SCRIPT_DIR}/.geoip_config"
+    fi
+    # 检查 crontab 任务
+    if crontab -l 2>/dev/null | grep -q "update_geoip.sh"; then
+        check_warning "GeoIP 更新计划任务仍存在"
+    fi
+else
+    check_ok "GeoIP 数据库已安装: ${GEOIP_DIR}/GeoLite2-City.mmdb"
+fi
+
+# 检查部署配置残留
+if [ -f "${OPENRESTY_PREFIX}/nginx/conf/nginx.conf" ]; then
+    if grep -q "project_root\|project_root" "${OPENRESTY_PREFIX}/nginx/conf/nginx.conf" 2>/dev/null; then
+        check_ok "nginx.conf 已部署（包含 project_root 变量）"
+        # 检查 project_root 路径是否正确
+        local project_root_in_conf=$(grep "set \$project_root" "${OPENRESTY_PREFIX}/nginx/conf/nginx.conf" 2>/dev/null | sed 's/.*"\(.*\)".*/\1/' | head -1)
+        if [ -n "$project_root_in_conf" ] && [ ! -d "$project_root_in_conf" ]; then
+            check_warning "nginx.conf 中的 project_root 路径不存在: $project_root_in_conf"
+        fi
+    else
+        check_warning "nginx.conf 存在但可能不是本项目部署的配置"
+    fi
+else
+    check_ok "nginx.conf 未部署或已清理"
+fi
+
+# 8. 检查服务状态和依赖关系
+echo -e "${BLUE}[8/8] 检查服务状态和依赖关系...${NC}"
+
+# 检查 OpenResty 服务状态
+if [ -f "${OPENRESTY_PREFIX}/bin/openresty" ]; then
+    if systemctl is-active --quiet openresty 2>/dev/null || pgrep -x openresty > /dev/null 2>&1; then
+        check_ok "OpenResty 服务正在运行"
+    else
+        check_warning "OpenResty 已安装但服务未运行"
+    fi
+fi
+
+# 检查 MySQL 服务状态
+if command -v mysql &> /dev/null || command -v mysqld &> /dev/null; then
+    if systemctl is-active --quiet mysqld 2>/dev/null || systemctl is-active --quiet mysql 2>/dev/null || pgrep -x mysqld > /dev/null 2>&1; then
+        check_ok "MySQL 服务正在运行"
+        # 检查 MySQL 连接
+        if mysqladmin ping -h localhost --silent 2>/dev/null; then
+            check_ok "MySQL 连接正常"
+        else
+            check_warning "MySQL 服务运行但连接失败"
+        fi
+    else
+        check_warning "MySQL 已安装但服务未运行"
+    fi
+fi
+
+# 检查 Redis 服务状态
+if command -v redis-server &> /dev/null; then
+    if systemctl is-active --quiet redis 2>/dev/null || systemctl is-active --quiet redis-server 2>/dev/null || pgrep -x redis-server > /dev/null 2>&1; then
+        check_ok "Redis 服务正在运行"
+        # 检查 Redis 连接
+        if redis-cli ping > /dev/null 2>&1; then
+            check_ok "Redis 连接正常"
+        else
+            check_warning "Redis 服务运行但连接失败"
+        fi
+    else
+        check_warning "Redis 已安装但服务未运行"
+    fi
+fi
+
+# 检查服务依赖关系
+if command -v lsof &> /dev/null; then
+    # 检查端口占用
+    if lsof -i :80 2>/dev/null | grep -qE "openresty|nginx"; then
+        check_ok "80 端口被 OpenResty/Nginx 占用（正常）"
+    elif lsof -i :80 > /dev/null 2>&1; then
+        check_warning "80 端口被其他服务占用"
+    fi
+    
+    if lsof -i :3306 2>/dev/null | grep -qE "mysqld|mysql"; then
+        check_ok "3306 端口被 MySQL 占用（正常）"
+    elif lsof -i :3306 > /dev/null 2>&1; then
+        check_warning "3306 端口被其他服务占用"
+    fi
+    
+    if lsof -i :6379 2>/dev/null | grep -q "redis-server"; then
+        check_ok "6379 端口被 Redis 占用（正常）"
+    elif lsof -i :6379 > /dev/null 2>&1; then
+        check_warning "6379 端口被其他服务占用"
+    fi
+fi
+
+echo ""
 echo -e "${GREEN}========================================${NC}"
 echo -e "${GREEN}检查完成${NC}"
 echo -e "${GREEN}========================================${NC}"
 echo ""
-echo "错误: $ERRORS"
-echo "警告: $WARNINGS"
+echo -e "${BLUE}检查统计：${NC}"
+echo "  错误: $ERRORS"
+echo "  警告: $WARNINGS"
+echo ""
 
 # 生成检查摘要
 echo ""
@@ -392,6 +595,7 @@ if [ $TOTAL_CHECKS -eq 0 ]; then
     echo "  - 关键修复项检查：✓"
     echo "  - 错误处理检查：✓"
     echo "  - 文件存在性检查：✓"
+    echo "  - 卸载残留检查：✓"
     exit 0
 elif [ $ERRORS -eq 0 ]; then
     echo -e "${YELLOW}⚠ 有警告，但无错误${NC}"

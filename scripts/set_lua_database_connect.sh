@@ -176,35 +176,137 @@ verify_config_syntax() {
     fi
 }
 
+# 交互式更新 MySQL 配置
+interactive_mysql() {
+    echo -e "${BLUE}交互式更新 MySQL 配置${NC}"
+    echo ""
+    
+    read -p "MySQL Host [127.0.0.1]: " MYSQL_HOST
+    MYSQL_HOST="${MYSQL_HOST:-127.0.0.1}"
+    
+    read -p "MySQL Port [3306]: " MYSQL_PORT
+    MYSQL_PORT="${MYSQL_PORT:-3306}"
+    
+    read -p "MySQL Database [waf_db]: " MYSQL_DB
+    MYSQL_DB="${MYSQL_DB:-waf_db}"
+    
+    read -p "MySQL User [waf_user]: " MYSQL_USER
+    MYSQL_USER="${MYSQL_USER:-waf_user}"
+    
+    read -sp "MySQL Password: " MYSQL_PASS
+    echo ""
+    
+    if [ -z "$MYSQL_PASS" ]; then
+        echo -e "${YELLOW}警告: 密码为空${NC}"
+        read -p "确认使用空密码？[y/N]: " CONFIRM_EMPTY
+        CONFIRM_EMPTY="${CONFIRM_EMPTY:-N}"
+        if [[ ! "$CONFIRM_EMPTY" =~ ^[Yy]$ ]]; then
+            echo -e "${YELLOW}取消配置更新${NC}"
+            return 1
+        fi
+    fi
+    
+    update_mysql_config "$MYSQL_HOST" "$MYSQL_PORT" "$MYSQL_DB" "$MYSQL_USER" "$MYSQL_PASS"
+    verify_config_syntax
+}
+
+# 交互式更新 Redis 配置
+interactive_redis() {
+    echo -e "${BLUE}交互式更新 Redis 配置${NC}"
+    echo ""
+    
+    read -p "Redis Host [127.0.0.1]: " REDIS_HOST
+    REDIS_HOST="${REDIS_HOST:-127.0.0.1}"
+    
+    read -p "Redis Port [6379]: " REDIS_PORT
+    REDIS_PORT="${REDIS_PORT:-6379}"
+    
+    read -p "Redis DB [0]: " REDIS_DB
+    REDIS_DB="${REDIS_DB:-0}"
+    
+    read -sp "Redis Password (留空表示无密码): " REDIS_PASS
+    echo ""
+    
+    update_redis_config "$REDIS_HOST" "$REDIS_PORT" "$REDIS_DB" "$REDIS_PASS"
+    verify_config_syntax
+}
+
+# 交互式菜单
+interactive_menu() {
+    echo -e "${BLUE}请选择要更新的配置:${NC}"
+    echo "1. MySQL 配置"
+    echo "2. Redis 配置"
+    echo "3. 验证配置文件语法"
+    read -p "请选择 [1-3]: " CONFIG_CHOICE
+    
+    case "$CONFIG_CHOICE" in
+        1)
+            interactive_mysql
+            ;;
+        2)
+            interactive_redis
+            ;;
+        3)
+            verify_config_syntax
+            ;;
+        *)
+            echo -e "${RED}错误: 无效的选择${NC}"
+            return 1
+            ;;
+    esac
+}
+
 # 主函数
 main() {
-    local action="$1"
+    local action="${1:-interactive}"
     
     case "$action" in
         mysql)
-            if [ $# -ne 6 ]; then
-                echo "用法: $0 mysql <host> <port> <database> <user> <password>"
+            if [ $# -eq 1 ]; then
+                # 没有参数，使用交互式模式
+                interactive_mysql
+            elif [ $# -ne 6 ]; then
+                echo "用法: $0 mysql [<host> <port> <database> <user> <password>]"
+                echo "  或: $0 mysql  # 交互式模式"
                 exit 1
+            else
+                update_mysql_config "$2" "$3" "$4" "$5" "$6"
+                verify_config_syntax
             fi
-            update_mysql_config "$2" "$3" "$4" "$5" "$6"
-            verify_config_syntax
             ;;
         redis)
-            if [ $# -ne 5 ]; then
-                echo "用法: $0 redis <host> <port> <db> <password>"
+            if [ $# -eq 1 ]; then
+                # 没有参数，使用交互式模式
+                interactive_redis
+            elif [ $# -ne 5 ]; then
+                echo "用法: $0 redis [<host> <port> <db> <password>]"
+                echo "  或: $0 redis  # 交互式模式"
                 exit 1
+            else
+                update_redis_config "$2" "$3" "$4" "$5"
+                verify_config_syntax
             fi
-            update_redis_config "$2" "$3" "$4" "$5"
-            verify_config_syntax
             ;;
         verify)
             verify_config_syntax
             ;;
+        interactive|"")
+            interactive_menu
+            ;;
         *)
-            echo "用法: $0 {mysql|redis|verify} [参数...]"
+            echo "用法: $0 {mysql|redis|verify|interactive} [参数...]"
+            echo ""
+            echo "模式:"
+            echo "  interactive  - 交互式模式（默认）"
+            echo "  mysql        - 更新 MySQL 配置（可带参数或交互式）"
+            echo "  redis        - 更新 Redis 配置（可带参数或交互式）"
+            echo "  verify       - 验证配置文件语法"
             echo ""
             echo "示例:"
+            echo "  $0                          # 交互式菜单"
+            echo "  $0 mysql                    # 交互式更新 MySQL"
             echo "  $0 mysql 127.0.0.1 3306 waf_db waf_user password"
+            echo "  $0 redis                    # 交互式更新 Redis"
             echo "  $0 redis 127.0.0.1 6379 0 password"
             echo "  $0 verify"
             exit 1

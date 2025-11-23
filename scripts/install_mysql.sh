@@ -136,15 +136,207 @@ check_root() {
 check_existing() {
     echo -e "${BLUE}[2/8] 检查是否已安装 MySQL...${NC}"
     
+    local mysql_installed=0
+    local mysql_version=""
+    local mysql_data_initialized=0
+    local mysql_data_dir=""
+    
+    # 检查 MySQL 是否已安装
     if command -v mysql &> /dev/null || command -v mysqld &> /dev/null; then
-        local mysql_version=$(mysql --version 2>/dev/null || mysqld --version 2>/dev/null | head -n 1)
+        mysql_installed=1
+        mysql_version=$(mysql --version 2>/dev/null || mysqld --version 2>/dev/null | head -n 1)
         echo -e "${YELLOW}检测到已安装 MySQL: ${mysql_version}${NC}"
-        read -p "是否继续安装/更新？(y/N): " -n 1 -r
-        echo
-        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-            echo -e "${YELLOW}安装已取消${NC}"
-            exit 0
+        
+        # 检查数据目录是否已初始化
+        local mysql_data_dirs=(
+            "/var/lib/mysql"
+            "/var/lib/mysqld"
+            "/usr/local/mysql/data"
+        )
+        
+        for dir in "${mysql_data_dirs[@]}"; do
+            if [ -d "$dir" ] && [ -n "$(ls -A "$dir" 2>/dev/null)" ]; then
+                # 检查是否包含 mysql 系统数据库（说明已初始化）
+                if [ -d "$dir/mysql" ] && ([ -f "$dir/mysql/user.MYD" ] || [ -f "$dir/mysql/user.ibd" ] || [ -d "$dir/mysql.ibd" ]); then
+                    mysql_data_initialized=1
+                    mysql_data_dir="$dir"
+                    break
+                fi
+            fi
+        done
+        
+        if [ $mysql_data_initialized -eq 1 ]; then
+            echo -e "${YELLOW}检测到 MySQL 数据目录已初始化: ${mysql_data_dir}${NC}"
+            echo ""
+            echo "请选择操作："
+            echo "  1. 保留现有数据和配置，跳过安装"
+            echo "  2. 重新安装 MySQL（保留数据目录）"
+            echo "  3. 完全重新安装（删除所有数据和配置）"
+            read -p "请选择 [1-3]: " REINSTALL_CHOICE
+            
+            case "$REINSTALL_CHOICE" in
+                1)
+                    echo -e "${GREEN}跳过 MySQL 安装，保留现有配置${NC}"
+                    # 检查现有 MySQL 版本是否满足要求
+                    if [ -n "$MYSQL_VERSION" ] && [ "$MYSQL_VERSION" != "default" ]; then
+                        local current_major=$(echo "$mysql_version" | grep -oE '[0-9]+\.[0-9]+' | head -1)
+                        local required_major=$(echo "$MYSQL_VERSION" | grep -oE '^[0-9]+\.[0-9]+' | head -1)
+                        if [ "$current_major" != "$required_major" ]; then
+                            echo -e "${YELLOW}⚠ 当前版本 ($current_major) 与要求版本 ($required_major) 不匹配${NC}"
+                            echo -e "${YELLOW}⚠ 建议重新安装以匹配版本要求${NC}"
+                        fi
+                    fi
+                    exit 0
+                    ;;
+                2)
+                    echo -e "${YELLOW}将重新安装 MySQL，但保留数据目录${NC}"
+                    echo -e "${YELLOW}注意: 如果版本不兼容，可能导致数据无法使用${NC}"
+                    echo -e "${YELLOW}建议: 在重新安装前备份数据目录${NC}"
+                    read -p "是否先备份数据目录？[Y/n]: " BACKUP_DATA
+                    BACKUP_DATA="${BACKUP_DATA:-Y}"
+                    if [[ "$BACKUP_DATA" =~ ^[Yy]$ ]]; then
+                        local backup_dir="/var/backups/mysql_$(date +%Y%m%d_%H%M%S)"
+                        mkdir -p "$backup_dir"
+                        echo -e "${BLUE}正在备份数据目录到: $backup_dir${NC}"
+                        cp -r "${mysql_data_dir}" "$backup_dir/data" 2>/dev/null || {
+                            echo -e "${YELLOW}⚠ 备份失败，继续安装${NC}"
+                        }
+                        echo -e "${GREEN}✓ 备份完成${NC}"
+                    fi
+                    REINSTALL_MODE="keep_data"
+                    ;;
+                3)
+                    echo -e "${RED}警告: 将删除所有 MySQL 数据和配置！${NC}"
+                    echo -e "${RED}这将包括：${NC}"
+                    echo "  - 所有数据库和数据"
+                    echo "  - 所有用户和权限"
+                    echo "  - 配置文件"
+                    echo "  - 日志文件"
+                    read -p "确认删除所有数据？[y/N]: " CONFIRM_DELETE
+                    CONFIRM_DELETE="${CONFIRM_DELETE:-N}"
+                    if [[ "$CONFIRM_DELETE" =~ ^[Yy]$ ]]; then
+                        echo -e "${YELLOW}将完全重新安装 MySQL，删除所有数据${NC}"
+                        REINSTALL_MODE="delete_all"
+                        
+                        # 停止 MySQL 服务
+                        if command -v systemctl &> /dev/null; then
+                            systemctl stop mysqld 2>/dev/null || systemctl stop mysql 2>/dev/null || true
+                        elif command -v service &> /dev/null; then
+                            service mysqld stop 2>/dev/null || service mysql stop 2>/dev/null || true
+                        fi
+                        sleep 2
+                        
+                        # 检查是否有其他服务依赖 MySQL
+                        echo -e "${BLUE}检查是否有其他服务依赖 MySQL...${NC}"
+                        local dependent_services=()
+                        if systemctl list-units --type=service --state=running 2>/dev/null | grep -qiE "php-fpm|wordpress|owncloud|nextcloud"; then
+                            echo -e "${YELLOW}⚠ 检测到可能依赖 MySQL 的服务正在运行${NC}"
+                            echo -e "${YELLOW}⚠ 删除 MySQL 可能导致这些服务无法正常工作${NC}"
+                            read -p "是否继续？[y/N]: " CONTINUE_DELETE
+                            CONTINUE_DELETE="${CONTINUE_DELETE:-N}"
+                            if [[ ! "$CONTINUE_DELETE" =~ ^[Yy]$ ]]; then
+                                echo -e "${GREEN}取消删除，将保留数据重新安装${NC}"
+                                REINSTALL_MODE="keep_data"
+                                return 0
+                            fi
+                        fi
+                        
+                        # 删除数据目录
+                        if [ -n "$mysql_data_dir" ] && [ -d "$mysql_data_dir" ]; then
+                            echo -e "${YELLOW}正在删除数据目录: ${mysql_data_dir}${NC}"
+                            rm -rf "${mysql_data_dir}"/*
+                            rm -rf "${mysql_data_dir}"/.* 2>/dev/null || true
+                            echo -e "${GREEN}✓ 数据目录已删除${NC}"
+                        fi
+                        
+                        # 删除配置文件
+                        local config_files=(
+                            "/etc/my.cnf"
+                            "/etc/mysql/my.cnf"
+                            "/etc/mysql/conf.d"
+                            "/etc/mysql/mysql.conf.d"
+                        )
+                        for file in "${config_files[@]}"; do
+                            if [ -f "$file" ] || [ -d "$file" ]; then
+                                rm -rf "$file"
+                                echo -e "${GREEN}✓ 已删除: $file${NC}"
+                            fi
+                        done
+                        
+                        # 删除日志文件
+                        local log_files=(
+                            "/var/log/mysqld.log"
+                            "/var/log/mysql"
+                        )
+                        for log_file in "${log_files[@]}"; do
+                            if [ -f "$log_file" ] || [ -d "$log_file" ]; then
+                                rm -rf "$log_file"
+                                echo -e "${GREEN}✓ 已删除: $log_file${NC}"
+                            fi
+                        done
+                    else
+                        echo -e "${GREEN}取消删除，将保留数据重新安装${NC}"
+                        REINSTALL_MODE="keep_data"
+                    fi
+                    ;;
+                *)
+                    echo -e "${YELLOW}无效选择，将跳过安装${NC}"
+                    exit 0
+                    ;;
+            esac
+        else
+            echo -e "${YELLOW}MySQL 已安装但数据目录未初始化${NC}"
+            read -p "是否继续安装/更新？(y/N): " -n 1 -r
+            echo
+            if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+                echo -e "${YELLOW}安装已取消${NC}"
+                exit 0
+            fi
+            REINSTALL_MODE="update"
         fi
+    else
+        echo -e "${GREEN}✓ MySQL 未安装，将进行全新安装${NC}"
+    fi
+    
+    # 版本选择（如果未设置环境变量）
+    if [ -z "$MYSQL_VERSION" ]; then
+        echo ""
+        echo "请选择 MySQL 版本："
+        echo "  1. MySQL 8.0（推荐，最新稳定版）"
+        echo "  2. MySQL 5.7（兼容性更好）"
+        echo "  3. MySQL 8.0.35（指定小版本）"
+        echo "  4. MySQL 5.7.44（指定小版本）"
+        echo "  5. 使用系统默认版本"
+        read -p "请选择 [1-5]: " VERSION_CHOICE
+        
+        case "$VERSION_CHOICE" in
+            1)
+                MYSQL_VERSION="8.0"
+                echo -e "${GREEN}✓ 已选择 MySQL 8.0${NC}"
+                ;;
+            2)
+                MYSQL_VERSION="5.7"
+                echo -e "${GREEN}✓ 已选择 MySQL 5.7${NC}"
+                ;;
+            3)
+                MYSQL_VERSION="8.0.35"
+                echo -e "${GREEN}✓ 已选择 MySQL 8.0.35${NC}"
+                ;;
+            4)
+                MYSQL_VERSION="5.7.44"
+                echo -e "${GREEN}✓ 已选择 MySQL 5.7.44${NC}"
+                ;;
+            5)
+                MYSQL_VERSION="default"
+                echo -e "${GREEN}✓ 将使用系统默认版本${NC}"
+                ;;
+            *)
+                MYSQL_VERSION="8.0"
+                echo -e "${YELLOW}无效选择，默认使用 MySQL 8.0${NC}"
+                ;;
+        esac
+    else
+        echo -e "${BLUE}使用环境变量指定的版本: ${MYSQL_VERSION}${NC}"
     fi
     
     echo -e "${GREEN}✓ 检查完成${NC}"
@@ -185,16 +377,29 @@ install_mysql_redhat() {
             ;;
     esac
     
-    # 安装 MySQL 仓库（MySQL 8.0）
+    # 根据选择的版本确定仓库包
+    local repo_version="80"
+    if [ "$MYSQL_VERSION" = "5.7" ] || echo "$MYSQL_VERSION" | grep -qE "^5\.7"; then
+        repo_version="57"
+    elif [ "$MYSQL_VERSION" = "8.0" ] || echo "$MYSQL_VERSION" | grep -qE "^8\.0"; then
+        repo_version="80"
+    elif [ "$MYSQL_VERSION" = "default" ]; then
+        # 使用系统默认版本，尝试 MySQL 8.0
+        repo_version="80"
+    fi
+    
+    # 安装 MySQL 仓库
     if [ ! -f /etc/yum.repos.d/mysql-community.repo ]; then
-        echo "添加 MySQL 官方仓库..."
+        echo "添加 MySQL ${repo_version} 官方仓库..."
         
         # 下载 MySQL Yum Repository
         local repo_downloaded=0
+        local repo_file="mysql${repo_version}-community-release-${el_version}-1.noarch.rpm"
         
         # 尝试下载对应版本的仓库
         for el_ver in $el_version el8 el7; do
-            if wget -q "https://dev.mysql.com/get/mysql80-community-release-${el_ver}-1.noarch.rpm" -O /tmp/mysql80-community-release.rpm 2>/dev/null && [ -s /tmp/mysql80-community-release.rpm ]; then
+            local repo_url="https://dev.mysql.com/get/${repo_file}"
+            if wget -q "$repo_url" -O /tmp/mysql-community-release.rpm 2>/dev/null && [ -s /tmp/mysql-community-release.rpm ]; then
                 repo_downloaded=1
                 break
             fi
@@ -204,14 +409,14 @@ install_mysql_redhat() {
             echo -e "${YELLOW}⚠ 无法下载 MySQL 仓库，尝试使用系统仓库${NC}"
         fi
         
-        if [ -f /tmp/mysql80-community-release.rpm ]; then
+        if [ -f /tmp/mysql-community-release.rpm ]; then
             # 尝试导入 GPG 密钥
             rpm --import https://repo.mysql.com/RPM-GPG-KEY-mysql-2022 2>/dev/null || \
             rpm --import https://repo.mysql.com/RPM-GPG-KEY-mysql 2>/dev/null || \
             echo -e "${YELLOW}⚠ GPG 密钥导入失败，将禁用 GPG 检查${NC}"
             
             # 安装仓库
-            if rpm -ivh /tmp/mysql80-community-release.rpm 2>&1; then
+            if rpm -ivh /tmp/mysql-community-release.rpm 2>&1; then
                 # 如果 GPG 检查失败，禁用 GPG 检查
                 if ! yum install -y mysql-server 2>&1 | grep -q "GPG"; then
                     : # 安装成功
@@ -220,20 +425,51 @@ install_mysql_redhat() {
                     sed -i 's/gpgcheck=1/gpgcheck=0/' /etc/yum.repos.d/mysql-community*.repo 2>/dev/null || true
                 fi
             fi
-            rm -f /tmp/mysql80-community-release.rpm
+            rm -f /tmp/mysql-community-release.rpm
+        fi
+        
+        # 如果指定了具体版本，启用对应版本的仓库并禁用其他版本
+        if [ "$MYSQL_VERSION" != "default" ] && [ -f /etc/yum.repos.d/mysql-community.repo ]; then
+            if echo "$MYSQL_VERSION" | grep -qE "^5\.7"; then
+                # 启用 MySQL 5.7，禁用其他版本
+                sed -i 's/enabled=1/enabled=0/g' /etc/yum.repos.d/mysql-community*.repo
+                sed -i '/\[mysql57-community\]/,/\[/ { /enabled=/ s/enabled=0/enabled=1/ }' /etc/yum.repos.d/mysql-community*.repo
+            elif echo "$MYSQL_VERSION" | grep -qE "^8\.0"; then
+                # 启用 MySQL 8.0，禁用其他版本
+                sed -i 's/enabled=1/enabled=0/g' /etc/yum.repos.d/mysql-community*.repo
+                sed -i '/\[mysql80-community\]/,/\[/ { /enabled=/ s/enabled=0/enabled=1/ }' /etc/yum.repos.d/mysql-community*.repo
+            fi
         fi
     fi
     
     # 安装 MySQL
     INSTALL_SUCCESS=0
     
-    if command -v dnf &> /dev/null; then
-        if dnf install -y mysql-server mysql 2>&1; then
-            INSTALL_SUCCESS=1
+    # 如果指定了具体版本，尝试安装指定版本
+    if [ "$MYSQL_VERSION" != "default" ] && echo "$MYSQL_VERSION" | grep -qE "^[0-9]+\.[0-9]+"; then
+        local version_package="mysql-community-server-${MYSQL_VERSION}"
+        echo "尝试安装指定版本: $version_package"
+        if command -v dnf &> /dev/null; then
+            if dnf install -y "$version_package" mysql-community-client 2>&1; then
+                INSTALL_SUCCESS=1
+            fi
+        else
+            if yum install -y "$version_package" mysql-community-client 2>&1; then
+                INSTALL_SUCCESS=1
+            fi
         fi
-    else
-        if yum install -y mysql-server mysql 2>&1; then
-            INSTALL_SUCCESS=1
+    fi
+    
+    # 如果指定版本安装失败，使用默认安装
+    if [ $INSTALL_SUCCESS -eq 0 ]; then
+        if command -v dnf &> /dev/null; then
+            if dnf install -y mysql-server mysql 2>&1; then
+                INSTALL_SUCCESS=1
+            fi
+        else
+            if yum install -y mysql-server mysql 2>&1; then
+                INSTALL_SUCCESS=1
+            fi
         fi
     fi
     

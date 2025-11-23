@@ -12,17 +12,17 @@ function _M.init()
     if config.geo.enable and not config.geo.geoip_db_path then
         -- 获取项目根目录（从 nginx 变量）
         local project_root = ngx.var.project_root
-        if not project_root or project_root == "" or project_root == "/path/to/project" then
+        if not project_root or project_root == "" then
             -- 如果变量未设置，尝试从 lua_package_path 推断
             -- package.path 中第一个路径通常是项目根目录下的 lua
             local first_path = package.path:match("([^;]+)")
             if first_path then
-                -- 提取路径：/path/to/project/lua/?.lua -> /path/to/project
+                -- 提取路径：从 lua/?.lua 推断项目根目录
                 project_root = first_path:match("(.+)/lua/%?%.lua")
             end
         end
         
-        if project_root and project_root ~= "/path/to/project" then
+        if project_root and project_root ~= "" then
             config.geo.geoip_db_path = project_root .. "/lua/geoip/GeoLite2-City.mmdb"
             ngx.log(ngx.INFO, "GeoIP2 database path auto-configured: ", config.geo.geoip_db_path)
         else

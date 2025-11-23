@@ -14,18 +14,17 @@ BLUE='\033[0;34m'
 CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
-# 获取项目根目录
+# 获取脚本目录（使用相对路径）
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$SCRIPT_DIR"
 
-# 脚本目录
-SCRIPTS_DIR="${PROJECT_ROOT}/scripts"
+# 脚本目录（相对于脚本位置）
+SCRIPTS_DIR="${SCRIPT_DIR}/scripts"
 
-# 配置文件路径
-CONFIG_FILE="${PROJECT_ROOT}/lua/config.lua"
+# 配置文件路径（相对于脚本位置）
+CONFIG_FILE="${SCRIPT_DIR}/lua/config.lua"
 
-# 日志目录
-LOGS_DIR="${PROJECT_ROOT}/logs"
+# 日志目录（相对于脚本位置）
+LOGS_DIR="${SCRIPT_DIR}/logs"
 
 # OpenResty 安装目录
 OPENRESTY_PREFIX="${OPENRESTY_PREFIX:-/usr/local/openresty}"
@@ -34,7 +33,7 @@ echo -e "${GREEN}========================================${NC}"
 echo -e "${GREEN}OpenResty WAF 一键安装脚本${NC}"
 echo -e "${GREEN}========================================${NC}"
 echo ""
-echo "项目根目录: $PROJECT_ROOT"
+echo "项目根目录: $SCRIPT_DIR"
 echo ""
 
 # 创建必要的目录
@@ -596,7 +595,7 @@ echo -e "${BLUE}步骤 ${CURRENT_STEP}/${TOTAL_STEPS}: 初始化数据库${NC}"
 echo -e "${BLUE}========================================${NC}"
 echo ""
 
-SQL_FILE="${PROJECT_ROOT}/init_file/数据库设计.sql"
+SQL_FILE="${SCRIPT_DIR}/init_file/数据库设计.sql"
 
 if [ ! -f "$SQL_FILE" ]; then
     echo -e "${RED}错误: SQL 文件不存在: $SQL_FILE${NC}"
@@ -739,14 +738,14 @@ echo "3. 设置开机自启:"
 echo "   systemctl enable openresty"
 echo ""
 echo "4. 查看日志:"
-echo "   tail -f ${PROJECT_ROOT}/logs/error.log"
-echo "   tail -f ${PROJECT_ROOT}/logs/access.log"
+echo "   tail -f ${SCRIPT_DIR}/logs/error.log"
+echo "   tail -f ${SCRIPT_DIR}/logs/access.log"
 echo ""
 echo "5. 添加封控规则（参考文档）:"
 echo "   docs/地域封控使用示例.md"
 echo ""
 echo -e "${YELLOW}提示:${NC}"
-echo "  - 配置文件位置: ${PROJECT_ROOT}/lua/config.lua"
+echo "  - 配置文件位置: ${SCRIPT_DIR}/lua/config.lua"
 echo "  - 配置文件已备份: ${CONFIG_FILE}.bak.*"
 echo "  - 修改配置后无需重新部署，直接 reload 即可"
 echo ""

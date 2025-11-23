@@ -14,16 +14,15 @@ NC='\033[0m' # No Color
 
 # 配置变量
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 CONFIG_FILE="${SCRIPT_DIR}/.geoip_config"
 
-# GeoIP 数据库目录（项目目录下的 lua/geoip）
-GEOIP_DIR="${PROJECT_ROOT}/lua/geoip"
+# GeoIP 数据库目录（相对于脚本位置：../lua/geoip）
+GEOIP_DIR="${SCRIPT_DIR}/../lua/geoip"
 TEMP_DIR="/tmp/geoip_update"
 DOWNLOAD_URL="https://download.maxmind.com/geoip/databases/GeoLite2-City/download"
 
-# 日志文件（项目目录下的 logs 文件夹）
-LOG_FILE="${PROJECT_ROOT}/logs/geoip_update.log"
+# 日志文件（相对于脚本位置：../logs/geoip_update.log）
+LOG_FILE="${SCRIPT_DIR}/../logs/geoip_update.log"
 
 # 确保日志目录存在
 mkdir -p "$(dirname "$LOG_FILE")" 2>/dev/null || true

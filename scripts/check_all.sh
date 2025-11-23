@@ -12,9 +12,9 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
-# 获取项目根目录
+# 获取脚本目录（使用相对路径）
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+PROJECT_ROOT="${SCRIPT_DIR}/.."
 
 echo -e "${GREEN}========================================${NC}"
 echo -e "${GREEN}项目全面检查${NC}"
@@ -357,7 +357,7 @@ REQUIRED_FILES=(
 )
 
 for file in "${REQUIRED_FILES[@]}"; do
-    if [ -f "$PROJECT_ROOT/$file" ]; then
+    if [ -f "${PROJECT_ROOT}/$file" ]; then
         check_ok "$file 存在"
     else
         check_error "$file 不存在"

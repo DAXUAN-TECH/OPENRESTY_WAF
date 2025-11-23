@@ -15,12 +15,11 @@ NC='\033[0m' # No Color
 ACCOUNT_ID="${1:-}"
 LICENSE_KEY="${2:-}"
 
-# 获取项目根目录（脚本所在目录的父目录）
+# 获取脚本目录
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-# GeoIP 数据库目录（项目目录下的 lua/geoip）
-GEOIP_DIR="${PROJECT_ROOT}/lua/geoip"
+# GeoIP 数据库目录（相对于脚本位置：../lua/geoip）
+GEOIP_DIR="${SCRIPT_DIR}/../lua/geoip"
 TEMP_DIR="/tmp/geoip_install"
 # 使用新的 permalink URL（需要从 MaxMind 账号页面获取）
 # 或者使用通用的下载端点（需要 Account ID 和 License Key）
@@ -340,8 +339,8 @@ setup_crontab() {
     chmod +x "$update_script" 2>/dev/null || true
 
     # 构建 crontab 任务（每周一凌晨 2 点更新）
-    # 日志文件放在项目目录的 logs 文件夹
-    local log_file="${PROJECT_ROOT}/logs/geoip_update.log"
+    # 日志文件放在项目目录的 logs 文件夹（相对于脚本位置）
+    local log_file="${SCRIPT_DIR}/../logs/geoip_update.log"
     local cron_job="0 2 * * 1 ${update_script} >> ${log_file} 2>&1"
     
     # 检查是否已存在相同的任务
@@ -384,7 +383,7 @@ setup_crontab() {
         echo "  sudo crontab -l | grep update_geoip"
         echo ""
         echo -e "${GREEN}查看更新日志:${NC}"
-        echo "  tail -f ${PROJECT_ROOT}/logs/geoip_update.log"
+        echo "  tail -f ${SCRIPT_DIR}/../logs/geoip_update.log"
         echo ""
         echo -e "${GREEN}移除计划任务:${NC}"
         echo "  sudo crontab -e"

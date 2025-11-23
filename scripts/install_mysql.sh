@@ -677,7 +677,7 @@ configure_mysql() {
                     echo -n "."
                 done
                 echo ""
-            else
+    else
                 echo -e "${YELLOW}⚠ 未清理数据目录，请手动处理${NC}"
             fi
         fi
@@ -1948,10 +1948,9 @@ init_database() {
         return 1
     fi
     
-    # 查找 SQL 文件
+    # 查找 SQL 文件（使用相对路径）
     SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-    PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-    SQL_FILE="${PROJECT_ROOT}/init_file/数据库设计.sql"
+    SQL_FILE="${SCRIPT_DIR}/../init_file/数据库设计.sql"
     
     if [ ! -f "$SQL_FILE" ]; then
         echo -e "${YELLOW}⚠ SQL 文件不存在: ${SQL_FILE}${NC}"

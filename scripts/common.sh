@@ -3,10 +3,10 @@
 # 公共函数库
 # 用途：供其他脚本引用的公共函数
 
-# 获取项目根目录
+# 获取项目根目录（返回相对路径）
 get_project_root() {
     local script_dir="$(cd "$(dirname "${BASH_SOURCE[1]}")" && pwd)"
-    echo "$(cd "$script_dir/.." && pwd)"
+    echo "$script_dir/.."
 }
 
 # 检查依赖（通用）

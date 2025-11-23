@@ -12,16 +12,15 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
-# 获取项目根目录
+# 获取脚本目录（使用相对路径）
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 # OpenResty 安装目录
 OPENRESTY_PREFIX="${OPENRESTY_PREFIX:-/usr/local/openresty}"
 NGINX_CONF_DIR="${OPENRESTY_PREFIX}/nginx/conf"
 
-# 备份目录
-BACKUP_DIR="${PROJECT_ROOT}/backup/optimize_$(date +%Y%m%d_%H%M%S)"
+# 备份目录（相对于脚本位置）
+BACKUP_DIR="${SCRIPT_DIR}/../backup/optimize_$(date +%Y%m%d_%H%M%S)"
 
 echo -e "${GREEN}========================================${NC}"
 echo -e "${GREEN}OpenResty WAF 系统优化脚本${NC}"
@@ -137,8 +136,8 @@ if [ -f "$NGINX_CONF_DIR/nginx.conf" ]; then
     cp "$NGINX_CONF_DIR/nginx.conf" "$BACKUP_DIR/nginx.conf.bak"
 fi
 
-if [ -f "$PROJECT_ROOT/conf.d/set_conf/performance.conf" ]; then
-    cp "$PROJECT_ROOT/conf.d/set_conf/performance.conf" "$BACKUP_DIR/performance.conf.bak"
+if [ -f "${SCRIPT_DIR}/../conf.d/set_conf/performance.conf" ]; then
+    cp "${SCRIPT_DIR}/../conf.d/set_conf/performance.conf" "$BACKUP_DIR/performance.conf.bak"
 fi
 
 echo -e "${GREEN}✓ 备份完成: $BACKUP_DIR${NC}"
@@ -249,41 +248,41 @@ if [ -f "$NGINX_CONF_DIR/nginx.conf" ]; then
 fi
 
 # 5.2 优化 performance.conf
-if [ -f "$PROJECT_ROOT/conf.d/set_conf/performance.conf" ]; then
+if [ -f "${SCRIPT_DIR}/../conf.d/set_conf/performance.conf" ]; then
     echo "  优化 performance.conf..."
     
     # 更新 keepalive 连接数
-    if grep -q "keepalive " "$PROJECT_ROOT/conf.d/set_conf/performance.conf"; then
-        sed -i "s/keepalive [0-9]*;/keepalive $KEEPALIVE_CONNECTIONS;/" "$PROJECT_ROOT/conf.d/set_conf/performance.conf"
+    if grep -q "keepalive " "${SCRIPT_DIR}/../conf.d/set_conf/performance.conf"; then
+        sed -i "s/keepalive [0-9]*;/keepalive $KEEPALIVE_CONNECTIONS;/" "${SCRIPT_DIR}/../conf.d/set_conf/performance.conf"
     fi
     
     echo -e "    ${GREEN}✓ performance.conf 已优化${NC}"
 fi
 
 # 5.3 优化 upstream.conf
-if [ -f "$PROJECT_ROOT/conf.d/set_conf/upstream.conf" ]; then
+if [ -f "${SCRIPT_DIR}/../conf.d/set_conf/upstream.conf" ]; then
     echo "  优化 upstream.conf..."
     
     # 更新 keepalive
-    if grep -q "keepalive " "$PROJECT_ROOT/conf.d/set_conf/upstream.conf"; then
-        sed -i "s/keepalive [0-9]*;/keepalive $KEEPALIVE_CONNECTIONS;/" "$PROJECT_ROOT/conf.d/set_conf/upstream.conf"
+    if grep -q "keepalive " "${SCRIPT_DIR}/../conf.d/set_conf/upstream.conf"; then
+        sed -i "s/keepalive [0-9]*;/keepalive $KEEPALIVE_CONNECTIONS;/" "${SCRIPT_DIR}/../conf.d/set_conf/upstream.conf"
     fi
     
     echo -e "    ${GREEN}✓ upstream.conf 已优化${NC}"
 fi
 
 # 5.4 优化 waf.conf 共享内存
-if [ -f "$PROJECT_ROOT/conf.d/set_conf/waf.conf" ]; then
+if [ -f "${SCRIPT_DIR}/../conf.d/set_conf/waf.conf" ]; then
     echo "  优化 waf.conf 共享内存..."
     
     # 更新 waf_cache（10MB）
-    if grep -q "lua_shared_dict waf_cache" "$PROJECT_ROOT/conf.d/set_conf/waf.conf"; then
-        sed -i "s/lua_shared_dict waf_cache [0-9]*m;/lua_shared_dict waf_cache 10m;/" "$PROJECT_ROOT/conf.d/set_conf/waf.conf"
+    if grep -q "lua_shared_dict waf_cache" "${SCRIPT_DIR}/../conf.d/set_conf/waf.conf"; then
+        sed -i "s/lua_shared_dict waf_cache [0-9]*m;/lua_shared_dict waf_cache 10m;/" "${SCRIPT_DIR}/../conf.d/set_conf/waf.conf"
     fi
     
     # 更新 waf_log_buffer（50MB）
-    if grep -q "lua_shared_dict waf_log_buffer" "$PROJECT_ROOT/conf.d/set_conf/waf.conf"; then
-        sed -i "s/lua_shared_dict waf_log_buffer [0-9]*m;/lua_shared_dict waf_log_buffer 50m;/" "$PROJECT_ROOT/conf.d/set_conf/waf.conf"
+    if grep -q "lua_shared_dict waf_log_buffer" "${SCRIPT_DIR}/../conf.d/set_conf/waf.conf"; then
+        sed -i "s/lua_shared_dict waf_log_buffer [0-9]*m;/lua_shared_dict waf_log_buffer 50m;/" "${SCRIPT_DIR}/../conf.d/set_conf/waf.conf"
     fi
     
     echo -e "    ${GREEN}✓ waf.conf 已优化${NC}"

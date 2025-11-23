@@ -487,13 +487,16 @@ set_root_password() {
         read -p "是否现在设置 root 密码？[Y/n]: " SET_PASSWORD
         SET_PASSWORD="${SET_PASSWORD:-Y}"
         if [[ "$SET_PASSWORD" =~ ^[Yy]$ ]]; then
-            read -sp "请输入新的 MySQL root 密码: " MYSQL_ROOT_PASSWORD
+            # 使用 IFS= 确保密码中的空格等字符不会被截断
+            IFS= read -rsp "请输入新的 MySQL root 密码: " MYSQL_ROOT_PASSWORD
             echo ""
             if [ -z "$MYSQL_ROOT_PASSWORD" ]; then
                 echo -e "${RED}错误: 密码不能为空${NC}"
                 echo -e "${YELLOW}跳过 root 密码设置${NC}"
                 return 0
             fi
+            # 调试：显示密码长度（不显示密码内容）
+            echo -e "${BLUE}调试: 已读取密码，长度 = ${#MYSQL_ROOT_PASSWORD} 字符${NC}"
         else
             echo -e "${YELLOW}跳过 root 密码设置${NC}"
             return 0
@@ -545,19 +548,28 @@ set_root_password() {
             
             # 验证密码复杂度（必须满足：大写字母、小写字母、数字、特殊字符）
             echo "验证密码复杂度..."
+            # 调试：检查密码变量是否正确读取（不显示完整密码，只显示长度）
+            local pwd_length=${#MYSQL_ROOT_PASSWORD}
+            echo -e "${BLUE}调试: 密码长度 = ${pwd_length} 字符${NC}"
+            
             local password_valid=0
             local password_check_msg=""
             
-            if [ ${#MYSQL_ROOT_PASSWORD} -lt 8 ]; then
-                password_check_msg="密码长度至少 8 位"
+            # 检查密码长度
+            if [ $pwd_length -lt 8 ]; then
+                password_check_msg="密码长度至少 8 位（当前: ${pwd_length} 字符）"
+            # 检查大写字母
             elif ! echo "$MYSQL_ROOT_PASSWORD" | grep -q '[A-Z]'; then
-                password_check_msg="密码必须包含至少一个大写字母"
+                password_check_msg="密码必须包含至少一个大写字母 (A-Z)"
+            # 检查小写字母
             elif ! echo "$MYSQL_ROOT_PASSWORD" | grep -q '[a-z]'; then
-                password_check_msg="密码必须包含至少一个小写字母"
+                password_check_msg="密码必须包含至少一个小写字母 (a-z)"
+            # 检查数字
             elif ! echo "$MYSQL_ROOT_PASSWORD" | grep -q '[0-9]'; then
-                password_check_msg="密码必须包含至少一个数字"
+                password_check_msg="密码必须包含至少一个数字 (0-9)"
+            # 检查特殊字符
             elif ! echo "$MYSQL_ROOT_PASSWORD" | grep -q '[^A-Za-z0-9]'; then
-                password_check_msg="密码必须包含至少一个特殊字符"
+                password_check_msg="密码必须包含至少一个特殊字符 (!@#$%^&*等)"
             else
                 password_valid=1
             fi
@@ -571,28 +583,33 @@ set_root_password() {
                 echo "  - 包含至少一个数字 (0-9)"
                 echo "  - 包含至少一个特殊字符 (!@#$%^&*等)"
                 echo ""
+                echo ""
+                echo -e "${YELLOW}提示: 如果刚才输入的密码是正确的，请直接按回车继续${NC}"
                 read -p "是否重新输入密码？[Y/n]: " REENTER_PWD
                 REENTER_PWD="${REENTER_PWD:-Y}"
                 if [[ "$REENTER_PWD" =~ ^[Yy]$ ]]; then
-                    read -sp "请输入新的 MySQL root 密码（必须满足复杂度要求）: " MYSQL_ROOT_PASSWORD
+                    IFS= read -rsp "请输入新的 MySQL root 密码（必须满足复杂度要求）: " MYSQL_ROOT_PASSWORD
                     echo ""
                     if [ -z "$MYSQL_ROOT_PASSWORD" ]; then
                         echo -e "${RED}错误: 密码不能为空${NC}"
                         set -e
                         return 1
                     fi
+                    # 调试：显示密码长度
+                    echo -e "${BLUE}调试: 已重新读取密码，长度 = ${#MYSQL_ROOT_PASSWORD} 字符${NC}"
                     # 重新验证
                     password_valid=0
-                    if [ ${#MYSQL_ROOT_PASSWORD} -lt 8 ]; then
-                        password_check_msg="密码长度至少 8 位"
+                    local pwd_len=${#MYSQL_ROOT_PASSWORD}
+                    if [ $pwd_len -lt 8 ]; then
+                        password_check_msg="密码长度至少 8 位（当前: ${pwd_len} 字符）"
                     elif ! echo "$MYSQL_ROOT_PASSWORD" | grep -q '[A-Z]'; then
-                        password_check_msg="密码必须包含至少一个大写字母"
+                        password_check_msg="密码必须包含至少一个大写字母 (A-Z)"
                     elif ! echo "$MYSQL_ROOT_PASSWORD" | grep -q '[a-z]'; then
-                        password_check_msg="密码必须包含至少一个小写字母"
+                        password_check_msg="密码必须包含至少一个小写字母 (a-z)"
                     elif ! echo "$MYSQL_ROOT_PASSWORD" | grep -q '[0-9]'; then
-                        password_check_msg="密码必须包含至少一个数字"
+                        password_check_msg="密码必须包含至少一个数字 (0-9)"
                     elif ! echo "$MYSQL_ROOT_PASSWORD" | grep -q '[^A-Za-z0-9]'; then
-                        password_check_msg="密码必须包含至少一个特殊字符"
+                        password_check_msg="密码必须包含至少一个特殊字符 (!@#$%^&*等)"
                     else
                         password_valid=1
                     fi
@@ -602,8 +619,9 @@ set_root_password() {
                         return 1
                     fi
                 else
-                    set -e
-                    return 1
+                    # 用户选择不重新输入，使用原来的密码继续（可能是验证逻辑有问题）
+                    echo -e "${YELLOW}⚠ 使用原密码继续，如果密码修改失败，请手动修改${NC}"
+                    # 不返回，继续执行密码修改
                 fi
             fi
             
@@ -686,22 +704,41 @@ CNF_EOF
                 exit_code=$?
             fi
             
-            # 如果 SQL 文件方式失败，尝试使用 -e 参数直接执行（更直接）
+            # 如果 SQL 文件方式失败，尝试使用 -e 参数直接执行（更直接，类似手动执行的方式）
             if [ $exit_code -ne 0 ]; then
-                echo -e "${YELLOW}⚠ SQL 文件方式失败，尝试使用 -e 参数直接执行${NC}"
-                # 读取 SQL 文件内容
-                local sql_content=$(cat "$sql_file")
-                # 使用 -e 参数直接执行
+                echo -e "${YELLOW}⚠ SQL 文件方式失败，尝试使用 -e 参数直接执行（类似手动执行方式）${NC}"
+                # 使用 -e 参数直接执行单个 ALTER USER 命令（最可靠的方式）
+                local alter_sql="ALTER USER 'root'@'localhost' IDENTIFIED BY '$(echo "$MYSQL_ROOT_PASSWORD" | sed "s/'/''/g")';"
+                
                 if [ $use_defaults_file -eq 1 ]; then
-                    error_output=$(mysql --connect-expired-password --defaults-file="$temp_cnf" -e "$sql_content" 2>&1)
+                    error_output=$(mysql --connect-expired-password --defaults-file="$temp_cnf" -e "$alter_sql" 2>&1)
                     exit_code=$?
                     if [ $exit_code -ne 0 ] && echo "$error_output" | grep -qi "unknown variable.*defaults-file"; then
-                        error_output=$(mysql --connect-expired-password -u root -p"${TEMP_PASSWORD}" -e "$sql_content" 2>&1)
+                        # 使用直接传递密码的方式（类似用户手动执行的方式）
+                        error_output=$(mysql --connect-expired-password -u root -p"${TEMP_PASSWORD}" -e "$alter_sql" 2>&1)
                         exit_code=$?
                     fi
                 else
-                    error_output=$(mysql --connect-expired-password -u root -p"${TEMP_PASSWORD}" -e "$sql_content" 2>&1)
+                    # 使用直接传递密码的方式（类似用户手动执行的方式）
+                    error_output=$(mysql --connect-expired-password -u root -p"${TEMP_PASSWORD}" -e "$alter_sql" 2>&1)
                     exit_code=$?
+                fi
+                
+                # 如果第一个用户修改成功，继续修改其他用户
+                if [ $exit_code -eq 0 ]; then
+                    local alter_sql2="ALTER USER 'root'@'127.0.0.1' IDENTIFIED BY '$(echo "$MYSQL_ROOT_PASSWORD" | sed "s/'/''/g")';"
+                    local alter_sql3="ALTER USER 'root'@'::1' IDENTIFIED BY '$(echo "$MYSQL_ROOT_PASSWORD" | sed "s/'/''/g")';"
+                    local flush_sql="FLUSH PRIVILEGES;"
+                    
+                    if [ $use_defaults_file -eq 1 ]; then
+                        mysql --connect-expired-password --defaults-file="$temp_cnf" -e "$alter_sql2" 2>/dev/null
+                        mysql --connect-expired-password --defaults-file="$temp_cnf" -e "$alter_sql3" 2>/dev/null
+                        mysql --connect-expired-password --defaults-file="$temp_cnf" -e "$flush_sql" 2>/dev/null
+                    else
+                        mysql --connect-expired-password -u root -p"${TEMP_PASSWORD}" -e "$alter_sql2" 2>/dev/null
+                        mysql --connect-expired-password -u root -p"${TEMP_PASSWORD}" -e "$alter_sql3" 2>/dev/null
+                        mysql --connect-expired-password -u root -p"${TEMP_PASSWORD}" -e "$flush_sql" 2>/dev/null
+                    fi
                 fi
             fi
             

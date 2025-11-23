@@ -515,32 +515,35 @@ setup_mysql_config() {
             fi
         fi
         
-        # 设置时区 default_time_zone = 'Asia/Shanghai'
+        # 设置时区 default_time_zone = '+08:00' (MySQL 8.0 使用 UTC 偏移量格式)
+        # 注意：MySQL 8.0 不支持 'Asia/Shanghai' 格式，需要使用 '+08:00' 或 'SYSTEM'
+        local timezone_value="'+08:00'"
         if grep -q "^default_time_zone" "$my_cnf_file" 2>/dev/null || grep -q "^[[:space:]]*default_time_zone" "$my_cnf_file" 2>/dev/null; then
-            # 如果已存在，检查值是否为 Asia/Shanghai
-            if ! grep -q "^[[:space:]]*default_time_zone[[:space:]]*=[[:space:]]*['\"]Asia/Shanghai['\"]" "$my_cnf_file" 2>/dev/null; then
+            # 如果已存在，检查值是否为 +08:00
+            if ! grep -q "^[[:space:]]*default_time_zone[[:space:]]*=[[:space:]]*['\"]+08:00['\"]" "$my_cnf_file" 2>/dev/null && \
+               ! grep -q "^[[:space:]]*default_time_zone[[:space:]]*=[[:space:]]*['\"]SYSTEM['\"]" "$my_cnf_file" 2>/dev/null; then
                 # 修改现有配置
-                sed -i "s/^[[:space:]]*default_time_zone[[:space:]]*=.*/default_time_zone = 'Asia\/Shanghai'/" "$my_cnf_file" 2>/dev/null || \
-                sed -i "s/^default_time_zone.*/default_time_zone = 'Asia\/Shanghai'/" "$my_cnf_file" 2>/dev/null
-                echo -e "${GREEN}✓ 已更新 default_time_zone 为 'Asia/Shanghai'${NC}"
+                sed -i "s/^[[:space:]]*default_time_zone[[:space:]]*=.*/default_time_zone = '+08:00'/" "$my_cnf_file" 2>/dev/null || \
+                sed -i "s/^default_time_zone.*/default_time_zone = '+08:00'/" "$my_cnf_file" 2>/dev/null
+                echo -e "${GREEN}✓ 已更新 default_time_zone 为 '+08:00'（中国时区）${NC}"
             else
-                echo -e "${GREEN}✓ default_time_zone 已设置为 'Asia/Shanghai'${NC}"
+                echo -e "${GREEN}✓ default_time_zone 已设置为 '+08:00'${NC}"
             fi
         else
             # 如果不存在，在 [mysqld] 段下添加配置
             if grep -q "^\[mysqld\]" "$my_cnf_file" 2>/dev/null; then
                 # 在 [mysqld] 段下添加配置（在 lower_case_table_names 之后）
                 if grep -q "lower_case_table_names" "$my_cnf_file" 2>/dev/null; then
-                    sed -i '/lower_case_table_names/a default_time_zone = '\''Asia\/Shanghai'\''' "$my_cnf_file" 2>/dev/null
+                    sed -i '/lower_case_table_names/a default_time_zone = '\''+08:00'\''' "$my_cnf_file" 2>/dev/null
                 else
-                    sed -i '/^\[mysqld\]/a default_time_zone = '\''Asia\/Shanghai'\''' "$my_cnf_file" 2>/dev/null
+                    sed -i '/^\[mysqld\]/a default_time_zone = '\''+08:00'\''' "$my_cnf_file" 2>/dev/null
                 fi
-                echo -e "${GREEN}✓ 已添加 default_time_zone = 'Asia/Shanghai'${NC}"
+                echo -e "${GREEN}✓ 已添加 default_time_zone = '+08:00'（中国时区）${NC}"
             else
                 # 如果没有 [mysqld] 段，添加它和配置
                 echo "[mysqld]" >> "$my_cnf_file"
-                echo "default_time_zone = 'Asia/Shanghai'" >> "$my_cnf_file"
-                echo -e "${GREEN}✓ 已添加 [mysqld] 段和 default_time_zone = 'Asia/Shanghai'${NC}"
+                echo "default_time_zone = '+08:00'" >> "$my_cnf_file"
+                echo -e "${GREEN}✓ 已添加 [mysqld] 段和 default_time_zone = '+08:00'（中国时区）${NC}"
             fi
         fi
         
@@ -607,19 +610,94 @@ configure_mysql() {
             fi
         done
         echo ""
-        echo -e "${BLUE}如果看到 'Different lower_case_table_names settings' 错误：${NC}"
-        echo "  1. 停止 MySQL 服务"
-        echo "  2. 删除数据目录（如果有重要数据请先备份）"
-        echo "  3. 确保配置文件中 lower_case_table_names=1"
-        echo "  4. 重新启动 MySQL 服务"
-        echo ""
-        echo -e "${YELLOW}示例命令：${NC}"
-        echo "  systemctl stop mysqld"
-        echo "  rm -rf /var/lib/mysql/*"
-        echo "  systemctl start mysqld"
-        echo ""
-        echo -e "${YELLOW}⚠ 继续等待，如果 MySQL 仍未启动，请手动检查错误日志${NC}"
-        sleep 5
+        echo -e "${BLUE}检测到初始化失败，尝试自动修复...${NC}"
+        
+        # 检查错误日志中是否有初始化失败的错误
+        local init_failed=0
+        for log_file in "${error_logs[@]}"; do
+            if [ -f "$log_file" ]; then
+                if tail -50 "$log_file" | grep -qiE "Data Dictionary initialization failed|Illegal or unknown default time zone|designated data directory.*is unusable"; then
+                    init_failed=1
+                    break
+                fi
+            fi
+        done
+        
+        if [ $init_failed -eq 1 ]; then
+            echo -e "${YELLOW}检测到数据目录初始化失败，需要清理数据目录并重新初始化${NC}"
+            read -p "是否自动清理数据目录并重新初始化？[Y/n]: " CLEAN_DATA
+            CLEAN_DATA="${CLEAN_DATA:-Y}"
+            if [[ "$CLEAN_DATA" =~ ^[Yy]$ ]]; then
+                echo -e "${YELLOW}正在停止 MySQL 服务...${NC}"
+                if command -v systemctl &> /dev/null; then
+                    systemctl stop mysqld 2>/dev/null || systemctl stop mysql 2>/dev/null || true
+                elif command -v service &> /dev/null; then
+                    service mysqld stop 2>/dev/null || service mysql stop 2>/dev/null || true
+                fi
+                sleep 2
+                
+                # 查找并清理数据目录
+                local mysql_data_dirs=(
+                    "/var/lib/mysql"
+                    "/usr/local/mysql/data"
+                    "/opt/mysql/data"
+                )
+                
+                for dir in "${mysql_data_dirs[@]}"; do
+                    if [ -d "$dir" ] && [ -n "$(ls -A "$dir" 2>/dev/null)" ]; then
+                        echo -e "${YELLOW}正在清理数据目录: ${dir}${NC}"
+                        rm -rf "${dir}"/*
+                        rm -rf "${dir}"/.* 2>/dev/null || true
+                        echo -e "${GREEN}✓ 数据目录已清理${NC}"
+                        break
+                    fi
+                done
+                
+                echo -e "${BLUE}重新启动 MySQL 服务（将自动重新初始化）...${NC}"
+                if command -v systemctl &> /dev/null; then
+                    systemctl start mysqld 2>/dev/null || systemctl start mysql 2>/dev/null || true
+                elif command -v service &> /dev/null; then
+                    service mysqld start 2>/dev/null || service mysql start 2>/dev/null || true
+                fi
+                
+                # 等待重新初始化
+                echo "等待 MySQL 重新初始化..."
+                sleep 5
+                
+                # 再次检查是否启动成功
+                local retry_count=0
+                while [ $retry_count -lt 15 ]; do
+    if mysqladmin ping -h localhost --silent 2>/dev/null; then
+                        echo -e "${GREEN}✓ MySQL 重新初始化成功并已启动${NC}"
+                        start_failed=0
+                        break
+                    fi
+                    sleep 2
+                    retry_count=$((retry_count + 1))
+                    echo -n "."
+                done
+                echo ""
+            else
+                echo -e "${YELLOW}⚠ 未清理数据目录，请手动处理${NC}"
+            fi
+        fi
+        
+        if [ $start_failed -eq 1 ]; then
+            echo ""
+            echo -e "${BLUE}如果看到 'Different lower_case_table_names settings' 或时区错误：${NC}"
+            echo "  1. 停止 MySQL 服务"
+            echo "  2. 删除数据目录（如果有重要数据请先备份）"
+            echo "  3. 确保配置文件中 lower_case_table_names=1 和 default_time_zone = '+08:00'"
+            echo "  4. 重新启动 MySQL 服务"
+            echo ""
+            echo -e "${YELLOW}示例命令：${NC}"
+            echo "  systemctl stop mysqld"
+            echo "  rm -rf /var/lib/mysql/*"
+            echo "  systemctl start mysqld"
+            echo ""
+            echo -e "${YELLOW}⚠ 如果 MySQL 仍未启动，请手动检查错误日志${NC}"
+        fi
+        sleep 2
     else
         # 额外等待几秒确保 MySQL 完全就绪
         sleep 3
@@ -845,7 +923,7 @@ CNF_EOF
             fi
             
             # 转义密码中的单引号
-            local escaped_password=$(echo "$MYSQL_ROOT_PASSWORD" | sed "s/'/''/g")
+                local escaped_password=$(echo "$MYSQL_ROOT_PASSWORD" | sed "s/'/''/g")
             local alter_sql="ALTER USER 'root'@'localhost' IDENTIFIED BY '${escaped_password}';"
             
             # 执行密码修改（使用 -e 参数，类似手动执行方式）
@@ -1108,18 +1186,18 @@ CNF_EOF
                             echo -e "${YELLOW}⚠ lower_case_table_names 验证: ${case_check:-未设置}（需要重启 MySQL 服务后生效）${NC}"
                         fi
                         
-                        # 验证时区设置（检查 default_time_zone 变量）
+                        # 验证时区设置（检查 time_zone 变量）
                         local timezone_check=""
                         if [ $verify_use_defaults -eq 1 ]; then
                             timezone_check=$(mysql --defaults-file="$new_pwd_cnf" -e "SHOW VARIABLES LIKE 'time_zone';" 2>&1 | grep -i "time_zone" | awk '{print $2}')
                         else
                             timezone_check=$(mysql -u root -p"${MYSQL_ROOT_PASSWORD}" -e "SHOW VARIABLES LIKE 'time_zone';" 2>&1 | grep -i "time_zone" | awk '{print $2}')
                         fi
-                        # time_zone 可能显示为 SYSTEM（使用系统时区）或具体的时区值
-                        if [ "$timezone_check" = "Asia/Shanghai" ] || [ "$timezone_check" = "+08:00" ] || [ "$timezone_check" = "SYSTEM" ]; then
-                            echo -e "${GREEN}✓ 时区验证: ${timezone_check}（default_time_zone 已在配置文件中设置为 'Asia/Shanghai'）${NC}"
+                        # time_zone 可能显示为 SYSTEM（使用系统时区）或具体的时区值（+08:00）
+                        if [ "$timezone_check" = "+08:00" ] || [ "$timezone_check" = "SYSTEM" ]; then
+                            echo -e "${GREEN}✓ 时区验证: ${timezone_check}（default_time_zone 已在配置文件中设置为 '+08:00'）${NC}"
                         else
-                            echo -e "${YELLOW}⚠ 时区验证: ${timezone_check:-未设置}（default_time_zone 已在配置文件中设置，可能需要重启 MySQL 服务后生效）${NC}"
+                            echo -e "${YELLOW}⚠ 时区验证: ${timezone_check:-未设置}（default_time_zone 已在配置文件中设置为 '+08:00'，可能需要重启 MySQL 服务后生效）${NC}"
                         fi
                         
                         rm -f "$new_pwd_cnf"
@@ -1272,7 +1350,7 @@ CNF_EOF
                 MYSQL_ROOT_PASSWORD=""
                 rm -f "$sql_file" 2>/dev/null || true
                 set -e  # 重新启用 set -e
-                return 1
+                    return 1
             fi
         fi
         
@@ -1662,7 +1740,7 @@ CNF_EOF
 CREATE DATABASE IF NOT EXISTS ${DB_NAME} DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
 EOF
 )
-        db_create_exit_code=$?
+            db_create_exit_code=$?
         
         # 如果配置文件方式失败，尝试直接传递密码
         if [ $db_create_exit_code -ne 0 ] && echo "$db_create_output" | grep -qi "unknown variable.*defaults-file"; then
@@ -1672,11 +1750,11 @@ EOF
 )
             db_create_exit_code=$?
         fi
-        
-        # 清理临时文件
+            
+            # 清理临时文件
         rm -f "$verify_cnf"
-        
-        if [ $db_create_exit_code -eq 0 ]; then
+            
+            if [ $db_create_exit_code -eq 0 ]; then
             echo -e "${GREEN}✓ 数据库创建成功${NC}"
         fi
         

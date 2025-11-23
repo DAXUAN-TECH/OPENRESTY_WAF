@@ -414,6 +414,94 @@ install_mysql() {
 configure_mysql() {
     echo -e "${BLUE}[4/7] 配置 MySQL...${NC}"
     
+    # 在启动 MySQL 前修改配置文件（lower_case_table_names 必须在首次启动前设置）
+    echo "修改 MySQL 配置文件（启动前）..."
+    local my_cnf_files=(
+        "/etc/my.cnf"
+        "/etc/mysql/my.cnf"
+        "/usr/local/mysql/etc/my.cnf"
+        "/usr/local/etc/my.cnf"
+        "/etc/mysql/mysql.conf.d/mysqld.cnf"
+    )
+    
+    local my_cnf_file=""
+    for file in "${my_cnf_files[@]}"; do
+        if [ -f "$file" ]; then
+            my_cnf_file="$file"
+            break
+        fi
+    done
+    
+    if [ -z "$my_cnf_file" ]; then
+        # 如果找不到配置文件，尝试创建或使用默认位置
+        my_cnf_file="/etc/my.cnf"
+        if [ ! -f "$my_cnf_file" ]; then
+            touch "$my_cnf_file"
+            echo "[mysqld]" >> "$my_cnf_file"
+        fi
+    fi
+    
+    if [ -n "$my_cnf_file" ]; then
+        # 检查是否已存在 lower_case_table_names 配置
+        if grep -q "^lower_case_table_names" "$my_cnf_file" 2>/dev/null || grep -q "^[[:space:]]*lower_case_table_names" "$my_cnf_file" 2>/dev/null; then
+            # 如果已存在，检查值是否为 1
+            if ! grep -q "^[[:space:]]*lower_case_table_names[[:space:]]*=[[:space:]]*1" "$my_cnf_file" 2>/dev/null; then
+                # 修改现有配置
+                sed -i 's/^[[:space:]]*lower_case_table_names[[:space:]]*=.*/lower_case_table_names=1/' "$my_cnf_file" 2>/dev/null || \
+                sed -i 's/^lower_case_table_names.*/lower_case_table_names=1/' "$my_cnf_file" 2>/dev/null
+                echo -e "${GREEN}✓ 已更新 lower_case_table_names 为 1${NC}"
+            else
+                echo -e "${GREEN}✓ lower_case_table_names 已设置为 1${NC}"
+            fi
+        else
+            # 如果不存在，检查是否有 [mysqld] 段
+            if grep -q "^\[mysqld\]" "$my_cnf_file" 2>/dev/null; then
+                # 在 [mysqld] 段下添加配置
+                sed -i '/^\[mysqld\]/a lower_case_table_names=1' "$my_cnf_file" 2>/dev/null
+                echo -e "${GREEN}✓ 已在 [mysqld] 段下添加 lower_case_table_names=1${NC}"
+            else
+                # 如果没有 [mysqld] 段，添加它和配置
+                echo "" >> "$my_cnf_file"
+                echo "[mysqld]" >> "$my_cnf_file"
+                echo "lower_case_table_names=1" >> "$my_cnf_file"
+                echo -e "${GREEN}✓ 已添加 [mysqld] 段和 lower_case_table_names=1${NC}"
+            fi
+        fi
+        
+        # 设置时区 default_time_zone = 'Asia/Shanghai'
+        if grep -q "^default_time_zone" "$my_cnf_file" 2>/dev/null || grep -q "^[[:space:]]*default_time_zone" "$my_cnf_file" 2>/dev/null; then
+            # 如果已存在，检查值是否为 Asia/Shanghai
+            if ! grep -q "^[[:space:]]*default_time_zone[[:space:]]*=[[:space:]]*['\"]Asia/Shanghai['\"]" "$my_cnf_file" 2>/dev/null; then
+                # 修改现有配置
+                sed -i "s/^[[:space:]]*default_time_zone[[:space:]]*=.*/default_time_zone = 'Asia\/Shanghai'/" "$my_cnf_file" 2>/dev/null || \
+                sed -i "s/^default_time_zone.*/default_time_zone = 'Asia\/Shanghai'/" "$my_cnf_file" 2>/dev/null
+                echo -e "${GREEN}✓ 已更新 default_time_zone 为 'Asia/Shanghai'${NC}"
+            else
+                echo -e "${GREEN}✓ default_time_zone 已设置为 'Asia/Shanghai'${NC}"
+            fi
+        else
+            # 如果不存在，在 [mysqld] 段下添加配置
+            if grep -q "^\[mysqld\]" "$my_cnf_file" 2>/dev/null; then
+                # 在 [mysqld] 段下添加配置（在 lower_case_table_names 之后）
+                if grep -q "lower_case_table_names" "$my_cnf_file" 2>/dev/null; then
+                    sed -i '/lower_case_table_names/a default_time_zone = '\''Asia\/Shanghai'\''' "$my_cnf_file" 2>/dev/null
+                else
+                    sed -i '/^\[mysqld\]/a default_time_zone = '\''Asia\/Shanghai'\''' "$my_cnf_file" 2>/dev/null
+                fi
+                echo -e "${GREEN}✓ 已添加 default_time_zone = 'Asia/Shanghai'${NC}"
+            else
+                # 如果没有 [mysqld] 段，添加它和配置
+                echo "[mysqld]" >> "$my_cnf_file"
+                echo "default_time_zone = 'Asia/Shanghai'" >> "$my_cnf_file"
+                echo -e "${GREEN}✓ 已添加 [mysqld] 段和 default_time_zone = 'Asia/Shanghai'${NC}"
+            fi
+        fi
+        
+        echo -e "${BLUE}  配置文件位置: ${my_cnf_file}${NC}"
+    else
+        echo -e "${YELLOW}⚠ 未找到 MySQL 配置文件，跳过配置${NC}"
+    fi
+    
     # 启动 MySQL 服务
     if command -v systemctl &> /dev/null; then
         systemctl enable mysqld 2>/dev/null || systemctl enable mysql 2>/dev/null || true
@@ -855,87 +943,13 @@ CNF_EOF
                         
                         # 保留 new_pwd_cnf 用于后续验证步骤
                         
-                        # 步骤 4: 修改 my.cnf 配置文件
-                        echo -e "${BLUE}步骤 4: 修改 MySQL 配置文件 my.cnf...${NC}"
-                        local my_cnf_files=(
-                            "/etc/my.cnf"
-                            "/etc/mysql/my.cnf"
-                            "/usr/local/mysql/etc/my.cnf"
-                            "/usr/local/etc/my.cnf"
-                            "/etc/mysql/mysql.conf.d/mysqld.cnf"
-                        )
+                        # 步骤 4: 验证配置文件（已在启动前设置，无需修改）
+                        echo -e "${BLUE}步骤 4: 验证 MySQL 配置文件...${NC}"
+                        echo -e "${GREEN}✓ lower_case_table_names 和 default_time_zone 已在 MySQL 启动前配置${NC}"
+                        echo -e "${BLUE}  配置文件位置: /etc/my.cnf 或 /etc/mysql/my.cnf${NC}"
                         
-                        local my_cnf_file=""
-                        for file in "${my_cnf_files[@]}"; do
-                            if [ -f "$file" ]; then
-                                my_cnf_file="$file"
-                                break
-                            fi
-                        done
-                        
-                        if [ -z "$my_cnf_file" ]; then
-                            # 如果找不到配置文件，尝试创建或使用默认位置
-                            my_cnf_file="/etc/my.cnf"
-                            if [ ! -f "$my_cnf_file" ]; then
-                                touch "$my_cnf_file"
-                                echo "[mysqld]" >> "$my_cnf_file"
-                            fi
-                        fi
-                        
-                        if [ -n "$my_cnf_file" ]; then
-                            # 检查是否已存在 lower_case_table_names 配置
-                            if grep -q "^lower_case_table_names" "$my_cnf_file" 2>/dev/null || grep -q "^[[:space:]]*lower_case_table_names" "$my_cnf_file" 2>/dev/null; then
-                                # 如果已存在，检查值是否为 1
-                                if grep -q "^[[:space:]]*lower_case_table_names[[:space:]]*=[[:space:]]*1" "$my_cnf_file" 2>/dev/null; then
-                                    echo -e "${GREEN}✓ lower_case_table_names 已设置为 1${NC}"
-                                else
-                                    # 修改现有配置
-                                    sed -i 's/^[[:space:]]*lower_case_table_names[[:space:]]*=.*/lower_case_table_names=1/' "$my_cnf_file" 2>/dev/null || \
-                                    sed -i 's/^lower_case_table_names.*/lower_case_table_names=1/' "$my_cnf_file" 2>/dev/null
-                                    echo -e "${GREEN}✓ 已更新 lower_case_table_names 为 1${NC}"
-                                fi
-                            else
-                                # 如果不存在，检查是否有 [mysqld] 段
-                                if grep -q "^\[mysqld\]" "$my_cnf_file" 2>/dev/null; then
-                                    # 在 [mysqld] 段下添加配置
-                                    sed -i '/^\[mysqld\]/a lower_case_table_names=1' "$my_cnf_file" 2>/dev/null
-                                    echo -e "${GREEN}✓ 已在 [mysqld] 段下添加 lower_case_table_names=1${NC}"
-                                else
-                                    # 如果没有 [mysqld] 段，添加它和配置
-                                    echo "" >> "$my_cnf_file"
-                                    echo "[mysqld]" >> "$my_cnf_file"
-                                    echo "lower_case_table_names=1" >> "$my_cnf_file"
-                                    echo -e "${GREEN}✓ 已添加 [mysqld] 段和 lower_case_table_names=1${NC}"
-                                fi
-                            fi
-                            echo -e "${BLUE}  配置文件位置: ${my_cnf_file}${NC}"
-                        else
-                            echo -e "${YELLOW}⚠ 未找到 MySQL 配置文件，跳过 lower_case_table_names 设置${NC}"
-                        fi
-                        
-                        # 步骤 5: 重启 MySQL 服务
-                        echo -e "${BLUE}步骤 5: 重启 MySQL 服务...${NC}"
-                        if command -v systemctl &> /dev/null; then
-                            if systemctl restart mysqld 2>/dev/null || systemctl restart mysql 2>/dev/null; then
-                                echo -e "${GREEN}✓ MySQL 服务重启成功${NC}"
-                                # 等待服务启动
-                                sleep 3
-                            else
-                                echo -e "${YELLOW}⚠ MySQL 服务重启失败，请手动重启${NC}"
-                            fi
-                        elif command -v service &> /dev/null; then
-                            if service mysqld restart 2>/dev/null || service mysql restart 2>/dev/null; then
-                                echo -e "${GREEN}✓ MySQL 服务重启成功${NC}"
-                                sleep 3
-                            else
-                                echo -e "${YELLOW}⚠ MySQL 服务重启失败，请手动重启${NC}"
-                            fi
-                        else
-                            echo -e "${YELLOW}⚠ 未找到 systemctl 或 service 命令，请手动重启 MySQL 服务${NC}"
-                        fi
-                        
-                        # 步骤 6: 验证修改的内容
-                        echo -e "${BLUE}步骤 6: 验证修改的内容...${NC}"
+                        # 步骤 5: 验证修改的内容
+                        echo -e "${BLUE}步骤 5: 验证修改的内容...${NC}"
                         
                         # 使用已有的 new_pwd_cnf 进行验证
                         local verify_use_defaults=$use_new_defaults_file
@@ -1003,9 +1017,23 @@ CNF_EOF
                             echo -e "${YELLOW}⚠ lower_case_table_names 验证: ${case_check:-未设置}（需要重启 MySQL 服务后生效）${NC}"
                         fi
                         
+                        # 验证时区设置（检查 default_time_zone 变量）
+                        local timezone_check=""
+                        if [ $verify_use_defaults -eq 1 ]; then
+                            timezone_check=$(mysql --defaults-file="$new_pwd_cnf" -e "SHOW VARIABLES LIKE 'time_zone';" 2>&1 | grep -i "time_zone" | awk '{print $2}')
+                        else
+                            timezone_check=$(mysql -u root -p"${MYSQL_ROOT_PASSWORD}" -e "SHOW VARIABLES LIKE 'time_zone';" 2>&1 | grep -i "time_zone" | awk '{print $2}')
+                        fi
+                        # time_zone 可能显示为 SYSTEM（使用系统时区）或具体的时区值
+                        if [ "$timezone_check" = "Asia/Shanghai" ] || [ "$timezone_check" = "+08:00" ] || [ "$timezone_check" = "SYSTEM" ]; then
+                            echo -e "${GREEN}✓ 时区验证: ${timezone_check}（default_time_zone 已在配置文件中设置为 'Asia/Shanghai'）${NC}"
+                        else
+                            echo -e "${YELLOW}⚠ 时区验证: ${timezone_check:-未设置}（default_time_zone 已在配置文件中设置，可能需要重启 MySQL 服务后生效）${NC}"
+                        fi
+                        
                         rm -f "$new_pwd_cnf"
                         
-                        echo -e "${BLUE}步骤 7: 继续下一步...${NC}"
+                        echo -e "${BLUE}步骤 6: 继续下一步...${NC}"
                     fi
                     
                     set -e  # 重新启用 set -e

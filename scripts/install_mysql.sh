@@ -1105,71 +1105,31 @@ install_mysql_redhat() {
 install_mysql_debian() {
     echo -e "${BLUE}[3/8] 安装 MySQL（Debian 系列）...${NC}"
     
-    # 更新包列表
-    apt-get update
+    # ========== 步骤1: 添加 MySQL 官方 APT 仓库（官方标准流程）==========
+    echo -e "${BLUE}[步骤1/4] 添加 MySQL 官方 APT 仓库...${NC}"
+    echo -e "${BLUE}官方下载页面: https://dev.mysql.com/downloads/repo/apt/${NC}"
     
-    # 安装 MySQL（使用系统仓库，通常包含 MySQL 8.0）
-    # 对于某些发行版，可能需要先安装 debconf-utils
-    if ! command -v debconf-set-selections &> /dev/null; then
-        apt-get install -y debconf-utils
-    fi
-    
-    # 设置非交互式安装
-    echo "mysql-server mysql-server/root_password password ${MYSQL_ROOT_PASSWORD:-}" | debconf-set-selections 2>/dev/null || true
-    echo "mysql-server mysql-server/root_password_again password ${MYSQL_ROOT_PASSWORD:-}" | debconf-set-selections 2>/dev/null || true
-    
-    INSTALL_SUCCESS=0
-    
-    # 如果指定了具体版本，尝试安装指定版本
-    if [ "$MYSQL_VERSION" != "default" ] && echo "$MYSQL_VERSION" | grep -qE "^[0-9]+\.[0-9]+"; then
-        # 提取主版本号和次版本号（如 8.0.39 -> 8.0）
-        local major_minor=$(echo "$MYSQL_VERSION" | grep -oE '^[0-9]+\.[0-9]+')
-        local full_version="$MYSQL_VERSION"
+    # 检查是否已配置 MySQL 官方仓库
+    if [ ! -f /etc/apt/sources.list.d/mysql.list ] && [ ! -f /etc/apt/sources.list.d/mysql-apt-config.list ]; then
+        echo "从 MySQL 官方下载页面获取 APT 安装源..."
         
-        echo -e "${BLUE}尝试安装指定版本: MySQL ${full_version}${NC}"
+        # 安装必要的工具
+        apt-get update -qq 2>/dev/null || true
+        apt-get install -y wget gnupg lsb-release 2>/dev/null || true
         
-        # 方法1: 尝试安装完整版本号
-        local version_package="mysql-server=${full_version}*"
-        echo "尝试安装包: $version_package"
-        if DEBIAN_FRONTEND=noninteractive apt-get install -y "$version_package" "mysql-client=${full_version}*" 2>&1 | tee /tmp/mysql_install.log; then
-            INSTALL_SUCCESS=1
-            echo -e "${GREEN}✓ MySQL ${full_version} 安装成功${NC}"
-        fi
+        # 下载并安装 MySQL APT 仓库配置
+        # 官方下载链接格式：https://dev.mysql.com/get/mysql-apt-config_{version}_all.deb
+        local repo_downloaded=0
+        # 尝试更多版本号（包括最新版本）
+        local apt_config_versions=("0.8.36-1" "0.8.35-1" "0.8.34-1" "0.8.33-1" "0.8.32-1" "0.8.31-1" "0.8.30-1" "0.8.29-1" "0.8.28-1" "0.8.27-1" "0.8.26-1" "0.8.25-1" "0.8.24-1")
         
-        # 方法2: 如果完整版本号失败，尝试只指定主次版本号
-        if [ $INSTALL_SUCCESS -eq 0 ]; then
-            echo -e "${YELLOW}⚠ 完整版本号安装失败，尝试使用主次版本号: ${major_minor}${NC}"
-            version_package="mysql-server=${major_minor}*"
-            if DEBIAN_FRONTEND=noninteractive apt-get install -y "$version_package" "mysql-client=${major_minor}*" 2>&1 | tee /tmp/mysql_install.log; then
-                INSTALL_SUCCESS=1
-                echo -e "${GREEN}✓ MySQL ${major_minor} 系列安装成功${NC}"
-            fi
-        fi
-        
-        # 方法3: 如果还是失败，尝试从 MySQL 官方下载页面添加仓库
-        if [ $INSTALL_SUCCESS -eq 0 ]; then
-            echo -e "${YELLOW}⚠ 系统仓库安装失败，尝试从 MySQL 官方下载页面添加仓库...${NC}"
-            echo -e "${BLUE}官方下载页面: https://dev.mysql.com/downloads/repo/apt/${NC}"
+        for config_version in "${apt_config_versions[@]}"; do
+            local repo_file="mysql-apt-config_${config_version}_all.deb"
+            local repo_url="https://dev.mysql.com/get/${repo_file}"
+            echo "尝试从官方下载: $repo_url"
             
-            # 安装必要的工具
-            apt-get install -y wget gnupg lsb-release 2>/dev/null || true
-            
-            # 下载并安装 MySQL APT 仓库配置
-            # 官方下载链接格式：https://dev.mysql.com/get/mysql-apt-config_{version}_all.deb
-            # 尝试多个版本号（从最新到较旧版本）
-            echo -e "${BLUE}从 MySQL 官方下载页面获取 APT 安装源...${NC}"
-            echo -e "${BLUE}官方下载页面: https://dev.mysql.com/downloads/repo/apt/${NC}"
-            
-            local repo_downloaded=0
-            # 尝试更多版本号（包括最新版本）
-            local apt_config_versions=("0.8.36-1" "0.8.35-1" "0.8.34-1" "0.8.33-1" "0.8.32-1" "0.8.31-1" "0.8.30-1" "0.8.29-1" "0.8.28-1" "0.8.27-1" "0.8.26-1" "0.8.25-1" "0.8.24-1")
-            
-            for config_version in "${apt_config_versions[@]}"; do
-                local repo_file="mysql-apt-config_${config_version}_all.deb"
-                local repo_url="https://dev.mysql.com/get/${repo_file}"
-                echo "尝试从官方下载: $repo_url"
-                
-                # 先尝试 wget
+            # 先尝试 wget
+            if command -v wget &> /dev/null; then
                 if wget -q "$repo_url" -O /tmp/${repo_file} 2>/dev/null && [ -s /tmp/${repo_file} ]; then
                     # 验证下载的文件是否为有效的 DEB 包
                     if file /tmp/${repo_file} 2>/dev/null | grep -qi "Debian\|deb"; then
@@ -1180,98 +1140,243 @@ install_mysql_debian() {
                         rm -f /tmp/${repo_file}
                         continue
                     fi
-                # 如果 wget 失败，尝试 curl
-                elif command -v curl &> /dev/null; then
-                    if curl -L -f -s "$repo_url" -o /tmp/${repo_file} 2>/dev/null && [ -s /tmp/${repo_file} ]; then
-                        if file /tmp/${repo_file} 2>/dev/null | grep -qi "Debian\|deb"; then
-                            repo_downloaded=1
-                            echo -e "${GREEN}✓ 使用 curl 成功下载 MySQL APT 仓库配置: ${repo_file}${NC}"
-                        else
-                            echo -e "${YELLOW}  下载的文件不是有效的 DEB 包，尝试下一个...${NC}"
-                            rm -f /tmp/${repo_file}
-                            continue
-                        fi
+                fi
+            # 如果 wget 失败，尝试 curl
+            elif command -v curl &> /dev/null; then
+                if curl -L -f -s "$repo_url" -o /tmp/${repo_file} 2>/dev/null && [ -s /tmp/${repo_file} ]; then
+                    if file /tmp/${repo_file} 2>/dev/null | grep -qi "Debian\|deb"; then
+                        repo_downloaded=1
+                        echo -e "${GREEN}✓ 使用 curl 成功下载 MySQL APT 仓库配置: ${repo_file}${NC}"
                     else
-                        echo -e "${YELLOW}  版本 ${config_version} 下载失败，尝试下一个...${NC}"
+                        echo -e "${YELLOW}  下载的文件不是有效的 DEB 包，尝试下一个...${NC}"
+                        rm -f /tmp/${repo_file}
                         continue
                     fi
-                else
-                    echo -e "${YELLOW}  版本 ${config_version} 下载失败，尝试下一个...${NC}"
-                    continue
                 fi
-                
-                # 如果下载成功，安装仓库配置
-                if [ $repo_downloaded -eq 1 ]; then
-                    # 安装仓库配置（非交互式）
-                    DEBIAN_FRONTEND=noninteractive dpkg -i /tmp/${repo_file} 2>/dev/null || true
-                    apt-get update -qq 2>/dev/null || true
-                    
-                    # 根据版本选择仓库
-                    if echo "$major_minor" | grep -qE "^5\.7"; then
-                        # 配置 MySQL 5.7 仓库
-                        echo "mysql-apt-config mysql-apt-config/select-server select mysql-5.7" | debconf-set-selections 2>/dev/null || true
-                    elif echo "$major_minor" | grep -qE "^8\.0"; then
-                        # 配置 MySQL 8.0 仓库
-                        echo "mysql-apt-config mysql-apt-config/select-server select mysql-8.0" | debconf-set-selections 2>/dev/null || true
-                    fi
-                    
-                    # 重新更新包列表
-                    apt-get update -qq 2>/dev/null || true
-                    
-                    # 尝试安装指定版本
-                    if DEBIAN_FRONTEND=noninteractive apt-get install -y mysql-server mysql-client 2>&1 | tee /tmp/mysql_install.log; then
-                        INSTALL_SUCCESS=1
-                        echo -e "${GREEN}✓ MySQL ${major_minor} 系列安装成功${NC}"
-                    fi
-                    
-                    rm -f /tmp/${repo_file}
-                    break
-                fi
-            done
-            
-            if [ $repo_downloaded -eq 0 ]; then
-                echo -e "${YELLOW}⚠ 无法从官方下载 MySQL APT 仓库配置${NC}"
-                echo -e "${YELLOW}  官方下载页面: https://dev.mysql.com/downloads/repo/apt/${NC}"
-                echo -e "${YELLOW}  请手动访问下载页面并安装对应的仓库包${NC}"
-                echo ""
-                echo -e "${BLUE}手动安装步骤：${NC}"
-                echo "  1. 访问: https://dev.mysql.com/downloads/repo/apt/"
-                echo "  2. 下载 mysql-apt-config_*.deb 包"
-                echo "  3. 运行: dpkg -i mysql-apt-config_*.deb"
-                echo "  4. 运行: apt-get update"
-                echo "  5. 然后重新运行此脚本"
             fi
+            
+            # 如果下载成功，安装仓库配置
+            if [ $repo_downloaded -eq 1 ]; then
+                # 安装仓库配置（非交互式）
+                DEBIAN_FRONTEND=noninteractive dpkg -i /tmp/${repo_file} 2>/dev/null || {
+                    echo -e "${RED}✗ MySQL APT 仓库配置安装失败${NC}"
+                    rm -f /tmp/${repo_file}
+                    exit 1
+                }
+                rm -f /tmp/${repo_file}
+                
+                # 配置 MySQL 8.0 仓库（默认）
+                echo "mysql-apt-config mysql-apt-config/select-server select mysql-8.0" | debconf-set-selections 2>/dev/null || true
+                echo -e "${GREEN}✓ MySQL APT 仓库配置安装成功${NC}"
+                break
+            fi
+        done
+        
+        if [ $repo_downloaded -eq 0 ]; then
+            echo -e "${RED}✗ 无法从官方下载 MySQL APT 仓库配置${NC}"
+            echo -e "${YELLOW}  官方下载页面: https://dev.mysql.com/downloads/repo/apt/${NC}"
+            echo -e "${YELLOW}  请手动访问下载页面并安装对应的仓库包${NC}"
+            echo ""
+            echo -e "${BLUE}手动安装步骤：${NC}"
+            echo "  1. 访问: https://dev.mysql.com/downloads/repo/apt/"
+            echo "  2. 下载 mysql-apt-config_*.deb 包"
+            echo "  3. 运行: dpkg -i mysql-apt-config_*.deb"
+            echo "  4. 运行: apt-get update"
+            echo "  5. 然后重新运行此脚本"
+            exit 1
         fi
+    else
+        echo -e "${GREEN}✓ MySQL APT 仓库已存在${NC}"
     fi
     
-    # 如果指定版本安装失败，使用默认安装
-    if [ $INSTALL_SUCCESS -eq 0 ]; then
-        echo -e "${YELLOW}⚠ 指定版本安装失败，尝试使用默认安装${NC}"
-        if DEBIAN_FRONTEND=noninteractive apt-get install -y mysql-server mysql-client 2>&1; then
-            INSTALL_SUCCESS=1
-            echo -e "${GREEN}✓ MySQL 安装完成（使用系统默认版本）${NC}"
+    # ========== 步骤2: 更新 APT 缓存 ==========
+    echo -e "${BLUE}[步骤2/4] 更新包管理器缓存...${NC}"
+    apt-get update -qq 2>/dev/null || {
+        echo -e "${RED}✗ APT 缓存更新失败${NC}"
+        exit 1
+    }
+    echo -e "${GREEN}✓ APT 缓存更新完成${NC}"
+    
+    # ========== 步骤3: 安装 MySQL（官方标准流程）==========
+    echo -e "${BLUE}[步骤3/4] 安装 MySQL...${NC}"
+    
+    # 安装必要的工具
+    if ! command -v debconf-set-selections &> /dev/null; then
+        apt-get install -y debconf-utils 2>/dev/null || true
+    fi
+    
+    # 设置非交互式安装（使用空密码，后续会设置）
+    echo "mysql-server mysql-server/root_password password" | debconf-set-selections 2>/dev/null || true
+    echo "mysql-server mysql-server/root_password_again password" | debconf-set-selections 2>/dev/null || true
+    
+    # 按照官方标准流程，直接安装 MySQL 8.0
+    echo "按照 MySQL 官方标准流程安装 MySQL 8.0..."
+    if DEBIAN_FRONTEND=noninteractive apt-get install -y mysql-server mysql-client 2>&1 | tee /tmp/mysql_install.log; then
+        # 验证是否真正安装成功
+        if verify_mysql_installation /tmp/mysql_install.log; then
+            echo -e "${GREEN}✓ MySQL 安装成功${NC}"
         else
-            echo -e "${RED}✗ MySQL 安装失败${NC}"
-            echo -e "${YELLOW}⚠ 请检查错误信息${NC}"
+            echo -e "${RED}✗ MySQL 安装失败（验证失败）${NC}"
+            echo ""
+            echo -e "${YELLOW}安装日志（最后50行）：${NC}"
+            if [ -f /tmp/mysql_install.log ] && [ -s /tmp/mysql_install.log ]; then
+                tail -50 /tmp/mysql_install.log
+            fi
+            exit 1
+        fi
+    else
+        echo -e "${RED}✗ apt-get install 命令执行失败${NC}"
+        echo ""
+        echo -e "${YELLOW}安装日志（最后50行）：${NC}"
+        if [ -f /tmp/mysql_install.log ] && [ -s /tmp/mysql_install.log ]; then
+            tail -50 /tmp/mysql_install.log
+        fi
+        exit 1
+    fi
+    
+    # ========== 步骤4: 安装完成后的后续配置（在安装成功后执行）==========
+    echo -e "${BLUE}[步骤4/4] 安装完成，准备进行后续配置...${NC}"
+    
+    # 注意：以下配置步骤将在主函数中执行，这里只标记安装成功
+    # 配置步骤包括：
+    # - 启动 MySQL 服务
+    # - 获取临时密码
+    # - 配置 MySQL（配置文件优化）
+    # - 设置 root 密码
+    # - 其他优化配置
+    
+    # 安装成功，返回
+    return 0
+}
+
+# 安装 MySQL（openSUSE/SLES）
+install_mysql_suse() {
+    echo -e "${BLUE}[3/8] 安装 MySQL（SUSE 系列）...${NC}"
+    
+    # ========== 步骤1: 添加 MySQL 官方 SUSE 仓库（官方标准流程）==========
+    echo -e "${BLUE}[步骤1/4] 添加 MySQL 官方 SUSE 仓库...${NC}"
+    echo -e "${BLUE}官方下载页面: https://dev.mysql.com/downloads/repo/suse/${NC}"
+    
+    # 检查是否已配置 MySQL 官方仓库
+    if ! zypper repos | grep -qi mysql; then
+        echo "从 MySQL 官方下载页面获取 SUSE 安装源..."
+        
+        # 安装必要的工具
+        zypper install -y wget 2>/dev/null || true
+        
+        # 下载并安装 MySQL SUSE 仓库配置
+        # 官方下载链接格式：https://dev.mysql.com/get/mysql80-community-release-sles{version}-{version}.noarch.rpm
+        local repo_downloaded=0
+        local sles_version=""
+        
+        # 检测 SUSE 版本
+        if [ -f /etc/os-release ]; then
+            sles_version=$(grep VERSION_ID /etc/os-release | cut -d'"' -f2 | cut -d'.' -f1)
+        fi
+        
+        # 尝试多个版本格式
+        local sles_versions=("15" "12" "11")
+        if [ -n "$sles_version" ]; then
+            sles_versions=("$sles_version" "${sles_versions[@]}")
+        fi
+        
+        for sles_ver in "${sles_versions[@]}"; do
+            for repo_ver in "1" "2" "3"; do
+                local repo_file="mysql80-community-release-sles${sles_ver}-${repo_ver}.noarch.rpm"
+                local repo_url="https://dev.mysql.com/get/${repo_file}"
+                echo "尝试从官方下载: $repo_url"
+                
+                # 使用 wget 或 curl 下载
+                if command -v wget &> /dev/null; then
+                    if wget -q "$repo_url" -O /tmp/${repo_file} 2>/dev/null && [ -s /tmp/${repo_file} ]; then
+                        if file /tmp/${repo_file} 2>/dev/null | grep -qi "RPM\|rpm"; then
+                            repo_downloaded=1
+                            echo -e "${GREEN}✓ 成功从官方下载 MySQL SUSE 仓库: ${repo_file}${NC}"
+                            break 2
+                        fi
+                    fi
+                elif command -v curl &> /dev/null; then
+                    if curl -L -f -s "$repo_url" -o /tmp/${repo_file} 2>/dev/null && [ -s /tmp/${repo_file} ]; then
+                        if file /tmp/${repo_file} 2>/dev/null | grep -qi "RPM\|rpm"; then
+                            repo_downloaded=1
+                            echo -e "${GREEN}✓ 使用 curl 成功下载 MySQL SUSE 仓库: ${repo_file}${NC}"
+                            break 2
+                        fi
+                    fi
+                fi
+            done
+        done
+        
+        if [ $repo_downloaded -eq 1 ] && [ -f /tmp/${repo_file} ]; then
+            # 安装仓库
+            zypper install -y /tmp/${repo_file} 2>/dev/null || {
+                echo -e "${RED}✗ MySQL SUSE 仓库安装失败${NC}"
+                rm -f /tmp/${repo_file}
+                exit 1
+            }
+            rm -f /tmp/${repo_file}
+            echo -e "${GREEN}✓ MySQL SUSE 仓库安装成功${NC}"
+        else
+            echo -e "${YELLOW}⚠ 无法从官方下载 MySQL SUSE 仓库，尝试使用系统仓库安装 MariaDB${NC}"
+            echo -e "${BLUE}提示: 可以访问 https://dev.mysql.com/downloads/repo/suse/ 手动下载${NC}"
+        fi
+    else
+        echo -e "${GREEN}✓ MySQL SUSE 仓库已存在${NC}"
+    fi
+    
+    # ========== 步骤2: 刷新仓库缓存 ==========
+    echo -e "${BLUE}[步骤2/4] 刷新仓库缓存...${NC}"
+    zypper refresh 2>/dev/null || true
+    echo -e "${GREEN}✓ 仓库缓存刷新完成${NC}"
+    
+    # ========== 步骤3: 安装 MySQL（官方标准流程）==========
+    echo -e "${BLUE}[步骤3/4] 安装 MySQL...${NC}"
+    
+    # 优先尝试安装 MySQL（如果仓库可用）
+    if zypper repos | grep -qi mysql; then
+        echo "使用 MySQL 官方仓库安装..."
+        if zypper install -y mysql-community-server mysql-community-client 2>&1 | tee /tmp/mysql_install.log; then
+            if verify_mysql_installation /tmp/mysql_install.log; then
+                echo -e "${GREEN}✓ MySQL 安装成功${NC}"
+            else
+                echo -e "${RED}✗ MySQL 安装失败（验证失败）${NC}"
+                exit 1
+            fi
+        else
+            echo -e "${YELLOW}⚠ MySQL 官方仓库安装失败，尝试使用系统仓库安装 MariaDB${NC}"
+            if zypper install -y mariadb mariadb-server 2>&1 | tee /tmp/mysql_install.log; then
+                if verify_mysql_installation /tmp/mysql_install.log; then
+                    echo -e "${GREEN}✓ MariaDB 安装完成（MySQL 兼容）${NC}"
+                else
+                    echo -e "${RED}✗ MariaDB 安装失败${NC}"
+                    exit 1
+                fi
+            else
+                echo -e "${RED}✗ MySQL/MariaDB 安装失败${NC}"
+                exit 1
+            fi
+        fi
+    else
+        # 如果没有 MySQL 官方仓库，使用系统仓库安装 MariaDB
+        echo "使用系统仓库安装 MariaDB（MySQL 兼容）..."
+        if zypper install -y mariadb mariadb-server 2>&1 | tee /tmp/mysql_install.log; then
+            if verify_mysql_installation /tmp/mysql_install.log; then
+                echo -e "${GREEN}✓ MariaDB 安装完成（MySQL 兼容）${NC}"
+            else
+                echo -e "${RED}✗ MariaDB 安装失败${NC}"
+                exit 1
+            fi
+        else
+            echo -e "${RED}✗ MariaDB 安装失败${NC}"
             exit 1
         fi
     fi
-}
-
-# 安装 MySQL（openSUSE）
-install_mysql_suse() {
-    echo -e "${BLUE}[3/8] 安装 MySQL（openSUSE）...${NC}"
     
-    # openSUSE 使用 MariaDB 或从源码编译 MySQL
-    echo -e "${YELLOW}注意: openSUSE 通常使用 MariaDB，如果需要 MySQL 请从源码编译${NC}"
+    # ========== 步骤4: 安装完成后的后续配置（在安装成功后执行）==========
+    echo -e "${BLUE}[步骤4/4] 安装完成，准备进行后续配置...${NC}"
     
-    # 尝试安装 MariaDB（MySQL 兼容）
-    zypper install -y mariadb mariadb-server || {
-        echo -e "${YELLOW}⚠ 包管理器安装失败，请手动安装 MySQL${NC}"
-        exit 1
-    }
-    
-    echo -e "${GREEN}✓ MariaDB 安装完成（MySQL 兼容）${NC}"
+    # 安装成功，返回
+    return 0
 }
 
 # 安装 MySQL（Arch Linux/Manjaro）

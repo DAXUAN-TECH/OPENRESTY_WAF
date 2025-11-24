@@ -17,10 +17,10 @@ if [ -f "${SCRIPT_DIR}/common.sh" ]; then
     source "${SCRIPT_DIR}/common.sh"
 else
     # 如果 common.sh 不存在，定义基本颜色（向后兼容）
-    RED='\033[0;31m'
-    GREEN='\033[0;32m'
-    YELLOW='\033[1;33m'
-    BLUE='\033[0;34m'
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
     NC='\033[0m'
 fi
 
@@ -801,15 +801,15 @@ install_mysql_redhat() {
             for repo_ver in "${repo_versions[@]}"; do
                 # 尝试标准格式：mysql80-community-release-el8-3.noarch.rpm
                 repo_file="mysql${repo_version}-community-release-${el_ver}-${repo_ver}.noarch.rpm"
-                local repo_url="https://dev.mysql.com/get/${repo_file}"
+            local repo_url="https://dev.mysql.com/get/${repo_file}"
                 echo "尝试下载: $repo_url"
                 
                 # 使用公共下载函数
                 if download_file_common "$repo_url" "/tmp/mysql-community-release.rpm" "RPM"; then
-                    repo_downloaded=1
+                repo_downloaded=1
                     echo -e "${GREEN}✓ 成功从官方下载 MySQL 仓库: ${repo_file}${NC}"
                     break 2
-                fi
+            fi
             done
         done
         
@@ -888,36 +888,62 @@ install_mysql_redhat() {
     echo "按照 MySQL 官方标准流程安装 MySQL 8.0..."
     echo "正在下载并安装 MySQL 包（这可能需要几分钟，请耐心等待）..."
     
-    if command -v dnf &> /dev/null; then
+        if command -v dnf &> /dev/null; then
         echo "使用 dnf 安装 MySQL..."
-        echo "正在执行: dnf install -y $nogpgcheck_flag mysql-community-server mysql-community-client"
-        if dnf install -y $nogpgcheck_flag mysql-community-server mysql-community-client 2>&1 | tee /tmp/mysql_install.log; then
-            # 验证是否真正安装成功
-            if verify_mysql_installation /tmp/mysql_install.log; then
+        
+        # 检查是否有模块化过滤问题，如果有则禁用模块化过滤
+        echo "检查 DNF 模块化过滤..."
+        if dnf list available mysql-community-server mysql-community-client 2>&1 | grep -qi "filtered out by modular filtering"; then
+            echo -e "${YELLOW}检测到模块化过滤问题，尝试禁用模块化过滤...${NC}"
+            # 尝试禁用 MySQL 模块（如果存在）
+            dnf module disable -y mysql 2>/dev/null || true
+            # 使用 --disable-module-filtering 禁用模块化过滤
+            local dnf_flags="$nogpgcheck_flag --disable-module-filtering"
+        else
+            local dnf_flags="$nogpgcheck_flag"
+        fi
+        
+        echo "正在执行: dnf install -y $dnf_flags mysql-community-server mysql-community-client"
+        if dnf install -y $dnf_flags mysql-community-server mysql-community-client 2>&1 | tee /tmp/mysql_install.log; then
+                # 验证是否真正安装成功
+                if verify_mysql_installation /tmp/mysql_install.log; then
                 INSTALL_SUCCESS=1
                 echo -e "${GREEN}✓ MySQL 安装成功${NC}"
-            else
+                else
                 echo -e "${RED}✗ MySQL 安装失败（验证失败）${NC}"
+                    INSTALL_SUCCESS=0
+                fi
+            else
                 INSTALL_SUCCESS=0
-            fi
-        else
-            INSTALL_SUCCESS=0
             echo -e "${RED}✗ dnf install 命令执行失败${NC}"
+            
+            # 如果失败，尝试使用 --disable-module-filtering
+            if echo "$dnf_flags" | grep -qv "disable-module-filtering"; then
+                echo -e "${YELLOW}尝试使用 --disable-module-filtering 重新安装...${NC}"
+                if dnf install -y $nogpgcheck_flag --disable-module-filtering mysql-community-server mysql-community-client 2>&1 | tee -a /tmp/mysql_install.log; then
+                    if verify_mysql_installation /tmp/mysql_install.log; then
+                    INSTALL_SUCCESS=1
+                        echo -e "${GREEN}✓ MySQL 安装成功（使用 --disable-module-filtering）${NC}"
+                    else
+                        INSTALL_SUCCESS=0
+                    fi
+                fi
+            fi
         fi
     elif command -v yum &> /dev/null; then
         echo "使用 yum 安装 MySQL..."
         echo "正在执行: yum install -y $nogpgcheck_flag mysql-community-server mysql-community-client"
         if yum install -y $nogpgcheck_flag mysql-community-server mysql-community-client 2>&1 | tee /tmp/mysql_install.log; then
-            # 验证是否真正安装成功
-            if verify_mysql_installation /tmp/mysql_install.log; then
-                INSTALL_SUCCESS=1
+                    # 验证是否真正安装成功
+                    if verify_mysql_installation /tmp/mysql_install.log; then
+                    INSTALL_SUCCESS=1
                 echo -e "${GREEN}✓ MySQL 安装成功${NC}"
-            else
+                    else
                 echo -e "${RED}✗ MySQL 安装失败（验证失败）${NC}"
-                INSTALL_SUCCESS=0
-            fi
-        else
-            INSTALL_SUCCESS=0
+                        INSTALL_SUCCESS=0
+                    fi
+                else
+                    INSTALL_SUCCESS=0
             echo -e "${RED}✗ yum install 命令执行失败${NC}"
         fi
     fi
@@ -941,7 +967,7 @@ install_mysql_redhat() {
                 echo "    3. 仓库缓存未更新"
                 echo ""
                 echo "  诊断命令："
-                if command -v dnf &> /dev/null; then
+            if command -v dnf &> /dev/null; then
                     echo "    dnf list available mysql-community-server"
                     echo "    dnf repolist | grep mysql"
                 else
@@ -1041,8 +1067,8 @@ install_mysql_debian() {
             echo "  4. 运行: apt-get update"
             echo "  5. 然后重新运行此脚本"
             exit 1
-        fi
-    else
+                fi
+            else
         echo -e "${GREEN}✓ MySQL APT 仓库已存在${NC}"
     fi
     
@@ -1069,8 +1095,8 @@ install_mysql_debian() {
     # 按照官方标准流程，直接安装 MySQL 8.0
     echo "按照 MySQL 官方标准流程安装 MySQL 8.0..."
     if DEBIAN_FRONTEND=noninteractive apt-get install -y mysql-server mysql-client 2>&1 | tee /tmp/mysql_install.log; then
-        # 验证是否真正安装成功
-        if verify_mysql_installation /tmp/mysql_install.log; then
+                # 验证是否真正安装成功
+                if verify_mysql_installation /tmp/mysql_install.log; then
             echo -e "${GREEN}✓ MySQL 安装成功${NC}"
         else
             echo -e "${RED}✗ MySQL 安装失败（验证失败）${NC}"
@@ -1080,8 +1106,8 @@ install_mysql_debian() {
                 tail -50 /tmp/mysql_install.log
             fi
             exit 1
-        fi
-    else
+            fi
+        else
         echo -e "${RED}✗ apt-get install 命令执行失败${NC}"
         echo ""
         echo -e "${YELLOW}安装日志（最后50行）：${NC}"
@@ -1209,8 +1235,8 @@ install_mysql_suse() {
                 echo -e "${GREEN}✓ MariaDB 安装完成（MySQL 兼容）${NC}"
             else
                 echo -e "${RED}✗ MariaDB 安装失败${NC}"
-                exit 1
-            fi
+            exit 1
+        fi
         else
             echo -e "${RED}✗ MariaDB 安装失败${NC}"
             exit 1

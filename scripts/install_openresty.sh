@@ -611,11 +611,87 @@ install_openresty_from_source() {
         exit 1
     fi
     
-    # 清理
+    # 检查并安装 opm（如果 make install 没有安装 opm）
+    echo "检查 opm 是否已安装..."
+    local opm_installed=0
+    if [ -f "${INSTALL_DIR}/bin/opm" ] && [ -x "${INSTALL_DIR}/bin/opm" ]; then
+        opm_installed=1
+        echo -e "${GREEN}✓ opm 已安装到系统目录: ${INSTALL_DIR}/bin/opm${NC}"
+    else
+        # 查找构建目录中的 opm
+        local build_opm=""
+        local possible_build_paths=(
+            "${build_dir}/openresty-${version}/build/opm-*/bin/opm"
+            "${build_dir}/openresty-${version}/bundle/opm-*/bin/opm"
+        )
+        
+        for pattern in "${possible_build_paths[@]}"; do
+            local found_opm=$(find "${build_dir}/openresty-${version}" -path "*/opm-*/bin/opm" -type f -executable 2>/dev/null | head -1)
+            if [ -n "$found_opm" ] && [ -f "$found_opm" ] && [ -x "$found_opm" ]; then
+                build_opm="$found_opm"
+                break
+            fi
+        done
+        
+        if [ -n "$build_opm" ]; then
+            echo -e "${YELLOW}⚠ 在构建目录中找到 opm，正在安装到系统目录...${NC}"
+            echo "  源文件: $build_opm"
+            echo "  目标: ${INSTALL_DIR}/bin/opm"
+            
+            # 确保目标目录存在
+            mkdir -p "${INSTALL_DIR}/bin"
+            
+            # 复制 opm 到系统目录
+            if cp "$build_opm" "${INSTALL_DIR}/bin/opm" 2>/dev/null; then
+                chmod +x "${INSTALL_DIR}/bin/opm"
+                opm_installed=1
+                echo -e "${GREEN}✓ opm 已安装到系统目录${NC}"
+            else
+                echo -e "${YELLOW}⚠ opm 复制失败，但可以手动复制${NC}"
+                echo "  手动复制命令:"
+                echo "    cp $build_opm ${INSTALL_DIR}/bin/opm"
+                echo "    chmod +x ${INSTALL_DIR}/bin/opm"
+            fi
+        else
+            echo -e "${YELLOW}⚠ 未在构建目录中找到 opm${NC}"
+        fi
+    fi
+    
+    # 创建 opm 的符号链接到 /usr/local/bin（可选，方便使用）
+    if [ $opm_installed -eq 1 ] && [ -f "${INSTALL_DIR}/bin/opm" ]; then
+        if [ ! -L /usr/local/bin/opm ] && [ ! -f /usr/local/bin/opm ]; then
+            ln -sf "${INSTALL_DIR}/bin/opm" /usr/local/bin/opm 2>/dev/null || true
+            echo -e "${GREEN}✓ 已创建 opm 符号链接: /usr/local/bin/opm${NC}"
+        fi
+    fi
+    
+    # 清理构建目录（但保留一段时间以便调试）
+    echo "清理构建目录..."
+    # 延迟清理，给用户一些时间检查
+    if [ -d "$build_dir" ]; then
+        echo -e "${BLUE}提示: 构建目录将在 10 秒后清理: $build_dir${NC}"
+        echo -e "${BLUE}如果需要保留构建文件用于调试，请按 Ctrl+C 取消${NC}"
+        sleep 10 || true
+        rm -rf "$build_dir" 2>/dev/null || true
+        echo -e "${GREEN}✓ 构建目录已清理${NC}"
+    fi
+    
     cd /
-    rm -rf "$build_dir"
     
     echo -e "${GREEN}✓ OpenResty 编译安装完成${NC}"
+    
+    # 验证 opm 安装
+    if [ $opm_installed -eq 1 ] && [ -f "${INSTALL_DIR}/bin/opm" ]; then
+        echo -e "${GREEN}✓ opm 已成功安装: ${INSTALL_DIR}/bin/opm${NC}"
+        if "${INSTALL_DIR}/bin/opm" --version &>/dev/null; then
+            local opm_version=$("${INSTALL_DIR}/bin/opm" --version 2>&1 | head -n 1)
+            echo -e "${GREEN}  opm 版本: ${opm_version}${NC}"
+        fi
+    else
+        echo -e "${YELLOW}⚠ opm 未安装，后续可能需要手动安装${NC}"
+        echo -e "${BLUE}提示: 可以运行以下命令安装 opm:${NC}"
+        echo "  sudo ./scripts/install_opm.sh"
+    fi
 }
 
 # 安装 OpenResty

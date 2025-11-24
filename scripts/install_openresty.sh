@@ -314,99 +314,45 @@ check_existing() {
 install_openresty_redhat() {
     echo -e "${BLUE}[4/8] 安装 OpenResty（RedHat 系列）...${NC}"
     
-    # 确定仓库名称（根据实际系统）
-    local repo_os=$OS
-    case $OS in
-        oraclelinux|ol)
-            repo_os="centos"  # Oracle Linux 使用 CentOS 仓库
-            ;;
-        amazonlinux|amzn)
-            repo_os="amazonlinux"  # Amazon Linux 有专门仓库
-            ;;
-        rocky|almalinux)
-            repo_os="centos"  # Rocky 和 AlmaLinux 使用 CentOS 仓库
-            ;;
-    esac
+    # 1. 安装必要的工具
+    echo "安装必要的工具..."
+    if command -v yum &> /dev/null; then
+        yum install -y yum-utils
+    elif command -v dnf &> /dev/null; then
+        dnf install -y yum-utils
+    else
+        echo -e "${YELLOW}⚠ 未找到 yum 或 dnf 包管理器${NC}"
+        echo -e "${YELLOW}⚠ 尝试从源码编译安装...${NC}"
+        install_openresty_from_source
+        return
+    fi
     
-    # 添加 OpenResty 仓库
+    # 2. 添加 OpenResty 仓库
     if [ ! -f /etc/yum.repos.d/openresty.repo ]; then
         echo "添加 OpenResty 仓库..."
-        
-        # 确保目录存在
-        mkdir -p /etc/pki/rpm-gpg
-        
-        # 尝试下载并导入 GPG 密钥（带错误处理）
-        echo "下载 GPG 密钥..."
-        GPG_CHECK=0
-        
-        # 方法1：尝试直接使用 rpm --import
-        if wget -qO - https://openresty.org/package/pubkey.gpg > /tmp/openresty-pubkey.gpg 2>&1 && [ -s /tmp/openresty-pubkey.gpg ]; then
-            # 尝试直接导入到 RPM 密钥环
-            if rpm --import /tmp/openresty-pubkey.gpg 2>&1; then
-                echo -e "${GREEN}✓ GPG 密钥已导入到 RPM 密钥环${NC}"
-                GPG_CHECK=1
-            else
-                # 方法2：尝试使用 gpg --dearmor 然后导入
-                if gpg --dearmor /tmp/openresty-pubkey.gpg -o /etc/pki/rpm-gpg/RPM-GPG-KEY-openresty 2>&1 && [ -s /etc/pki/rpm-gpg/RPM-GPG-KEY-openresty ]; then
-                    # 尝试导入到 RPM 密钥环
-                    if rpm --import /etc/pki/rpm-gpg/RPM-GPG-KEY-openresty 2>&1; then
-                        echo -e "${GREEN}✓ GPG 密钥已导入到 RPM 密钥环${NC}"
-                        GPG_CHECK=1
-                    else
-                        echo -e "${YELLOW}⚠ GPG 密钥导入到 RPM 密钥环失败，将禁用 GPG 检查${NC}"
-                        GPG_CHECK=0
-                    fi
-                else
-                    echo -e "${YELLOW}⚠ GPG 密钥处理失败，将禁用 GPG 检查${NC}"
-                    GPG_CHECK=0
-                fi
-            fi
-            rm -f /tmp/openresty-pubkey.gpg
+        if command -v yum-config-manager &> /dev/null; then
+            # 使用 yum-config-manager 添加仓库（标准方法）
+            yum-config-manager --add-repo https://openresty.org/package/centos/openresty.repo
+            echo -e "${GREEN}✓ OpenResty 仓库已添加${NC}"
         else
-            echo -e "${YELLOW}⚠ 无法下载 GPG 密钥，将禁用 GPG 检查${NC}"
-            GPG_CHECK=0
-        fi
-        
-        # 创建仓库配置文件
-        # 如果 GPG 检查失败，直接禁用（不设置 gpgkey）
-        if [ "$GPG_CHECK" = "1" ]; then
+            echo -e "${YELLOW}⚠ yum-config-manager 不可用，尝试手动添加仓库...${NC}"
+            # 手动创建仓库文件
             cat > /etc/yum.repos.d/openresty.repo <<EOF
 [openresty]
 name=Official OpenResty Repository
-baseurl=https://openresty.org/package/${repo_os}/\$releasever/\$basearch
+baseurl=https://openresty.org/package/centos/\$releasever/\$basearch
 gpgcheck=1
 enabled=1
 gpgkey=https://openresty.org/package/pubkey.gpg
 EOF
-        else
-            # 禁用 GPG 检查
-            cat > /etc/yum.repos.d/openresty.repo <<EOF
-[openresty]
-name=Official OpenResty Repository
-baseurl=https://openresty.org/package/${repo_os}/\$releasever/\$basearch
-gpgcheck=0
-enabled=1
-EOF
-            echo -e "${YELLOW}⚠ 已禁用 GPG 检查，继续安装${NC}"
+            echo -e "${GREEN}✓ OpenResty 仓库已添加${NC}"
         fi
-        
-        echo -e "${GREEN}✓ OpenResty 仓库配置完成${NC}"
     else
-        # 如果仓库文件已存在，检查是否需要修复
-        if grep -q "gpgcheck=1" /etc/yum.repos.d/openresty.repo && ! rpm -q gpg-pubkey-d5edeb74 &> /dev/null; then
-            echo "检测到 GPG 检查已启用但密钥未导入，尝试修复..."
-            if wget -qO - https://openresty.org/package/pubkey.gpg | rpm --import 2>&1; then
-                echo -e "${GREEN}✓ GPG 密钥已导入${NC}"
-            else
-                echo -e "${YELLOW}⚠ GPG 密钥导入失败，禁用 GPG 检查${NC}"
-                sed -i 's/gpgcheck=1/gpgcheck=0/' /etc/yum.repos.d/openresty.repo
-                sed -i '/gpgkey=/d' /etc/yum.repos.d/openresty.repo
-            fi
-        fi
+        echo -e "${BLUE}OpenResty 仓库已存在${NC}"
     fi
     
-    # 尝试使用包管理器安装（RedHat 系列优先使用 dnf）
-    echo "尝试使用包管理器安装 OpenResty..."
+    # 3. 安装 OpenResty（RedHat 系列优先使用 dnf）
+    echo "安装 OpenResty..."
     INSTALL_SUCCESS=0
     
     if command -v dnf &> /dev/null; then
@@ -432,73 +378,106 @@ EOF
 install_openresty_debian() {
     echo -e "${BLUE}[4/8] 安装 OpenResty（Debian 系列）...${NC}"
     
-    # 确定仓库名称（根据实际系统）
-    local repo_os=$OS
-    case $OS in
-        linuxmint)
-            repo_os="ubuntu"  # Linux Mint 使用 Ubuntu 仓库
-            ;;
-        kali|raspbian)
-            repo_os="debian"  # Kali 和 Raspbian 使用 Debian 仓库
-            ;;
-    esac
+    # 1. 安装必要的工具
+    echo "安装必要的工具..."
+    apt-get update
+    apt-get install -y --no-install-recommends wget gnupg ca-certificates
     
-    # 获取发行版代号
-    local distro_codename
-    if command -v lsb_release &> /dev/null; then
-        distro_codename=$(lsb_release -sc)
-    elif [ -f /etc/os-release ]; then
-        . /etc/os-release
-        distro_codename=$VERSION_CODENAME
-        if [ -z "$distro_codename" ]; then
-            # 尝试从 VERSION_ID 推断
-            case $OS in
-                ubuntu)
-                    case $VERSION_ID in
-                        20.04) distro_codename="focal" ;;
-                        22.04) distro_codename="jammy" ;;
-                        18.04) distro_codename="bionic" ;;
-                        *) distro_codename="focal" ;;  # 默认
-                    esac
-                    ;;
-                debian)
-                    case $VERSION_ID in
-                        11) distro_codename="bullseye" ;;
-                        12) distro_codename="bookworm" ;;
-                        10) distro_codename="buster" ;;
-                        *) distro_codename="bullseye" ;;  # 默认
-                    esac
-                    ;;
-            esac
+    # 2. 导入 GPG 密钥
+    echo "导入 GPG 密钥..."
+    if wget -O - https://openresty.org/package/pubkey.gpg | apt-key add - 2>&1; then
+        echo -e "${GREEN}✓ GPG 密钥已导入${NC}"
+    else
+        echo -e "${YELLOW}⚠ GPG 密钥导入失败，尝试使用新方法...${NC}"
+        # 使用新方法（apt 2.4+）
+        mkdir -p /etc/apt/keyrings
+        if wget -O - https://openresty.org/package/pubkey.gpg | gpg --dearmor -o /etc/apt/keyrings/openresty.gpg 2>&1; then
+            echo -e "${GREEN}✓ GPG 密钥已导入（新方法）${NC}"
+        else
+            echo -e "${YELLOW}⚠ GPG 密钥导入失败，继续安装（可能无法验证包签名）${NC}"
         fi
     fi
     
-    if [ -z "$distro_codename" ]; then
-        echo -e "${YELLOW}⚠ 无法确定发行版代号，尝试使用通用方法${NC}"
-        distro_codename="focal"  # 默认使用 Ubuntu 20.04
-    fi
-    
-    # 添加 OpenResty 仓库
+    # 3. 添加仓库（使用 lsb_release -sc 获取发行版代号）
     if [ ! -f /etc/apt/sources.list.d/openresty.list ]; then
         echo "添加 OpenResty 仓库..."
-        # 尝试使用 apt-key（旧方法）
-        if wget -qO - https://openresty.org/package/pubkey.gpg | apt-key add - 2>/dev/null; then
-            echo "deb http://openresty.org/package/${repo_os} ${distro_codename} main" > /etc/apt/sources.list.d/openresty.list
+        
+        # 获取发行版代号（优先使用 lsb_release -sc，这是标准方法）
+        local distro_codename
+        if command -v lsb_release &> /dev/null; then
+            distro_codename=$(lsb_release -sc)
+            echo -e "${BLUE}检测到发行版代号: ${distro_codename}${NC}"
         else
-            # 使用新方法（apt 2.4+）
-            mkdir -p /etc/apt/keyrings
-            wget -qO - https://openresty.org/package/pubkey.gpg | gpg --dearmor -o /etc/apt/keyrings/openresty.gpg
-            echo "deb [signed-by=/etc/apt/keyrings/openresty.gpg] http://openresty.org/package/${repo_os} ${distro_codename} main" > /etc/apt/sources.list.d/openresty.list
+            # 如果没有 lsb_release，尝试从 /etc/os-release 获取
+            echo -e "${YELLOW}⚠ lsb_release 不可用，尝试从 /etc/os-release 获取发行版代号...${NC}"
+            if [ -f /etc/os-release ]; then
+                . /etc/os-release
+                distro_codename=$VERSION_CODENAME
+                if [ -z "$distro_codename" ]; then
+                    # 尝试从 VERSION_ID 推断
+                    case $OS in
+                        ubuntu)
+                            case $VERSION_ID in
+                                20.04) distro_codename="focal" ;;
+                                22.04) distro_codename="jammy" ;;
+                                18.04) distro_codename="bionic" ;;
+                                *) distro_codename="focal" ;;
+                            esac
+                            ;;
+                        debian)
+                            case $VERSION_ID in
+                                11) distro_codename="bullseye" ;;
+                                12) distro_codename="bookworm" ;;
+                                10) distro_codename="buster" ;;
+                                *) distro_codename="bullseye" ;;
+                            esac
+                            ;;
+                    esac
+                fi
+            fi
         fi
-        apt-get update
+        
+        if [ -z "$distro_codename" ]; then
+            echo -e "${YELLOW}⚠ 无法确定发行版代号，使用默认值${NC}"
+            distro_codename="focal"
+        fi
+        
+        # 确定仓库名称（根据实际系统）
+        local repo_os=$OS
+        case $OS in
+            linuxmint)
+                repo_os="ubuntu"  # Linux Mint 使用 Ubuntu 仓库
+                ;;
+            kali|raspbian)
+                repo_os="debian"  # Kali 和 Raspbian 使用 Debian 仓库
+                ;;
+        esac
+        
+        # 添加仓库（标准格式：deb http://openresty.org/package/ubuntu $(lsb_release -sc) main）
+        if [ -f /etc/apt/keyrings/openresty.gpg ]; then
+            # 使用新方法（signed-by，适用于 apt 2.4+）
+            echo "deb [signed-by=/etc/apt/keyrings/openresty.gpg] http://openresty.org/package/${repo_os} ${distro_codename} main" | tee /etc/apt/sources.list.d/openresty.list
+        else
+            # 使用旧方法（apt-key）
+            echo "deb http://openresty.org/package/${repo_os} ${distro_codename} main" | tee /etc/apt/sources.list.d/openresty.list
+        fi
+        echo -e "${GREEN}✓ OpenResty 仓库已添加${NC}"
+    else
+        echo -e "${BLUE}OpenResty 仓库已存在${NC}"
     fi
     
-    # 安装 OpenResty（Ubuntu/Debian 系列使用 apt-get）
-    if apt-get install -y openresty 2>&1; then
+    # 4. 更新包列表
+    echo "更新包列表..."
+    apt-get update
+    
+    # 5. 安装 OpenResty
+    echo "安装 OpenResty..."
+    INSTALL_SUCCESS=0
+    if apt-get install -y openresty openresty-resty 2>&1; then
+        INSTALL_SUCCESS=1
         echo -e "${GREEN}✓ OpenResty 安装完成${NC}"
     else
-        echo -e "${YELLOW}⚠ 包管理器安装失败，尝试从源码编译安装...${NC}"
-        install_openresty_from_source
+        INSTALL_SUCCESS=0
     fi
     
     # 如果包管理器安装失败，尝试从源码编译

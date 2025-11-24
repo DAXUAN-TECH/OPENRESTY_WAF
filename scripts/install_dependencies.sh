@@ -71,6 +71,7 @@ check_openresty() {
 check_module_installed() {
     local module_name=$1
     local module_file="${LUALIB_DIR}/${module_name//\./\/}.lua"
+    local module_dir="${LUALIB_DIR}/${module_name//\./\/}"
     
     # 检查文件是否存在
     if [ -f "$module_file" ]; then
@@ -78,8 +79,27 @@ check_module_installed() {
     fi
     
     # 检查目录是否存在（某些模块可能是目录结构）
-    local module_dir="${LUALIB_DIR}/${module_name//\./\/}"
     if [ -d "$module_dir" ]; then
+        return 0
+    fi
+    
+    # 检查是否有任何相关文件（某些模块可能有不同的文件结构）
+    # 例如：resty/msgpack.lua 或 resty/msgpack/init.lua
+    local base_dir="${LUALIB_DIR}/resty"
+    local file_pattern=$(echo "$module_name" | sed 's/^resty\.//')
+    
+    # 检查直接文件
+    if [ -f "${base_dir}/${file_pattern}.lua" ]; then
+        return 0
+    fi
+    
+    # 检查目录
+    if [ -d "${base_dir}/${file_pattern}" ]; then
+        return 0
+    fi
+    
+    # 检查 init.lua 文件（某些模块使用目录+init.lua结构）
+    if [ -f "${base_dir}/${file_pattern}/init.lua" ]; then
         return 0
     fi
     
@@ -107,23 +127,47 @@ install_module() {
     echo -e "${YELLOW}未安装，正在安装...${NC}"
     echo -e "  ${BLUE}说明: ${description}${NC}"
     
-    # 安装模块
-    if ${OPM_BIN} get "$opm_package" > /dev/null 2>&1; then
-        echo -e "  ${GREEN}✓ 安装成功${NC}"
-        INSTALLED=$((INSTALLED + 1))
-        return 0
+    # 安装模块（显示详细错误信息）
+    local install_output
+    local install_status
+    
+    # 尝试安装并捕获输出
+    install_output=$(${OPM_BIN} get "$opm_package" 2>&1)
+    install_status=$?
+    
+    if [ $install_status -eq 0 ]; then
+        # 检查是否真的安装成功（验证文件是否存在）
+        if check_module_installed "$module_name"; then
+            echo -e "  ${GREEN}✓ 安装成功${NC}"
+            INSTALLED=$((INSTALLED + 1))
+            return 0
+        else
+            # 安装命令成功但文件不存在，可能是包结构问题
+            echo -e "  ${YELLOW}⚠ 安装命令成功，但模块文件未找到${NC}"
+            echo -e "  ${BLUE}OPM 输出:${NC}"
+            echo "$install_output" | sed 's/^/    /'
+            FAILED=$((FAILED + 1))
+        fi
     else
         echo -e "  ${RED}✗ 安装失败${NC}"
+        echo -e "  ${BLUE}错误信息:${NC}"
+        echo "$install_output" | sed 's/^/    /'
         FAILED=$((FAILED + 1))
-        
-        if [ "$is_required" = "required" ]; then
-            echo -e "${RED}错误: 必需模块安装失败${NC}"
-            echo -e "${YELLOW}手动安装命令: ${OPM_BIN} get ${opm_package}${NC}"
-            return 1
-        else
-            echo -e "${YELLOW}警告: 可选模块安装失败，功能可能受限${NC}"
-            return 0
-        fi
+    fi
+    
+    if [ "$is_required" = "required" ]; then
+        echo -e "${RED}错误: 必需模块安装失败${NC}"
+        echo -e "${YELLOW}手动安装命令: ${OPM_BIN} get ${opm_package}${NC}"
+        echo -e "${YELLOW}调试信息:${NC}"
+        echo "  - OPM 路径: ${OPM_BIN}"
+        echo "  - OPM 版本: $(${OPM_BIN} --version 2>&1 || echo '无法获取版本')"
+        echo "  - 目标目录: ${LUALIB_DIR}"
+        echo "  - 模块路径: ${LUALIB_DIR}/${module_name//\./\/}.lua"
+        return 1
+    else
+        echo -e "${YELLOW}警告: 可选模块安装失败，功能可能受限${NC}"
+        echo -e "${BLUE}提示: 可以稍后手动安装: ${OPM_BIN} get ${opm_package}${NC}"
+        return 0
     fi
 }
 

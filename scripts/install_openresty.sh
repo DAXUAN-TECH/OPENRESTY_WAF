@@ -131,10 +131,11 @@ install_deps_redhat() {
     
     if command -v dnf &> /dev/null; then
         # Fedora
-        dnf install -y gcc gcc-c++ pcre-devel zlib-devel openssl-devel perl perl-ExtUtils-Embed readline-devel wget curl
+        dnf install -y gcc gcc-c++ pcre-devel pcre2-devel pcre2 zlib-devel openssl-devel perl perl-ExtUtils-Embed readline-devel wget curl
     elif command -v yum &> /dev/null; then
         # CentOS/RHEL
-        yum install -y gcc gcc-c++ pcre-devel zlib-devel openssl-devel perl perl-ExtUtils-Embed readline-devel wget curl
+        # 安装开发包和运行时库
+        yum install -y gcc gcc-c++ pcre-devel pcre2-devel pcre2 zlib-devel openssl-devel perl perl-ExtUtils-Embed readline-devel wget curl
     else
         echo -e "${RED}错误: 未找到包管理器（yum/dnf）${NC}"
         exit 1
@@ -148,7 +149,7 @@ install_deps_debian() {
     echo -e "${BLUE}[2/8] 安装依赖包（Debian 系列）...${NC}"
     
     apt-get update
-    apt-get install -y build-essential libpcre3-dev zlib1g-dev libssl-dev libreadline-dev wget curl
+    apt-get install -y build-essential libpcre3-dev libpcre2-dev libpcre2-8-0 zlib1g-dev libssl-dev libreadline-dev wget curl
     
     echo -e "${GREEN}✓ 依赖包安装完成${NC}"
 }
@@ -1036,9 +1037,76 @@ find_opm() {
     echo "$opm_path"
 }
 
+# 检查并安装运行时依赖
+check_and_install_runtime_deps() {
+    echo "检查运行时依赖..."
+    local missing_deps=0
+    
+    # 检查 libpcre2-8.so.0
+    if ! ldconfig -p 2>/dev/null | grep -q "libpcre2-8.so.0"; then
+        echo -e "${YELLOW}⚠ 检测到缺少 libpcre2-8.so.0 运行时库${NC}"
+        missing_deps=1
+    fi
+    
+    # 检查其他常见依赖
+    local required_libs=(
+        "libz.so.1"
+        "libssl.so"
+        "libcrypto.so"
+    )
+    
+    for lib in "${required_libs[@]}"; do
+        if ! ldconfig -p 2>/dev/null | grep -q "$lib"; then
+            echo -e "${YELLOW}⚠ 检测到缺少 $lib${NC}"
+            missing_deps=1
+        fi
+    done
+    
+    if [ $missing_deps -eq 1 ]; then
+        echo "安装缺失的运行时依赖..."
+        detect_os
+        
+        case $OS in
+            centos|rhel|fedora|rocky|almalinux|oraclelinux|amazonlinux)
+                if command -v dnf &> /dev/null; then
+                    dnf install -y pcre2 zlib openssl-libs 2>/dev/null || true
+                elif command -v yum &> /dev/null; then
+                    yum install -y pcre2 zlib openssl-libs 2>/dev/null || true
+                fi
+                ;;
+            ubuntu|debian|linuxmint|raspbian|kali)
+                if command -v apt-get &> /dev/null; then
+                    apt-get install -y libpcre2-8-0 zlib1g libssl1.1 2>/dev/null || \
+                    apt-get install -y libpcre2-8-0 zlib1g libssl3 2>/dev/null || true
+                fi
+                ;;
+            opensuse*|sles)
+                if command -v zypper &> /dev/null; then
+                    zypper install -y pcre2 zlib libopenssl1_1 2>/dev/null || true
+                fi
+                ;;
+            arch|manjaro)
+                if command -v pacman &> /dev/null; then
+                    pacman -S --noconfirm pcre2 zlib openssl 2>/dev/null || true
+                fi
+                ;;
+        esac
+        
+        # 更新动态链接库缓存
+        ldconfig 2>/dev/null || true
+        
+        echo -e "${GREEN}✓ 运行时依赖检查完成${NC}"
+    else
+        echo -e "${GREEN}✓ 运行时依赖完整${NC}"
+    fi
+}
+
 # 安装 Lua 模块
 install_lua_modules() {
     echo -e "${BLUE}[7/8] 安装 Lua 模块...${NC}"
+    
+    # 检查并安装运行时依赖
+    check_and_install_runtime_deps
     
     # 查找 opm
     local opm_path=$(find_opm)
@@ -1296,7 +1364,36 @@ verify_installation() {
     echo -e "${BLUE}[8/8] 验证安装...${NC}"
     
     if [ -f "${INSTALL_DIR}/bin/openresty" ]; then
-        local version=$(${INSTALL_DIR}/bin/openresty -v 2>&1 | head -n 1)
+        # 检查运行时依赖
+        check_and_install_runtime_deps
+        
+        # 测试 OpenResty 命令
+        local version_output=$(${INSTALL_DIR}/bin/openresty -v 2>&1)
+        if echo "$version_output" | grep -qi "error while loading shared libraries"; then
+            echo -e "${RED}✗ OpenResty 运行时依赖缺失${NC}"
+            echo -e "${YELLOW}错误信息: $version_output${NC}"
+            echo ""
+            echo -e "${BLUE}解决方案:${NC}"
+            echo "请运行以下命令安装缺失的运行时库："
+            detect_os
+            case $OS in
+                centos|rhel|fedora|rocky|almalinux|oraclelinux|amazonlinux)
+                    echo "  sudo yum install -y pcre2 zlib openssl-libs"
+                    echo "  或"
+                    echo "  sudo dnf install -y pcre2 zlib openssl-libs"
+                    ;;
+                ubuntu|debian|linuxmint|raspbian|kali)
+                    echo "  sudo apt-get install -y libpcre2-8-0 zlib1g libssl1.1"
+                    echo "  或"
+                    echo "  sudo apt-get install -y libpcre2-8-0 zlib1g libssl3"
+                    ;;
+            esac
+            echo ""
+            echo "安装后运行: sudo ldconfig"
+            exit 1
+        fi
+        
+        local version=$(echo "$version_output" | head -n 1)
         echo -e "${GREEN}✓ OpenResty 安装成功${NC}"
         echo "  版本: $version"
         echo "  安装路径: ${INSTALL_DIR}"
@@ -1313,6 +1410,8 @@ verify_installation() {
             echo -e "${GREEN}✓ 配置文件语法正确${NC}"
         else
             echo -e "${YELLOW}⚠ 配置文件可能有语法错误，请检查${NC}"
+            echo -e "${BLUE}提示: 运行以下命令检查配置:${NC}"
+            echo "  ${INSTALL_DIR}/bin/openresty -t"
         fi
     fi
 }

@@ -734,10 +734,15 @@ check_existing() {
                 local custom_option=$((idx + 1))
                 printf "  %2d. 自定义版本（手动输入版本号）\n" "$custom_option"
                 echo ""
-                read -p "请选择版本 [1-${custom_option}]: " VERSION_CHOICE
+                read -p "请选择版本 [1-${custom_option}，默认1]: " VERSION_CHOICE
+                VERSION_CHOICE="${VERSION_CHOICE:-1}"  # 如果为空，默认选择1
                 
+                # 验证输入是否为数字
+                if ! echo "$VERSION_CHOICE" | grep -qE '^[0-9]+$'; then
+                    echo -e "${YELLOW}⚠ 输入无效，使用默认版本: ${available_versions[0]}${NC}"
+                    MYSQL_VERSION="${available_versions[0]}"
                 # 处理选择
-                if [ "$VERSION_CHOICE" -ge 1 ] && [ "$VERSION_CHOICE" -le ${#available_versions[@]} ]; then
+                elif [ "$VERSION_CHOICE" -ge 1 ] && [ "$VERSION_CHOICE" -le ${#available_versions[@]} ]; then
                     MYSQL_VERSION="${available_versions[$((VERSION_CHOICE - 1))]}"
                     echo -e "${GREEN}✓ 已选择 MySQL ${MYSQL_VERSION}${NC}"
                 elif [ "$VERSION_CHOICE" -eq "$default_option" ]; then
@@ -757,7 +762,7 @@ check_existing() {
                         MYSQL_VERSION="${available_versions[0]}"
                     fi
                 else
-                    echo -e "${YELLOW}无效选择，使用默认版本: ${available_versions[0]}${NC}"
+                    echo -e "${YELLOW}⚠ 选择超出范围，使用默认版本: ${available_versions[0]}${NC}"
                     MYSQL_VERSION="${available_versions[0]}"
                 fi
             else
@@ -859,10 +864,15 @@ check_existing() {
                 local custom_option=$((idx + 1))
                 printf "  %2d. 自定义版本（手动输入版本号）\n" "$custom_option"
                 echo ""
-                read -p "请选择版本 [1-${custom_option}]: " VERSION_CHOICE
+                read -p "请选择版本 [1-${custom_option}，默认1]: " VERSION_CHOICE
+                VERSION_CHOICE="${VERSION_CHOICE:-1}"  # 如果为空，默认选择1
                 
+                # 验证输入是否为数字
+                if ! echo "$VERSION_CHOICE" | grep -qE '^[0-9]+$'; then
+                    echo -e "${YELLOW}⚠ 输入无效，使用默认版本: ${available_versions[0]}${NC}"
+                    MYSQL_VERSION="${available_versions[0]}"
                 # 处理选择
-                if [ "$VERSION_CHOICE" -ge 1 ] && [ "$VERSION_CHOICE" -le ${#available_versions[@]} ]; then
+                elif [ "$VERSION_CHOICE" -ge 1 ] && [ "$VERSION_CHOICE" -le ${#available_versions[@]} ]; then
                     MYSQL_VERSION="${available_versions[$((VERSION_CHOICE - 1))]}"
                     echo -e "${GREEN}✓ 已选择 MySQL ${MYSQL_VERSION}${NC}"
                 elif [ "$VERSION_CHOICE" -eq "$default_option" ]; then
@@ -882,52 +892,52 @@ check_existing() {
                         MYSQL_VERSION="${available_versions[0]}"
                     fi
                 else
-                    echo -e "${YELLOW}无效选择，使用默认版本: ${available_versions[0]}${NC}"
+                    echo -e "${YELLOW}⚠ 选择超出范围，使用默认版本: ${available_versions[0]}${NC}"
                     MYSQL_VERSION="${available_versions[0]}"
                 fi
             else
                 # 如果没有检测到可用版本，显示默认选项
                 echo -e "${YELLOW}⚠ 无法检测可用版本，显示默认选项${NC}"
-                echo ""
-                echo "请选择 MySQL 版本："
-                echo "  1. MySQL 8.0（推荐，最新稳定版）"
-                echo "  2. MySQL 5.7（兼容性更好）"
+        echo ""
+        echo "请选择 MySQL 版本："
+        echo "  1. MySQL 8.0（推荐，最新稳定版）"
+        echo "  2. MySQL 5.7（兼容性更好）"
                 echo "  3. 使用系统默认版本"
                 echo "  4. 自定义版本（手动输入版本号）"
                 read -p "请选择 [1-4]: " VERSION_CHOICE
-                
-                case "$VERSION_CHOICE" in
-                    1)
-                        MYSQL_VERSION="8.0"
-                        echo -e "${GREEN}✓ 已选择 MySQL 8.0${NC}"
-                        ;;
-                    2)
-                        MYSQL_VERSION="5.7"
-                        echo -e "${GREEN}✓ 已选择 MySQL 5.7${NC}"
-                        ;;
-                    3)
+        
+        case "$VERSION_CHOICE" in
+            1)
+                MYSQL_VERSION="8.0"
+                echo -e "${GREEN}✓ 已选择 MySQL 8.0${NC}"
+                ;;
+            2)
+                MYSQL_VERSION="5.7"
+                echo -e "${GREEN}✓ 已选择 MySQL 5.7${NC}"
+                ;;
+            3)
                         MYSQL_VERSION="default"
                         echo -e "${GREEN}✓ 将使用系统默认版本${NC}"
                         ;;
                     4)
-                        echo ""
-                        echo -e "${BLUE}请输入 MySQL 版本号（格式：主版本.次版本.修订版本，如 8.0.39）${NC}"
-                        read -p "版本号: " CUSTOM_VERSION
-                        CUSTOM_VERSION=$(echo "$CUSTOM_VERSION" | tr -d '[:space:]')
-                        
-                        if echo "$CUSTOM_VERSION" | grep -qE '^[0-9]+\.[0-9]+(\.[0-9]+)?$'; then
-                            MYSQL_VERSION="$CUSTOM_VERSION"
-                            echo -e "${GREEN}✓ 已选择 MySQL ${MYSQL_VERSION}${NC}"
-                        else
+                echo ""
+                echo -e "${BLUE}请输入 MySQL 版本号（格式：主版本.次版本.修订版本，如 8.0.39）${NC}"
+                read -p "版本号: " CUSTOM_VERSION
+                CUSTOM_VERSION=$(echo "$CUSTOM_VERSION" | tr -d '[:space:]')
+                
+                if echo "$CUSTOM_VERSION" | grep -qE '^[0-9]+\.[0-9]+(\.[0-9]+)?$'; then
+                    MYSQL_VERSION="$CUSTOM_VERSION"
+                    echo -e "${GREEN}✓ 已选择 MySQL ${MYSQL_VERSION}${NC}"
+                else
                             echo -e "${RED}✗ 版本号格式错误，默认使用 MySQL 8.0${NC}"
-                            MYSQL_VERSION="8.0"
-                        fi
-                        ;;
-                    *)
-                        MYSQL_VERSION="8.0"
-                        echo -e "${YELLOW}无效选择，默认使用 MySQL 8.0${NC}"
-                        ;;
-                esac
+                    MYSQL_VERSION="8.0"
+                fi
+                ;;
+            *)
+                MYSQL_VERSION="8.0"
+                echo -e "${YELLOW}无效选择，默认使用 MySQL 8.0${NC}"
+                ;;
+        esac
             fi
         fi
     else
@@ -1059,45 +1069,55 @@ get_available_mysql_versions_redhat() {
 verify_mysql_installation() {
     local install_log="${1:-/tmp/mysql_install.log}"
     
-    # 检查安装日志中是否有错误信息
+    # 首先检查 MySQL 命令和服务包是否已安装（最可靠的验证方法）
+    local mysql_installed=0
+    if command -v mysql &> /dev/null || command -v mysqld &> /dev/null; then
+        mysql_installed=1
+    fi
+    
+    # 检查 MySQL 服务包是否已安装（RedHat系列）
+    if command -v rpm &> /dev/null; then
+        if rpm -qa | grep -qiE "mysql-community-server|mysql-server|mariadb-server"; then
+            mysql_installed=1
+        fi
+    fi
+    
+    # 如果命令和包都已存在，认为安装成功
+    if [ $mysql_installed -eq 1 ]; then
+        return 0
+    fi
+    
+    # 如果命令和包都不存在，检查安装日志
     if [ -f "$install_log" ]; then
         # 检查是否有"没有可用软件包"或"错误：无须任何处理"等错误
-        if grep -qiE "没有可用软件包|No package available|错误：无须任何处理|Nothing to do|No packages marked for|无需任何处理" "$install_log"; then
+        if grep -qiE "没有可用软件包|No package available|错误：无须任何处理|Nothing to do|No packages marked for|无需任何处理|No match for argument" "$install_log"; then
             echo -e "${RED}✗ 检测到安装失败：软件包不可用或无需处理${NC}"
             return 1
         fi
         
         # 检查是否有其他安装错误（排除GPG警告）
-        if grep -qiE "Error.*install|Failed.*install|无法安装|安装失败|安装.*失败" "$install_log" && ! grep -qiE "GPG key|GPG 密钥|GPG.*warning" "$install_log"; then
+        if grep -qiE "Error.*install|Failed.*install|无法安装|安装失败|安装.*失败|Cannot find a package" "$install_log" && ! grep -qiE "GPG key|GPG 密钥|GPG.*warning" "$install_log"; then
             echo -e "${RED}✗ 检测到安装错误${NC}"
             return 1
         fi
         
         # 检查是否真的安装了软件包（检查日志中是否有"Installed"或"已安装"）
-        if ! grep -qiE "Installed|已安装|安装.*完成|Complete!" "$install_log"; then
-            # 如果没有安装成功的标记，检查是否有错误
-            if grep -qiE "Error|Failed|失败|错误" "$install_log" && ! grep -qiE "GPG|warning|警告" "$install_log"; then
-                echo -e "${RED}✗ 未检测到安装成功的标记${NC}"
-                return 1
-            fi
+        if grep -qiE "Installed|已安装|安装.*完成|Complete!|Package.*installed" "$install_log"; then
+            # 有安装成功的标记，但命令不存在，可能是PATH问题
+            echo -e "${YELLOW}⚠ 检测到安装成功标记，但命令未找到，可能是PATH问题${NC}"
+            return 0  # 仍然返回成功，因为包已安装
         fi
-    fi
-    
-    # 检查 MySQL 命令是否存在
-    if ! command -v mysql &> /dev/null && ! command -v mysqld &> /dev/null; then
-        echo -e "${RED}✗ MySQL 命令未找到，安装可能失败${NC}"
-        return 1
-    fi
-    
-    # 检查 MySQL 服务包是否已安装（RedHat系列）
-    if command -v rpm &> /dev/null; then
-        if ! rpm -qa | grep -qiE "mysql-community-server|mysql-server|mariadb-server"; then
-            echo -e "${RED}✗ MySQL/MariaDB 服务包未安装${NC}"
+        
+        # 如果没有安装成功的标记，检查是否有错误
+        if grep -qiE "Error|Failed|失败|错误" "$install_log" && ! grep -qiE "GPG|warning|警告" "$install_log"; then
+            echo -e "${RED}✗ 未检测到安装成功的标记，且存在错误信息${NC}"
             return 1
         fi
     fi
     
-    return 0
+    # 如果命令和包都不存在，且日志也没有明确说明，返回失败
+    echo -e "${RED}✗ MySQL 命令和包都未找到，安装可能失败${NC}"
+    return 1
 }
 
 # 修复 MySQL GPG 密钥问题
@@ -1279,8 +1299,23 @@ install_mysql_redhat() {
         echo -e "${BLUE}尝试安装指定版本: MySQL ${full_version}${NC}"
         
         # 方法1: 尝试安装完整版本号
+        # 注意：MySQL包名格式可能是 mysql-community-server-8.0.44-1.el7
+        # 先尝试精确版本号，如果失败再尝试通配符
         local version_package="mysql-community-server-${full_version}"
         echo "尝试安装包: $version_package"
+        
+        # 先检查包是否真的存在
+        if command -v yum &> /dev/null; then
+            if ! yum list available "$version_package" 2>/dev/null | grep -qE "mysql-community-server"; then
+                echo -e "${YELLOW}⚠ 精确版本包不存在，尝试使用通配符: mysql-community-server-${full_version}*${NC}"
+                version_package="mysql-community-server-${full_version}*"
+            fi
+        elif command -v dnf &> /dev/null; then
+            if ! dnf list available "$version_package" 2>/dev/null | grep -qE "mysql-community-server"; then
+                echo -e "${YELLOW}⚠ 精确版本包不存在，尝试使用通配符: mysql-community-server-${full_version}*${NC}"
+                version_package="mysql-community-server-${full_version}*"
+            fi
+        fi
         
         # 修复 GPG 密钥问题（强制使用 --nogpgcheck 以确保安装成功）
         fix_mysql_gpg_key
@@ -1295,10 +1330,15 @@ install_mysql_redhat() {
                 echo -e "${GREEN}✓ MySQL ${full_version} 安装成功${NC}"
                 else
                     echo -e "${RED}✗ MySQL ${full_version} 安装失败${NC}"
+                    echo -e "${YELLOW}安装日志（最后20行）：${NC}"
+                    tail -20 /tmp/mysql_install.log 2>/dev/null || true
                     INSTALL_SUCCESS=0
                 fi
             else
                 INSTALL_SUCCESS=0
+                echo -e "${RED}✗ dnf install 命令执行失败${NC}"
+                echo -e "${YELLOW}安装日志（最后20行）：${NC}"
+                tail -20 /tmp/mysql_install.log 2>/dev/null || true
             fi
         else
             if yum install -y $nogpgcheck_flag "$version_package" "mysql-community-client-${full_version}" 2>&1 | tee /tmp/mysql_install.log; then
@@ -1308,10 +1348,15 @@ install_mysql_redhat() {
                 echo -e "${GREEN}✓ MySQL ${full_version} 安装成功${NC}"
                 else
                     echo -e "${RED}✗ MySQL ${full_version} 安装失败${NC}"
+                    echo -e "${YELLOW}安装日志（最后20行）：${NC}"
+                    tail -20 /tmp/mysql_install.log 2>/dev/null || true
                     INSTALL_SUCCESS=0
                 fi
             else
                 INSTALL_SUCCESS=0
+                echo -e "${RED}✗ yum install 命令执行失败${NC}"
+                echo -e "${YELLOW}安装日志（最后20行）：${NC}"
+                tail -20 /tmp/mysql_install.log 2>/dev/null || true
             fi
         fi
         
@@ -1333,10 +1378,15 @@ install_mysql_redhat() {
                     echo -e "${GREEN}✓ MySQL ${major_minor} 系列安装成功${NC}"
                     else
                         echo -e "${RED}✗ MySQL ${major_minor} 系列安装失败${NC}"
+                        echo -e "${YELLOW}安装日志（最后20行）：${NC}"
+                        tail -20 /tmp/mysql_install.log 2>/dev/null || true
                         INSTALL_SUCCESS=0
                     fi
                 else
                     INSTALL_SUCCESS=0
+                    echo -e "${RED}✗ dnf install 命令执行失败${NC}"
+                    echo -e "${YELLOW}安装日志（最后20行）：${NC}"
+                    tail -20 /tmp/mysql_install.log 2>/dev/null || true
                 fi
             else
                 # 使用 yum 安装指定版本
@@ -1347,10 +1397,15 @@ install_mysql_redhat() {
                     echo -e "${GREEN}✓ MySQL ${major_minor} 系列安装成功${NC}"
                     else
                         echo -e "${RED}✗ MySQL ${major_minor} 系列安装失败${NC}"
+                        echo -e "${YELLOW}安装日志（最后20行）：${NC}"
+                        tail -20 /tmp/mysql_install.log 2>/dev/null || true
                         INSTALL_SUCCESS=0
                     fi
                 else
                     INSTALL_SUCCESS=0
+                    echo -e "${RED}✗ yum install 命令执行失败${NC}"
+                    echo -e "${YELLOW}安装日志（最后20行）：${NC}"
+                    tail -20 /tmp/mysql_install.log 2>/dev/null || true
                 fi
             fi
         fi
@@ -1381,27 +1436,37 @@ install_mysql_redhat() {
                 if dnf install -y $nogpgcheck_flag mysql-community-server mysql-community-client 2>&1 | tee /tmp/mysql_install.log; then
                     # 验证是否真正安装成功
                     if verify_mysql_installation /tmp/mysql_install.log; then
-                    INSTALL_SUCCESS=1
-                    echo -e "${GREEN}✓ MySQL ${major_minor} 系列安装成功${NC}"
+                        INSTALL_SUCCESS=1
+                        echo -e "${GREEN}✓ MySQL ${major_minor} 系列安装成功${NC}"
                     else
                         echo -e "${RED}✗ MySQL ${major_minor} 系列安装失败${NC}"
+                        echo -e "${YELLOW}安装日志（最后20行）：${NC}"
+                        tail -20 /tmp/mysql_install.log 2>/dev/null || true
                         INSTALL_SUCCESS=0
                     fi
                 else
                     INSTALL_SUCCESS=0
+                    echo -e "${RED}✗ dnf install 命令执行失败${NC}"
+                    echo -e "${YELLOW}安装日志（最后20行）：${NC}"
+                    tail -20 /tmp/mysql_install.log 2>/dev/null || true
                 fi
             else
                 if yum install -y $nogpgcheck_flag mysql-community-server mysql-community-client 2>&1 | tee /tmp/mysql_install.log; then
                     # 验证是否真正安装成功
                     if verify_mysql_installation /tmp/mysql_install.log; then
-                    INSTALL_SUCCESS=1
-                    echo -e "${GREEN}✓ MySQL ${major_minor} 系列安装成功${NC}"
+                        INSTALL_SUCCESS=1
+                        echo -e "${GREEN}✓ MySQL ${major_minor} 系列安装成功${NC}"
                     else
                         echo -e "${RED}✗ MySQL ${major_minor} 系列安装失败${NC}"
+                        echo -e "${YELLOW}安装日志（最后20行）：${NC}"
+                        tail -20 /tmp/mysql_install.log 2>/dev/null || true
                         INSTALL_SUCCESS=0
                     fi
                 else
                     INSTALL_SUCCESS=0
+                    echo -e "${RED}✗ yum install 命令执行失败${NC}"
+                    echo -e "${YELLOW}安装日志（最后20行）：${NC}"
+                    tail -20 /tmp/mysql_install.log 2>/dev/null || true
                 fi
             fi
         fi

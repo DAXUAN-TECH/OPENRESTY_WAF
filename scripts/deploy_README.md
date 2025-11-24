@@ -207,7 +207,7 @@ sudo chmod 755 /path/to/project/logs
 - `/path/to/project` → 实际项目路径
 - `set $project_root "/path/to/project"` → `set $project_root "/实际路径"`
 - `/path/to/project/logs/error.log` → `/实际路径/logs/error.log`
-- `/path/to/project/logs/nginx.pid` → `/实际路径/logs/nginx.pid`
+- `pid /usr/local/openresty/nginx/logs/nginx.pid` → **保持不变**（固定路径，必须与 systemd 服务文件一致）
 - `include /path/to/project/conf.d/set_conf/*.conf` → `include /实际路径/conf.d/set_conf/*.conf`
 - `include /path/to/project/conf.d/vhost_conf/*.conf` → `include /实际路径/conf.d/vhost_conf/*.conf`
 

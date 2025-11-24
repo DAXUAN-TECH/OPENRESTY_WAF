@@ -68,9 +68,10 @@ echo -e "${GREEN}[2/3] 复制并配置主配置文件...${NC}"
 cp "${PROJECT_ROOT}/init_file/nginx.conf" "$NGINX_CONF_DIR/nginx.conf"
 
 # 替换 nginx.conf 中的路径占位符
-# 1. 替换 error_log 和 pid 路径（这些指令不支持变量，必须使用绝对路径）
+# 1. 替换 error_log 路径（这些指令不支持变量，必须使用绝对路径）
+# 注意：PID 文件路径固定为 /usr/local/openresty/nginx/logs/nginx.pid，不能修改
+#       必须与 systemd 服务文件 openresty.service 中的 PIDFile 一致
 sed -i "s|/path/to/project/logs/error.log|$PROJECT_ROOT_ABS/logs/error.log|g" "$NGINX_CONF_DIR/nginx.conf"
-sed -i "s|/path/to/project/logs/nginx.pid|$PROJECT_ROOT_ABS/logs/nginx.pid|g" "$NGINX_CONF_DIR/nginx.conf"
 
 # 2. 替换 $project_root 变量为实际项目路径（用于 include 和其他配置）
 # 注意：转义 $ 符号，避免被 shell 解释为变量

@@ -73,91 +73,45 @@ echo -e "${GREEN}✓ 目录检查完成${NC}"
 echo -e "${GREEN}[2/3] 复制并配置主配置文件...${NC}"
 cp "${PROJECT_ROOT}/init_file/nginx.conf" "$NGINX_CONF_DIR/nginx.conf"
 
-# 检查并修复重复的 http 块和内容（如果存在）
-http_block_count=$(grep -c "^http {" "$NGINX_CONF_DIR/nginx.conf" 2>/dev/null || echo "0")
-if [ "$http_block_count" -gt 1 ]; then
-    echo -e "${YELLOW}⚠ 检测到多个 http 块，正在修复...${NC}"
-    # 找到第一个 http 块的位置
-    first_http_line=$(grep -n "^http {" "$NGINX_CONF_DIR/nginx.conf" | cut -d: -f1 | head -1)
-    # 使用更精确的方法找到第一个 http 块的结束位置
-    first_http_end=$(awk -v start="$first_http_line" '
-        BEGIN { brace_count = 0; found_start = 0 }
+# 替换 nginx.conf 中的路径占位符
+# 1. 替换 error_log 路径（这些指令不支持变量，必须使用绝对路径）
+sed -i "s|/path/to/project/logs/error.log|$PROJECT_ROOT_ABS/logs/error.log|g" "$NGINX_CONF_DIR/nginx.conf"
+
+# 2. 替换 $project_root 变量为实际项目路径
+sed -i 's|set $project_root "/path/to/project"|set $project_root "'"$PROJECT_ROOT_ABS"'"|g' "$NGINX_CONF_DIR/nginx.conf"
+
+# 3. 确保 http 块后没有多余内容（简单直接的方法）
+# 找到 http 块开始行
+http_start=$(grep -n "^http {" "$NGINX_CONF_DIR/nginx.conf" | cut -d: -f1 | head -1)
+if [ -n "$http_start" ]; then
+    # 找到 http 块结束位置（计算大括号匹配）
+    http_end=$(awk -v start="$http_start" '
+        BEGIN { brace_count = 0 }
         NR >= start {
-            if (NR == start) found_start = 1
-            if (found_start) {
-                for (i = 1; i <= length($0); i++) {
-                    char = substr($0, i, 1)
-                    if (char == "{") brace_count++
-                    if (char == "}") {
-                        brace_count--
-                        if (brace_count == 0 && found_start) {
-                            print NR
-                            exit
-                        }
+            for (i = 1; i <= length($0); i++) {
+                char = substr($0, i, 1)
+                if (char == "{") brace_count++
+                if (char == "}") {
+                    brace_count--
+                    if (brace_count == 0) {
+                        print NR
+                        exit
                     }
                 }
             }
         }
     ' "$NGINX_CONF_DIR/nginx.conf")
-    if [ -z "$first_http_end" ]; then
-        first_http_end=$(wc -l < "$NGINX_CONF_DIR/nginx.conf")
-    fi
-    # 删除第一个 http 块之后的所有内容，保留第一个 http 块
-    sed -i "$((first_http_end + 1)),\$d" "$NGINX_CONF_DIR/nginx.conf"
-    echo -e "${GREEN}✓ 已修复重复的 http 块${NC}"
-fi
-
-# 检查是否有重复的内容（在 http 块结束后）
-# 如果 http 块结束后还有内容，可能是重复的配置，需要清理
-if [ -f "$NGINX_CONF_DIR/nginx.conf" ]; then
-    http_start=$(grep -n "^http {" "$NGINX_CONF_DIR/nginx.conf" | cut -d: -f1 | head -1)
-    if [ -n "$http_start" ]; then
-        http_end=$(awk -v start="$http_start" '
-            BEGIN { brace_count = 0; found_start = 0 }
-            NR >= start {
-                if (NR == start) found_start = 1
-                if (found_start) {
-                    for (i = 1; i <= length($0); i++) {
-                        char = substr($0, i, 1)
-                        if (char == "{") brace_count++
-                        if (char == "}") {
-                            brace_count--
-                            if (brace_count == 0 && found_start) {
-                                print NR
-                                exit
-                            }
-                        }
-                    }
-                }
-            }
-        ' "$NGINX_CONF_DIR/nginx.conf")
-        if [ -n "$http_end" ]; then
-            total_lines=$(wc -l < "$NGINX_CONF_DIR/nginx.conf")
-            # 检查 http 块结束后是否还有内容（除了空行和注释）
-            if [ "$http_end" -lt "$total_lines" ]; then
-                # 检查 http 块后的内容（跳过空行）
-                after_http_content=$(sed -n "$((http_end + 1)),\$p" "$NGINX_CONF_DIR/nginx.conf" | grep -v '^[[:space:]]*$' | grep -v '^[[:space:]]*#')
-                if [ -n "$after_http_content" ]; then
-                    echo -e "${YELLOW}⚠ 检测到 http 块后有重复内容，正在清理...${NC}"
-                    # 删除 http 块后的所有内容（保留空行和注释，但删除实际配置）
-                    # 更安全的方式：只保留到 http 块结束
-                    sed -i "$((http_end + 1)),\$d" "$NGINX_CONF_DIR/nginx.conf"
-                    echo -e "${GREEN}✓ 已清理 http 块后的重复内容${NC}"
-                fi
-            fi
+    
+    if [ -n "$http_end" ]; then
+        total_lines=$(wc -l < "$NGINX_CONF_DIR/nginx.conf")
+        # 如果 http 块后还有内容，直接删除
+        if [ "$http_end" -lt "$total_lines" ]; then
+            echo -e "${YELLOW}⚠ 清理 http 块后的多余内容（第 $((http_end + 1))-$total_lines 行）...${NC}"
+            sed -i "$((http_end + 1)),\$d" "$NGINX_CONF_DIR/nginx.conf"
+            echo -e "${GREEN}✓ 已清理${NC}"
         fi
     fi
 fi
-
-# 替换 nginx.conf 中的路径占位符
-# 1. 替换 error_log 路径（这些指令不支持变量，必须使用绝对路径）
-# 注意：PID 文件路径固定为 /usr/local/openresty/nginx/logs/nginx.pid，不能修改
-#       必须与 systemd 服务文件 openresty.service 中的 PIDFile 一致
-sed -i "s|/path/to/project/logs/error.log|$PROJECT_ROOT_ABS/logs/error.log|g" "$NGINX_CONF_DIR/nginx.conf"
-
-# 2. 替换 $project_root 变量为实际项目路径（用于 include 和其他配置）
-# 注意：转义 $ 符号，避免被 shell 解释为变量
-sed -i 's|set $project_root "/path/to/project"|set $project_root "'"$PROJECT_ROOT_ABS"'"|g' "$NGINX_CONF_DIR/nginx.conf"
 
 echo -e "${GREEN}✓ 主配置文件已复制并配置${NC}"
 echo -e "${YELLOW}  注意: conf.d、lua、logs、cert 目录保持在项目目录，使用相对路径引用${NC}"
@@ -169,220 +123,36 @@ echo -e "${GREEN}[3/4] 验证配置...${NC}"
 if [ -f "${OPENRESTY_PREFIX}/bin/openresty" ]; then
     echo "验证 nginx.conf 语法..."
     
-    # 确保 set 指令在 http 块内的正确位置
-    # 注意：由于第 100 行已经替换了 set 指令的值，这里需要清理和重新组织
+    # 在验证前，确保 http 块后没有多余内容（简单直接的方法）
     if [ -f "$NGINX_CONF_DIR/nginx.conf" ]; then
-        # 首先，删除所有在 http 块外的 set 指令（防止语法错误）
-        echo -e "${BLUE}清理 http 块外的 set 指令...${NC}"
-        
-        # 查找第一个 http 块（确保只有一个）
-        http_start=$(grep -n "^http {" "$NGINX_CONF_DIR/nginx.conf" | cut -d: -f1 | head -1)
-        
-        if [ -z "$http_start" ]; then
-            echo -e "${RED}✗ 未找到 http 块，配置文件可能已损坏${NC}"
-            exit 1
-        fi
-        
-        # 找到第一个 http 块的结束位置（查找匹配的 }）
-        # 使用更精确的匹配，确保找到正确的 http 块结束
-        http_end=$(awk -v start="$http_start" '
-            BEGIN { brace_count = 0; found_start = 0 }
-            NR >= start {
-                if (NR == start) found_start = 1
-                if (found_start) {
-                    # 计算大括号
-                    for (i = 1; i <= length($0); i++) {
-                        char = substr($0, i, 1)
-                        if (char == "{") brace_count++
-                        if (char == "}") {
-                            brace_count--
-                            if (brace_count == 0 && found_start) {
-                                print NR
-                                exit
-                            }
-                        }
-                    }
-                }
-            }
-        ' "$NGINX_CONF_DIR/nginx.conf")
-        if [ -z "$http_end" ]; then
-            http_end=$(wc -l < "$NGINX_CONF_DIR/nginx.conf")
-        fi
-        
-        # 删除 http 块外的所有 set 指令及其注释
-        # 1. 删除 http 块之前的所有 set 指令
-        if [ "$http_start" -gt 1 ]; then
-            sed -i "1,$((http_start - 1)){/set \$project_root/d; /#.*项目根目录/d; /#.*project_root/d}" "$NGINX_CONF_DIR/nginx.conf"
-        fi
-        
-        # 2. 删除 http 块之后的所有 set 指令
-        total_lines=$(wc -l < "$NGINX_CONF_DIR/nginx.conf")
-        if [ "$http_end" -lt "$total_lines" ]; then
-            sed -i "$((http_end + 1)),\${/set \$project_root/d; /#.*项目根目录/d; /#.*project_root/d}" "$NGINX_CONF_DIR/nginx.conf"
-        fi
-        
-        # 重新查找 http 块位置（因为可能删除了行）
-        http_start=$(grep -n "^http {" "$NGINX_CONF_DIR/nginx.conf" | cut -d: -f1 | head -1)
-        # 使用更精确的匹配，确保找到正确的 http 块结束
-        http_end=$(awk -v start="$http_start" '
-            BEGIN { brace_count = 0; found_start = 0 }
-            NR >= start {
-                if (NR == start) found_start = 1
-                if (found_start) {
-                    # 计算大括号
-                    for (i = 1; i <= length($0); i++) {
-                        char = substr($0, i, 1)
-                        if (char == "{") brace_count++
-                        if (char == "}") {
-                            brace_count--
-                            if (brace_count == 0 && found_start) {
-                                print NR
-                                exit
-                            }
-                        }
-                    }
-                }
-            }
-        ' "$NGINX_CONF_DIR/nginx.conf")
-        if [ -z "$http_end" ]; then
-            http_end=$(wc -l < "$NGINX_CONF_DIR/nginx.conf")
-        fi
-        
-        # 检查 http 块内是否有 set 指令
-        set_in_http=$(sed -n "${http_start},${http_end}p" "$NGINX_CONF_DIR/nginx.conf" | grep -c "set \$project_root" 2>/dev/null || echo "0")
-        set_in_http=$(echo "$set_in_http" | tr -d '\n\r' | head -n1)
-        if ! [[ "$set_in_http" =~ ^[0-9]+$ ]]; then
-            set_in_http=0
-        fi
-        
-        # 如果 http 块内有多个 set 指令，只保留第一个，删除其他的
-        if [ "$set_in_http" -gt 1 ]; then
-            echo -e "${YELLOW}⚠ 检测到 http 块内有多个 set 指令，正在清理...${NC}"
-            # 在 http 块内找到第一个 set 指令的位置
-            first_set_line=$(sed -n "${http_start},${http_end}p" "$NGINX_CONF_DIR/nginx.conf" | grep -n "set \$project_root" | head -1 | cut -d: -f1)
-            first_set_line=$((http_start + first_set_line - 1))
-            # 删除 http 块内第一个 set 指令之后的所有 set 指令
-            sed -i "$((first_set_line + 1)),${http_end}{/set \$project_root/d; /#.*项目根目录/d; /#.*project_root/d}" "$NGINX_CONF_DIR/nginx.conf"
-            set_in_http=1
-        fi
-        
-        if [ "$set_in_http" -eq 0 ]; then
-            # 没有 set 指令，在 http { 后添加
-            echo -e "${YELLOW}⚠ 在 http 块内添加 set 指令...${NC}"
-            # 使用更安全的方式插入（避免 sed 转义问题）
-            # 确保在 http { 行的下一行插入，而不是在同一行
-            awk -v start="$http_start" -v project_root="$PROJECT_ROOT_ABS" '
-                NR == start {
-                    print
-                    # 在下一行插入 set 指令
-                    print "    # 项目根目录变量"
-                    print "    set $project_root \"" project_root "\";"
-                    next
-                }
-                { print }
-            ' "$NGINX_CONF_DIR/nginx.conf" > "$NGINX_CONF_DIR/nginx.conf.tmp" && \
-            mv "$NGINX_CONF_DIR/nginx.conf.tmp" "$NGINX_CONF_DIR/nginx.conf"
-            echo -e "${GREEN}✓ 已添加 set 指令到 http 块内${NC}"
-        else
-            # 已有 set 指令，确保其值是正确的
-            current_value=$(sed -n "${http_start},${http_end}p" "$NGINX_CONF_DIR/nginx.conf" | grep "set \$project_root" | sed 's/.*"\(.*\)".*/\1/' | head -1)
-            if [ "$current_value" != "$PROJECT_ROOT_ABS" ]; then
-                echo -e "${YELLOW}⚠ 更新 set 指令的值...${NC}"
-                # 只在 http 块内替换
-                sed -i "${http_start},${http_end}s|set \$project_root \"[^\"]*\"|set \$project_root \"$PROJECT_ROOT_ABS\"|g" "$NGINX_CONF_DIR/nginx.conf"
-                echo -e "${GREEN}✓ 已更新 set 指令的值${NC}"
-            else
-                echo -e "${GREEN}✓ set 指令已在 http 块内且值正确${NC}"
-            fi
-        fi
-        
-        # 在验证之前，强制清理 http 块后的所有内容（防止任何重复内容）
-        echo -e "${BLUE}验证前清理 http 块后的所有内容...${NC}"
         http_start=$(grep -n "^http {" "$NGINX_CONF_DIR/nginx.conf" | cut -d: -f1 | head -1)
         if [ -n "$http_start" ]; then
-            # 使用更可靠的方法找到 http 块的结束位置
-            # 从 http { 开始，计算大括号匹配
+            # 找到 http 块结束位置（计算大括号匹配）
             http_end=$(awk -v start="$http_start" '
-                BEGIN { brace_count = 0; found_start = 0 }
+                BEGIN { brace_count = 0 }
                 NR >= start {
-                    if (NR == start) found_start = 1
-                    if (found_start) {
-                        # 处理整行的所有字符
-                        line = $0
-                        for (i = 1; i <= length(line); i++) {
-                            char = substr(line, i, 1)
-                            if (char == "{") brace_count++
-                            if (char == "}") {
-                                brace_count--
-                                if (brace_count == 0) {
-                                    print NR
-                                    exit
-                                }
+                    for (i = 1; i <= length($0); i++) {
+                        char = substr($0, i, 1)
+                        if (char == "{") brace_count++
+                        if (char == "}") {
+                            brace_count--
+                            if (brace_count == 0) {
+                                print NR
+                                exit
                             }
                         }
                     }
                 }
             ' "$NGINX_CONF_DIR/nginx.conf")
             
-            if [ -n "$http_end" ] && [ "$http_end" -gt 0 ]; then
+            if [ -n "$http_end" ]; then
                 total_lines=$(wc -l < "$NGINX_CONF_DIR/nginx.conf")
-                # 如果 http 块结束后还有内容，强制删除
+                # 如果 http 块后还有内容，直接删除
                 if [ "$http_end" -lt "$total_lines" ]; then
-                    echo -e "${YELLOW}⚠ 检测到 http 块（第 ${http_start}-${http_end} 行）后还有内容（第 $((http_end + 1))-${total_lines} 行），正在清理...${NC}"
-                    # 强制删除 http 块后的所有内容
+                    echo -e "${YELLOW}⚠ 删除 http 块后的多余内容（第 $((http_end + 1))-$total_lines 行）...${NC}"
                     sed -i "$((http_end + 1)),\$d" "$NGINX_CONF_DIR/nginx.conf"
-                    echo -e "${GREEN}✓ 已清理 http 块后的所有内容${NC}"
-                else
-                    echo -e "${BLUE}✓ http 块后没有多余内容${NC}"
+                    echo -e "${GREEN}✓ 已清理${NC}"
                 fi
-            else
-                echo -e "${YELLOW}⚠ 无法确定 http 块结束位置，尝试使用备用方法...${NC}"
-                # 备用方法：查找最后一个独立的 }
-                last_brace=$(grep -n "^}" "$NGINX_CONF_DIR/nginx.conf" | tail -1 | cut -d: -f1)
-                if [ -n "$last_brace" ] && [ "$last_brace" -gt "$http_start" ]; then
-                    total_lines=$(wc -l < "$NGINX_CONF_DIR/nginx.conf")
-                    if [ "$last_brace" -lt "$total_lines" ]; then
-                        echo -e "${YELLOW}⚠ 使用备用方法清理第 $((last_brace + 1)) 行之后的内容...${NC}"
-                        sed -i "$((last_brace + 1)),\$d" "$NGINX_CONF_DIR/nginx.conf"
-                        echo -e "${GREEN}✓ 已清理${NC}"
-                    fi
-                fi
-            fi
-        fi
-    fi
-    
-    # 在验证之前，最后一次强制清理：删除 http 块后的所有内容
-    echo -e "${BLUE}最终清理：确保 http 块后没有内容...${NC}"
-    http_start=$(grep -n "^http {" "$NGINX_CONF_DIR/nginx.conf" | cut -d: -f1 | head -1)
-    if [ -n "$http_start" ]; then
-        # 找到 http 块的结束位置（最后一个独立的 }）
-        http_end=$(awk -v start="$http_start" '
-            BEGIN { brace_count = 0; found_start = 0; last_close = 0 }
-            NR >= start {
-                if (NR == start) found_start = 1
-                if (found_start) {
-                    line = $0
-                    for (i = 1; i <= length(line); i++) {
-                        char = substr(line, i, 1)
-                        if (char == "{") brace_count++
-                        if (char == "}") {
-                            brace_count--
-                            if (brace_count == 0) {
-                                last_close = NR
-                            }
-                        }
-                    }
-                }
-            }
-            END { if (last_close > 0) print last_close }
-        ' "$NGINX_CONF_DIR/nginx.conf")
-        
-        if [ -n "$http_end" ] && [ "$http_end" -gt 0 ]; then
-            total_lines=$(wc -l < "$NGINX_CONF_DIR/nginx.conf")
-            if [ "$http_end" -lt "$total_lines" ]; then
-                echo -e "${YELLOW}⚠ 强制删除第 $((http_end + 1)) 行之后的所有内容...${NC}"
-                sed -i "$((http_end + 1)),\$d" "$NGINX_CONF_DIR/nginx.conf"
-                echo -e "${GREEN}✓ 已删除 http 块后的所有内容${NC}"
             fi
         fi
     fi

@@ -25,7 +25,7 @@ declare -A OPTIONAL_DEPENDENCIES
 OPTIONAL_DEPENDENCIES["resty.redis"]="openresty/lua-resty-redis|Redis 客户端，用于二级缓存"
 OPTIONAL_DEPENDENCIES["resty.maxminddb"]="anjia0532/lua-resty-maxminddb|GeoIP2 数据库查询，用于地域封控"
 OPTIONAL_DEPENDENCIES["resty.http"]="ledgetech/lua-resty-http|HTTP 客户端，用于告警 Webhook"
-OPTIONAL_DEPENDENCIES["resty.file"]="openresty/lua-resty-file|文件操作，用于日志队列"
+# 注意：resty.file 模块在 OPM 中不存在，代码使用标准 Lua io 库，已从依赖列表中移除
 OPTIONAL_DEPENDENCIES["resty.msgpack"]="chronolaw/lua-resty-msgpack|MessagePack 序列化，用于高性能序列化"
 
 # 统计

@@ -17,8 +17,9 @@
 | `resty.redis` | `openresty/lua-resty-redis` | Redis 客户端 | Redis 二级缓存（已启用） |
 | `resty.maxminddb` | `anjia0532/lua-resty-maxminddb` | GeoIP2 数据库查询 | 地域封控功能 |
 | `resty.http` | `ledgetech/lua-resty-http` | HTTP 客户端 | 告警 Webhook 功能 |
-| `resty.file` | `openresty/lua-resty-file` | 文件操作 | 日志队列本地备份 |
 | `resty.msgpack` | `chronolaw/lua-resty-msgpack` | MessagePack 序列化 | 高性能序列化（可选） |
+
+**注意**：`resty.file` 模块在 OPM 中不存在。代码使用标准 Lua `io` 库进行文件操作，无需安装额外模块。
 
 ### 内置模块（OpenResty 自带）
 
@@ -83,7 +84,7 @@ sudo ./scripts/install_dependencies.sh
 /usr/local/openresty/bin/opm get openresty/lua-resty-redis
 /usr/local/openresty/bin/opm get anjia0532/lua-resty-maxminddb
 /usr/local/openresty/bin/opm get ledgetech/lua-resty-http
-/usr/local/openresty/bin/opm get openresty/lua-resty-file
+# 注意：lua-resty-file 在 OPM 中不存在，代码使用标准 Lua io 库，无需安装
 /usr/local/openresty/bin/opm get chronolaw/lua-resty-msgpack
 ```
 
@@ -147,9 +148,9 @@ ls -la /usr/local/openresty/site/lualib/resty/maxminddb.lua
 
 **状态**：可选功能（`config.log.enable_local_backup = true`）
 
-**依赖**：`resty.file`
+**依赖**：标准 Lua `io` 库（无需安装额外模块）
 
-**影响**：如果未安装 `resty.file`，日志队列的本地备份功能将无法使用。
+**说明**：日志队列的本地备份功能使用标准 Lua `io` 库实现，无需安装 `resty.file` 模块（该模块在 OPM 中不存在）。
 
 ### MessagePack 序列化
 

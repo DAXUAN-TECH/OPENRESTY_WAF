@@ -6,7 +6,7 @@ local mysql_pool = require "waf.mysql_pool"
 local config = require "config"
 local path_utils = require "waf.path_utils"
 local cjson = require "cjson"
-local file = require "resty.file"
+-- 注意：使用标准 Lua io 库进行文件操作，不需要 resty.file 模块
 
 local _M = {}
 local cache = ngx.shared.waf_log_buffer

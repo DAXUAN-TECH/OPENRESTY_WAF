@@ -40,8 +40,9 @@ sudo ./scripts/uninstall_dependencies.sh
 - `resty.redis` - Redis 客户端
 - `resty.maxminddb` - GeoIP2 数据库查询
 - `resty.http` - HTTP 客户端
-- `resty.file` - 文件操作
 - `resty.msgpack` - MessagePack 序列化
+
+**注意**：`resty.file` 模块在 OPM 中不存在，代码使用标准 Lua `io` 库，无需安装。
 
 ### 3. 交互式卸载
 
@@ -65,8 +66,8 @@ sudo ./scripts/uninstall_dependencies.sh
    - 卸载 `resty.redis` 后，Redis 二级缓存功能将无法使用
    - 卸载 `resty.maxminddb` 后，地域封控功能将无法使用
    - 卸载 `resty.http` 后，告警 Webhook 功能将无法使用
-   - 卸载 `resty.file` 后，日志队列本地备份功能将无法使用
    - 卸载 `resty.msgpack` 后，将回退到 JSON 序列化
+   - **注意**：`resty.file` 模块在 OPM 中不存在，代码使用标准 Lua `io` 库，无需卸载
 
 3. **服务重启**：
    - 卸载模块后，需要重启 OpenResty 服务使更改生效

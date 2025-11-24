@@ -534,11 +534,7 @@ if [ -f "${OPENRESTY_PREFIX}/bin/openresty" ]; then
         check_warning "resty.http (可选) - 未安装，告警 Webhook 功能将受限"
     fi
     
-    if [ -f "${LUALIB_DIR}/resty/file.lua" ] || [ -d "${LUALIB_DIR}/resty/file" ]; then
-        check_ok "resty.file (可选) - 已安装"
-    else
-        check_warning "resty.file (可选) - 未安装，日志队列本地备份功能将受限"
-    fi
+    # 注意：resty.file 模块在 OPM 中不存在，代码使用标准 Lua io 库，无需检查
     
     if [ -f "${LUALIB_DIR}/resty/msgpack.lua" ] || [ -d "${LUALIB_DIR}/resty/msgpack" ]; then
         check_ok "resty.msgpack (可选) - 已安装"

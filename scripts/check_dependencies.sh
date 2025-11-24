@@ -222,7 +222,7 @@ show_summary() {
     if [ $FAILED -gt 0 ]; then
         echo -e "${YELLOW}建议:${NC}"
         echo "  1. 检查网络连接"
-        echo "  2. 检查 opm 是否正常工作: ${OPM_BIN} --version"
+        echo "  2. 检查 opm 是否正常工作: ${OPM_BIN} -h"
         echo "  3. 手动安装失败的模块"
         echo ""
     fi

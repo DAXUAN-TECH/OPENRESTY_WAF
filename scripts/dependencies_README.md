@@ -179,7 +179,7 @@ ls -la /usr/local/openresty/site/lualib/resty/maxminddb.lua
 ping -c 3 openresty.org
 
 # 检查 opm 是否可用
-/usr/local/openresty/bin/opm --version
+/usr/local/openresty/bin/opm -h
 
 # 手动安装
 /usr/local/openresty/bin/opm get <package-name>

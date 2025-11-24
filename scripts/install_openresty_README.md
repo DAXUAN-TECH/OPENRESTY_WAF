@@ -285,7 +285,7 @@ tail -f /usr/local/openresty/nginx/logs/error.log
 /usr/local/openresty/bin/opm get openresty/lua-resty-mysql
 
 # 检查 opm 是否可用
-/usr/local/openresty/bin/opm --version
+/usr/local/openresty/bin/opm -h
 ```
 
 ### 问题 5：不支持的系统

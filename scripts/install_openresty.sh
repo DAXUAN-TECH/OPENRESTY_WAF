@@ -822,9 +822,10 @@ install_openresty_from_source() {
     # 验证 opm 安装
     if [ $opm_installed -eq 1 ] && [ -f "${INSTALL_DIR}/bin/opm" ]; then
         echo -e "${GREEN}✓ opm 已成功安装: ${INSTALL_DIR}/bin/opm${NC}"
-        if "${INSTALL_DIR}/bin/opm" --version &>/dev/null; then
-            local opm_version=$("${INSTALL_DIR}/bin/opm" --version 2>&1 | head -n 1)
-            echo -e "${GREEN}  opm 版本: ${opm_version}${NC}"
+        if "${INSTALL_DIR}/bin/opm" -h &>/dev/null; then
+            echo -e "${GREEN}  opm 验证: 正常工作${NC}"
+        else
+            echo -e "${YELLOW}  opm 验证: 无法执行（可能有问题）${NC}"
         fi
     else
         echo -e "${YELLOW}⚠ opm 未安装，后续可能需要手动安装${NC}"

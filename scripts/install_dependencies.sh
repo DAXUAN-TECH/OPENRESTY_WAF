@@ -160,7 +160,16 @@ install_module() {
         echo -e "${YELLOW}手动安装命令: ${OPM_BIN} get ${opm_package}${NC}"
         echo -e "${YELLOW}调试信息:${NC}"
         echo "  - OPM 路径: ${OPM_BIN}"
-        echo "  - OPM 版本: $(${OPM_BIN} --version 2>&1 || echo '无法获取版本')"
+        if [ -f "${OPM_BIN}" ] && [ -x "${OPM_BIN}" ]; then
+            echo "  - OPM 状态: 已安装且可执行"
+            if ${OPM_BIN} -h &>/dev/null; then
+                echo "  - OPM 验证: 正常工作"
+            else
+                echo "  - OPM 验证: 无法执行（可能有问题）"
+            fi
+        else
+            echo "  - OPM 状态: 未找到或不可执行"
+        fi
         echo "  - 目标目录: ${LUALIB_DIR}"
         echo "  - 模块路径: ${LUALIB_DIR}/${module_name//\./\/}.lua"
         return 1
@@ -232,7 +241,7 @@ show_summary() {
     if [ $FAILED -gt 0 ]; then
         echo -e "${YELLOW}建议:${NC}"
         echo "  1. 检查网络连接"
-        echo "  2. 检查 opm 是否正常工作: ${OPM_BIN} --version"
+        echo "  2. 检查 opm 是否正常工作: ${OPM_BIN} -h"
         echo "  3. 手动安装失败的模块"
         echo ""
     fi

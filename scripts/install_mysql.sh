@@ -1959,10 +1959,18 @@ configure_mysql() {
     
     # 启动 MySQL 服务（首次启动会自动初始化）
     if command -v systemctl &> /dev/null; then
-        systemctl enable mysqld 2>/dev/null || systemctl enable mysql 2>/dev/null || true
+        # 启用开机自启动
+        if systemctl enable mysqld >/dev/null 2>&1 || systemctl enable mysql >/dev/null 2>&1; then
+            echo -e "${GREEN}✓ 已启用 MySQL 开机自启动${NC}"
+        fi
         systemctl start mysqld 2>/dev/null || systemctl start mysql 2>/dev/null || true
     elif command -v service &> /dev/null; then
+        # 启用开机自启动
+        if chkconfig mysqld on >/dev/null 2>&1 || chkconfig mysql on >/dev/null 2>&1; then
+            echo -e "${GREEN}✓ 已启用 MySQL 开机自启动${NC}"
+        fi
         service mysql start 2>/dev/null || service mysqld start 2>/dev/null || true
+        # 再次确保开机自启动已启用
         chkconfig mysql on 2>/dev/null || chkconfig mysqld on 2>/dev/null || true
     fi
     
@@ -3538,12 +3546,27 @@ EOF
 
 # 更新 WAF 配置文件
 update_waf_config() {
+    echo -e "${BLUE}[11/11] 更新 WAF 配置文件...${NC}"
+    
     # 检查是否有数据库和用户信息
-    if [ -z "$CREATED_DB_NAME" ] || [ -z "$MYSQL_USER_FOR_WAF" ] || [ -z "$MYSQL_PASSWORD_FOR_WAF" ]; then
-        return 0  # 如果没有创建数据库和用户，跳过配置更新
+    # 优先使用导出的变量，如果没有则使用当前函数内的变量
+    local db_name="${CREATED_DB_NAME:-${MYSQL_DATABASE}}"
+    local db_user="${MYSQL_USER_FOR_WAF:-${MYSQL_USER}}"
+    local db_password="${MYSQL_PASSWORD_FOR_WAF:-${MYSQL_USER_PASSWORD}}"
+    
+    if [ -z "$db_name" ] || [ -z "$db_user" ]; then
+        echo -e "${YELLOW}⚠ 缺少数据库或用户信息，跳过配置文件更新${NC}"
+        echo -e "${YELLOW}  数据库: ${db_name:-未设置}${NC}"
+        echo -e "${YELLOW}  用户: ${db_user:-未设置}${NC}"
+        echo -e "${YELLOW}  请手动更新 lua/config.lua 文件${NC}"
+        return 0
     fi
     
-    echo -e "${BLUE}更新 WAF 配置文件...${NC}"
+    echo -e "${BLUE}配置信息:${NC}"
+    echo -e "  数据库: ${db_name}"
+    echo -e "  用户: ${db_user}"
+    echo -e "  密码: ${db_password:+已设置（隐藏）}"
+    echo ""
     
     # 获取脚本目录
     SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -3553,14 +3576,28 @@ update_waf_config() {
     if [ ! -f "$UPDATE_CONFIG_SCRIPT" ]; then
         echo -e "${YELLOW}⚠ 配置更新脚本不存在: $UPDATE_CONFIG_SCRIPT${NC}"
         echo -e "${YELLOW}  请手动更新 lua/config.lua 文件${NC}"
+        echo -e "${YELLOW}  或运行: bash $UPDATE_CONFIG_SCRIPT mysql 127.0.0.1 3306 ${db_name} ${db_user} <password>${NC}"
+        return 0
+    fi
+    
+    # 检查配置文件是否存在
+    local config_file="${SCRIPT_DIR}/../lua/config.lua"
+    if [ ! -f "$config_file" ]; then
+        echo -e "${YELLOW}⚠ 配置文件不存在: $config_file${NC}"
+        echo -e "${YELLOW}  请确保项目目录结构正确${NC}"
         return 0
     fi
     
     # 更新配置文件
-    if bash "$UPDATE_CONFIG_SCRIPT" mysql "127.0.0.1" "3306" "$CREATED_DB_NAME" "$MYSQL_USER_FOR_WAF" "$MYSQL_PASSWORD_FOR_WAF"; then
+    echo -e "${BLUE}正在更新配置文件: $config_file${NC}"
+    if bash "$UPDATE_CONFIG_SCRIPT" mysql "127.0.0.1" "3306" "$db_name" "$db_user" "$db_password"; then
         echo -e "${GREEN}✓ WAF 配置文件已更新${NC}"
+        echo -e "${GREEN}  配置文件路径: $config_file${NC}"
+        return 0
     else
         echo -e "${YELLOW}⚠ 配置文件更新失败，请手动更新 lua/config.lua${NC}"
+        echo -e "${YELLOW}  或运行: bash $UPDATE_CONFIG_SCRIPT mysql 127.0.0.1 3306 ${db_name} ${db_user} <password>${NC}"
+        return 1
     fi
 }
 
@@ -3576,10 +3613,25 @@ init_database() {
         return 0
     fi
     
-    # 检查是否已创建数据库
-    if [ -z "$MYSQL_DATABASE" ]; then
+    # 检查是否已创建数据库（优先使用 CREATED_DB_NAME，如果没有则使用 MYSQL_DATABASE）
+    if [ -z "$MYSQL_DATABASE" ] && [ -z "$CREATED_DB_NAME" ]; then
         echo -e "${YELLOW}⚠ 未创建数据库，无法初始化${NC}"
         return 1
+    fi
+    
+    # 确保使用正确的数据库名称
+    if [ -z "$MYSQL_DATABASE" ] && [ -n "$CREATED_DB_NAME" ]; then
+        MYSQL_DATABASE="$CREATED_DB_NAME"
+    elif [ -z "$CREATED_DB_NAME" ] && [ -n "$MYSQL_DATABASE" ]; then
+        export CREATED_DB_NAME="$MYSQL_DATABASE"
+    fi
+    
+    # 确保使用正确的用户和密码（优先使用 FOR_WAF 变量）
+    if [ -z "$MYSQL_USER" ] && [ -n "$MYSQL_USER_FOR_WAF" ]; then
+        MYSQL_USER="$MYSQL_USER_FOR_WAF"
+    fi
+    if [ -z "$MYSQL_USER_PASSWORD" ] && [ -n "$MYSQL_PASSWORD_FOR_WAF" ]; then
+        MYSQL_USER_PASSWORD="$MYSQL_PASSWORD_FOR_WAF"
     fi
     
     # 查找 SQL 文件（使用相对路径）
@@ -3640,16 +3692,49 @@ CNF_EOF
     
     # 导入 SQL 脚本
     echo "正在导入 SQL 脚本: ${SQL_FILE}"
-    if [ -n "$MYSQL_USER_PASSWORD" ]; then
-        SQL_OUTPUT=$(mysql -h"127.0.0.1" -u"${MYSQL_USER}" -p"${MYSQL_USER_PASSWORD}" "${MYSQL_DATABASE}" < "$SQL_FILE" 2>&1)
-    else
-        SQL_OUTPUT=$(mysql -h"127.0.0.1" -u"${MYSQL_USER}" "${MYSQL_DATABASE}" < "$SQL_FILE" 2>&1)
+    echo -e "${BLUE}使用用户: ${MYSQL_USER}，数据库: ${MYSQL_DATABASE}${NC}"
+    
+    # 检查 SQL 文件是否存在且可读
+    if [ ! -r "$SQL_FILE" ]; then
+        echo -e "${RED}✗ SQL 文件不存在或不可读: ${SQL_FILE}${NC}"
+        return 1
     fi
     
-    SQL_EXIT_CODE=$?
+    # 显示 SQL 文件大小
+    local sql_file_size=$(du -h "$SQL_FILE" | cut -f1)
+    echo -e "${BLUE}SQL 文件大小: ${sql_file_size}${NC}"
+    
+    # 导入 SQL 脚本（显示进度）
+    echo -e "${BLUE}开始导入...${NC}"
+    if [ -n "$MYSQL_USER_PASSWORD" ]; then
+        # 使用配置文件方式避免密码泄露到进程列表
+        local temp_cnf=$(mktemp)
+        cat > "$temp_cnf" <<CNF_EOF
+[client]
+host=127.0.0.1
+user=${MYSQL_USER}
+password=${MYSQL_USER_PASSWORD}
+database=${MYSQL_DATABASE}
+CNF_EOF
+        chmod 600 "$temp_cnf"
+        SQL_OUTPUT=$(mysql --defaults-file="$temp_cnf" < "$SQL_FILE" 2>&1)
+        SQL_EXIT_CODE=$?
+        rm -f "$temp_cnf"
+    else
+        SQL_OUTPUT=$(mysql -h"127.0.0.1" -u"${MYSQL_USER}" "${MYSQL_DATABASE}" < "$SQL_FILE" 2>&1)
+        SQL_EXIT_CODE=$?
+    fi
+    
+    # 过滤掉警告信息（MySQL 8.0 会输出密码警告）
+    SQL_OUTPUT=$(echo "$SQL_OUTPUT" | grep -v "Warning: Using a password on the command line")
     
     if [ $SQL_EXIT_CODE -eq 0 ]; then
         echo -e "${GREEN}✓ 数据库初始化成功${NC}"
+        # 如果有输出，显示部分输出（可能是成功信息）
+        if [ -n "$SQL_OUTPUT" ]; then
+            echo -e "${BLUE}导入输出:${NC}"
+            echo "$SQL_OUTPUT" | head -10
+        fi
         # 显示安装总结
         show_installation_summary
     else
@@ -3660,9 +3745,15 @@ CNF_EOF
             # 显示安装总结
             show_installation_summary
         else
-            echo -e "${YELLOW}⚠ 数据库初始化可能有问题，请检查错误信息${NC}"
-            echo "错误信息："
-            echo "$SQL_OUTPUT" | head -20
+            echo -e "${RED}✗ 数据库初始化失败${NC}"
+            echo -e "${YELLOW}错误信息：${NC}"
+            echo "$SQL_OUTPUT" | head -30
+            echo ""
+            echo -e "${YELLOW}建议：${NC}"
+            echo "  1. 检查 SQL 文件语法是否正确"
+            echo "  2. 检查数据库用户权限是否足够"
+            echo "  3. 手动导入 SQL 文件: mysql -u ${MYSQL_USER} -p ${MYSQL_DATABASE} < ${SQL_FILE}"
+            return 1
         fi
     fi
 }
@@ -3732,6 +3823,49 @@ CNF_EOF
         fi
         echo ""
     fi
+    
+    # 显示连接URL信息
+    echo -e "${BLUE}连接 URL 信息:${NC}"
+    if [ -n "$MYSQL_USER" ] && [ "$MYSQL_USER" != "root" ] && [ -n "$MYSQL_USER_PASSWORD" ]; then
+        # 使用创建的用户
+        echo "  MySQL URL: mysql://${MYSQL_USER}:${MYSQL_USER_PASSWORD}@127.0.0.1:3306/${MYSQL_DATABASE}"
+        echo "  连接命令: mysql -h 127.0.0.1 -P 3306 -u ${MYSQL_USER} -p'${MYSQL_USER_PASSWORD}' ${MYSQL_DATABASE}"
+    elif [ -n "$MYSQL_ROOT_PASSWORD" ]; then
+        # 使用root用户
+        echo "  MySQL URL: mysql://root:${MYSQL_ROOT_PASSWORD}@127.0.0.1:3306/${MYSQL_DATABASE:-}"
+        if [ -n "$MYSQL_DATABASE" ]; then
+            echo "  连接命令: mysql -h 127.0.0.1 -P 3306 -u root -p'${MYSQL_ROOT_PASSWORD}' ${MYSQL_DATABASE}"
+        else
+            echo "  连接命令: mysql -h 127.0.0.1 -P 3306 -u root -p'${MYSQL_ROOT_PASSWORD}'"
+        fi
+    else
+        echo "  MySQL URL: mysql://root@127.0.0.1:3306/${MYSQL_DATABASE:-}"
+        if [ -n "$MYSQL_DATABASE" ]; then
+            echo "  连接命令: mysql -h 127.0.0.1 -P 3306 -u root ${MYSQL_DATABASE}"
+        else
+            echo "  连接命令: mysql -h 127.0.0.1 -P 3306 -u root"
+        fi
+    fi
+    echo ""
+    
+    # 检查开机启动状态
+    echo -e "${BLUE}开机启动状态:${NC}"
+    if command -v systemctl &> /dev/null; then
+        if systemctl is-enabled mysqld >/dev/null 2>&1 || systemctl is-enabled mysql >/dev/null 2>&1; then
+            echo -e "  ${GREEN}✓ 已启用开机自启动${NC}"
+        else
+            echo -e "  ${YELLOW}⚠ 未启用开机自启动${NC}"
+            echo -e "  ${BLUE}提示: 运行 'systemctl enable mysqld' 启用开机自启动${NC}"
+        fi
+    elif command -v chkconfig &> /dev/null; then
+        if chkconfig mysqld 2>/dev/null | grep -q "3:on\|5:on" || chkconfig mysql 2>/dev/null | grep -q "3:on\|5:on"; then
+            echo -e "  ${GREEN}✓ 已启用开机自启动${NC}"
+        else
+            echo -e "  ${YELLOW}⚠ 未启用开机自启动${NC}"
+            echo -e "  ${BLUE}提示: 运行 'chkconfig mysqld on' 启用开机自启动${NC}"
+        fi
+    fi
+    echo ""
     
     # 显示创建的用户（如果不是root）
     if [ -n "$MYSQL_USER" ] && [ "$MYSQL_USER" != "root" ]; then
@@ -3821,11 +3955,24 @@ show_next_steps() {
     echo ""
     echo "2. 连接 MySQL:"
     if [ -n "$MYSQL_USER_PASSWORD" ] && [ "$MYSQL_USER" != "root" ]; then
-        echo "   mysql -u ${MYSQL_USER} -p'${MYSQL_USER_PASSWORD}' ${MYSQL_DATABASE}"
+        echo "   mysql -h 127.0.0.1 -P 3306 -u ${MYSQL_USER} -p'${MYSQL_USER_PASSWORD}' ${MYSQL_DATABASE}"
+        echo "   MySQL URL: mysql://${MYSQL_USER}:${MYSQL_USER_PASSWORD}@127.0.0.1:3306/${MYSQL_DATABASE}"
     elif [ -n "$MYSQL_ROOT_PASSWORD" ]; then
-        echo "   mysql -u root -p'${MYSQL_ROOT_PASSWORD}'"
+        if [ -n "$MYSQL_DATABASE" ]; then
+            echo "   mysql -h 127.0.0.1 -P 3306 -u root -p'${MYSQL_ROOT_PASSWORD}' ${MYSQL_DATABASE}"
+            echo "   MySQL URL: mysql://root:${MYSQL_ROOT_PASSWORD}@127.0.0.1:3306/${MYSQL_DATABASE}"
+        else
+            echo "   mysql -h 127.0.0.1 -P 3306 -u root -p'${MYSQL_ROOT_PASSWORD}'"
+            echo "   MySQL URL: mysql://root:${MYSQL_ROOT_PASSWORD}@127.0.0.1:3306/"
+        fi
     else
-        echo "   mysql -u root -p"
+        if [ -n "$MYSQL_DATABASE" ]; then
+            echo "   mysql -h 127.0.0.1 -P 3306 -u root ${MYSQL_DATABASE}"
+            echo "   MySQL URL: mysql://root@127.0.0.1:3306/${MYSQL_DATABASE}"
+        else
+            echo "   mysql -h 127.0.0.1 -P 3306 -u root"
+            echo "   MySQL URL: mysql://root@127.0.0.1:3306/"
+        fi
     fi
     echo ""
     

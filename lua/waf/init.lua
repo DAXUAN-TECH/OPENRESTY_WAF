@@ -269,6 +269,65 @@ function _M.init_worker()
             ngx.log(ngx.INFO, "Alert check timer initialized")
         end
     end
+    
+    -- 初始化性能监控定时器
+    local performance_monitor = require "waf.performance_monitor"
+    if performance_monitor then
+        local monitor_interval = 300  -- 每5分钟检查一次
+        
+        local function periodic_monitor_check(premature)
+            if premature then
+                return
+            end
+            
+            -- 清理过期慢查询记录
+            performance_monitor.cleanup_old_queries()
+            
+            -- 设置下一次定时器
+            local ok, err = ngx.timer.at(monitor_interval, periodic_monitor_check)
+            if not ok then
+                ngx.log(ngx.ERR, "failed to create performance monitor timer: ", err)
+            end
+        end
+        
+        -- 启动定时器
+        local ok, err = ngx.timer.at(monitor_interval, periodic_monitor_check)
+        if not ok then
+            ngx.log(ngx.ERR, "failed to create initial performance monitor timer: ", err)
+        else
+            ngx.log(ngx.INFO, "Performance monitor timer initialized")
+        end
+    end
+    
+    -- 初始化缓存调优定时器
+    local cache_tuner = require "waf.cache_tuner"
+    if cache_tuner then
+        local config_manager = require "waf.config_manager"
+        local tuning_interval = tonumber(config_manager.get_config("cache_tuner_interval", 300, "number")) or 300
+        
+        local function periodic_cache_tuning(premature)
+            if premature then
+                return
+            end
+            
+            -- 执行缓存调优
+            cache_tuner.tune_cache_ttl()
+            
+            -- 设置下一次定时器
+            local ok, err = ngx.timer.at(tuning_interval, periodic_cache_tuning)
+            if not ok then
+                ngx.log(ngx.ERR, "failed to create cache tuning timer: ", err)
+            end
+        end
+        
+        -- 启动定时器
+        local ok, err = ngx.timer.at(tuning_interval, periodic_cache_tuning)
+        if not ok then
+            ngx.log(ngx.ERR, "failed to create initial cache tuning timer: ", err)
+        else
+            ngx.log(ngx.INFO, "Cache tuning timer initialized")
+        end
+    end
 end
 
 return _M

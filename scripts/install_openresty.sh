@@ -773,6 +773,123 @@ verify_installation() {
     fi
 }
 
+# 启动服务并设置开机自启
+start_and_enable_service() {
+    echo ""
+    echo -e "${BLUE}[9/9] 启动服务并设置开机自启...${NC}"
+    
+    # 检查是否有配置文件，如果没有配置文件则只设置开机自启，不启动服务
+    local can_start=0
+    if [ -f "${NGINX_CONF_DIR}/nginx.conf" ]; then
+        # 检查配置文件语法
+        if ${INSTALL_DIR}/bin/openresty -t >/dev/null 2>&1; then
+            can_start=1
+        else
+            echo -e "${YELLOW}⚠ 配置文件语法有误，将跳过自动启动${NC}"
+            echo -e "${YELLOW}  但会设置开机自启，修复配置后可手动启动${NC}"
+        fi
+    else
+        echo -e "${YELLOW}⚠ 未找到配置文件，将跳过自动启动${NC}"
+        echo -e "${YELLOW}  但会设置开机自启，部署配置后可手动启动${NC}"
+    fi
+    
+    # 使用 systemd 管理服务
+    if command -v systemctl &> /dev/null; then
+        # 确保 systemd 服务文件存在
+        if [ ! -f /etc/systemd/system/openresty.service ]; then
+            echo "创建 systemd 服务文件..."
+            cat > /etc/systemd/system/openresty.service <<EOF
+[Unit]
+Description=OpenResty HTTP Server
+After=network.target
+
+[Service]
+Type=forking
+PIDFile=${INSTALL_DIR}/nginx/logs/nginx.pid
+ExecStart=${INSTALL_DIR}/bin/openresty
+ExecReload=/bin/kill -s HUP \$MAINPID
+ExecStop=/bin/kill -s TERM \$MAINPID
+PrivateTmp=true
+Restart=on-failure
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target
+EOF
+            systemctl daemon-reload
+            echo -e "${GREEN}✓ systemd 服务文件已创建${NC}"
+        fi
+        
+        # 设置开机自启（无论是否有配置文件都设置）
+        echo "设置开机自启..."
+        if systemctl enable openresty >/dev/null 2>&1; then
+            echo -e "${GREEN}✓ 已设置开机自启${NC}"
+        else
+            echo -e "${YELLOW}⚠ 设置开机自启失败，请手动执行: systemctl enable openresty${NC}"
+        fi
+        
+        # 启动服务（只有在配置文件可用时才启动）
+        if [ "$can_start" -eq 1 ]; then
+            echo "启动 OpenResty 服务..."
+            if systemctl start openresty >/dev/null 2>&1; then
+                # 等待一下确保服务启动
+                sleep 2
+                
+                # 检查服务状态
+                if systemctl is-active --quiet openresty; then
+                    echo -e "${GREEN}✓ OpenResty 服务已启动${NC}"
+                    
+                    # 显示服务状态
+                    echo ""
+                    echo -e "${BLUE}服务状态:${NC}"
+                    systemctl status openresty --no-pager -l | head -n 10
+                else
+                    echo -e "${YELLOW}⚠ 服务启动可能失败，请检查状态: systemctl status openresty${NC}"
+                    echo -e "${YELLOW}  查看日志: tail -f ${NGINX_LOG_DIR}/error.log${NC}"
+                fi
+            else
+                echo -e "${YELLOW}⚠ 服务启动失败，请检查配置文件和日志${NC}"
+                echo -e "${YELLOW}  手动启动: systemctl start openresty${NC}"
+                echo -e "${YELLOW}  查看日志: tail -f ${NGINX_LOG_DIR}/error.log${NC}"
+            fi
+        else
+            echo ""
+            echo -e "${BLUE}提示: 配置文件就绪后，请手动启动服务:${NC}"
+            echo "  sudo systemctl start openresty"
+        fi
+    else
+        # 如果没有 systemd，尝试直接启动
+        echo -e "${YELLOW}⚠ 未找到 systemctl，尝试直接启动...${NC}"
+        
+        # 检查是否已经在运行
+        if pgrep -f "nginx.*master" >/dev/null 2>&1; then
+            echo -e "${GREEN}✓ OpenResty 已在运行${NC}"
+        elif [ "$can_start" -eq 1 ]; then
+            # 尝试启动
+            if ${INSTALL_DIR}/bin/openresty >/dev/null 2>&1; then
+                sleep 1
+                if pgrep -f "nginx.*master" >/dev/null 2>&1; then
+                    echo -e "${GREEN}✓ OpenResty 已启动${NC}"
+                else
+                    echo -e "${YELLOW}⚠ 启动失败，请检查配置文件和日志${NC}"
+                fi
+            else
+                echo -e "${YELLOW}⚠ 启动失败，请检查配置文件和日志${NC}"
+            fi
+        fi
+        
+        # 对于非 systemd 系统，提示手动设置开机自启
+        echo ""
+        echo -e "${YELLOW}提示: 请手动设置开机自启${NC}"
+        echo "  方法1: 在 /etc/rc.local 中添加:"
+        echo "    ${INSTALL_DIR}/bin/openresty"
+        echo ""
+        echo "  方法2: 创建 init.d 脚本（如果使用 SysV init）"
+    fi
+    
+    echo ""
+}
+
 # 显示后续步骤
 show_next_steps() {
     echo ""
@@ -782,13 +899,7 @@ show_next_steps() {
     echo ""
     echo -e "${BLUE}后续步骤:${NC}"
     echo ""
-    echo "1. 启动 OpenResty 服务:"
-    echo "   sudo systemctl start openresty"
-    echo ""
-    echo "2. 设置开机自启:"
-    echo "   sudo systemctl enable openresty"
-    echo ""
-    echo "3. 检查服务状态:"
+    echo "1. 检查服务状态:"
     echo "   sudo systemctl status openresty"
     echo ""
     echo "4. 测试配置文件:"
@@ -847,6 +958,9 @@ main() {
     
     # 验证安装
     verify_installation
+    
+    # 启动服务并设置开机自启
+    start_and_enable_service
     
     # 显示后续步骤
     show_next_steps

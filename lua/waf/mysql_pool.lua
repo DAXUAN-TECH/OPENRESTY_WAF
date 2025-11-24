@@ -70,8 +70,9 @@ function _M.get_connection()
     return db, nil
 end
 
--- 执行查询
+-- 执行查询（带性能监控）
 function _M.query(sql, ...)
+    local start_time = ngx.now() * 1000  -- 毫秒
     local db, err = _M.get_connection()
     if not db then
         return nil, err
@@ -79,11 +80,22 @@ function _M.query(sql, ...)
 
     -- 构建 SQL（如果有参数）
     local final_sql = sql
-    if select("#", ...) > 0 then
+    local params = {...}
+    if #params > 0 then
         final_sql = build_sql(sql, ...)
     end
 
     local res, err, errcode, sqlstate = db:query(final_sql)
+    local duration_ms = (ngx.now() * 1000) - start_time
+    
+    -- 性能监控：记录慢查询（延迟加载，避免每次查询都加载模块）
+    if duration_ms > 0 then
+        local ok, performance_monitor = pcall(require, "waf.performance_monitor")
+        if ok and performance_monitor and performance_monitor.record_slow_query then
+            performance_monitor.record_slow_query(sql, duration_ms, params)
+        end
+    end
+    
     if not res then
         ngx.log(ngx.ERR, "bad result: ", err, ": ", errcode, ": ", sqlstate)
         db:close()

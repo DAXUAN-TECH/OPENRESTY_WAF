@@ -8,40 +8,60 @@ local path_utils = require "waf.path_utils"
 
 local _M = {}
 
--- 内部函数：执行nginx重载（返回结果，不发送HTTP响应）
-local function do_reload_nginx()
-    -- 检查是否有nginx可执行文件
-    local nginx_binary = nil
+-- 查找nginx可执行文件（可移植性实现）
+local function find_nginx_binary()
+    -- 1. 优先从环境变量获取（最高优先级）
+    local nginx_binary_env = os.getenv("NGINX_BINARY")
+    if nginx_binary_env and nginx_binary_env ~= "" then
+        local file = io.open(nginx_binary_env, "r")
+        if file then
+            file:close()
+            return nginx_binary_env
+        end
+    end
     
-    -- 优先从环境变量获取（可移植性）
-    local openresty_prefix = os.getenv("OPENRESTY_PREFIX") or "/usr/local/openresty"
-    
-    -- 尝试常见的nginx路径（按优先级排序）
-    local possible_paths = {
-        openresty_prefix .. "/bin/openresty",
-        openresty_prefix .. "/nginx/sbin/nginx",
-        os.getenv("NGINX_BINARY"),  -- 环境变量指定
-        "/usr/local/openresty/bin/openresty",
-        "/usr/local/openresty/nginx/sbin/nginx",
-        "/usr/sbin/nginx",
-        "/usr/bin/nginx",
-        "/sbin/nginx",
-        "/bin/nginx"
-    }
-    
-    for _, path in ipairs(possible_paths) do
-        if path then
+    -- 2. 从 OPENRESTY_PREFIX 环境变量构建路径
+    local openresty_prefix = os.getenv("OPENRESTY_PREFIX")
+    if openresty_prefix and openresty_prefix ~= "" then
+        local possible_paths = {
+            openresty_prefix .. "/bin/openresty",
+            openresty_prefix .. "/nginx/sbin/nginx"
+        }
+        for _, path in ipairs(possible_paths) do
             local file = io.open(path, "r")
             if file then
                 file:close()
-                nginx_binary = path
-                break
+                return path
             end
         end
     end
     
+    -- 3. 尝试使用 which 命令查找（跨平台兼容）
+    local which_cmd = "which openresty 2>/dev/null || which nginx 2>/dev/null"
+    local which_result = io.popen(which_cmd)
+    if which_result then
+        local which_path = which_result:read("*line")
+        which_result:close()
+        if which_path and which_path ~= "" then
+            local file = io.open(which_path, "r")
+            if file then
+                file:close()
+                return which_path
+            end
+        end
+    end
+    
+    -- 4. 如果都找不到，返回nil（由调用者处理错误）
+    return nil
+end
+
+-- 内部函数：执行nginx重载（返回结果，不发送HTTP响应）
+local function do_reload_nginx()
+    -- 查找nginx可执行文件
+    local nginx_binary = find_nginx_binary()
+    
     if not nginx_binary then
-        return false, "未找到nginx可执行文件，请设置OPENRESTY_PREFIX环境变量或检查nginx安装路径"
+        return false, "未找到nginx可执行文件，请设置NGINX_BINARY或OPENRESTY_PREFIX环境变量"
     end
     
     -- 执行nginx配置测试
@@ -93,40 +113,13 @@ end
 
 -- 测试nginx配置
 function _M.test_nginx_config()
-    -- 检查是否有nginx可执行文件
-    local nginx_binary = nil
-    
-    -- 优先从环境变量获取（可移植性）
-    local openresty_prefix = os.getenv("OPENRESTY_PREFIX") or "/usr/local/openresty"
-    
-    -- 尝试常见的nginx路径（按优先级排序）
-    local possible_paths = {
-        openresty_prefix .. "/bin/openresty",
-        openresty_prefix .. "/nginx/sbin/nginx",
-        os.getenv("NGINX_BINARY"),  -- 环境变量指定
-        "/usr/local/openresty/bin/openresty",
-        "/usr/local/openresty/nginx/sbin/nginx",
-        "/usr/sbin/nginx",
-        "/usr/bin/nginx",
-        "/sbin/nginx",
-        "/bin/nginx"
-    }
-    
-    for _, path in ipairs(possible_paths) do
-        if path then
-            local file = io.open(path, "r")
-            if file then
-                file:close()
-                nginx_binary = path
-                break
-            end
-        end
-    end
+    -- 查找nginx可执行文件
+    local nginx_binary = find_nginx_binary()
     
     if not nginx_binary then
         api_utils.json_response({
             success = false,
-            error = "未找到nginx可执行文件，请设置OPENRESTY_PREFIX环境变量或检查nginx安装路径"
+            error = "未找到nginx可执行文件，请设置NGINX_BINARY或OPENRESTY_PREFIX环境变量"
         }, 500)
         return
     end
@@ -194,4 +187,3 @@ function _M.get_status()
 end
 
 return _M
-

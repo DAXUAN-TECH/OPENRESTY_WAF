@@ -168,8 +168,11 @@ function _M.import_rules_json(rules_data, options)
         errors = {}
     }
     
+    -- 第一步：验证所有规则
+    local valid_rules = {}
+    local invalid_rules = {}
+    
     for i, rule in ipairs(rules_data) do
-        -- 验证规则
         local valid, err_msg = validate_rule(rule)
         if not valid then
             if skip_invalid then
@@ -179,99 +182,224 @@ function _M.import_rules_json(rules_data, options)
                     rule_name = rule.rule_name or "unknown",
                     error = err_msg
                 })
+                table.insert(invalid_rules, {index = i, rule = rule})
             else
                 return nil, string.format("rule[%d] validation failed: %s", i, err_msg)
             end
         else
-            -- 检查规则是否已存在
-            local sql_check = [[
-                SELECT id FROM waf_block_rules
-                WHERE rule_type = ?
-                AND rule_value = ?
-                LIMIT 1
-            ]]
-            
-            local existing, err = mysql_pool.query(sql_check, rule.rule_type, rule.rule_value)
-            if err then
-                ngx.log(ngx.ERR, "check existing rule error: ", err)
-                if skip_invalid then
-                    results.skipped = results.skipped + 1
-                    table.insert(results.errors, {
-                        index = i,
-                        rule_name = rule.rule_name or "unknown",
-                        error = "database error: " .. err
-                    })
-                else
-                    return nil, "database error: " .. err
+            table.insert(valid_rules, {index = i, rule = rule})
+        end
+    end
+    
+    -- 第二步：批量查询所有有效规则是否已存在（性能优化）
+    local existing_rules_map = {}
+    if #valid_rules > 0 then
+        -- 构建批量查询SQL（使用IN子句）
+        local rule_types = {}
+        local rule_values = {}
+        local rule_keys = {}  -- 用于映射回原始规则
+        
+        for _, item in ipairs(valid_rules) do
+            local rule = item.rule
+            local key = rule.rule_type .. ":" .. rule.rule_value
+            if not existing_rules_map[key] then
+                table.insert(rule_types, rule.rule_type)
+                table.insert(rule_values, rule.rule_value)
+                table.insert(rule_keys, key)
+            end
+        end
+        
+        if #rule_values > 0 then
+            -- 构建批量查询SQL（分批查询，每批最多1000条）
+            local batch_size = 1000
+            for batch_start = 1, #rule_values, batch_size do
+                local batch_end = math.min(batch_start + batch_size - 1, #rule_values)
+                local batch_types = {}
+                local batch_values = {}
+                local batch_keys = {}
+                
+                for i = batch_start, batch_end do
+                    table.insert(batch_types, rule_types[i])
+                    table.insert(batch_values, rule_values[i])
+                    table.insert(batch_keys, rule_keys[i])
                 end
-            elseif existing and #existing > 0 then
-                -- 规则已存在
-                if update_existing then
-                    -- 更新现有规则
-                    local sql_update = [[
-                        UPDATE waf_block_rules
-                        SET rule_name = ?, description = ?, status = ?, 
-                            priority = ?, start_time = ?, end_time = ?
-                        WHERE id = ?
-                    ]]
-                    
-                    local ok, err = mysql_pool.update(sql_update,
-                        rule.rule_name,
-                        rule.description or "",
-                        rule.status or 1,
-                        rule.priority or 0,
-                        rule.start_time or nil,
-                        rule.end_time or nil,
-                        existing[1].id
-                    )
-                    
-                    if err then
-                        ngx.log(ngx.ERR, "update rule error: ", err)
-                        results.failed = results.failed + 1
-                        table.insert(results.errors, {
-                            index = i,
-                            rule_name = rule.rule_name or "unknown",
-                            error = "update error: " .. err
-                        })
-                    else
-                        results.success = results.success + 1
+                
+                -- 构建SQL（使用IN子句和组合条件）
+                local conditions = {}
+                local params = {}
+                for i = 1, #batch_values do
+                    table.insert(conditions, "(rule_type = ? AND rule_value = ?)")
+                    table.insert(params, batch_types[i])
+                    table.insert(params, batch_values[i])
+                end
+                
+                local sql_batch = [[
+                    SELECT id, rule_type, rule_value FROM waf_block_rules
+                    WHERE ]] .. table.concat(conditions, " OR ")
+                
+                local existing_batch, err = mysql_pool.query(sql_batch, unpack(params))
+                if err then
+                    ngx.log(ngx.ERR, "batch check existing rules error: ", err)
+                    -- 如果批量查询失败，回退到逐个查询
+                    for i = batch_start, batch_end do
+                        local key = batch_keys[i - batch_start + 1]
+                        local rule_type = batch_types[i - batch_start + 1]
+                        local rule_value = batch_values[i - batch_start + 1]
+                        
+                        local sql_check = [[
+                            SELECT id FROM waf_block_rules
+                            WHERE rule_type = ?
+                            AND rule_value = ?
+                            LIMIT 1
+                        ]]
+                        
+                        local existing, err2 = mysql_pool.query(sql_check, rule_type, rule_value)
+                        if not err2 and existing and #existing > 0 then
+                            existing_rules_map[key] = existing[1].id
+                        end
                     end
                 else
-                    -- 跳过已存在的规则
-                    results.skipped = results.skipped + 1
+                    -- 构建映射表
+                    if existing_batch then
+                        for _, row in ipairs(existing_batch) do
+                            local key = row.rule_type .. ":" .. row.rule_value
+                            existing_rules_map[key] = row.id
+                        end
+                    end
                 end
-            else
-                -- 插入新规则
-                local sql_insert = [[
-                    INSERT INTO waf_block_rules
-                    (rule_type, rule_value, rule_name, description, status, priority, start_time, end_time, rule_version)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
+            end
+        end
+    end
+    
+    -- 第三步：处理所有有效规则（插入或更新）
+    for _, item in ipairs(valid_rules) do
+        local i = item.index
+        local rule = item.rule
+        local key = rule.rule_type .. ":" .. rule.rule_value
+        local existing_id = existing_rules_map[key]
+        
+        if existing_id then
+            -- 规则已存在
+            if update_existing then
+                -- 更新现有规则
+                local sql_update = [[
+                    UPDATE waf_block_rules
+                    SET rule_name = ?, description = ?, status = ?, 
+                        priority = ?, start_time = ?, end_time = ?
+                    WHERE id = ?
                 ]]
                 
-                local insert_id, err = mysql_pool.insert(sql_insert,
-                    rule.rule_type,
-                    rule.rule_value,
+                local ok, err = mysql_pool.update(sql_update,
                     rule.rule_name,
                     rule.description or "",
                     rule.status or 1,
                     rule.priority or 0,
                     rule.start_time or nil,
-                    rule.end_time or nil
+                    rule.end_time or nil,
+                    existing_id
                 )
                 
                 if err then
-                    ngx.log(ngx.ERR, "insert rule error: ", err)
+                    ngx.log(ngx.ERR, "update rule error: ", err)
                     results.failed = results.failed + 1
                     table.insert(results.errors, {
                         index = i,
                         rule_name = rule.rule_name or "unknown",
-                        error = "insert error: " .. err
+                        error = "update error: " .. err
                     })
                 else
                     results.success = results.success + 1
                 end
+            else
+                -- 跳过已存在的规则
+                results.skipped = results.skipped + 1
+            end
+        else
+            -- 插入新规则（批量插入优化）
+            -- 收集所有需要插入的规则，最后批量插入
+            if not results.insert_batch then
+                results.insert_batch = {}
+            end
+            table.insert(results.insert_batch, {
+                index = i,
+                rule = rule
+            })
+        end
+    end
+    
+    -- 第四步：批量插入新规则（性能优化）
+    if results.insert_batch and #results.insert_batch > 0 then
+        local insert_fields = {"rule_type", "rule_value", "rule_name", "description", "status", "priority", "start_time", "end_time", "rule_version"}
+        local insert_values = {}
+        
+        for _, item in ipairs(results.insert_batch) do
+            local rule = item.rule
+            table.insert(insert_values, {
+                rule.rule_type,
+                rule.rule_value,
+                rule.rule_name,
+                rule.description or "",
+                rule.status or 1,
+                rule.priority or 0,
+                rule.start_time or nil,
+                rule.end_time or nil,
+                1  -- rule_version
+            })
+        end
+        
+        -- 分批插入（每批最多1000条）
+        local batch_size = 1000
+        for batch_start = 1, #insert_values, batch_size do
+            local batch_end = math.min(batch_start + batch_size - 1, #insert_values)
+            local batch_values = {}
+            
+            for i = batch_start, batch_end do
+                table.insert(batch_values, insert_values[i])
+            end
+            
+            local res, err = mysql_pool.batch_insert("waf_block_rules", insert_fields, batch_values)
+            if err then
+                ngx.log(ngx.ERR, "batch insert rules error: ", err)
+                -- 批量插入失败，回退到逐个插入
+                for i = batch_start, batch_end do
+                    local item = results.insert_batch[i]
+                    local rule = item.rule
+                    local sql_insert = [[
+                        INSERT INTO waf_block_rules
+                        (rule_type, rule_value, rule_name, description, status, priority, start_time, end_time, rule_version)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
+                    ]]
+                    
+                    local insert_id, err2 = mysql_pool.insert(sql_insert,
+                        rule.rule_type,
+                        rule.rule_value,
+                        rule.rule_name,
+                        rule.description or "",
+                        rule.status or 1,
+                        rule.priority or 0,
+                        rule.start_time or nil,
+                        rule.end_time or nil
+                    )
+                    
+                    if err2 then
+                        results.failed = results.failed + 1
+                        table.insert(results.errors, {
+                            index = item.index,
+                            rule_name = rule.rule_name or "unknown",
+                            error = "insert error: " .. err2
+                        })
+                    else
+                        results.success = results.success + 1
+                    end
+                end
+            else
+                -- 批量插入成功
+                results.success = results.success + #batch_values
             end
         end
+        
+        -- 清理临时数据
+        results.insert_batch = nil
     end
     
     -- 清除缓存

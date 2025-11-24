@@ -7,6 +7,8 @@ local totp = require "waf.totp"
 local password_utils = require "waf.password_utils"
 local api_utils = require "api.utils"
 local cjson = require "cjson"
+local audit_log = require "waf.audit_log"
+local csrf = require "waf.csrf"
 
 local _M = {}
 
@@ -36,6 +38,8 @@ function _M.login()
     -- 验证用户名和密码
     local ok, user = auth.verify_credentials(username, password)
     if not ok then
+        -- 记录登录失败审计日志
+        audit_log.log_login(username, false, "用户名或密码错误")
         api_utils.json_response({
             error = "Unauthorized",
             message = "用户名或密码错误"
@@ -61,6 +65,8 @@ function _M.login()
         local user_info = auth.get_user(username)
         local totp_ok, err = totp.verify_totp(user_info.totp_secret, totp_code)
         if not totp_ok then
+            -- 记录登录失败审计日志
+            audit_log.log_login(username, false, "双因素认证代码错误")
             api_utils.json_response({
                 error = "Unauthorized",
                 message = "双因素认证代码错误"
@@ -72,6 +78,7 @@ function _M.login()
     -- 创建会话
     local session_id, err = auth.create_session(username, user)
     if not session_id then
+        audit_log.log_login(username, false, "创建会话失败: " .. (err or "unknown error"))
         api_utils.json_response({
             error = "Internal Server Error",
             message = err or "创建会话失败"
@@ -79,20 +86,33 @@ function _M.login()
         return
     end
     
+    -- 生成CSRF Token
+    local csrf_token = csrf.generate_token(user.id or username)
+    
     -- 设置Cookie
     auth.set_session_cookie(session_id)
     
-    -- 返回成功响应
+    -- 记录登录成功审计日志
+    audit_log.log_login(username, true, nil)
+    
+    -- 返回成功响应（包含CSRF Token）
     api_utils.json_response({
         success = true,
         message = "登录成功",
         username = username,
-        role = user.role
+        role = user.role,
+        csrf_token = csrf_token
     }, 200)
 end
 
 -- 登出接口
 function _M.logout()
+    local authenticated, session = auth.is_authenticated()
+    local username = nil
+    if authenticated and session then
+        username = session.username
+    end
+    
     local session_id = auth.get_session_from_cookie()
     if session_id then
         auth.delete_session(session_id)
@@ -101,20 +121,28 @@ function _M.logout()
     -- 清除Cookie
     auth.clear_session_cookie()
     
+    -- 记录登出审计日志
+    if username then
+        audit_log.log_logout(username)
+    end
+    
     api_utils.json_response({
         success = true,
         message = "登出成功"
     }, 200)
 end
 
--- 检查登录状态接口
+-- 检查登录状态接口（返回CSRF Token）
 function _M.check()
     local authenticated, session = auth.is_authenticated()
     if authenticated then
+        -- 生成新的CSRF Token
+        local csrf_token = csrf.generate_token(session.username)
         api_utils.json_response({
             authenticated = true,
             username = session.username,
-            role = session.role
+            role = session.role,
+            csrf_token = csrf_token
         }, 200)
     else
         api_utils.json_response({

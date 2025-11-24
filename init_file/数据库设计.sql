@@ -114,7 +114,9 @@ CREATE TABLE IF NOT EXISTS waf_block_logs (
     KEY idx_client_ip_time (client_ip, block_time) COMMENT 'IP和时间联合索引，用于查询特定IP的时间序列',
     KEY idx_block_time (block_time) COMMENT '封控时间索引，用于按时间范围查询',
     KEY idx_rule_id_time (rule_id, block_time) COMMENT '规则和时间联合索引，用于查询特定规则的时间序列',
-    KEY idx_block_reason_time (block_reason, block_time) COMMENT '封控原因和时间联合索引，用于按原因统计'
+    KEY idx_block_reason_time (block_reason, block_time) COMMENT '封控原因和时间联合索引，用于按原因统计',
+    -- 外键约束：规则删除时，保留日志记录但设置为NULL（SET NULL）
+    FOREIGN KEY (rule_id) REFERENCES waf_block_rules(id) ON DELETE SET NULL COMMENT '外键约束，规则删除时保留日志记录'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci 
 ROW_FORMAT=DYNAMIC COMMENT='封控日志表：记录所有被封控的IP访问记录，用于审计和统计分析';
 
@@ -162,16 +164,152 @@ CREATE TABLE IF NOT EXISTS waf_system_config (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci 
 ROW_FORMAT=DYNAMIC COMMENT='系统配置表：存储系统运行时配置参数，支持动态修改';
 
--- 插入默认配置
+-- 插入默认配置（所有配置项都可通过Web界面管理）
 INSERT INTO waf_system_config (config_key, config_value, description) VALUES
+-- 缓存配置
 ('cache_ttl', '60', '缓存过期时间（秒）'),
+('cache_max_items', '10000', '最大缓存项数'),
+('cache_rule_list_ttl', '300', 'IP段规则列表缓存时间（秒，5分钟）'),
+('cache_inactive_ttl', '30', '不活跃IP缓存时间（秒）'),
+('cache_access_count_threshold', '3', '活跃访问次数阈值'),
+-- 缓存优化配置（动态TTL、热点数据识别）
+('cache_optimizer_enable', '1', '是否启用缓存策略优化（1-启用，0-禁用）'),
+('cache_dynamic_ttl_enable', '1', '是否启用动态TTL调整（1-启用，0-禁用）'),
+('cache_hotspot_detection_enable', '1', '是否启用热点数据识别（1-启用，0-禁用）'),
+('cache_hotspot_preload_enable', '0', '是否启用热点数据预加载（1-启用，0-禁用）'),
+('cache_hotspot_threshold', '100', '热点数据访问次数阈值'),
+('cache_min_ttl', '30', '动态TTL最小值（秒）'),
+('cache_max_ttl', '3600', '动态TTL最大值（秒）'),
+-- 日志配置
 ('log_batch_size', '100', '日志批量写入大小'),
 ('log_batch_interval', '1', '日志批量写入间隔（秒）'),
-('enable_geo_block', '0', '是否启用地域封控（1-启用，0-禁用）'),
-('enable_auto_block', '1', '是否启用自动封控（1-启用，0-禁用）'),
-('auto_block_threshold', '100', '自动封控阈值（每分钟访问次数）'),
+('log_enable_async', '1', '是否异步写入（1-启用，0-禁用）'),
+('log_max_retry', '3', '最大重试次数'),
+('log_retry_delay', '0.1', '重试延迟（秒）'),
+('log_buffer_warn_threshold', '0.8', '缓冲区警告阈值（80%）'),
+('log_enable_local_backup', '1', '是否启用本地日志备份（1-启用，0-禁用）'),
+('log_queue_max_size', '10000', '日志队列最大大小'),
+-- 封控配置
+('block_enable', '1', '是否启用封控（1-启用，0-禁用）'),
+('block_page', '<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Access Denied</title>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; padding: 50px; }
+        h1 { color: #d32f2f; }
+    </style>
+</head>
+<body>
+    <h1>403 Forbidden</h1>
+    <p>Your access has been denied.</p>
+</body>
+</html>', '封控页面HTML内容（403错误时显示的页面，可通过Web界面修改）'),
+-- 白名单配置
+('whitelist_enable', '1', '是否启用白名单（1-启用，0-禁用）'),
+-- 地域封控配置
+('geo_enable', '0', '是否启用地域封控（1-启用，0-禁用）'),
+('geo_cache_ttl', '3600', 'GeoIP查询结果缓存时间（秒，默认1小时）'),
+-- 自动封控配置
+('auto_block_enable', '1', '是否启用自动封控（1-启用，0-禁用）'),
+('auto_block_frequency_threshold', '100', '频率阈值（每分钟访问次数）'),
+('auto_block_error_rate_threshold', '0.5', '错误率阈值（0-1之间，如0.5表示50%）'),
+('auto_block_scan_path_threshold', '20', '扫描行为阈值（短时间内访问的不同路径数）'),
+('auto_block_window_size', '60', '统计窗口大小（秒）'),
 ('auto_block_duration', '3600', '自动封控时长（秒，默认1小时）'),
-('rule_version', '1', '规则版本号（用于缓存失效）')
+('auto_block_check_interval', '10', '检查间隔（秒）'),
+-- 代理IP安全配置
+('proxy_enable_trusted_proxy_check', '1', '是否启用受信任代理检查（1-启用，0-禁用）'),
+('proxy_trusted_proxies_cache_ttl', '300', '受信任代理列表缓存时间（秒）'),
+('proxy_log_ip_resolution', '0', '是否记录IP解析过程日志（1-启用，0-禁用，调试用）'),
+-- 缓存失效配置
+('cache_invalidation_enable_version_check', '1', '是否启用版本号检查（1-启用，0-禁用）'),
+('cache_invalidation_version_check_interval', '30', '版本号检查间隔（秒）'),
+-- 降级机制配置
+('fallback_enable', '1', '是否启用降级机制（1-启用，0-禁用）'),
+('fallback_health_check_interval', '10', '健康检查间隔（秒）'),
+-- 监控指标配置
+('metrics_enable', '1', '是否启用监控指标（1-启用，0-禁用）'),
+('metrics_prometheus_endpoint', '/metrics', 'Prometheus指标导出端点'),
+-- 缓存穿透防护配置
+('cache_protection_enable', '1', '是否启用缓存穿透防护（1-启用，0-禁用）'),
+('cache_protection_enable_bloom_filter', '1', '是否启用布隆过滤器（1-启用，0-禁用）'),
+('cache_protection_enable_rate_limit', '1', '是否启用频率限制（1-启用，0-禁用）'),
+('cache_protection_empty_result_ttl', '60', '空结果缓存时间（秒）'),
+('cache_protection_bloom_filter_size', '100000', '布隆过滤器大小'),
+('cache_protection_bloom_filter_hash_count', '3', '布隆过滤器哈希函数数量'),
+('cache_protection_rate_limit_window', '60', '频率限制窗口（秒）'),
+('cache_protection_rate_limit_threshold', '100', '频率限制阈值（每个窗口内的请求数）'),
+-- 连接池监控配置
+('pool_monitor_enable', '1', '是否启用连接池监控（1-启用，0-禁用）'),
+('pool_monitor_check_interval', '10', '监控检查间隔（秒）'),
+('pool_monitor_warn_threshold', '0.8', '连接池警告阈值（80%）'),
+('pool_monitor_max_pool_size', '100', '最大连接池大小'),
+('pool_monitor_min_pool_size', '10', '最小连接池大小'),
+('pool_monitor_growth_step', '10', '连接池增长步长'),
+-- 缓存预热配置
+('cache_warmup_enable', '1', '是否启用缓存预热（1-启用，0-禁用）'),
+('cache_warmup_interval', '300', '预热间隔（秒）'),
+('cache_warmup_batch_size', '100', '预热批次大小'),
+('cache_warmup_smooth_transition', '1', '是否启用平滑过渡（1-启用，0-禁用）'),
+('cache_warmup_warmup_common_ips', '0', '是否预热常用IP（1-启用，0-禁用）'),
+-- 规则备份配置
+('rule_backup_enable', '1', '是否启用规则备份（1-启用，0-禁用）'),
+('rule_backup_backup_interval', '300', '备份间隔（秒，默认5分钟）'),
+('rule_backup_max_backup_files', '10', '最大备份文件数'),
+-- Redis缓存配置
+('redis_cache_enable', '1', '是否启用Redis二级缓存（1-启用，0-禁用）'),
+('redis_cache_key_prefix', 'waf:', 'Redis键前缀'),
+('redis_cache_ttl', '300', '默认TTL（秒）'),
+-- 规则更新通知配置
+('rule_notification_enable', '1', '是否启用规则更新通知（1-启用，0-禁用）'),
+('rule_notification_use_redis_pubsub', '0', '是否使用Redis Pub/Sub（1-启用，0-禁用）'),
+('rule_notification_channel', 'waf:rule_update', 'Redis Pub/Sub频道'),
+-- 告警配置
+('alert_enable', '1', '是否启用告警（1-启用，0-禁用）'),
+('alert_cooldown', '300', '告警冷却时间（秒，防止重复告警）'),
+('alert_webhook_url', '', 'Webhook URL（可选，用于发送告警到外部系统）'),
+('alert_threshold_block_rate', '100', '每分钟封控次数阈值'),
+('alert_threshold_cache_miss_rate', '0.5', '缓存未命中率阈值（50%）'),
+('alert_threshold_db_failure_count', '3', '数据库连续失败次数阈值'),
+('alert_threshold_pool_usage', '0.9', '连接池使用率阈值（90%）'),
+('alert_threshold_error_rate', '0.1', '错误率阈值（10%）'),
+-- 会话配置
+('session_ttl', '86400', '会话过期时间（秒，默认24小时）'),
+('session_cookie_name', 'waf_session', '会话Cookie名称'),
+('session_enable_secure', '1', '是否启用Secure标志（HTTPS时，1-启用，0-禁用）'),
+('session_enable_httponly', '1', '是否启用HttpOnly标志（1-启用，0-禁用）'),
+-- CSRF配置
+('csrf_enable', '1', '是否启用CSRF防护（1-启用，0-禁用）'),
+('csrf_token_ttl', '3600', 'CSRF Token过期时间（秒）'),
+-- 速率限制配置
+('rate_limit_login_enable', '1', '是否启用登录接口速率限制（1-启用，0-禁用）'),
+('rate_limit_login_rate', '5', '登录接口速率限制（每分钟请求数）'),
+('rate_limit_api_enable', '1', '是否启用API速率限制（1-启用，0-禁用）'),
+('rate_limit_api_rate', '100', 'API速率限制（每分钟请求数）'),
+-- 规则版本号
+('rule_version', '1', '规则版本号（用于缓存失效）'),
+-- WAF配置文件自动生成配置
+('waf_conf_version', '1', 'WAF配置文件版本号（用于触发配置文件自动更新）'),
+('waf_listen_port', '80', 'WAF管理服务监听端口'),
+('waf_server_name', 'localhost', 'WAF管理服务服务器名称'),
+('waf_client_max_body_size', '10m', 'WAF管理服务客户端请求体最大大小'),
+-- 性能监控配置
+('performance_monitor_enable', '1', '是否启用性能监控（1-启用，0-禁用）'),
+('performance_slow_query_threshold', '100', '慢查询阈值（毫秒，超过此时间的查询会被记录）'),
+('performance_monitor_interval', '60', '性能监控检查间隔（秒）'),
+('performance_max_slow_queries', '1000', '最大慢查询记录数'),
+-- 缓存调优配置
+('cache_tuner_enable', '1', '是否启用缓存自动调优（1-启用，0-禁用）'),
+('cache_tuner_interval', '300', '缓存调优检查间隔（秒，默认5分钟）'),
+('cache_base_ttl', '60', '缓存基础TTL（秒，用于自动调优的基准值）'),
+-- 共享内存优化配置
+('shared_memory_optimizer_enable', '0', '是否启用共享内存优化（使用Redis替代部分共享内存，1-启用，0-禁用）'),
+('shared_memory_redis_fallback_enable', '1', '是否启用Redis回退机制（Redis失败时回退到共享内存，1-启用，0-禁用）'),
+-- 网络优化配置
+('http2_enable', '0', '是否启用HTTP/2支持（需要SSL/TLS，1-启用，0-禁用）'),
+('brotli_enable', '0', '是否启用Brotli压缩（需要ngx_brotli模块，1-启用，0-禁用）')
 ON DUPLICATE KEY UPDATE config_value = VALUES(config_value);
 
 -- ============================================
@@ -298,7 +436,8 @@ INSERT INTO waf_feature_switches (feature_key, feature_name, description, enable
 ('cache_warmup', '缓存预热', '缓存预热功能', 1, 'database'),
 ('rule_backup', '规则备份', '规则备份功能', 1, 'database'),
 ('stats', '统计报表', '封控统计报表功能，提供封控数据统计和分析', 1, 'database'),
-('monitor', '监控面板', '实时监控面板功能，显示系统运行状态和关键指标', 1, 'database')
+('monitor', '监控面板', '实时监控面板功能，显示系统运行状态和关键指标', 1, 'database'),
+('proxy_management', '反向代理管理', '反向代理配置管理功能，支持HTTP、TCP、UDP代理配置', 1, 'database')
 ON DUPLICATE KEY UPDATE 
     feature_name = VALUES(feature_name),
     description = VALUES(description),
@@ -314,15 +453,28 @@ CREATE TABLE IF NOT EXISTS waf_users (
     role VARCHAR(20) NOT NULL DEFAULT 'user' COMMENT '用户角色：admin-管理员, user-普通用户',
     totp_secret VARCHAR(32) DEFAULT NULL COMMENT 'TOTP密钥（Base32编码的双因素认证密钥，NULL表示未启用双因素认证）',
     status TINYINT NOT NULL DEFAULT 1 COMMENT '用户状态：1-启用（用户可以登录），0-禁用（用户无法登录）',
+    password_changed_at DATETIME DEFAULT NULL COMMENT '密码最后修改时间（用于密码过期策略）',
+    password_must_change TINYINT NOT NULL DEFAULT 0 COMMENT '是否必须修改密码（1-是，0-否，首次登录或密码过期时设置为1）',
     last_login_time DATETIME DEFAULT NULL COMMENT '最后登录时间（记录用户最后一次成功登录的时间）',
     last_login_ip VARCHAR(45) DEFAULT NULL COMMENT '最后登录IP（记录用户最后一次登录的IP地址，支持IPv6）',
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '用户创建时间',
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '用户信息最后更新时间',
     PRIMARY KEY (id),
     UNIQUE KEY uk_username (username) COMMENT '用户名唯一索引，确保每个用户名只出现一次',
-    KEY idx_status_role (status, role) COMMENT '状态和角色联合索引，用于权限查询'
+    KEY idx_status_role (status, role) COMMENT '状态和角色联合索引，用于权限查询',
+    KEY idx_password_must_change (password_must_change) COMMENT '密码必须修改标识索引，用于查询需要修改密码的用户'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci 
-ROW_FORMAT=DYNAMIC COMMENT='用户表：存储系统用户信息，支持角色权限和双因素认证';
+ROW_FORMAT=DYNAMIC COMMENT='用户表：存储系统用户信息，支持角色权限和双因素认证，不再使用硬编码的默认用户';
+
+-- 注意：不再创建默认管理员用户，首次安装时需要通过以下方式之一创建：
+-- 1. 使用安装脚本自动创建（推荐）
+-- 2. 使用API创建：POST /api/auth/password/hash 生成密码哈希，然后手动插入数据库
+-- 3. 使用MySQL命令行创建（需要先使用API生成密码哈希）
+--
+-- 示例SQL（需要先通过API生成密码哈希）：
+-- INSERT INTO waf_users (username, password_hash, role, status, password_must_change)
+-- VALUES ('admin', '$2b$10$...', 'admin', 1, 1);
+-- 注意：password_hash 必须是通过 BCrypt 生成的哈希值，不能使用明文密码
 
 -- ============================================
 -- 13. 用户会话表（高频更新表，优化索引）
@@ -360,7 +512,9 @@ CREATE TABLE IF NOT EXISTS waf_auto_unblock_tasks (
     PRIMARY KEY (id),
     KEY idx_status_scheduled (status, scheduled_time) COMMENT '状态和计划时间联合索引，用于查询待处理任务',
     KEY idx_rule_id (rule_id) COMMENT '规则ID索引',
-    KEY idx_client_ip (client_ip) COMMENT 'IP地址索引'
+    KEY idx_client_ip (client_ip) COMMENT 'IP地址索引',
+    -- 外键约束：规则删除时，保留任务记录但设置为NULL（SET NULL）
+    FOREIGN KEY (rule_id) REFERENCES waf_block_rules(id) ON DELETE SET NULL COMMENT '外键约束，规则删除时保留任务记录'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci 
 ROW_FORMAT=DYNAMIC COMMENT='自动解封任务表';
 
@@ -455,6 +609,66 @@ ON DUPLICATE KEY UPDATE
     feature_name = VALUES(feature_name),
     description = VALUES(description),
     config_source = 'database';
+
+-- ============================================
+-- 18. 操作审计日志表（高频写入表，优化索引）
+-- ============================================
+CREATE TABLE IF NOT EXISTS waf_audit_logs (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '主键ID，自增',
+    user_id INT UNSIGNED DEFAULT NULL COMMENT '用户ID（关联waf_users表，NULL表示系统操作）',
+    username VARCHAR(50) DEFAULT NULL COMMENT '用户名（冗余字段，便于查询，避免关联查询）',
+    action_type VARCHAR(50) NOT NULL COMMENT '操作类型：login-登录, logout-登出, create-创建, update-更新, delete-删除, enable-启用, disable-禁用等',
+    resource_type VARCHAR(50) DEFAULT NULL COMMENT '资源类型：rule-规则, user-用户, config-配置, feature-功能开关等',
+    resource_id VARCHAR(100) DEFAULT NULL COMMENT '资源ID（规则ID、用户ID等）',
+    action_description TEXT DEFAULT NULL COMMENT '操作描述（详细说明操作内容和结果）',
+    request_method VARCHAR(10) DEFAULT NULL COMMENT 'HTTP请求方法（GET、POST、PUT、DELETE等）',
+    request_path VARCHAR(512) DEFAULT NULL COMMENT '请求路径（API端点或页面路径）',
+    request_params TEXT DEFAULT NULL COMMENT '请求参数（JSON格式，记录请求的详细参数）',
+    ip_address VARCHAR(45) DEFAULT NULL COMMENT '操作IP地址（记录操作来源IP，支持IPv6）',
+    user_agent VARCHAR(512) DEFAULT NULL COMMENT 'User-Agent信息（记录操作时的浏览器或客户端信息）',
+    status VARCHAR(20) NOT NULL DEFAULT 'success' COMMENT '操作状态：success-成功, failed-失败, error-错误',
+    error_message TEXT DEFAULT NULL COMMENT '错误信息（操作失败时的错误详情）',
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '操作时间（记录操作发生的具体时间）',
+    PRIMARY KEY (id),
+    -- 优化：使用覆盖索引，优化查询性能
+    KEY idx_user_id_time (user_id, created_at) COMMENT '用户和时间联合索引，用于查询特定用户的操作历史',
+    KEY idx_action_type_time (action_type, created_at) COMMENT '操作类型和时间联合索引，用于按操作类型统计',
+    KEY idx_resource_type_id (resource_type, resource_id) COMMENT '资源类型和ID联合索引，用于查询特定资源的操作历史',
+    KEY idx_created_at (created_at) COMMENT '操作时间索引，用于时间范围查询和清理',
+    KEY idx_status_time (status, created_at) COMMENT '状态和时间联合索引，用于查询失败操作',
+    KEY idx_ip_address_time (ip_address, created_at) COMMENT 'IP和时间联合索引，用于安全审计',
+    -- 外键约束：用户删除时，保留审计日志但设置为NULL（SET NULL）
+    FOREIGN KEY (user_id) REFERENCES waf_users(id) ON DELETE SET NULL COMMENT '外键约束，用户删除时保留审计日志记录'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci 
+ROW_FORMAT=DYNAMIC COMMENT='操作审计日志表：记录所有管理操作，包括登录、规则变更、配置修改等，用于安全审计和问题排查';
+
+-- ============================================
+-- 19. CSRF Token表（高频更新表，优化索引）
+-- ============================================
+CREATE TABLE IF NOT EXISTS waf_csrf_tokens (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '主键ID，自增',
+    user_id INT UNSIGNED NOT NULL COMMENT '用户ID（关联waf_users表）',
+    token VARCHAR(64) NOT NULL COMMENT 'CSRF Token值（唯一标识，存储在Cookie或Header中）',
+    expires_at DATETIME NOT NULL COMMENT 'Token过期时间（Token在此时间后自动失效）',
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'Token创建时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_token (token) COMMENT 'Token唯一索引，确保每个Token只出现一次',
+    KEY idx_user_id_expires (user_id, expires_at) COMMENT '用户和过期时间联合索引，用于查询特定用户的有效Token',
+    KEY idx_expires_at (expires_at) COMMENT '过期时间索引，用于清理过期Token',
+    FOREIGN KEY (user_id) REFERENCES waf_users(id) ON DELETE CASCADE COMMENT '外键约束，用户删除时自动删除其所有Token'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci 
+ROW_FORMAT=DYNAMIC COMMENT='CSRF Token表：存储CSRF防护Token，防止跨站请求伪造攻击';
+
+-- ============================================
+-- 20. 用户会话增强字段（为waf_user_sessions表添加字段）
+-- ============================================
+-- 注意：如果字段已存在，此语句会失败，需要手动注释或删除
+-- ALTER TABLE waf_user_sessions
+-- ADD COLUMN csrf_token VARCHAR(64) DEFAULT NULL COMMENT 'CSRF Token（关联waf_csrf_tokens表）' AFTER session_id,
+-- ADD COLUMN is_fixed TINYINT NOT NULL DEFAULT 0 COMMENT '是否固定会话（0-否，1-是，用于检测会话固定攻击）' AFTER user_agent,
+-- ADD COLUMN concurrent_count INT UNSIGNED NOT NULL DEFAULT 1 COMMENT '并发会话数（同一用户的并发会话数量）' AFTER expires_at,
+-- ADD KEY idx_csrf_token (csrf_token) COMMENT 'CSRF Token索引',
+-- ADD KEY idx_is_fixed (is_fixed) COMMENT '会话固定标识索引';
 
 -- ============================================
 -- 视图定义（兼容MySQL 5.7和8.0）

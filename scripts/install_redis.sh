@@ -751,7 +751,13 @@ start_redis() {
     
     if command -v systemctl &> /dev/null; then
         systemctl daemon-reload
-        systemctl enable redis 2>/dev/null || systemctl enable redis-server 2>/dev/null || true
+        
+        # 启用开机自启动
+        if systemctl enable redis >/dev/null 2>&1 || systemctl enable redis-server >/dev/null 2>&1; then
+            echo -e "${GREEN}✓ 已启用 Redis 开机自启动${NC}"
+        else
+            echo -e "${YELLOW}⚠ 启用开机自启动失败，将在服务启动后重试${NC}"
+        fi
         
         if systemctl start redis 2>/dev/null || systemctl start redis-server 2>/dev/null; then
             # 等待服务启动
@@ -760,6 +766,8 @@ start_redis() {
             if systemctl is-active --quiet redis 2>/dev/null || systemctl is-active --quiet redis-server 2>/dev/null; then
                 service_started=true
                 echo -e "${GREEN}✓ Redis 服务启动成功（systemd）${NC}"
+                # 再次确保开机自启动已启用
+                systemctl enable redis >/dev/null 2>&1 || systemctl enable redis-server >/dev/null 2>&1 || true
             else
                 echo -e "${YELLOW}⚠ systemd 服务启动后状态异常${NC}"
             fi
@@ -788,7 +796,13 @@ start_redis() {
             fi
         fi
     elif command -v service &> /dev/null; then
+        # 启用开机自启动
+        if chkconfig redis on >/dev/null 2>&1 || chkconfig redis-server on >/dev/null 2>&1; then
+            echo -e "${GREEN}✓ 已启用 Redis 开机自启动${NC}"
+        fi
+        
         if service redis start 2>/dev/null || service redis-server start 2>/dev/null; then
+            # 再次确保开机自启动已启用
             chkconfig redis on 2>/dev/null || chkconfig redis-server on 2>/dev/null || true
             sleep 2
             if pgrep -x redis-server > /dev/null 2>&1; then
@@ -883,12 +897,71 @@ verify_installation() {
     fi
 }
 
-# 显示后续步骤
-show_next_steps() {
+# 显示安装总结信息
+show_installation_summary() {
     echo ""
     echo -e "${GREEN}========================================${NC}"
     echo -e "${GREEN}Redis 安装完成！${NC}"
     echo -e "${GREEN}========================================${NC}"
+    echo ""
+    
+    # 显示配置信息
+    echo -e "${BLUE}Redis 配置信息:${NC}"
+    echo "  端口: ${REDIS_PORT}"
+    if [ -n "$REDIS_PASSWORD" ]; then
+        echo "  密码: ${REDIS_PASSWORD}"
+    else
+        echo "  密码: 未设置"
+    fi
+    
+    # 显示连接URL信息
+    echo ""
+    echo -e "${BLUE}连接 URL 信息:${NC}"
+    if [ -n "$REDIS_PASSWORD" ]; then
+        echo "  Redis URL: redis://:${REDIS_PASSWORD}@127.0.0.1:${REDIS_PORT}/0"
+        echo "  连接命令: redis-cli -h 127.0.0.1 -p ${REDIS_PORT} -a '${REDIS_PASSWORD}'"
+    else
+        echo "  Redis URL: redis://127.0.0.1:${REDIS_PORT}/0"
+        echo "  连接命令: redis-cli -h 127.0.0.1 -p ${REDIS_PORT}"
+    fi
+    
+    # 显示配置文件位置
+    echo ""
+    echo -e "${BLUE}配置文件位置:${NC}"
+    if [ -n "$REDIS_CONF" ] && [ -f "$REDIS_CONF" ]; then
+        echo "  ${REDIS_CONF}"
+    elif [ -f /etc/redis/redis.conf ]; then
+        echo "  /etc/redis/redis.conf"
+    elif [ -f /etc/redis.conf ]; then
+        echo "  /etc/redis.conf"
+    fi
+    
+    # 检查开机启动状态
+    echo ""
+    echo -e "${BLUE}开机启动状态:${NC}"
+    if command -v systemctl &> /dev/null; then
+        if systemctl is-enabled redis >/dev/null 2>&1 || systemctl is-enabled redis-server >/dev/null 2>&1; then
+            echo -e "  ${GREEN}✓ 已启用开机自启动${NC}"
+        else
+            echo -e "  ${YELLOW}⚠ 未启用开机自启动${NC}"
+            echo -e "  ${BLUE}提示: 运行 'systemctl enable redis' 启用开机自启动${NC}"
+        fi
+    elif command -v chkconfig &> /dev/null; then
+        if chkconfig redis 2>/dev/null | grep -q "3:on\|5:on" || chkconfig redis-server 2>/dev/null | grep -q "3:on\|5:on"; then
+            echo -e "  ${GREEN}✓ 已启用开机自启动${NC}"
+        else
+            echo -e "  ${YELLOW}⚠ 未启用开机自启动${NC}"
+            echo -e "  ${BLUE}提示: 运行 'chkconfig redis on' 启用开机自启动${NC}"
+        fi
+    fi
+    
+    echo ""
+    echo -e "${GREEN}========================================${NC}"
+    echo ""
+}
+
+# 显示后续步骤
+show_next_steps() {
     echo ""
     echo -e "${BLUE}后续步骤:${NC}"
     echo ""
@@ -920,13 +993,6 @@ show_next_steps() {
     echo "  停止: sudo systemctl stop redis"
     echo "  重启: sudo systemctl restart redis"
     echo "  开机自启: sudo systemctl enable redis"
-    echo ""
-    echo -e "${BLUE}配置文件位置:${NC}"
-    if [ -f /etc/redis/redis.conf ]; then
-        echo "  /etc/redis/redis.conf"
-    elif [ -f /etc/redis.conf ]; then
-        echo "  /etc/redis.conf"
-    fi
     echo ""
 }
 
@@ -969,6 +1035,9 @@ main() {
     
     # 更新 WAF 配置文件
     update_waf_config
+    
+    # 显示安装总结
+    show_installation_summary
     
     # 显示后续步骤
     show_next_steps

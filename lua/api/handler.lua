@@ -6,6 +6,7 @@ local rules_api = require "api.rules"
 local templates_api = require "api.templates"
 local batch_api = require "api.batch"
 local config_check_api = require "api.config_check"
+local config_api = require "api.config"
 local features_api = require "api.features"
 local auth_api = require "api.auth"
 local stats_api = require "api.stats"
@@ -13,6 +14,8 @@ local proxy_api = require "api.proxy"
 local system_api = require "api.system"
 local api_utils = require "api.utils"
 local auth = require "waf.auth"
+local csrf = require "waf.csrf"
+local rate_limit = require "waf.rate_limit"
 
 local _M = {}
 
@@ -20,9 +23,37 @@ local _M = {}
 local function require_api_auth()
     local uri = ngx.var.request_uri
     local path = uri:match("^([^?]+)")
+    local method = ngx.req.get_method()
     
-    -- 登录相关 API 不需要认证
+    -- 登录相关 API 不需要认证，但需要速率限制
     if path == "/api/auth/login" or path == "/api/auth/check" then
+        -- 登录接口速率限制
+        if path == "/api/auth/login" then
+            local username = nil
+            ngx.req.read_body()
+            local args = ngx.req.get_post_args()
+            if args and args.username then
+                username = args.username
+            end
+            
+            local ok, remaining, limit = rate_limit.check_login_rate_limit(username, ngx.var.remote_addr)
+            if not ok then
+                ngx.header["X-RateLimit-Limit"] = tostring(limit)
+                ngx.header["X-RateLimit-Remaining"] = "0"
+                ngx.header["X-RateLimit-Reset"] = tostring(ngx.time() + remaining)
+                api_utils.json_response({
+                    error = "Too Many Requests",
+                    message = "登录请求过于频繁，请稍后再试",
+                    retry_after = remaining
+                }, 429)
+                return false
+            end
+            
+            -- 设置速率限制响应头
+            ngx.header["X-RateLimit-Limit"] = tostring(limit)
+            ngx.header["X-RateLimit-Remaining"] = tostring(remaining)
+        end
+        
         return true
     end
     
@@ -34,6 +65,41 @@ local function require_api_auth()
             message = "请先登录"
         }, 401)
         return false
+    end
+    
+    -- API速率限制
+    local ok, remaining, limit = rate_limit.check_api_rate_limit(
+        session.username,
+        ngx.var.remote_addr,
+        path
+    )
+    if not ok then
+        ngx.header["X-RateLimit-Limit"] = tostring(limit)
+        ngx.header["X-RateLimit-Remaining"] = "0"
+        ngx.header["X-RateLimit-Reset"] = tostring(ngx.time() + remaining)
+        api_utils.json_response({
+            error = "Too Many Requests",
+            message = "请求过于频繁，请稍后再试",
+            retry_after = remaining
+        }, 429)
+        return false
+    end
+    
+    -- 设置速率限制响应头
+    ngx.header["X-RateLimit-Limit"] = tostring(limit)
+    ngx.header["X-RateLimit-Remaining"] = tostring(remaining)
+    
+    -- CSRF防护检查（POST、PUT、DELETE等需要）
+    if csrf.requires_csrf(method) then
+        local token = csrf.get_token_from_request()
+        local verify_ok, err = csrf.verify_token(token, session.username)
+        if not verify_ok then
+            api_utils.json_response({
+                error = "Forbidden",
+                message = "CSRF token验证失败: " .. (err or "unknown error")
+            }, 403)
+            return false
+        end
     end
     
     return true, session
@@ -91,6 +157,11 @@ function _M.route()
     -- 系统管理相关路由
     if path:match("^/api/system") then
         return _M.route_system(path, method)
+    end
+    
+    -- 性能监控相关路由
+    if path:match("^/api/performance") then
+        return _M.route_performance(path, method)
     end
     
     -- 未匹配的路由
@@ -200,14 +271,32 @@ function _M.route_features(path, method)
     }, 404)
 end
 
--- 配置检查路由分发
+-- 配置管理路由分发
 function _M.route_config(path, method)
+    -- 配置检查相关API
     if path == "/api/config/check" then
         return config_check_api.check()
     elseif path == "/api/config/results" then
         return config_check_api.get_results()
     elseif path == "/api/config/formatted" then
         return config_check_api.get_formatted()
+    end
+    
+    -- 配置管理相关API
+    if path == "/api/config" then
+        if method == "GET" then
+            return config_api.list()
+        elseif method == "POST" then
+            return config_api.batch_update()
+        end
+    elseif path == "/api/config/get" then
+        return config_api.get()
+    elseif path == "/api/config/update" then
+        return config_api.update()
+    elseif path == "/api/config/batch" then
+        return config_api.batch_update()
+    elseif path == "/api/config/clear-cache" then
+        return config_api.clear_cache()
     end
     
     -- 未匹配的配置路由
@@ -482,6 +571,31 @@ function _M.route_system(path, method)
         path = path,
         method = method
     }, 404)
+end
+
+-- 性能监控路由分发
+function _M.route_performance(path, method)
+    local performance_api = require "api.performance"
+    
+    if path == "/api/performance/slow-queries" then
+        return performance_api.get_slow_queries()
+    elseif path == "/api/performance/stats" then
+        return performance_api.get_stats()
+    elseif path == "/api/performance/analyze" then
+        return performance_api.analyze_slow_queries()
+    elseif path == "/api/performance/cache/usage" then
+        return performance_api.get_cache_usage()
+    elseif path == "/api/performance/cache/tuning-history" then
+        return performance_api.get_cache_tuning_history()
+    elseif path == "/api/performance/cache/recommendations" then
+        return performance_api.get_cache_recommendations()
+    else
+        api_utils.json_response({
+            error = "API endpoint not found",
+            path = path,
+            method = method
+        }, 404)
+    end
 end
 
 -- ============================================

@@ -134,8 +134,17 @@ end
 function _M.get_latest_backup()
     ensure_backup_dir()
     
-    -- 列出所有备份文件
-    local cmd = "ls -t " .. BACKUP_DIR .. "/rules_backup_*.* 2>/dev/null | head -1"
+    -- 安全检查：防止路径注入攻击
+    if BACKUP_DIR:match("[;&|`$(){}]") then
+        ngx.log(ngx.ERR, "Invalid characters in BACKUP_DIR: ", BACKUP_DIR)
+        return nil
+    end
+    
+    -- 转义路径中的特殊字符（防止shell注入）
+    local escaped_dir = BACKUP_DIR:gsub("'", "'\\''")
+    
+    -- 列出所有备份文件（使用安全转义）
+    local cmd = "ls -t '" .. escaped_dir .. "/rules_backup_*.*' 2>/dev/null | head -1"
     local handle = io.popen(cmd)
     if not handle then
         return nil
@@ -144,15 +153,29 @@ function _M.get_latest_backup()
     local filename = handle:read("*line")
     handle:close()
     
-    return filename
+    -- 验证文件名是否在备份目录内（防止路径遍历攻击）
+    if filename and filename:match("^" .. BACKUP_DIR:gsub("%-", "%%-") .. "/") then
+        return filename
+    end
+    
+    return nil
 end
 
 -- 清理旧备份文件
 function _M.cleanup_old_backups()
     ensure_backup_dir()
     
-    -- 列出所有备份文件，按时间排序
-    local cmd = "ls -t " .. BACKUP_DIR .. "/rules_backup_*.* 2>/dev/null"
+    -- 安全检查：防止路径注入攻击
+    if BACKUP_DIR:match("[;&|`$(){}]") then
+        ngx.log(ngx.ERR, "Invalid characters in BACKUP_DIR: ", BACKUP_DIR)
+        return
+    end
+    
+    -- 转义路径中的特殊字符（防止shell注入）
+    local escaped_dir = BACKUP_DIR:gsub("'", "'\\''")
+    
+    -- 列出所有备份文件，按时间排序（使用安全转义）
+    local cmd = "ls -t '" .. escaped_dir .. "/rules_backup_*.*' 2>/dev/null"
     local handle = io.popen(cmd)
     if not handle then
         return
@@ -160,15 +183,21 @@ function _M.cleanup_old_backups()
     
     local files = {}
     for line in handle:lines() do
-        table.insert(files, line)
+        -- 验证文件名是否在备份目录内（防止路径遍历攻击）
+        if line:match("^" .. BACKUP_DIR:gsub("%-", "%%-") .. "/") then
+            table.insert(files, line)
+        end
     end
     handle:close()
     
     -- 删除超出最大数量的文件
     if #files > MAX_BACKUP_FILES then
         for i = MAX_BACKUP_FILES + 1, #files do
-            os.remove(files[i])
-            ngx.log(ngx.INFO, "removed old backup file: ", files[i])
+            -- 再次验证文件路径（双重检查）
+            if files[i]:match("^" .. BACKUP_DIR:gsub("%-", "%%-") .. "/") then
+                os.remove(files[i])
+                ngx.log(ngx.INFO, "removed old backup file: ", files[i])
+            end
         end
     end
 end

@@ -79,23 +79,48 @@ get_credentials() {
     fi
     
     if [ -z "$ACCOUNT_ID" ]; then
-        echo -e "${YELLOW}请输入 MaxMind Account ID:${NC}"
-        echo -e "${YELLOW}(可以在 MaxMind 账号页面找到: https://www.maxmind.com/en/accounts/current)${NC}"
+        echo ""
+        echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        echo -e "${BLUE}步骤 1/2: 输入 MaxMind Account ID${NC}"
+        echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        echo ""
+        echo -e "${YELLOW}说明:${NC}"
+        echo "  Account ID 是一个数字，用于标识您的 MaxMind 账号"
+        echo ""
+        echo -e "${YELLOW}获取方式:${NC}"
+        echo "  1. 访问 MaxMind 账号页面: https://www.maxmind.com/en/accounts/current"
+        echo "  2. 登录后，在账号信息页面可以看到 Account ID（通常是一个数字）"
+        echo ""
+        echo -n -e "${GREEN}请输入 MaxMind Account ID: ${NC}"
         read -r ACCOUNT_ID
         if [ -z "$ACCOUNT_ID" ]; then
             echo -e "${RED}错误: Account ID 不能为空${NC}"
             exit 1
         fi
+        echo ""
     fi
     
     if [ -z "$LICENSE_KEY" ]; then
-        echo -e "${YELLOW}请输入 MaxMind License Key:${NC}"
-        echo -e "${YELLOW}(可以在 MaxMind 账号页面找到: https://www.maxmind.com/en/accounts/current/license-key)${NC}"
+        echo ""
+        echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        echo -e "${BLUE}步骤 2/2: 输入 MaxMind License Key${NC}"
+        echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        echo ""
+        echo -e "${YELLOW}说明:${NC}"
+        echo "  License Key 是一个字符串密钥，用于下载 GeoIP 数据库"
+        echo ""
+        echo -e "${YELLOW}获取方式:${NC}"
+        echo "  1. 访问 MaxMind License Key 页面: https://www.maxmind.com/en/accounts/current/license-key"
+        echo "  2. 登录后，可以创建或查看现有的 License Key"
+        echo "  3. 如果没有 License Key，请先创建一个"
+        echo ""
+        echo -n -e "${GREEN}请输入 MaxMind License Key: ${NC}"
         read -r LICENSE_KEY
         if [ -z "$LICENSE_KEY" ]; then
             echo -e "${RED}错误: License Key 不能为空${NC}"
             exit 1
         fi
+        echo ""
     fi
 }
 
@@ -353,16 +378,36 @@ setup_crontab() {
 
     # 询问用户是否要添加计划任务
     echo ""
-    echo -e "${YELLOW}是否要自动配置计划任务（每周一凌晨 2 点更新数据库）？${NC}"
-    echo -e "${YELLOW}输入 y/yes 确认，其他任意键跳过:${NC}"
+    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${BLUE}配置自动更新计划任务${NC}"
+    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo ""
+    echo -e "${YELLOW}说明:${NC}"
+    echo "  计划任务将自动在每周一凌晨 2 点更新 GeoIP 数据库"
+    echo "  这样可以确保数据库始终是最新版本"
+    echo ""
+    echo -e "${YELLOW}计划任务详情:${NC}"
+    echo "  执行时间: 每周一凌晨 2:00"
+    echo "  执行脚本: ${update_script}"
+    echo "  日志文件: ${log_file}"
+    echo ""
+    echo -e "${YELLOW}是否要自动配置此计划任务？${NC}"
+    echo -e "${GREEN}  输入 Y 确认配置（推荐）${NC}"
+    echo -e "${YELLOW}  输入 N 直接跳过（可稍后手动配置）${NC}"
+    echo ""
+    echo -n -e "${GREEN}请选择 [Y/n，默认Y]: ${NC}"
     read -r response
+    response="${response:-Y}"  # 默认值为 Y
+    echo ""
     
-    if [[ ! "$response" =~ ^[Yy][Ee][Ss]?$ ]]; then
-        echo -e "${YELLOW}已跳过 crontab 设置${NC}"
-        echo -e "${YELLOW}如需手动配置，请运行:${NC}"
-        echo "  sudo crontab -e"
-        echo "  # 添加以下行:"
-        echo "  $cron_job"
+    if [[ ! "$response" =~ ^[Yy][Ee][Ss]?$ ]] && [[ ! "$response" =~ ^[Yy]$ ]]; then
+        echo -e "${YELLOW}已跳过计划任务配置${NC}"
+        echo ""
+        echo -e "${BLUE}如需稍后手动配置，请执行以下步骤:${NC}"
+        echo "  1. 运行命令: sudo crontab -e"
+        echo "  2. 添加以下行:"
+        echo "     $cron_job"
+        echo ""
         return 0
     fi
 

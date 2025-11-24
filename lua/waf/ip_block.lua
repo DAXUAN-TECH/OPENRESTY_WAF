@@ -77,10 +77,8 @@ local function check_whitelist(client_ip)
     local rules = nil
     
     if rule_list_data then
-        -- 从缓存获取规则列表
-        local ok, decoded = pcall(function()
-            return cjson.decode(rule_list_data)
-        end)
+        -- 从缓存获取规则列表（优化：减少字符串操作）
+        local ok, decoded = pcall(cjson.decode, rule_list_data)
         if ok and decoded then
             rules = decoded
         end

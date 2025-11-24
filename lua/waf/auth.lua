@@ -8,42 +8,67 @@ local password_utils = require "waf.password_utils"
 local _M = {}
 local cache = ngx.shared.waf_cache
 
--- 配置
+-- 配置（从数据库读取，支持动态配置）
+local config_manager = require "waf.config_manager"
 local SESSION_PREFIX = "session:"
-local SESSION_TTL = 3600 * 24  -- 会话过期时间（秒，默认24小时）
-local SESSION_COOKIE_NAME = "waf_session"
+local SESSION_TTL = tonumber(config_manager.get_config("session_ttl", 86400, "number")) or 86400  -- 会话过期时间（秒，默认24小时）
+local SESSION_COOKIE_NAME = config_manager.get_config("session_cookie_name", "waf_session", "string") or "waf_session"
+local SESSION_ENABLE_SECURE = config_manager.get_config("session_enable_secure", true, "boolean")
+local SESSION_ENABLE_HTTPONLY = config_manager.get_config("session_enable_httponly", true, "boolean")
 
--- 默认用户配置（生产环境应该从数据库读取或使用环境变量）
--- totp_secret: Base32 编码的 TOTP 密钥，如果为空则不启用双因素认证
-local DEFAULT_USERS = {
-    {
-        username = "admin",
-        password = "admin123",  -- 生产环境请修改默认密码
-        role = "admin",
-        totp_secret = nil  -- 初始为空，需要通过 API 设置
-    }
-}
+-- 注意：不再使用硬编码的默认用户，所有用户必须从数据库读取
+-- 首次安装时，需要通过安装脚本或API创建初始管理员用户
 
--- 生成随机会话ID
+-- 生成加密安全的随机会话ID（使用OpenSSL随机数生成器）
 local function generate_session_id()
-    -- 使用时间戳 + 随机数 + IP地址生成唯一会话ID
+    -- 使用OpenSSL生成32字节随机数（如果可用）
+    local ok, random_bytes = pcall(function()
+        local resty_random = require "resty.random"
+        if resty_random then
+            return resty_random.bytes(32)
+        end
+        return nil
+    end)
+    
+    if ok and random_bytes then
+        -- 转换为16进制字符串
+        local hex_chars = "0123456789abcdef"
+        local hex_string = ""
+        for i = 1, #random_bytes do
+            local byte = string.byte(random_bytes, i)
+            hex_string = hex_string .. hex_chars:sub((byte >> 4) + 1, (byte >> 4) + 1)
+            hex_string = hex_string .. hex_chars:sub((byte & 0xF) + 1, (byte & 0xF) + 1)
+        end
+        return hex_string
+    end
+    
+    -- 回退方案：使用时间戳 + 随机数 + IP地址 + 工作进程ID + 更强的哈希
     local timestamp = ngx.time()
-    local random_num = math.random(1000000, 9999999)
+    local random_num1 = math.random(1000000, 9999999)
+    local random_num2 = math.random(1000000, 9999999)
     local remote_addr = ngx.var.remote_addr or "0.0.0.0"
     local worker_pid = ngx.worker.pid()
     
     -- 组合生成唯一字符串
-    local raw_string = timestamp .. ":" .. random_num .. ":" .. remote_addr .. ":" .. worker_pid
+    local raw_string = timestamp .. ":" .. random_num1 .. ":" .. random_num2 .. ":" .. remote_addr .. ":" .. worker_pid
     
-    -- 简单的哈希函数（FNV-1a）
+    -- 使用MD5哈希（如果可用）
+    local ok, md5_hash = pcall(function()
+        return ngx.md5(raw_string)
+    end)
+    
+    if ok and md5_hash then
+        return md5_hash .. string.format("%x%x", timestamp, random_num1)
+    end
+    
+    -- 最终回退：使用FNV-1a哈希
     local hash = 2166136261
     for i = 1, #raw_string do
         hash = hash ~ string.byte(raw_string, i)
         hash = hash * 16777619
-        hash = hash & 0xFFFFFFFF  -- 限制为32位
+        hash = hash & 0xFFFFFFFF
     end
     
-    -- 转换为16进制字符串
     local hex_chars = "0123456789abcdef"
     local hex_string = ""
     local temp_hash = hash
@@ -53,8 +78,7 @@ local function generate_session_id()
         temp_hash = temp_hash >> 4
     end
     
-    -- 添加时间戳和随机数确保唯一性
-    return hex_string .. string.format("%x%x", timestamp, random_num)
+    return hex_string .. string.format("%x%x", timestamp, random_num1)
 end
 
 -- 验证用户名和密码（优先从数据库读取，回退到配置文件）
@@ -95,13 +119,8 @@ function _M.verify_credentials(username, password)
         end
     end
     
-    -- 回退到配置文件中的用户列表（兼容性）
-    for _, user in ipairs(DEFAULT_USERS) do
-        if user.username == username and user.password == password then
-            return true, user
-        end
-    end
-    
+    -- 不再使用硬编码的默认用户，所有用户必须从数据库读取
+    -- 如果数据库中没有用户，需要通过安装脚本或API创建初始管理员用户
     return false, nil
 end
 
@@ -134,13 +153,7 @@ function _M.get_user(username)
         }
     end
     
-    -- 回退到配置文件
-    for _, user in ipairs(DEFAULT_USERS) do
-        if user.username == username then
-            return user
-        end
-    end
-    
+    -- 不再使用硬编码的默认用户
     return nil
 end
 
@@ -165,14 +178,7 @@ function _M.set_user_totp_secret(username, secret)
         return true
     end
     
-    -- 回退到配置文件（兼容性）
-    for _, user in ipairs(DEFAULT_USERS) do
-        if user.username == username then
-            user.totp_secret = secret
-            return true
-        end
-    end
-    
+    -- 不再使用硬编码的默认用户
     return false
 end
 
@@ -253,13 +259,18 @@ function _M.get_session_from_cookie()
     return cookie
 end
 
--- 设置会话Cookie
+-- 设置会话Cookie（支持动态配置）
 function _M.set_session_cookie(session_id)
     local cookie_value = SESSION_COOKIE_NAME .. "=" .. session_id
-    cookie_value = cookie_value .. "; Path=/; HttpOnly; Max-Age=" .. SESSION_TTL
+    cookie_value = cookie_value .. "; Path=/; Max-Age=" .. SESSION_TTL
     
-    -- 如果使用HTTPS，添加Secure标志
-    if ngx.var.scheme == "https" then
+    -- 根据配置添加HttpOnly标志
+    if SESSION_ENABLE_HTTPONLY then
+        cookie_value = cookie_value .. "; HttpOnly"
+    end
+    
+    -- 根据配置和HTTPS状态添加Secure标志
+    if SESSION_ENABLE_SECURE and ngx.var.scheme == "https" then
         cookie_value = cookie_value .. "; Secure"
     end
     
@@ -268,7 +279,13 @@ end
 
 -- 清除会话Cookie
 function _M.clear_session_cookie()
-    local cookie_value = SESSION_COOKIE_NAME .. "=; Path=/; HttpOnly; Max-Age=0"
+    local cookie_value = SESSION_COOKIE_NAME .. "=; Path=/; Max-Age=0"
+    if SESSION_ENABLE_HTTPONLY then
+        cookie_value = cookie_value .. "; HttpOnly"
+    end
+    if SESSION_ENABLE_SECURE and ngx.var.scheme == "https" then
+        cookie_value = cookie_value .. "; Secure"
+    end
     ngx.header["Set-Cookie"] = cookie_value
 end
 

@@ -176,6 +176,21 @@ install_module() {
     else
         echo -e "${YELLOW}警告: 可选模块安装失败，功能可能受限${NC}"
         echo -e "${BLUE}提示: 可以稍后手动安装: ${OPM_BIN} get ${opm_package}${NC}"
+        echo -e "${YELLOW}调试信息:${NC}"
+        echo "  - OPM 路径: ${OPM_BIN}"
+        if [ -f "${OPM_BIN}" ] && [ -x "${OPM_BIN}" ]; then
+            echo "  - OPM 状态: 已安装且可执行"
+            if ${OPM_BIN} -h &>/dev/null; then
+                echo "  - OPM 验证: 正常工作"
+            else
+                echo "  - OPM 验证: 无法执行（可能有问题）"
+            fi
+        else
+            echo "  - OPM 状态: 未找到或不可执行"
+        fi
+        echo "  - 目标目录: ${LUALIB_DIR}"
+        echo "  - 模块路径: ${LUALIB_DIR}/${module_name//\./\/}.lua"
+        echo ""
         return 0
     fi
 }

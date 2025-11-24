@@ -873,15 +873,15 @@ install_mysql_redhat() {
         repo_version="80"
     fi
     
-    # 安装 MySQL 仓库（从官方下载页面获取）
+    # ========== 步骤1: 下载并安装 MySQL Yum Repository（官方标准流程）==========
+    echo -e "${BLUE}[步骤1/4] 添加 MySQL 官方 Yum 仓库...${NC}"
+    echo -e "${BLUE}官方下载页面: https://dev.mysql.com/downloads/repo/yum/${NC}"
+    
     if [ ! -f /etc/yum.repos.d/mysql-community.repo ]; then
-        echo -e "${BLUE}从 MySQL 官方下载页面获取安装源...${NC}"
-        echo -e "${BLUE}官方下载页面: https://dev.mysql.com/downloads/repo/yum/${NC}"
         echo "添加 MySQL ${repo_version} 官方仓库..."
         
         # 下载 MySQL Yum Repository
         # 官方下载链接格式：https://dev.mysql.com/get/mysql{version}-community-release-{el_version}-{version}.noarch.rpm
-        # 注意：MySQL 8.0+ 使用新的仓库包格式，可能包含版本号后缀
         local repo_downloaded=0
         local repo_file=""
         
@@ -903,70 +903,62 @@ install_mysql_redhat() {
         esac
         
         # 尝试多个仓库包版本格式（MySQL 可能更新了包名格式）
-        local repo_versions=("1" "2" "3")
+        local repo_versions=("3" "2" "1")
         
         # 尝试下载对应版本的仓库
         for el_ver in "${el_versions_to_try[@]}"; do
             for repo_ver in "${repo_versions[@]}"; do
-                # 尝试标准格式：mysql80-community-release-el8-1.noarch.rpm
+                # 尝试标准格式：mysql80-community-release-el8-3.noarch.rpm
                 repo_file="mysql${repo_version}-community-release-${el_ver}-${repo_ver}.noarch.rpm"
                 local repo_url="https://dev.mysql.com/get/${repo_file}"
                 echo "尝试下载: $repo_url"
                 
-                if wget -q "$repo_url" -O /tmp/mysql-community-release.rpm 2>/dev/null && [ -s /tmp/mysql-community-release.rpm ]; then
-                    # 验证下载的文件是否为有效的 RPM 包
-                    if file /tmp/mysql-community-release.rpm 2>/dev/null | grep -qi "RPM\|rpm"; then
-                        repo_downloaded=1
-                        echo -e "${GREEN}✓ 成功从官方下载 MySQL 仓库: ${repo_file}${NC}"
-                        break 2
-                    else
-                        echo -e "${YELLOW}  下载的文件不是有效的 RPM 包，尝试下一个...${NC}"
-                        rm -f /tmp/mysql-community-release.rpm
+                # 优先使用 wget
+                if command -v wget &> /dev/null; then
+                    if wget -q "$repo_url" -O /tmp/mysql-community-release.rpm 2>/dev/null && [ -s /tmp/mysql-community-release.rpm ]; then
+                        # 验证下载的文件是否为有效的 RPM 包
+                        if file /tmp/mysql-community-release.rpm 2>/dev/null | grep -qi "RPM\|rpm"; then
+                            repo_downloaded=1
+                            echo -e "${GREEN}✓ 成功从官方下载 MySQL 仓库: ${repo_file}${NC}"
+                            break 2
+                        else
+                            echo -e "${YELLOW}  下载的文件不是有效的 RPM 包，尝试下一个...${NC}"
+                            rm -f /tmp/mysql-community-release.rpm
+                        fi
                     fi
-                else
-                    echo -e "${YELLOW}  ${repo_file} 下载失败，尝试下一个...${NC}"
-                fi
-            done
-        done
-        
-        # 如果标准格式都失败，尝试使用 curl 直接访问下载页面
-        if [ $repo_downloaded -eq 0 ]; then
-            echo -e "${YELLOW}⚠ 标准格式下载失败，尝试从下载页面获取...${NC}"
-            echo -e "${BLUE}提示: 可以访问 https://dev.mysql.com/downloads/repo/yum/ 手动下载${NC}"
-            
-            # 尝试使用 curl 获取重定向后的实际下载链接
-            for el_ver in "${el_versions_to_try[@]}"; do
-                repo_file="mysql${repo_version}-community-release-${el_ver}-1.noarch.rpm"
-                local repo_url="https://dev.mysql.com/get/${repo_file}"
-                
-                # 使用 curl 跟随重定向下载
-                if command -v curl &> /dev/null; then
+                # 如果 wget 不可用，使用 curl
+                elif command -v curl &> /dev/null; then
                     if curl -L -f -s "$repo_url" -o /tmp/mysql-community-release.rpm 2>/dev/null && [ -s /tmp/mysql-community-release.rpm ]; then
                         if file /tmp/mysql-community-release.rpm 2>/dev/null | grep -qi "RPM\|rpm"; then
                             repo_downloaded=1
                             echo -e "${GREEN}✓ 使用 curl 成功下载 MySQL 仓库: ${repo_file}${NC}"
-                            break
+                            break 2
+                        else
+                            echo -e "${YELLOW}  下载的文件不是有效的 RPM 包，尝试下一个...${NC}"
+                            rm -f /tmp/mysql-community-release.rpm
                         fi
                     fi
                 fi
             done
-        fi
+        done
         
         if [ $repo_downloaded -eq 0 ]; then
-            echo -e "${YELLOW}⚠ 无法从官方下载 MySQL 仓库${NC}"
+            echo -e "${RED}✗ 无法从官方下载 MySQL 仓库${NC}"
             echo -e "${YELLOW}  官方下载页面: https://dev.mysql.com/downloads/repo/yum/${NC}"
             echo -e "${YELLOW}  请手动访问下载页面并安装对应的仓库包${NC}"
-            echo -e "${YELLOW}  或尝试使用系统仓库${NC}"
             echo ""
             echo -e "${BLUE}手动安装步骤：${NC}"
             echo "  1. 访问: https://dev.mysql.com/downloads/repo/yum/"
             echo "  2. 选择适合您系统的 RPM 包（el7/el8/el9）"
             echo "  3. 下载后运行: rpm -ivh mysql80-community-release-el*.rpm"
             echo "  4. 然后重新运行此脚本"
+            exit 1
         fi
         
+        # 安装 MySQL 仓库
         if [ -f /tmp/mysql-community-release.rpm ]; then
             # 尝试导入 GPG 密钥（在安装仓库之前）
+            echo "导入 MySQL GPG 密钥..."
             rpm --import https://repo.mysql.com/RPM-GPG-KEY-mysql-2022 2>/dev/null || \
             rpm --import https://repo.mysql.com/RPM-GPG-KEY-mysql 2>/dev/null || true
             
@@ -974,459 +966,139 @@ install_mysql_redhat() {
             echo "正在安装 MySQL 仓库..."
             if rpm -ivh --nodigest --nosignature /tmp/mysql-community-release.rpm 2>&1; then
                 echo -e "${GREEN}✓ MySQL 仓库安装成功${NC}"
-                # 安装仓库后，立即禁用 GPG 检查以确保后续安装成功
-                fix_mysql_gpg_key
             else
-                echo -e "${YELLOW}⚠ 仓库安装失败，尝试其他方法${NC}"
-                # 如果安装失败，尝试不使用任何验证
-                rpm -ivh --nodigest --nosignature --force /tmp/mysql-community-release.rpm 2>&1 || true
-                # 安装后禁用 GPG 检查
-                if [ -f /etc/yum.repos.d/mysql-community.repo ]; then
-                    sed -i 's/^gpgcheck=1/gpgcheck=0/g' /etc/yum.repos.d/mysql-community*.repo 2>/dev/null || true
-                    echo -e "${GREEN}✓ 已禁用 MySQL 仓库的 GPG 检查${NC}"
-                fi
+                echo -e "${YELLOW}⚠ 仓库安装失败，尝试强制安装...${NC}"
+                # 如果安装失败，尝试强制安装
+                rpm -ivh --nodigest --nosignature --force /tmp/mysql-community-release.rpm 2>&1 || {
+                    echo -e "${RED}✗ MySQL 仓库安装失败${NC}"
+                    rm -f /tmp/mysql-community-release.rpm
+                    exit 1
+                }
             fi
             rm -f /tmp/mysql-community-release.rpm
-        fi
-        
-        # 如果指定了具体版本，启用对应版本的仓库并禁用其他版本
-        if [ "$MYSQL_VERSION" != "default" ] && [ -f /etc/yum.repos.d/mysql-community.repo ]; then
-            if echo "$MYSQL_VERSION" | grep -qE "^5\.7"; then
-                # 启用 MySQL 5.7，禁用其他版本
-                sed -i 's/enabled=1/enabled=0/g' /etc/yum.repos.d/mysql-community*.repo
-                sed -i '/\[mysql57-community\]/,/\[/ { /enabled=/ s/enabled=0/enabled=1/ }' /etc/yum.repos.d/mysql-community*.repo
-            elif echo "$MYSQL_VERSION" | grep -qE "^8\.0"; then
-                # 启用 MySQL 8.0，禁用其他版本
-                sed -i 's/enabled=1/enabled=0/g' /etc/yum.repos.d/mysql-community*.repo
-                sed -i '/\[mysql80-community\]/,/\[/ { /enabled=/ s/enabled=0/enabled=1/ }' /etc/yum.repos.d/mysql-community*.repo
+            
+            # 安装仓库后，禁用 GPG 检查以确保后续安装成功
+            if [ -f /etc/yum.repos.d/mysql-community.repo ]; then
+                sed -i 's/^gpgcheck=1/gpgcheck=0/g' /etc/yum.repos.d/mysql-community*.repo 2>/dev/null || true
+                echo -e "${GREEN}✓ 已禁用 MySQL 仓库的 GPG 检查${NC}"
+            fi
+            
+            # 如果指定了 MySQL 8.0，启用 MySQL 8.0 仓库并禁用其他版本
+            if [ "$repo_version" = "80" ] && [ -f /etc/yum.repos.d/mysql-community.repo ]; then
+                sed -i 's/enabled=1/enabled=0/g' /etc/yum.repos.d/mysql-community*.repo 2>/dev/null || true
+                sed -i '/\[mysql80-community\]/,/\[/ { /enabled=/ s/enabled=0/enabled=1/ }' /etc/yum.repos.d/mysql-community*.repo 2>/dev/null || true
+                echo -e "${GREEN}✓ 已启用 MySQL 8.0 仓库${NC}"
             fi
         fi
+    else
+        echo -e "${GREEN}✓ MySQL 仓库已存在${NC}"
     fi
     
-    # 安装 MySQL
+    # ========== 步骤2: 更新 yum/dnf 缓存 ==========
+    echo -e "${BLUE}[步骤2/4] 更新包管理器缓存...${NC}"
+    if command -v dnf &> /dev/null; then
+        dnf makecache 2>&1 | grep -vE "GPG|密钥" || true
+        echo -e "${GREEN}✓ dnf 缓存更新完成${NC}"
+    elif command -v yum &> /dev/null; then
+        yum makecache fast 2>&1 | grep -vE "GPG|密钥" || true
+        echo -e "${GREEN}✓ yum 缓存更新完成${NC}"
+    fi
+    
+    # ========== 步骤3: 安装 MySQL（官方标准流程）==========
+    echo -e "${BLUE}[步骤3/4] 安装 MySQL...${NC}"
     INSTALL_SUCCESS=0
     
-    # 如果指定了具体版本，尝试安装指定版本
-    if [ "$MYSQL_VERSION" != "default" ] && echo "$MYSQL_VERSION" | grep -qE "^[0-9]+\.[0-9]+"; then
-        # 提取主版本号和次版本号（如 8.0.39 -> 8.0）
-        local major_minor=$(echo "$MYSQL_VERSION" | grep -oE '^[0-9]+\.[0-9]+')
-        local full_version="$MYSQL_VERSION"
-        
-        echo -e "${BLUE}尝试安装指定版本: MySQL ${full_version}${NC}"
-        
-        # 方法1: 尝试安装完整版本号
-        # 注意：MySQL包名格式可能是 mysql-community-server-8.0.44-1.el7
-        # 先尝试精确版本号，如果失败再尝试通配符
-        local version_package="mysql-community-server-${full_version}"
-        echo "尝试安装包: $version_package"
-        
-        # 先检查包是否真的存在
-        if command -v yum &> /dev/null; then
-            if ! yum list available "$version_package" 2>/dev/null | grep -qE "mysql-community-server"; then
-                echo -e "${YELLOW}⚠ 精确版本包不存在，尝试使用通配符: mysql-community-server-${full_version}*${NC}"
-                version_package="mysql-community-server-${full_version}*"
-            fi
-        elif command -v dnf &> /dev/null; then
-            if ! dnf list available "$version_package" 2>/dev/null | grep -qE "mysql-community-server"; then
-                echo -e "${YELLOW}⚠ 精确版本包不存在，尝试使用通配符: mysql-community-server-${full_version}*${NC}"
-                version_package="mysql-community-server-${full_version}*"
-            fi
-        fi
-        
-        # 修复 GPG 密钥问题（强制使用 --nogpgcheck 以确保安装成功）
-        fix_mysql_gpg_key
-        # 强制使用 --nogpgcheck，因为MySQL的GPG密钥经常不匹配
-        local nogpgcheck_flag="--nogpgcheck"
-        
-        if command -v dnf &> /dev/null; then
-            # 先检查包是否可用
-            echo "检查软件包是否可用..."
-            if ! dnf list available "$version_package" 2>&1 | grep -qE "mysql-community-server"; then
-                echo -e "${YELLOW}⚠ 软件包 $version_package 不可用${NC}"
-                echo "尝试列出所有可用的 MySQL 包："
-                dnf list available "mysql-community-server*" 2>&1 | head -20 || true
-                echo ""
-            fi
-            
-            # 执行安装并捕获输出
-            echo "执行安装命令: dnf install -y $nogpgcheck_flag $version_package mysql-community-client-${full_version}"
-            if dnf install -y $nogpgcheck_flag "$version_package" "mysql-community-client-${full_version}" 2>&1 | tee /tmp/mysql_install.log; then
-                # 验证是否真正安装成功
-                if verify_mysql_installation /tmp/mysql_install.log; then
+    # 修复 GPG 密钥问题（强制使用 --nogpgcheck 以确保安装成功）
+    fix_mysql_gpg_key
+    local nogpgcheck_flag="--nogpgcheck"
+    
+    # 按照官方标准流程，直接安装 MySQL 8.0（不指定具体版本号）
+    echo "按照 MySQL 官方标准流程安装 MySQL 8.0..."
+    
+    if command -v dnf &> /dev/null; then
+        echo "使用 dnf 安装 MySQL..."
+        if dnf install -y $nogpgcheck_flag mysql-community-server mysql-community-client 2>&1 | tee /tmp/mysql_install.log; then
+            # 验证是否真正安装成功
+            if verify_mysql_installation /tmp/mysql_install.log; then
                 INSTALL_SUCCESS=1
-                echo -e "${GREEN}✓ MySQL ${full_version} 安装成功${NC}"
-                else
-                    echo -e "${RED}✗ MySQL ${full_version} 安装失败${NC}"
-                    echo ""
-                    echo -e "${YELLOW}安装日志（完整输出）：${NC}"
-                    if [ -f /tmp/mysql_install.log ] && [ -s /tmp/mysql_install.log ]; then
-                        cat /tmp/mysql_install.log
-                    else
-                        echo "  日志文件为空或不存在"
-                    fi
-                    echo ""
-                    echo -e "${BLUE}详细错误分析：${NC}"
-                    if [ -f /tmp/mysql_install.log ]; then
-                        if grep -qiE "No package|没有可用软件包|No match for argument|Nothing to do|No packages marked for" /tmp/mysql_install.log; then
-                            echo "  - 软件包不可用，可能原因："
-                            echo "    1. 仓库中不存在该版本"
-                            echo "    2. 仓库未正确配置"
-                            echo "    3. 网络连接问题"
-                            echo ""
-                            echo "  诊断命令："
-                            echo "    dnf list available mysql-community-server*"
-                            echo "    dnf repolist | grep mysql"
-                        elif grep -qiE "Error|Failed|错误" /tmp/mysql_install.log; then
-                            echo "  - 检测到安装错误"
-                            grep -iE "Error|Failed|错误" /tmp/mysql_install.log | head -10
-                        else
-                            echo "  - 安装命令返回成功，但验证失败"
-                            echo "  - 可能原因：包已安装但命令不在 PATH 中"
-                        fi
-                    fi
-                    INSTALL_SUCCESS=0
-                fi
+                echo -e "${GREEN}✓ MySQL 安装成功${NC}"
             else
+                echo -e "${RED}✗ MySQL 安装失败（验证失败）${NC}"
                 INSTALL_SUCCESS=0
-                echo -e "${RED}✗ dnf install 命令执行失败${NC}"
-                echo ""
-                echo -e "${YELLOW}安装日志（完整输出）：${NC}"
-                if [ -f /tmp/mysql_install.log ] && [ -s /tmp/mysql_install.log ]; then
-                    cat /tmp/mysql_install.log
-                else
-                    echo "  日志文件为空或不存在"
-                fi
-                echo ""
-                echo -e "${BLUE}详细错误分析：${NC}"
-                if [ -f /tmp/mysql_install.log ]; then
-                    if grep -qiE "No package|没有可用软件包|No match for argument|Nothing to do" /tmp/mysql_install.log; then
-                        echo "  - 软件包不可用"
-                        echo "  - 尝试检查可用版本: dnf list available mysql-community-server"
-                        echo "  - 检查仓库: dnf repolist | grep mysql"
-                    elif grep -qiE "Error|Failed|错误" /tmp/mysql_install.log; then
-                        echo "  - 检测到安装错误"
-                        grep -iE "Error|Failed|错误" /tmp/mysql_install.log | head -10
-                    else
-                        echo "  - 安装命令失败，但日志中没有明确错误信息"
-                        echo "  - 请检查网络连接和仓库配置"
-                    fi
-                else
-                    echo "  - 日志文件不存在，无法分析错误"
-                fi
             fi
         else
-            # 先检查包是否可用
-            echo "检查软件包是否可用..."
-            if ! yum list available "$version_package" 2>&1 | grep -qE "mysql-community-server"; then
-                echo -e "${YELLOW}⚠ 软件包 $version_package 不可用${NC}"
-                echo "尝试列出所有可用的 MySQL 包："
-                yum list available "mysql-community-server*" 2>&1 | head -20 || true
-                echo ""
-            fi
-            
-            # 执行安装并捕获输出
-            echo "执行安装命令: yum install -y $nogpgcheck_flag $version_package mysql-community-client-${full_version}"
-            if yum install -y $nogpgcheck_flag "$version_package" "mysql-community-client-${full_version}" 2>&1 | tee /tmp/mysql_install.log; then
-                # 验证是否真正安装成功
-                if verify_mysql_installation /tmp/mysql_install.log; then
+            INSTALL_SUCCESS=0
+            echo -e "${RED}✗ dnf install 命令执行失败${NC}"
+        fi
+    elif command -v yum &> /dev/null; then
+        echo "使用 yum 安装 MySQL..."
+        if yum install -y $nogpgcheck_flag mysql-community-server mysql-community-client 2>&1 | tee /tmp/mysql_install.log; then
+            # 验证是否真正安装成功
+            if verify_mysql_installation /tmp/mysql_install.log; then
                 INSTALL_SUCCESS=1
-                echo -e "${GREEN}✓ MySQL ${full_version} 安装成功${NC}"
-                else
-                    echo -e "${RED}✗ MySQL ${full_version} 安装失败${NC}"
-                    echo ""
-                    echo -e "${YELLOW}安装日志（完整输出）：${NC}"
-                    if [ -f /tmp/mysql_install.log ] && [ -s /tmp/mysql_install.log ]; then
-                        cat /tmp/mysql_install.log
-                    else
-                        echo "  日志文件为空或不存在"
-                    fi
-                    echo ""
-                    echo -e "${BLUE}详细错误分析：${NC}"
-                    if [ -f /tmp/mysql_install.log ]; then
-                        if grep -qiE "No package|没有可用软件包|No match for argument|Nothing to do|No packages marked for" /tmp/mysql_install.log; then
-                            echo "  - 软件包不可用，可能原因："
-                            echo "    1. 仓库中不存在该版本"
-                            echo "    2. 仓库未正确配置"
-                            echo "    3. 网络连接问题"
-                            echo ""
-                            echo "  诊断命令："
-                            echo "    yum list available mysql-community-server*"
-                            echo "    yum repolist | grep mysql"
-                        elif grep -qiE "Error|Failed|错误" /tmp/mysql_install.log; then
-                            echo "  - 检测到安装错误"
-                            grep -iE "Error|Failed|错误" /tmp/mysql_install.log | head -10
-                        else
-                            echo "  - 安装命令返回成功，但验证失败"
-                            echo "  - 可能原因：包已安装但命令不在 PATH 中"
-                        fi
-                    fi
-                    INSTALL_SUCCESS=0
-                fi
+                echo -e "${GREEN}✓ MySQL 安装成功${NC}"
             else
+                echo -e "${RED}✗ MySQL 安装失败（验证失败）${NC}"
                 INSTALL_SUCCESS=0
-                echo -e "${RED}✗ yum install 命令执行失败${NC}"
-                echo ""
-                echo -e "${YELLOW}安装日志（完整输出）：${NC}"
-                if [ -f /tmp/mysql_install.log ] && [ -s /tmp/mysql_install.log ]; then
-                    cat /tmp/mysql_install.log
-                else
-                    echo "  日志文件为空或不存在"
-                fi
-                echo ""
-                echo -e "${BLUE}详细错误分析：${NC}"
-                if [ -f /tmp/mysql_install.log ]; then
-                    if grep -qiE "No package|没有可用软件包|No match for argument|Nothing to do" /tmp/mysql_install.log; then
-                        echo "  - 软件包不可用"
-                        echo "  - 尝试检查可用版本: yum list available mysql-community-server"
-                        echo "  - 检查仓库: yum repolist | grep mysql"
-                    elif grep -qiE "Error|Failed|错误" /tmp/mysql_install.log; then
-                        echo "  - 检测到安装错误"
-                        grep -iE "Error|Failed|错误" /tmp/mysql_install.log | head -10
-                    else
-                        echo "  - 安装命令失败，但日志中没有明确错误信息"
-                        echo "  - 请检查网络连接和仓库配置"
-                    fi
-                else
-                    echo "  - 日志文件不存在，无法分析错误"
-                fi
             fi
-        fi
-        
-        # 方法2: 如果完整版本号失败，尝试只指定主次版本号
-        if [ $INSTALL_SUCCESS -eq 0 ]; then
-            echo -e "${YELLOW}⚠ 完整版本号安装失败，尝试使用主次版本号: ${major_minor}${NC}"
-            
-            # 修复 GPG 密钥问题（强制使用 --nogpgcheck）
-            fix_mysql_gpg_key
-            # 强制使用 --nogpgcheck，因为MySQL的GPG密钥经常不匹配
-            local nogpgcheck_flag="--nogpgcheck"
-            
-            if command -v dnf &> /dev/null; then
-                # 使用 dnf 安装指定版本（dnf 支持版本锁定）
-                if dnf install -y $nogpgcheck_flag "mysql-community-server-${major_minor}*" "mysql-community-client-${major_minor}*" 2>&1 | tee /tmp/mysql_install.log; then
-                    # 验证是否真正安装成功
-                    if verify_mysql_installation /tmp/mysql_install.log; then
-                    INSTALL_SUCCESS=1
-                    echo -e "${GREEN}✓ MySQL ${major_minor} 系列安装成功${NC}"
-                    else
-                        echo -e "${RED}✗ MySQL ${major_minor} 系列安装失败${NC}"
-                        echo -e "${YELLOW}安装日志（最后20行）：${NC}"
-                        tail -20 /tmp/mysql_install.log 2>/dev/null || true
-                        INSTALL_SUCCESS=0
-                    fi
-                else
-                    INSTALL_SUCCESS=0
-                    echo -e "${RED}✗ dnf install 命令执行失败${NC}"
-                    echo -e "${YELLOW}安装日志（最后20行）：${NC}"
-                    tail -20 /tmp/mysql_install.log 2>/dev/null || true
-                fi
-            else
-                # 使用 yum 安装指定版本
-                if yum install -y $nogpgcheck_flag "mysql-community-server-${major_minor}*" "mysql-community-client-${major_minor}*" 2>&1 | tee /tmp/mysql_install.log; then
-                    # 验证是否真正安装成功
-                    if verify_mysql_installation /tmp/mysql_install.log; then
-                    INSTALL_SUCCESS=1
-                    echo -e "${GREEN}✓ MySQL ${major_minor} 系列安装成功${NC}"
-                    else
-                        echo -e "${RED}✗ MySQL ${major_minor} 系列安装失败${NC}"
-                        echo -e "${YELLOW}安装日志（最后20行）：${NC}"
-                        tail -20 /tmp/mysql_install.log 2>/dev/null || true
-                        INSTALL_SUCCESS=0
-                    fi
-                else
-                    INSTALL_SUCCESS=0
-                    echo -e "${RED}✗ yum install 命令执行失败${NC}"
-                    echo -e "${YELLOW}安装日志（最后20行）：${NC}"
-                    tail -20 /tmp/mysql_install.log 2>/dev/null || true
-                fi
-            fi
-        fi
-        
-        # 方法3: 如果还是失败，尝试启用对应版本的仓库后安装
-        if [ $INSTALL_SUCCESS -eq 0 ] && [ -f /etc/yum.repos.d/mysql-community.repo ]; then
-            echo -e "${YELLOW}⚠ 直接安装失败，尝试启用对应版本的仓库...${NC}"
-            # 根据主次版本号启用对应仓库
-            if echo "$major_minor" | grep -qE "^5\.7"; then
-                # 启用 MySQL 5.7 仓库
-                sed -i 's/enabled=1/enabled=0/g' /etc/yum.repos.d/mysql-community*.repo
-                sed -i '/\[mysql57-community\]/,/\[/ { /enabled=/ s/enabled=0/enabled=1/ }' /etc/yum.repos.d/mysql-community*.repo
-                echo -e "${BLUE}已启用 MySQL 5.7 仓库${NC}"
-            elif echo "$major_minor" | grep -qE "^8\.0"; then
-                # 启用 MySQL 8.0 仓库
-                sed -i 's/enabled=1/enabled=0/g' /etc/yum.repos.d/mysql-community*.repo
-                sed -i '/\[mysql80-community\]/,/\[/ { /enabled=/ s/enabled=0/enabled=1/ }' /etc/yum.repos.d/mysql-community*.repo
-                echo -e "${BLUE}已启用 MySQL 8.0 仓库${NC}"
-            fi
-            
-            # 再次尝试安装
-            # 修复 GPG 密钥问题（强制使用 --nogpgcheck）
-            fix_mysql_gpg_key
-            # 强制使用 --nogpgcheck，因为MySQL的GPG密钥经常不匹配
-            local nogpgcheck_flag="--nogpgcheck"
-            
-            if command -v dnf &> /dev/null; then
-                if dnf install -y $nogpgcheck_flag mysql-community-server mysql-community-client 2>&1 | tee /tmp/mysql_install.log; then
-                    # 验证是否真正安装成功
-                    if verify_mysql_installation /tmp/mysql_install.log; then
-                    INSTALL_SUCCESS=1
-                    echo -e "${GREEN}✓ MySQL ${major_minor} 系列安装成功${NC}"
-                    else
-                        echo -e "${RED}✗ MySQL ${major_minor} 系列安装失败${NC}"
-                        echo -e "${YELLOW}安装日志（最后20行）：${NC}"
-                        tail -20 /tmp/mysql_install.log 2>/dev/null || true
-                        INSTALL_SUCCESS=0
-                    fi
-                else
-                    INSTALL_SUCCESS=0
-                    echo -e "${RED}✗ dnf install 命令执行失败${NC}"
-                    echo -e "${YELLOW}安装日志（最后20行）：${NC}"
-                    tail -20 /tmp/mysql_install.log 2>/dev/null || true
-                fi
-            else
-                if yum install -y $nogpgcheck_flag mysql-community-server mysql-community-client 2>&1 | tee /tmp/mysql_install.log; then
-                    # 验证是否真正安装成功
-                    if verify_mysql_installation /tmp/mysql_install.log; then
-                    INSTALL_SUCCESS=1
-                    echo -e "${GREEN}✓ MySQL ${major_minor} 系列安装成功${NC}"
-                    else
-                        echo -e "${RED}✗ MySQL ${major_minor} 系列安装失败${NC}"
-                        echo -e "${YELLOW}安装日志（最后20行）：${NC}"
-                        tail -20 /tmp/mysql_install.log 2>/dev/null || true
-                        INSTALL_SUCCESS=0
-                    fi
-                else
-                    INSTALL_SUCCESS=0
-                    echo -e "${RED}✗ yum install 命令执行失败${NC}"
-                    echo -e "${YELLOW}安装日志（最后20行）：${NC}"
-                    tail -20 /tmp/mysql_install.log 2>/dev/null || true
-                fi
-            fi
+        else
+            INSTALL_SUCCESS=0
+            echo -e "${RED}✗ yum install 命令执行失败${NC}"
         fi
     fi
     
-    # 如果指定版本安装失败，使用默认安装
+    # 如果安装失败，显示详细错误信息
     if [ $INSTALL_SUCCESS -eq 0 ]; then
-        echo -e "${YELLOW}⚠ 指定版本安装失败，尝试使用默认安装${NC}"
-        
-        # 修复 GPG 密钥问题（强制使用 --nogpgcheck）
-        fix_mysql_gpg_key
-        # 强制使用 --nogpgcheck，因为MySQL的GPG密钥经常不匹配
-        local nogpgcheck_flag="--nogpgcheck"
-        
-        if command -v dnf &> /dev/null; then
-            if dnf install -y $nogpgcheck_flag mysql-server mysql 2>&1 | tee /tmp/mysql_install.log; then
-                # 验证是否真正安装成功
-                if verify_mysql_installation /tmp/mysql_install.log; then
-                INSTALL_SUCCESS=1
-                    echo -e "${GREEN}✓ MySQL 默认版本安装成功${NC}"
-                else
-                    INSTALL_SUCCESS=0
-            fi
-        else
-                INSTALL_SUCCESS=0
-            fi
-        else
-            if yum install -y $nogpgcheck_flag mysql-server mysql 2>&1 | tee /tmp/mysql_install.log; then
-                # 验证是否真正安装成功
-                if verify_mysql_installation /tmp/mysql_install.log; then
-                INSTALL_SUCCESS=1
-                    echo -e "${GREEN}✓ MySQL 默认版本安装成功${NC}"
-                else
-                    INSTALL_SUCCESS=0
-                fi
-            else
-                INSTALL_SUCCESS=0
-            fi
-        fi
-    fi
-    
-    # 如果 MySQL 安装失败，尝试安装 MariaDB（MySQL 兼容）
-    if [ $INSTALL_SUCCESS -eq 0 ]; then
-        echo -e "${YELLOW}⚠ MySQL 安装失败，尝试安装 MariaDB（MySQL 兼容）...${NC}"
-        if command -v dnf &> /dev/null; then
-            if dnf install -y mariadb-server mariadb 2>&1 | tee /tmp/mysql_install.log; then
-                # 验证是否真正安装成功
-                if verify_mysql_installation /tmp/mysql_install.log; then
-                INSTALL_SUCCESS=1
-                echo -e "${GREEN}✓ MariaDB 安装完成（MySQL 兼容）${NC}"
-                else
-                    INSTALL_SUCCESS=0
-            fi
-        else
-                INSTALL_SUCCESS=0
-            fi
-        else
-            if yum install -y mariadb-server mariadb 2>&1 | tee /tmp/mysql_install.log; then
-                # 验证是否真正安装成功
-                if verify_mysql_installation /tmp/mysql_install.log; then
-                INSTALL_SUCCESS=1
-                echo -e "${GREEN}✓ MariaDB 安装完成（MySQL 兼容）${NC}"
-                else
-                    INSTALL_SUCCESS=0
-                fi
-            else
-                INSTALL_SUCCESS=0
-            fi
-        fi
-    fi
-    
-    # 最终验证安装是否成功
-    if [ $INSTALL_SUCCESS -eq 0 ] || ! verify_mysql_installation /tmp/mysql_install.log; then
         echo ""
-        echo -e "${RED}========================================${NC}"
-        echo -e "${RED}✗ MySQL/MariaDB 安装失败${NC}"
-        echo -e "${RED}========================================${NC}"
-        echo ""
-        echo -e "${YELLOW}可能的原因：${NC}"
-        echo "  1. 指定的版本不可用"
-        echo "  2. 软件仓库配置错误"
-        echo "  3. 网络连接问题"
-        echo "  4. 软件包名称不正确"
-        echo ""
-        
-        # 显示完整的安装日志
+        echo -e "${YELLOW}安装日志（最后50行）：${NC}"
         if [ -f /tmp/mysql_install.log ] && [ -s /tmp/mysql_install.log ]; then
-            echo -e "${BLUE}安装日志（完整输出）：${NC}"
-            cat /tmp/mysql_install.log
-            echo ""
-            echo -e "${BLUE}错误分析：${NC}"
-            if grep -qiE "No package|没有可用软件包|No match for argument|Nothing to do|No packages marked for" /tmp/mysql_install.log; then
-                echo "  - 软件包不可用"
-                echo "  - 建议：尝试使用系统默认版本或检查仓库配置"
-                echo ""
-                echo "  诊断步骤："
-                if command -v dnf &> /dev/null; then
-                    echo "    1. 检查可用包: dnf list available mysql-community-server*"
-                    echo "    2. 检查仓库: dnf repolist | grep mysql"
-                    echo "    3. 检查仓库配置: cat /etc/yum.repos.d/mysql-community*.repo"
-                else
-                    echo "    1. 检查可用包: yum list available mysql-community-server*"
-                    echo "    2. 检查仓库: yum repolist | grep mysql"
-                    echo "    3. 检查仓库配置: cat /etc/yum.repos.d/mysql-community*.repo"
-                fi
-            elif grep -qiE "GPG key|GPG 密钥" /tmp/mysql_install.log; then
-                echo "  - GPG 密钥问题（已尝试禁用，但可能仍有问题）"
-                echo "  - 建议：检查仓库 GPG 配置"
-            elif grep -qiE "网络|network|timeout|连接|Connection|DNS" /tmp/mysql_install.log; then
-                echo "  - 网络连接问题"
-                echo "  - 建议：检查网络连接和仓库镜像"
-            else
-                echo "  - 请查看上方日志获取详细错误信息"
-            fi
-            echo ""
+            tail -50 /tmp/mysql_install.log
+        else
+            echo "  日志文件为空或不存在"
         fi
-        echo -e "${YELLOW}建议的解决方案：${NC}"
-        echo "  1. 检查可用版本: dnf list available mysql-community-server 或 yum list available mysql-community-server"
-        echo "  2. 尝试使用系统默认版本（选择选项3）"
-        echo "  3. 检查仓库配置: cat /etc/yum.repos.d/mysql-community*.repo"
-        echo "  4. 手动安装: dnf install -y --nogpgcheck mysql-community-server mysql-community-client"
         echo ""
-        echo -e "${YELLOW}请检查错误信息并手动安装，或尝试其他版本${NC}"
+        echo -e "${BLUE}详细错误分析：${NC}"
+        if [ -f /tmp/mysql_install.log ]; then
+            if grep -qiE "No package|没有可用软件包|No match for argument|Nothing to do|No packages marked for" /tmp/mysql_install.log; then
+                echo "  - 软件包不可用，可能原因："
+                echo "    1. 仓库未正确配置"
+                echo "    2. 网络连接问题"
+                echo "    3. 仓库缓存未更新"
+                echo ""
+                echo "  诊断命令："
+                if command -v dnf &> /dev/null; then
+                    echo "    dnf list available mysql-community-server"
+                    echo "    dnf repolist | grep mysql"
+                else
+                    echo "    yum list available mysql-community-server"
+                    echo "    yum repolist | grep mysql"
+                fi
+            elif grep -qiE "Error|Failed|错误" /tmp/mysql_install.log; then
+                echo "  - 检测到安装错误"
+                grep -iE "Error|Failed|错误" /tmp/mysql_install.log | head -10
+            else
+                echo "  - 安装命令失败，但日志中没有明确错误信息"
+                echo "  - 请检查网络连接和仓库配置"
+            fi
+        fi
         echo ""
+        echo -e "${RED}✗ MySQL 安装失败${NC}"
         exit 1
-    else
-        echo -e "${GREEN}✓ MySQL/MariaDB 安装完成${NC}"
     fi
+    
+    # ========== 步骤4: 安装完成后的后续配置（在安装成功后执行）==========
+    echo -e "${BLUE}[步骤4/4] 安装完成，准备进行后续配置...${NC}"
+    
+    # 注意：以下配置步骤将在主函数中执行，这里只标记安装成功
+    # 配置步骤包括：
+    # - 启动 MySQL 服务
+    # - 获取临时密码
+    # - 配置 MySQL（配置文件优化）
+    # - 设置 root 密码
+    # - 其他优化配置
+    
+    # 安装成功，返回
+    return 0
 }
 
 # 安装 MySQL（Ubuntu/Debian/Linux Mint/Kali Linux）

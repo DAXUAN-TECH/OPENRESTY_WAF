@@ -135,7 +135,7 @@ mysql_execute() {
             else
                 if [ -n "$extra_args" ]; then
                     output=$(mysql $extra_args -h"$host" -P"$port" -u"$user" < "$sql_or_file" 2>&1)
-                else
+    else
                     output=$(mysql -h"$host" -P"$port" -u"$user" < "$sql_or_file" 2>&1)
                 fi
             fi
@@ -996,7 +996,7 @@ check_existing() {
     if [ -n "${MYSQL_VERSION_FROM_ENV:-}" ]; then
         MYSQL_VERSION="${MYSQL_VERSION_FROM_ENV}"
         echo -e "${BLUE}使用环境变量指定的版本: ${MYSQL_VERSION}${NC}"
-    else
+            else
         # 默认使用 MySQL 8.0
                         MYSQL_VERSION="8.0"
         echo -e "${BLUE}默认安装 MySQL 8.0 最新版本${NC}"
@@ -1355,7 +1355,7 @@ install_mysql_redhat() {
             echo "正在安装 MySQL 仓库..."
             if rpm -ivh --nodigest --nosignature /tmp/mysql-community-release.rpm 2>&1; then
                 echo -e "${GREEN}✓ MySQL 仓库安装成功${NC}"
-            else
+                else
                 echo -e "${YELLOW}⚠ 仓库安装失败，尝试强制安装...${NC}"
                 # 如果安装失败，尝试强制安装
                 rpm -ivh --nodigest --nosignature --force /tmp/mysql-community-release.rpm 2>&1 || {
@@ -1365,7 +1365,7 @@ install_mysql_redhat() {
                 }
             fi
             rm -f /tmp/mysql-community-release.rpm
-            
+        
             # 安装仓库后，禁用 GPG 检查以确保后续安装成功
             if [ -f /etc/yum.repos.d/mysql-community.repo ]; then
                 sed -i 's/^gpgcheck=1/gpgcheck=0/g' /etc/yum.repos.d/mysql-community*.repo 2>/dev/null || true
@@ -1480,9 +1480,9 @@ install_mysql_redhat() {
                 else
                     INSTALL_SUCCESS=0
             echo -e "${RED}✗ yum install 命令执行失败${NC}"
+            fi
         fi
-    fi
-    
+        
     # 如果安装失败，显示详细错误信息
     if [ $INSTALL_SUCCESS -eq 0 ]; then
         echo ""
@@ -1582,7 +1582,7 @@ install_mysql_debian() {
             if download_file_common "$repo_url" "/tmp/${repo_file}" "DEB"; then
                 repo_downloaded=1
                 echo -e "${GREEN}✓ 成功从官方下载 MySQL APT 仓库配置: ${repo_file}${NC}"
-            else
+                else
                 echo -e "${YELLOW}  版本 ${config_version} 下载失败，尝试下一个...${NC}"
                 continue
             fi
@@ -1647,7 +1647,7 @@ install_mysql_debian() {
                 # 验证是否真正安装成功
                 if verify_mysql_installation /tmp/mysql_install.log; then
             echo -e "${GREEN}✓ MySQL 安装成功${NC}"
-        else
+                else
             echo -e "${RED}✗ MySQL 安装失败（验证失败）${NC}"
             echo ""
             echo -e "${YELLOW}安装日志（最后50行）：${NC}"
@@ -1774,15 +1774,15 @@ install_mysql_suse() {
             else
                 echo -e "${RED}✗ MySQL/MariaDB 安装失败${NC}"
                 exit 1
-            fi
         fi
+    fi
     else
         # 如果没有 MySQL 官方仓库，使用系统仓库安装 MariaDB
         echo "使用系统仓库安装 MariaDB（MySQL 兼容）..."
         if zypper install -y mariadb mariadb-server 2>&1 | tee /tmp/mysql_install.log; then
             if verify_mysql_installation /tmp/mysql_install.log; then
                 echo -e "${GREEN}✓ MariaDB 安装完成（MySQL 兼容）${NC}"
-            else
+        else
                 echo -e "${RED}✗ MariaDB 安装失败${NC}"
             exit 1
         fi
@@ -2420,7 +2420,7 @@ configure_mysql() {
     # 只在未设置时获取，避免重复调用
     if [ -z "${TEMP_PASSWORD:-}" ]; then
         TEMP_PASSWORD=$(get_mysql_temp_password || echo "")
-    fi
+        fi
     
     # 对于 MariaDB（Alpine/SUSE），可能没有临时密码
     if [ -z "$TEMP_PASSWORD" ] && [ "$OS" = "alpine" ]; then
@@ -2644,7 +2644,7 @@ set_root_password() {
                     # 标记密码已验证
                     PASSWORD_VERIFIED=1
                     
-                        # 步骤 2-7: 使用新密码设置密码策略、修改配置文件、重启服务、验证
+                    # 步骤 2-7: 使用新密码设置密码策略、修改配置文件、重启服务、验证
                     if [ -n "$mysql_version" ]; then
                         # 使用已缓存的连接信息，无需重复调用 get_mysql_connection_info
                         
@@ -3062,22 +3062,22 @@ verify_installation() {
                 echo -e "${GREEN}✓ MySQL 服务运行正常（连接测试使用备用方法）${NC}"
             else
                 echo -e "${YELLOW}⚠ MySQL 连接测试失败${NC}"
-                echo ""
+            echo ""
                 echo -e "${YELLOW}可能的原因:${NC}"
                 echo "  1. 密码不正确或包含特殊字符"
                 echo "  2. MySQL 服务未完全启动"
                 echo "  3. 权限问题"
-                echo ""
-                echo -e "${BLUE}建议手动测试连接:${NC}"
-                echo "  mysql -u root -p"
-                echo "  # 然后输入密码进行交互式连接"
-                echo ""
-                echo -e "${BLUE}或者使用配置文件方式:${NC}"
-                echo "  echo '[client]' > ~/.my.cnf"
-                echo "  echo 'user=root' >> ~/.my.cnf"
+            echo ""
+            echo -e "${BLUE}建议手动测试连接:${NC}"
+            echo "  mysql -u root -p"
+            echo "  # 然后输入密码进行交互式连接"
+            echo ""
+            echo -e "${BLUE}或者使用配置文件方式:${NC}"
+            echo "  echo '[client]' > ~/.my.cnf"
+            echo "  echo 'user=root' >> ~/.my.cnf"
                 echo "  echo 'password=your_password' >> ~/.my.cnf"
-                echo "  chmod 600 ~/.my.cnf"
-                echo "  mysql -e 'SELECT 1;'"
+            echo "  chmod 600 ~/.my.cnf"
+            echo "  mysql -e 'SELECT 1;'"
                 echo ""
                 echo -e "${YELLOW}注意: 如果之前的步骤（密码设置、安全配置）成功，说明密码实际上是正确的${NC}"
                 echo -e "${YELLOW}连接测试失败可能是因为密码包含特殊字符导致 shell 解析问题${NC}"
@@ -3151,7 +3151,7 @@ create_database() {
     local db_create_exit_code=0
     
         # 尝试连接并创建数据库（使用辅助函数）
-        if [ -n "$MYSQL_ROOT_PASSWORD" ]; then
+    if [ -n "$MYSQL_ROOT_PASSWORD" ]; then
             # 使用已缓存的连接信息，无需重复调用 get_mysql_connection_info
             
             # 首先验证密码是否有效（使用辅助函数，使用已缓存的连接信息）
@@ -3224,9 +3224,9 @@ create_database() {
                         sleep 1
                         if mysql_verify_connection "$mysql_host" "$mysql_port" "root" "$MYSQL_ROOT_PASSWORD"; then
                             echo -e "${GREEN}✓ 新密码验证成功${NC}"
-                            # 重新尝试创建数据库
+                        # 重新尝试创建数据库
                             db_create_output=$(mysql_execute "$create_db_sql" "$mysql_host" "$mysql_port" "root" "$MYSQL_ROOT_PASSWORD" 2>&1)
-                            db_create_exit_code=$?
+                        db_create_exit_code=$?
                         else
                             echo -e "${RED}✗ 新密码验证失败，请检查密码${NC}"
                             return 1
@@ -3596,7 +3596,7 @@ init_database() {
                 mysql -h"$mysql_host" -P"$mysql_port" -u"${MYSQL_USER}" -p"${MYSQL_USER_PASSWORD}" "${MYSQL_DATABASE}" < "$SQL_FILE" > "$import_log" 2>&1
         SQL_EXIT_CODE=$?
             fi
-        else
+    else
             if command -v pv &> /dev/null; then
                 pv -p -t -e -r -b "$SQL_FILE" | mysql -h"$mysql_host" -P"$mysql_port" -u"${MYSQL_USER}" "${MYSQL_DATABASE}" > "$import_log" 2>&1
                 SQL_EXIT_CODE=${PIPESTATUS[1]}
@@ -3700,18 +3700,18 @@ init_database() {
         # 显示安装总结
         show_installation_summary
         return 0
-    else
+        else
         echo ""
-        echo -e "${RED}✗ 数据库初始化失败${NC}"
+            echo -e "${RED}✗ 数据库初始化失败${NC}"
         if [ -n "$SQL_OUTPUT" ]; then
             echo -e "${YELLOW}错误信息：${NC}"
             echo "$SQL_OUTPUT" | head -30
         fi
-        echo ""
-        echo -e "${YELLOW}建议：${NC}"
-        echo "  1. 检查 SQL 文件语法是否正确"
-        echo "  2. 检查数据库用户权限是否足够"
-        echo "  3. 手动导入 SQL 文件: mysql -u ${MYSQL_USER} -p ${MYSQL_DATABASE} < ${SQL_FILE}"
+            echo ""
+            echo -e "${YELLOW}建议：${NC}"
+            echo "  1. 检查 SQL 文件语法是否正确"
+            echo "  2. 检查数据库用户权限是否足够"
+            echo "  3. 手动导入 SQL 文件: mysql -u ${MYSQL_USER} -p ${MYSQL_DATABASE} < ${SQL_FILE}"
         echo ""
         # 提供重试选项
         read -p "是否重试导入 SQL 脚本？[y/N]: " RETRY_IMPORT
@@ -3823,7 +3823,7 @@ show_installation_summary() {
     get_mysql_connection_info
     local mysql_host="$mysql_host"
     local mysql_port="$mysql_port"
-    
+        
     # 查询并显示root用户的host信息（使用辅助函数）
     local root_query="SELECT CONCAT(User, '@', Host) as 'User@Host' FROM mysql.user WHERE User='root' ORDER BY Host;"
     local root_hosts
@@ -4150,7 +4150,7 @@ FLUSH PRIVILEGES;"
                 echo -e "  ${GREEN}✓${NC} ${table_name}"
             fi
         done
-    else
+                    else
         echo -e "${YELLOW}⚠ 未检测到表，可能导入失败${NC}"
         if [ -n "$sql_output" ]; then
             echo -e "${YELLOW}错误信息：${NC}"

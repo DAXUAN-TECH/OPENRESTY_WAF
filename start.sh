@@ -753,27 +753,27 @@ install_all() {
     
     # 直接调用各个安装脚本，每个脚本内部会询问是否安装
     # 步骤 1: 安装 OpenResty（基础组件，必须先安装）
-    install_openresty
-    
-    # 步骤 2: 部署配置文件（需要 OpenResty）
-    deploy_config
+        install_openresty
+        
+        # 步骤 2: 部署配置文件（需要 OpenResty）
+        deploy_config
     
     # 步骤 3: 安装 MySQL
-    install_mysql
-    
-    # 注意：install_mysql.sh 内部已经包含了：
-    # 1. 数据库初始化（执行 SQL 脚本）
-    # 2. WAF 配置文件更新（更新 lua/config.lua）
-    # 如果安装成功，这些步骤会自动完成
+        install_mysql
+        
+        # 注意：install_mysql.sh 内部已经包含了：
+        # 1. 数据库初始化（执行 SQL 脚本）
+        # 2. WAF 配置文件更新（更新 lua/config.lua）
+        # 如果安装成功，这些步骤会自动完成
     
     # 步骤 4: 安装 Redis
-    install_redis
+        install_redis
     
     # 步骤 5: 安装 GeoIP
-    install_geoip
+        install_geoip
     
     # 步骤 6: 系统优化
-    optimize_system
+        optimize_system
     
     # 安装完成
     echo -e "${GREEN}========================================${NC}"

@@ -391,7 +391,7 @@ check_existing() {
                     echo -e "${GREEN}取消卸载，保留现有安装${NC}"
                     echo -e "${GREEN}跳过 OpenResty 安装${NC}"
                     return 0
-                fi
+        fi
         
                 echo -e "${YELLOW}确认卸载，开始卸载 OpenResty...${NC}"
                 REINSTALL_MODE="yes"
@@ -462,11 +462,11 @@ check_existing() {
                 "OpenResty 1.19.9.1（兼容性更好）" \
                 "使用系统默认版本（如果可用）")
         else
-            echo "请选择 OpenResty 版本："
-            echo "  1. OpenResty 1.21.4.1（推荐，最新稳定版）"
-            echo "  2. OpenResty 1.19.9.1（兼容性更好）"
-            echo "  3. 使用系统默认版本（如果可用）"
-            read -p "请选择 [1-3]: " VERSION_CHOICE
+        echo "请选择 OpenResty 版本："
+        echo "  1. OpenResty 1.21.4.1（推荐，最新稳定版）"
+        echo "  2. OpenResty 1.19.9.1（兼容性更好）"
+        echo "  3. 使用系统默认版本（如果可用）"
+        read -p "请选择 [1-3]: " VERSION_CHOICE
         fi
         
         case "$VERSION_CHOICE" in
@@ -581,7 +581,7 @@ EOF
         echo "验证安装..."
         if verify_package_installation; then
             return 0
-        else
+    else
             # 验证失败，尝试从源码编译（作为最后手段）
             echo -e "${YELLOW}⚠ 包管理器安装验证失败，尝试从源码编译安装...${NC}"
             if install_openresty_from_source; then
@@ -788,7 +788,7 @@ install_openresty_arch() {
         echo "验证安装..."
         if verify_package_installation; then
             return 0
-        else
+    else
             # 验证失败，尝试从源码编译（作为最后手段）
             echo -e "${YELLOW}⚠ 包管理器安装验证失败，尝试从源码编译安装...${NC}"
             if install_openresty_from_source; then
@@ -1794,7 +1794,7 @@ install_lua_modules() {
             hash -r 2>/dev/null || true
             # 清除 opm 缓存并重新查找（安装后可能已添加到 PATH）
             CACHED_OPM_PATH=""
-            opm_path=$(find_opm)
+                opm_path=$(find_opm)
             if [ -n "$opm_path" ]; then
                 echo -e "${GREEN}✓ 找到 opm: ${opm_path}${NC}"
             else
@@ -2073,9 +2073,9 @@ verify_installation() {
         echo "  安装路径: ${INSTALL_DIR}"
         echo "  配置文件: ${NGINX_CONF_DIR}/nginx.conf"
         echo "  Lua 脚本: ${NGINX_LUA_DIR}"
-        
+    
         # 测试配置文件（将结果保存到全局变量，供 start_and_enable_service 使用）
-        if [ -f "${NGINX_CONF_DIR}/nginx.conf" ]; then
+    if [ -f "${NGINX_CONF_DIR}/nginx.conf" ]; then
         CONFIG_TEST_OUTPUT=$($openresty_cmd -t 2>&1)
         if echo "$CONFIG_TEST_OUTPUT" | grep -q "syntax is ok"; then
             CONFIG_TEST_PASSED=1
@@ -2114,7 +2114,7 @@ start_and_enable_service() {
     # 检查是否可以启动服务（使用 verify_installation 中的测试结果）
     local can_start=0
     if [ "${CONFIG_TEST_PASSED:-0}" -eq 1 ]; then
-        can_start=1
+            can_start=1
     elif [ -f "${NGINX_CONF_DIR}/nginx.conf" ]; then
         # 如果 verify_installation 没有测试，这里再测试一次（使用统一函数）
         # 但只在 CONFIG_TEST_PASSED 未设置时才测试，避免重复
@@ -2268,7 +2268,7 @@ EOF
                     if pgrep -f "nginx.*master" >/dev/null 2>&1 || \
                        ([ -f "${INSTALL_DIR}/nginx/logs/nginx.pid" ] && \
                         kill -0 "$(cat "${INSTALL_DIR}/nginx/logs/nginx.pid" 2>/dev/null)" 2>/dev/null); then
-                        echo -e "${GREEN}✓ OpenResty 已启动${NC}"
+                    echo -e "${GREEN}✓ OpenResty 已启动${NC}"
                         nginx_running=1
                         break
                     fi

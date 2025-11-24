@@ -74,15 +74,50 @@ check_openresty() {
 check_module_installed() {
     local module_name=$1
     local module_file="${LUALIB_DIR}/${module_name//\./\/}.lua"
+    local module_dir="${LUALIB_DIR}/${module_name//\./\/}"
     
-    # 检查文件是否存在
+    # 方法1: 使用 opm list 检查（最可靠的方法）
+    if [ -f "${OPM_BIN}" ] && [ -x "${OPM_BIN}" ]; then
+        # 从模块名提取包名（例如：resty.msgpack -> lua-resty-msgpack）
+        local package_pattern=$(echo "$module_name" | sed 's/^resty\./lua-resty-/')
+        # 检查 opm list 输出中是否包含该包
+        if ${OPM_BIN} list 2>/dev/null | grep -qiE "${package_pattern}|${module_name}"; then
+            return 0
+        fi
+    fi
+    
+    # 方法2: 检查文件是否存在
     if [ -f "$module_file" ]; then
         return 0
     fi
     
-    # 检查目录是否存在（某些模块可能是目录结构）
-    local module_dir="${LUALIB_DIR}/${module_name//\./\/}"
+    # 方法3: 检查目录是否存在（某些模块可能是目录结构）
     if [ -d "$module_dir" ]; then
+        return 0
+    fi
+    
+    # 方法4: 检查是否有任何相关文件（某些模块可能有不同的文件结构）
+    # 例如：resty/msgpack.lua 或 resty/msgpack/init.lua
+    local base_dir="${LUALIB_DIR}/resty"
+    local file_pattern=$(echo "$module_name" | sed 's/^resty\.//')
+    
+    # 检查直接文件
+    if [ -f "${base_dir}/${file_pattern}.lua" ]; then
+        return 0
+    fi
+    
+    # 检查目录
+    if [ -d "${base_dir}/${file_pattern}" ]; then
+        return 0
+    fi
+    
+    # 检查 init.lua 文件（某些模块使用目录+init.lua结构）
+    if [ -f "${base_dir}/${file_pattern}/init.lua" ]; then
+        return 0
+    fi
+    
+    # 方法5: 使用 find 命令搜索相关文件（兜底方法）
+    if find "${LUALIB_DIR}" -type f -name "*${file_pattern}*" 2>/dev/null | grep -q .; then
         return 0
     fi
     

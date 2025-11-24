@@ -751,149 +751,29 @@ install_all() {
     echo -e "${GREEN}✓ 已创建日志目录: $LOGS_DIR${NC}"
     echo ""
     
-    # 收集配置信息
-    echo -e "${BLUE}========================================${NC}"
-    echo -e "${BLUE}步骤 1: 收集配置信息${NC}"
-    echo -e "${BLUE}========================================${NC}"
-    echo ""
-    
-    # OpenResty 配置（基础组件）
-    read -p "是否安装 OpenResty（基础组件，必需）？[Y/n]: " INSTALL_OPENRESTY
-    INSTALL_OPENRESTY="${INSTALL_OPENRESTY:-Y}"
-    
-    # opm 配置（需要 OpenResty）
-    if [[ "$INSTALL_OPENRESTY" =~ ^[Yy]$ ]]; then
-        read -p "是否安装 opm（OpenResty 包管理器，推荐）？[Y/n]: " INSTALL_OPM
-        INSTALL_OPM="${INSTALL_OPM:-Y}"
-        
-        # Lua 模块依赖配置（需要 opm）
-        if [[ "$INSTALL_OPM" =~ ^[Yy]$ ]]; then
-            read -p "是否安装 Lua 模块依赖（必需，用于数据库连接等）？[Y/n]: " INSTALL_DEPENDENCIES
-            INSTALL_DEPENDENCIES="${INSTALL_DEPENDENCIES:-Y}"
-        else
-            INSTALL_DEPENDENCIES="N"
-        fi
-    else
-        INSTALL_OPM="N"
-        INSTALL_DEPENDENCIES="N"
-    fi
-    
-    # MySQL 配置
-    read -p "是否安装 MySQL（数据库，必需）？[Y/n]: " INSTALL_MYSQL
-    INSTALL_MYSQL="${INSTALL_MYSQL:-Y}"
-    
-    # Redis 配置
-    read -p "是否安装 Redis（可选，用于缓存）？[Y/n]: " INSTALL_REDIS
-    INSTALL_REDIS="${INSTALL_REDIS:-Y}"
-    
-    # GeoIP 配置
-    read -p "是否安装 GeoIP 数据库（可选，用于地域封控）？[Y/n]: " INSTALL_GEOIP
-    INSTALL_GEOIP="${INSTALL_GEOIP:-Y}"
-    
-    # 系统优化
-    read -p "是否执行系统优化（可选）？[Y/n]: " OPTIMIZE_SYSTEM
-    OPTIMIZE_SYSTEM="${OPTIMIZE_SYSTEM:-Y}"
-    
-    echo ""
-    echo -e "${GREEN}✓ 配置信息收集完成${NC}"
-    echo ""
-    
-    # 计算步骤（按依赖顺序）
-    CURRENT_STEP=2
-    TOTAL_STEPS=0
-    [[ "$INSTALL_OPENRESTY" =~ ^[Yy]$ ]] && TOTAL_STEPS=$((TOTAL_STEPS + 1))  # OpenResty
-    [[ "$INSTALL_OPM" =~ ^[Yy]$ ]] && TOTAL_STEPS=$((TOTAL_STEPS + 1))  # opm（需要 OpenResty）
-    [[ "$INSTALL_DEPENDENCIES" =~ ^[Yy]$ ]] && TOTAL_STEPS=$((TOTAL_STEPS + 1))  # Lua 模块依赖（需要 opm）
-    [[ "$INSTALL_OPENRESTY" =~ ^[Yy]$ ]] && TOTAL_STEPS=$((TOTAL_STEPS + 1))  # Deploy（需要 OpenResty）
-    [[ "$INSTALL_MYSQL" =~ ^[Yy]$ ]] && TOTAL_STEPS=$((TOTAL_STEPS + 1))
-    [[ "$INSTALL_REDIS" =~ ^[Yy]$ ]] && TOTAL_STEPS=$((TOTAL_STEPS + 1))
-    [[ "$INSTALL_GEOIP" =~ ^[Yy]$ ]] && TOTAL_STEPS=$((TOTAL_STEPS + 1))
-    [[ "$OPTIMIZE_SYSTEM" =~ ^[Yy]$ ]] && TOTAL_STEPS=$((TOTAL_STEPS + 1))
-    
+    # 直接调用各个安装脚本，每个脚本内部会询问是否安装
     # 步骤 1: 安装 OpenResty（基础组件，必须先安装）
-    if [[ "$INSTALL_OPENRESTY" =~ ^[Yy]$ ]]; then
-        echo -e "${BLUE}========================================${NC}"
-        echo -e "${BLUE}步骤 ${CURRENT_STEP}/${TOTAL_STEPS}: 安装 OpenResty${NC}"
-        echo -e "${BLUE}========================================${NC}"
-        echo ""
-        install_openresty
-        CURRENT_STEP=$((CURRENT_STEP + 1))
-        
-        # 步骤 2: 安装 opm（OpenResty 包管理器，需要 OpenResty）
-        if [[ "$INSTALL_OPM" =~ ^[Yy]$ ]]; then
-            echo -e "${BLUE}========================================${NC}"
-            echo -e "${BLUE}步骤 ${CURRENT_STEP}/${TOTAL_STEPS}: 安装 opm${NC}"
-            echo -e "${BLUE}========================================${NC}"
-            echo ""
-            install_opm
-            CURRENT_STEP=$((CURRENT_STEP + 1))
-        fi
-        
-        # 步骤 3: 安装 Lua 模块依赖（需要 opm）
-        if [[ "$INSTALL_DEPENDENCIES" =~ ^[Yy]$ ]]; then
-            echo -e "${BLUE}========================================${NC}"
-            echo -e "${BLUE}步骤 ${CURRENT_STEP}/${TOTAL_STEPS}: 安装 Lua 模块依赖${NC}"
-            echo -e "${BLUE}========================================${NC}"
-            echo ""
-            manage_dependencies
-            CURRENT_STEP=$((CURRENT_STEP + 1))
-        fi
-        
-        # 步骤 4: 部署配置文件（需要 OpenResty）
-        echo -e "${BLUE}========================================${NC}"
-        echo -e "${BLUE}步骤 ${CURRENT_STEP}/${TOTAL_STEPS}: 部署配置文件${NC}"
-        echo -e "${BLUE}========================================${NC}"
-        echo ""
-        deploy_config
-        CURRENT_STEP=$((CURRENT_STEP + 1))
-    else
-        echo -e "${YELLOW}跳过 OpenResty 安装，相关步骤也将跳过${NC}"
-        echo ""
-    fi
+    install_openresty
+    
+    # 步骤 2: 部署配置文件（需要 OpenResty）
+    deploy_config
     
     # 步骤 3: 安装 MySQL
-    if [[ "$INSTALL_MYSQL" =~ ^[Yy]$ ]]; then
-        echo -e "${BLUE}========================================${NC}"
-        echo -e "${BLUE}步骤 ${CURRENT_STEP}/${TOTAL_STEPS}: 安装 MySQL${NC}"
-        echo -e "${BLUE}========================================${NC}"
-        echo ""
-        install_mysql
-        CURRENT_STEP=$((CURRENT_STEP + 1))
-        
-        # 注意：install_mysql.sh 内部已经包含了：
-        # 1. 数据库初始化（执行 SQL 脚本）
-        # 2. WAF 配置文件更新（更新 lua/config.lua）
-        # 如果安装成功，这些步骤会自动完成
-    fi
+    install_mysql
+    
+    # 注意：install_mysql.sh 内部已经包含了：
+    # 1. 数据库初始化（执行 SQL 脚本）
+    # 2. WAF 配置文件更新（更新 lua/config.lua）
+    # 如果安装成功，这些步骤会自动完成
     
     # 步骤 4: 安装 Redis
-    if [[ "$INSTALL_REDIS" =~ ^[Yy]$ ]]; then
-        echo -e "${BLUE}========================================${NC}"
-        echo -e "${BLUE}步骤 ${CURRENT_STEP}/${TOTAL_STEPS}: 安装 Redis${NC}"
-        echo -e "${BLUE}========================================${NC}"
-        echo ""
-        install_redis
-        CURRENT_STEP=$((CURRENT_STEP + 1))
-    fi
+    install_redis
     
     # 步骤 5: 安装 GeoIP
-    if [[ "$INSTALL_GEOIP" =~ ^[Yy]$ ]]; then
-        echo -e "${BLUE}========================================${NC}"
-        echo -e "${BLUE}步骤 ${CURRENT_STEP}/${TOTAL_STEPS}: 安装 GeoIP 数据库${NC}"
-        echo -e "${BLUE}========================================${NC}"
-        echo ""
-        install_geoip
-        CURRENT_STEP=$((CURRENT_STEP + 1))
-    fi
+    install_geoip
     
     # 步骤 6: 系统优化
-    if [[ "$OPTIMIZE_SYSTEM" =~ ^[Yy]$ ]]; then
-        echo -e "${BLUE}========================================${NC}"
-        echo -e "${BLUE}步骤 ${CURRENT_STEP}/${TOTAL_STEPS}: 系统优化${NC}"
-        echo -e "${BLUE}========================================${NC}"
-        echo ""
-        optimize_system
-    fi
+    optimize_system
     
     # 安装完成
     echo -e "${GREEN}========================================${NC}"

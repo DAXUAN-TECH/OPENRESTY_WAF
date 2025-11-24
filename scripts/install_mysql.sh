@@ -915,25 +915,30 @@ install_mysql_redhat() {
                 echo -e "${YELLOW}检测到模块化过滤问题，尝试禁用模块化过滤...${NC}"
                 # 尝试禁用 MySQL 模块（如果存在）
                 echo "尝试禁用 MySQL 模块..."
-                dnf module disable -y mysql 2>/dev/null || true
+                dnf module disable -y mysql 2>&1 | tee -a /tmp/mysql_install.log || true
                 
-                # 使用 --setopt=module_platform_id= 禁用模块过滤（正确的 DNF 参数）
-                echo -e "${YELLOW}使用 --setopt=module_platform_id= 禁用模块过滤重新安装...${NC}"
-                echo "正在执行: dnf install -y $nogpgcheck_flag --setopt=module_platform_id= mysql-community-server mysql-community-client"
-                dnf install -y $nogpgcheck_flag --setopt=module_platform_id= mysql-community-server mysql-community-client 2>&1 | tee -a /tmp/mysql_install.log
+                # 清理 DNF 缓存，确保模块禁用生效
+                echo "清理 DNF 缓存..."
+                dnf clean all 2>/dev/null || true
+                dnf makecache 2>&1 | grep -vE "GPG|密钥" || true
+                
+                # 禁用模块后，直接重新安装（不需要额外参数）
+                echo -e "${YELLOW}MySQL 模块已禁用，重新安装...${NC}"
+                echo "正在执行: dnf install -y $nogpgcheck_flag mysql-community-server mysql-community-client"
+                dnf install -y $nogpgcheck_flag mysql-community-server mysql-community-client 2>&1 | tee -a /tmp/mysql_install.log
                 local dnf_retry_exit_code=${PIPESTATUS[0]}
                 
                 if [ $dnf_retry_exit_code -eq 0 ]; then
                     if verify_mysql_installation /tmp/mysql_install.log; then
                         INSTALL_SUCCESS=1
-                        echo -e "${GREEN}✓ MySQL 安装成功（已禁用模块过滤）${NC}"
+                        echo -e "${GREEN}✓ MySQL 安装成功（已禁用 MySQL 模块）${NC}"
                     else
                         INSTALL_SUCCESS=0
                         echo -e "${RED}✗ MySQL 安装失败（验证失败）${NC}"
                     fi
                 else
                     INSTALL_SUCCESS=0
-                    echo -e "${RED}✗ dnf install 命令执行失败（即使禁用模块过滤）${NC}"
+                    echo -e "${RED}✗ dnf install 命令执行失败（即使禁用 MySQL 模块）${NC}"
                 fi
             else
                 echo -e "${RED}✗ dnf install 命令执行失败${NC}"

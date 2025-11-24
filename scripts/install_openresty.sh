@@ -405,18 +405,22 @@ EOF
         fi
     fi
     
-    # 尝试使用包管理器安装
+    # 尝试使用包管理器安装（RedHat 系列优先使用 yum）
     echo "尝试使用包管理器安装 OpenResty..."
     INSTALL_SUCCESS=0
     
-    if command -v dnf &> /dev/null; then
+    if command -v yum &> /dev/null; then
+        echo "使用 yum 安装 OpenResty..."
+        if yum install -y openresty openresty-resty 2>&1; then
+            INSTALL_SUCCESS=1
+        fi
+    elif command -v dnf &> /dev/null; then
+        echo "使用 dnf 安装 OpenResty（yum 不可用时使用）..."
         if dnf install -y openresty openresty-resty 2>&1; then
             INSTALL_SUCCESS=1
         fi
     else
-        if yum install -y openresty openresty-resty 2>&1; then
-            INSTALL_SUCCESS=1
-        fi
+        echo -e "${YELLOW}⚠ 未找到 yum 或 dnf 包管理器${NC}"
     fi
     
     # 如果包管理器安装失败，尝试从源码编译
@@ -480,6 +484,7 @@ install_openresty_debian() {
     
     # 添加 OpenResty 仓库
     if [ ! -f /etc/apt/sources.list.d/openresty.list ]; then
+        echo "添加 OpenResty 仓库..."
         # 尝试使用 apt-key（旧方法）
         if wget -qO - https://openresty.org/package/pubkey.gpg | apt-key add - 2>/dev/null; then
             echo "deb http://openresty.org/package/${repo_os} ${distro_codename} main" > /etc/apt/sources.list.d/openresty.list
@@ -489,13 +494,22 @@ install_openresty_debian() {
             wget -qO - https://openresty.org/package/pubkey.gpg | gpg --dearmor -o /etc/apt/keyrings/openresty.gpg
             echo "deb [signed-by=/etc/apt/keyrings/openresty.gpg] http://openresty.org/package/${repo_os} ${distro_codename} main" > /etc/apt/sources.list.d/openresty.list
         fi
-        apt-get update
+        echo "更新 apt 仓库列表..."
+        apt update
     fi
     
-    # 安装 OpenResty
-    if apt-get install -y openresty 2>&1; then
+    # 安装 OpenResty（Ubuntu/Debian 系列使用 apt）
+    echo "使用 apt 安装 OpenResty..."
+    INSTALL_SUCCESS=0
+    if apt install -y openresty openresty-resty 2>&1; then
+        INSTALL_SUCCESS=1
         echo -e "${GREEN}✓ OpenResty 安装完成${NC}"
     else
+        INSTALL_SUCCESS=0
+    fi
+    
+    # 如果包管理器安装失败，尝试从源码编译
+    if [ "$INSTALL_SUCCESS" -eq 0 ]; then
         echo -e "${YELLOW}⚠ 包管理器安装失败，尝试从源码编译安装...${NC}"
         install_openresty_from_source
     fi
@@ -881,8 +895,13 @@ install_lua_modules() {
                             echo -e "${GREEN}✓ openresty-resty 安装成功${NC}"
                         fi
                     fi
-                elif command -v apt-get &> /dev/null; then
-                    if apt-get install -y openresty-resty 2>&1 | tee /tmp/openresty_resty_install.log; then
+                elif command -v apt &> /dev/null || command -v apt-get &> /dev/null; then
+                    # Ubuntu/Debian 系列使用 apt
+                    local apt_cmd="apt"
+                    if ! command -v apt &> /dev/null; then
+                        apt_cmd="apt-get"
+                    fi
+                    if $apt_cmd install -y openresty-resty 2>&1 | tee /tmp/openresty_resty_install.log; then
                         if grep -qiE "已安装|installed|complete|Setting up|已经是最新版本" /tmp/openresty_resty_install.log; then
                             install_success=1
                             echo -e "${GREEN}✓ openresty-resty 安装成功${NC}"

@@ -2019,8 +2019,7 @@ set_root_password() {
             return 0
         fi
     elif [ -z "$MYSQL_ROOT_PASSWORD" ]; then
-        read -sp "请输入 MySQL root 密码（直接回车跳过）: " MYSQL_ROOT_PASSWORD
-        echo ""
+        read -p "请输入 MySQL root 密码（直接回车跳过）: " MYSQL_ROOT_PASSWORD
     fi
     
     if [ -n "$MYSQL_ROOT_PASSWORD" ]; then
@@ -2746,8 +2745,7 @@ CNF_EOF
                 read -p "是否重新输入 root 密码？[Y/n]: " REENTER_PWD
                 REENTER_PWD="${REENTER_PWD:-Y}"
                 if [[ "$REENTER_PWD" =~ ^[Yy]$ ]]; then
-                    read -sp "请输入正确的 MySQL root 密码: " MYSQL_ROOT_PASSWORD
-                    echo ""
+                    read -p "请输入正确的 MySQL root 密码: " MYSQL_ROOT_PASSWORD
                     if [ -z "$MYSQL_ROOT_PASSWORD" ]; then
                         echo -e "${RED}错误: 密码不能为空${NC}"
                         echo -e "${YELLOW}跳过安全配置${NC}"
@@ -2838,8 +2836,7 @@ EOF
             read -p "是否现在设置 root 密码？[Y/n]: " SET_PWD_NOW
             SET_PWD_NOW="${SET_PWD_NOW:-Y}"
             if [[ "$SET_PWD_NOW" =~ ^[Yy]$ ]]; then
-                read -sp "请输入新密码: " NEW_PASSWORD
-                echo ""
+                read -p "请输入新密码: " NEW_PASSWORD
                 if [ -n "$NEW_PASSWORD" ]; then
                     # 使用临时密码修改密码
                     if mysql --connect-expired-password -u root -p"${TEMP_PASSWORD}" -e "ALTER USER 'root'@'localhost' IDENTIFIED BY '${NEW_PASSWORD}';" 2>/dev/null; then
@@ -2942,8 +2939,7 @@ create_database() {
             echo -e "${YELLOW}检测到 MySQL 临时密码，请使用临时密码或已设置的新密码${NC}"
             echo -e "${YELLOW}临时密码: ${TEMP_PASSWORD}${NC}"
         fi
-        read -sp "请输入 MySQL root 密码（直接回车使用临时密码或无密码）: " MYSQL_ROOT_PASSWORD
-        echo ""
+        read -p "请输入 MySQL root 密码（直接回车使用临时密码或无密码）: " MYSQL_ROOT_PASSWORD
         # 如果用户没有输入密码，使用临时密码
         if [ -z "$MYSQL_ROOT_PASSWORD" ] && [ -n "$TEMP_PASSWORD" ]; then
             MYSQL_ROOT_PASSWORD="$TEMP_PASSWORD"
@@ -3126,8 +3122,7 @@ EOF
             read -p "是否现在修改 root 密码？[Y/n]: " CHANGE_PWD
             CHANGE_PWD="${CHANGE_PWD:-Y}"
             if [[ "$CHANGE_PWD" =~ ^[Yy]$ ]]; then
-                read -sp "请输入新密码: " NEW_PASSWORD
-                echo ""
+                read -p "请输入新密码: " NEW_PASSWORD
                 if [ -n "$NEW_PASSWORD" ]; then
                     # 修改密码（MySQL 8.0 需要使用 --connect-expired-password）
                     if mysql --connect-expired-password -u root -p"${TEMP_PASSWORD}" -e "ALTER USER 'root'@'localhost' IDENTIFIED BY '${NEW_PASSWORD}';" 2>/dev/null; then
@@ -3275,8 +3270,7 @@ CNF_EOF
         USE_EXISTING_USER="${USE_EXISTING_USER:-Y}"
         if [[ "$USE_EXISTING_USER" =~ ^[Yy]$ ]]; then
             echo -e "${GREEN}✓ 将使用现有用户 ${DB_USER}${NC}"
-            read -sp "请输入用户 ${DB_USER} 的密码: " DB_USER_PASSWORD
-            echo ""
+            read -p "请输入用户 ${DB_USER} 的密码: " DB_USER_PASSWORD
             if [ -z "$DB_USER_PASSWORD" ]; then
                 echo -e "${RED}错误: 用户密码不能为空${NC}"
                 return 1
@@ -3331,8 +3325,7 @@ EOF
     fi
     
     # 交互式输入密码
-    read -sp "请输入数据库用户密码: " DB_USER_PASSWORD
-    echo ""
+    read -p "请输入数据库用户密码: " DB_USER_PASSWORD
     if [ -z "$DB_USER_PASSWORD" ]; then
         echo -e "${RED}错误: 用户密码不能为空${NC}"
         return 1
@@ -3918,8 +3911,7 @@ main() {
                 done
                 
                 # 提示用户输入密码
-                read -sp "请输入 MySQL root 密码（直接回车使用临时密码或无密码）: " MYSQL_ROOT_PASSWORD
-                echo ""
+                read -p "请输入 MySQL root 密码（直接回车使用临时密码或无密码）: " MYSQL_ROOT_PASSWORD
                 
                 # 如果用户没有输入，使用临时密码或尝试无密码
                 if [ -z "$MYSQL_ROOT_PASSWORD" ]; then

@@ -71,46 +71,24 @@ echo -e "${GREEN}✓ 目录检查完成${NC}"
 
 # 复制 nginx.conf（只复制主配置文件）
 echo -e "${GREEN}[2/3] 复制并配置主配置文件...${NC}"
-cp "${PROJECT_ROOT}/init_file/nginx.conf" "$NGINX_CONF_DIR/nginx.conf"
 
-# 替换 nginx.conf 中的路径占位符
-# 1. 替换 error_log 路径（这些指令不支持变量，必须使用绝对路径）
-sed -i "s|/path/to/project/logs/error.log|$PROJECT_ROOT_ABS/logs/error.log|g" "$NGINX_CONF_DIR/nginx.conf"
+# 直接使用 sed 在复制时替换，避免多次操作导致重复
+# 一次性完成：读取模板文件 -> 替换路径 -> 写入目标文件
+sed -e "s|/path/to/project/logs/error.log|$PROJECT_ROOT_ABS/logs/error.log|g" \
+    -e 's|set $project_root "/path/to/project"|set $project_root "'"$PROJECT_ROOT_ABS"'"|g' \
+    "${PROJECT_ROOT}/init_file/nginx.conf" > "$NGINX_CONF_DIR/nginx.conf.tmp" && \
+    mv "$NGINX_CONF_DIR/nginx.conf.tmp" "$NGINX_CONF_DIR/nginx.conf"
 
-# 2. 替换 $project_root 变量为实际项目路径
-sed -i 's|set $project_root "/path/to/project"|set $project_root "'"$PROJECT_ROOT_ABS"'"|g' "$NGINX_CONF_DIR/nginx.conf"
-
-# 3. 确保 http 块后没有多余内容（简单直接的方法）
-# 找到 http 块开始行
-http_start=$(grep -n "^http {" "$NGINX_CONF_DIR/nginx.conf" | cut -d: -f1 | head -1)
-if [ -n "$http_start" ]; then
-    # 找到 http 块结束位置（计算大括号匹配）
-    http_end=$(awk -v start="$http_start" '
-        BEGIN { brace_count = 0 }
-        NR >= start {
-            for (i = 1; i <= length($0); i++) {
-                char = substr($0, i, 1)
-                if (char == "{") brace_count++
-                if (char == "}") {
-                    brace_count--
-                    if (brace_count == 0) {
-                        print NR
-                        exit
-                    }
-                }
-            }
-        }
-    ' "$NGINX_CONF_DIR/nginx.conf")
-    
-    if [ -n "$http_end" ]; then
-        total_lines=$(wc -l < "$NGINX_CONF_DIR/nginx.conf")
-        # 如果 http 块后还有内容，直接删除
-        if [ "$http_end" -lt "$total_lines" ]; then
-            echo -e "${YELLOW}⚠ 清理 http 块后的多余内容（第 $((http_end + 1))-$total_lines 行）...${NC}"
-            sed -i "$((http_end + 1)),\$d" "$NGINX_CONF_DIR/nginx.conf"
-            echo -e "${GREEN}✓ 已清理${NC}"
-        fi
-    fi
+# 验证文件是否正确生成（检查行数，应该和模板文件一致）
+template_lines=$(wc -l < "${PROJECT_ROOT}/init_file/nginx.conf")
+deployed_lines=$(wc -l < "$NGINX_CONF_DIR/nginx.conf")
+if [ "$template_lines" != "$deployed_lines" ]; then
+    echo -e "${YELLOW}⚠ 警告: 部署后的文件行数 ($deployed_lines) 与模板文件 ($template_lines) 不一致${NC}"
+    echo -e "${YELLOW}  可能是替换操作导致的问题，将使用模板文件重新生成...${NC}"
+    # 重新生成，确保文件正确
+    sed -e "s|/path/to/project/logs/error.log|$PROJECT_ROOT_ABS/logs/error.log|g" \
+        -e 's|set $project_root "/path/to/project"|set $project_root "'"$PROJECT_ROOT_ABS"'"|g' \
+        "${PROJECT_ROOT}/init_file/nginx.conf" > "$NGINX_CONF_DIR/nginx.conf"
 fi
 
 echo -e "${GREEN}✓ 主配置文件已复制并配置${NC}"
@@ -122,40 +100,6 @@ echo -e "${GREEN}[3/4] 验证配置...${NC}"
 # 验证 nginx.conf 语法
 if [ -f "${OPENRESTY_PREFIX}/bin/openresty" ]; then
     echo "验证 nginx.conf 语法..."
-    
-    # 在验证前，确保 http 块后没有多余内容（简单直接的方法）
-    if [ -f "$NGINX_CONF_DIR/nginx.conf" ]; then
-        http_start=$(grep -n "^http {" "$NGINX_CONF_DIR/nginx.conf" | cut -d: -f1 | head -1)
-        if [ -n "$http_start" ]; then
-            # 找到 http 块结束位置（计算大括号匹配）
-            http_end=$(awk -v start="$http_start" '
-                BEGIN { brace_count = 0 }
-                NR >= start {
-                    for (i = 1; i <= length($0); i++) {
-                        char = substr($0, i, 1)
-                        if (char == "{") brace_count++
-                        if (char == "}") {
-                            brace_count--
-                            if (brace_count == 0) {
-                                print NR
-                                exit
-                            }
-                        }
-                    }
-                }
-            ' "$NGINX_CONF_DIR/nginx.conf")
-            
-            if [ -n "$http_end" ]; then
-                total_lines=$(wc -l < "$NGINX_CONF_DIR/nginx.conf")
-                # 如果 http 块后还有内容，直接删除
-                if [ "$http_end" -lt "$total_lines" ]; then
-                    echo -e "${YELLOW}⚠ 删除 http 块后的多余内容（第 $((http_end + 1))-$total_lines 行）...${NC}"
-                    sed -i "$((http_end + 1)),\$d" "$NGINX_CONF_DIR/nginx.conf"
-                    echo -e "${GREEN}✓ 已清理${NC}"
-                fi
-            fi
-        fi
-    fi
     
     if ${OPENRESTY_PREFIX}/bin/openresty -t > /dev/null 2>&1; then
         echo -e "${GREEN}✓ nginx.conf 语法正确${NC}"

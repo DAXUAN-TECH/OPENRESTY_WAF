@@ -917,23 +917,23 @@ install_mysql_redhat() {
                 echo "尝试禁用 MySQL 模块..."
                 dnf module disable -y mysql 2>/dev/null || true
                 
-                # 使用 --disable-module-filtering 重新安装
-                echo -e "${YELLOW}使用 --disable-module-filtering 重新安装...${NC}"
-                echo "正在执行: dnf install -y $nogpgcheck_flag --disable-module-filtering mysql-community-server mysql-community-client"
-                dnf install -y $nogpgcheck_flag --disable-module-filtering mysql-community-server mysql-community-client 2>&1 | tee -a /tmp/mysql_install.log
+                # 使用 --setopt=module_platform_id= 禁用模块过滤（正确的 DNF 参数）
+                echo -e "${YELLOW}使用 --setopt=module_platform_id= 禁用模块过滤重新安装...${NC}"
+                echo "正在执行: dnf install -y $nogpgcheck_flag --setopt=module_platform_id= mysql-community-server mysql-community-client"
+                dnf install -y $nogpgcheck_flag --setopt=module_platform_id= mysql-community-server mysql-community-client 2>&1 | tee -a /tmp/mysql_install.log
                 local dnf_retry_exit_code=${PIPESTATUS[0]}
                 
                 if [ $dnf_retry_exit_code -eq 0 ]; then
                     if verify_mysql_installation /tmp/mysql_install.log; then
                         INSTALL_SUCCESS=1
-                        echo -e "${GREEN}✓ MySQL 安装成功（使用 --disable-module-filtering）${NC}"
+                        echo -e "${GREEN}✓ MySQL 安装成功（已禁用模块过滤）${NC}"
                     else
                         INSTALL_SUCCESS=0
                         echo -e "${RED}✗ MySQL 安装失败（验证失败）${NC}"
                     fi
                 else
                     INSTALL_SUCCESS=0
-                    echo -e "${RED}✗ dnf install 命令执行失败（即使使用 --disable-module-filtering）${NC}"
+                    echo -e "${RED}✗ dnf install 命令执行失败（即使禁用模块过滤）${NC}"
                 fi
             else
                 echo -e "${RED}✗ dnf install 命令执行失败${NC}"

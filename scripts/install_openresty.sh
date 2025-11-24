@@ -265,116 +265,26 @@ detect_installation_method() {
     return 1
 }
 
-# 卸载 OpenResty（包管理器安装）
-uninstall_openresty_package() {
-    echo -e "${BLUE}使用包管理器卸载 OpenResty...${NC}"
+# 调用卸载脚本
+call_uninstall_script() {
+    local uninstall_script=""
     
-    # 停止服务
-    if command -v systemctl &> /dev/null; then
-        systemctl stop openresty 2>/dev/null || true
-        systemctl disable openresty 2>/dev/null || true
-    fi
+    # 获取脚本目录
+    local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    uninstall_script="${script_dir}/uninstall_openresty.sh"
     
-    # 卸载包
-    if command -v yum &> /dev/null; then
-        yum remove -y openresty openresty-resty 2>/dev/null || true
-        echo -e "${GREEN}✓ 已使用 yum 卸载 OpenResty${NC}"
-    elif command -v dnf &> /dev/null; then
-        dnf remove -y openresty openresty-resty 2>/dev/null || true
-        echo -e "${GREEN}✓ 已使用 dnf 卸载 OpenResty${NC}"
-    elif command -v apt-get &> /dev/null; then
-        apt-get remove -y openresty openresty-resty 2>/dev/null || true
-        apt-get purge -y openresty openresty-resty 2>/dev/null || true
-        apt-get autoremove -y 2>/dev/null || true
-        echo -e "${GREEN}✓ 已使用 apt-get 卸载 OpenResty${NC}"
-    fi
-    
-    # 删除 systemd 服务文件
-    if [ -f /etc/systemd/system/openresty.service ]; then
-        rm -f /etc/systemd/system/openresty.service
-        systemctl daemon-reload 2>/dev/null || true
-        echo -e "${GREEN}✓ 已删除 systemd 服务文件${NC}"
-    fi
-    
-    # 删除符号链接
-    if [ -L /usr/local/bin/openresty ]; then
-        rm -f /usr/local/bin/openresty
-    fi
-    if [ -L /usr/local/bin/opm ]; then
-        rm -f /usr/local/bin/opm
-    fi
-}
-
-# 卸载 OpenResty（源码编译安装）
-uninstall_openresty_source() {
-    echo -e "${BLUE}卸载源码编译安装的 OpenResty...${NC}"
-    
-    # 停止服务
-    if command -v systemctl &> /dev/null; then
-        systemctl stop openresty 2>/dev/null || true
-        systemctl disable openresty 2>/dev/null || true
-    fi
-    
-    # 停止进程（如果还在运行）
-    if pgrep -f "nginx.*master" >/dev/null 2>&1; then
-        echo "停止 OpenResty 进程..."
-        pkill -9 -f "nginx.*master" 2>/dev/null || true
-        sleep 2
-    fi
-    
-    # 删除安装目录
-    if [ -d "${INSTALL_DIR}" ]; then
-        echo "删除安装目录: ${INSTALL_DIR}"
-        rm -rf "${INSTALL_DIR}"
-        echo -e "${GREEN}✓ 已删除安装目录${NC}"
-    fi
-    
-    # 删除 systemd 服务文件
-    if [ -f /etc/systemd/system/openresty.service ]; then
-        rm -f /etc/systemd/system/openresty.service
-        systemctl daemon-reload 2>/dev/null || true
-        echo -e "${GREEN}✓ 已删除 systemd 服务文件${NC}"
-    fi
-    
-    # 删除符号链接
-    if [ -L /usr/local/bin/openresty ]; then
-        rm -f /usr/local/bin/openresty
-    fi
-    if [ -L /usr/local/bin/opm ]; then
-        rm -f /usr/local/bin/opm
-    fi
-    
-    # 检查残留文件
-    echo "检查残留文件..."
-    local has_residue=0
-    
-    # 检查常见的残留位置
-    local residue_paths=(
-        "/usr/local/bin/openresty"
-        "/usr/local/bin/opm"
-        "/usr/bin/openresty"
-        "/usr/bin/opm"
-        "/opt/openresty"
-        "/etc/systemd/system/openresty.service"
-    )
-    
-    for path in "${residue_paths[@]}"; do
-        if [ -e "$path" ]; then
-            echo -e "${YELLOW}  发现残留: $path${NC}"
-            has_residue=1
-        fi
-    done
-    
-    # 检查进程
-    if pgrep -f "nginx.*master" >/dev/null 2>&1; then
-        echo -e "${YELLOW}  发现运行中的进程${NC}"
-        has_residue=1
-    fi
-    
-    if [ $has_residue -eq 0 ]; then
-        echo -e "${GREEN}✓ 未发现残留文件，卸载成功${NC}"
+    # 检查卸载脚本是否存在
+    if [ -f "$uninstall_script" ] && [ -x "$uninstall_script" ]; then
+        echo -e "${BLUE}调用卸载脚本卸载现有 OpenResty...${NC}"
+        # 使用非交互模式，完全删除（重新安装场景）
+        NON_INTERACTIVE=1 bash "$uninstall_script" --non-interactive delete_all 2>&1 || {
+            echo -e "${YELLOW}⚠ 卸载脚本执行完成（可能有警告）${NC}"
+        }
+        return 0
     else
-        echo -e "${YELLOW}⚠ 发现残留文件，请手动清理${NC}"
+        echo -e "${YELLOW}⚠ 卸载脚本不存在: ${uninstall_script}${NC}"
+        echo -e "${YELLOW}⚠ 将尝试手动卸载...${NC}"
+        return 1
     fi
 }
 
@@ -429,21 +339,40 @@ check_existing() {
                 echo -e "${YELLOW}将重新安装 OpenResty...${NC}"
                 REINSTALL_MODE="yes"
                 
-                # 根据安装方式选择卸载方法
-                case "$install_method" in
-                    rpm|deb)
-                        uninstall_openresty_package
-                        ;;
-                    source)
-                        uninstall_openresty_source
-                        ;;
-                    *)
-                        # 未知安装方式，尝试两种方法
-                        echo -e "${YELLOW}⚠ 未知安装方式，尝试卸载...${NC}"
-                        uninstall_openresty_package
-                        uninstall_openresty_source
-                        ;;
-                esac
+                # 调用卸载脚本（非交互模式，完全删除）
+                if ! call_uninstall_script; then
+                    # 如果卸载脚本不存在或失败，尝试手动卸载
+                    echo -e "${YELLOW}⚠ 卸载脚本调用失败，尝试手动卸载...${NC}"
+                    case "$install_method" in
+                        rpm|deb)
+                            # 简单的手动卸载（包管理器）
+                            if command -v yum &> /dev/null; then
+                                yum remove -y openresty openresty-resty 2>/dev/null || true
+                            elif command -v dnf &> /dev/null; then
+                                dnf remove -y openresty openresty-resty 2>/dev/null || true
+                            elif command -v apt-get &> /dev/null; then
+                                apt-get remove -y openresty openresty-resty 2>/dev/null || true
+                                apt-get purge -y openresty openresty-resty 2>/dev/null || true
+                            fi
+                            ;;
+                        source)
+                            # 简单的手动卸载（源码编译）
+                            if [ -d "${INSTALL_DIR}" ]; then
+                                rm -rf "${INSTALL_DIR}"
+                            fi
+                            ;;
+                    esac
+                    # 停止服务
+                    if command -v systemctl &> /dev/null; then
+                        systemctl stop openresty 2>/dev/null || true
+                        systemctl disable openresty 2>/dev/null || true
+                    fi
+                    # 删除服务文件
+                    if [ -f /etc/systemd/system/openresty.service ]; then
+                        rm -f /etc/systemd/system/openresty.service
+                        systemctl daemon-reload 2>/dev/null || true
+                    fi
+                fi
                 
                 # 等待一下确保卸载完成
                 sleep 2

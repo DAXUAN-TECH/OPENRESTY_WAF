@@ -11,11 +11,11 @@ if [ -f "${SCRIPT_DIR}/common.sh" ]; then
     source "${SCRIPT_DIR}/common.sh"
 else
     # 如果 common.sh 不存在，定义基本颜色（向后兼容）
-    RED='\033[0;31m'
-    GREEN='\033[0;32m'
-    YELLOW='\033[1;33m'
-    BLUE='\033[0;34m'
-    NC='\033[0m'
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m'
 fi
 
 # 获取脚本目录（使用相对路径）
@@ -126,7 +126,13 @@ if [ -f "${OPENRESTY_PREFIX}/bin/openresty" ]; then
             fi
             
             # 检查 http 块内是否已有 set 指令
-            set_in_http=$(sed -n "${http_start},${http_end}p" "$NGINX_CONF_DIR/nginx.conf" | grep -c "set \$project_root" || echo "0")
+            set_in_http=$(sed -n "${http_start},${http_end}p" "$NGINX_CONF_DIR/nginx.conf" | grep -c "set \$project_root" 2>/dev/null || echo "0")
+            # 清理变量值，去除可能的换行符和空格
+            set_in_http=$(echo "$set_in_http" | tr -d '\n\r' | head -n1)
+            # 确保是数字，如果不是则设为 0
+            if ! [[ "$set_in_http" =~ ^[0-9]+$ ]]; then
+                set_in_http=0
+            fi
             
             if [ "$set_in_http" -eq 0 ]; then
                 # 在 http 块内第一行添加 set 指令（确保正确的缩进）

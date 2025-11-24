@@ -336,7 +336,35 @@ check_existing() {
         
         case "$REINSTALL_CHOICE" in
             1)
-                echo -e "${YELLOW}将重新安装 OpenResty...${NC}"
+                echo -e "${YELLOW}将重新安装 OpenResty，需要先卸载现有安装${NC}"
+                echo ""
+                echo -e "${RED}警告: 卸载将删除以下内容：${NC}"
+                case "$install_method" in
+                    rpm|deb)
+                        echo "  - OpenResty 软件包（通过包管理器卸载）"
+                        echo "  - systemd 服务文件"
+                        echo "  - 符号链接"
+                        ;;
+                    source)
+                        echo "  - OpenResty 安装目录: ${INSTALL_DIR}"
+                        echo "  - systemd 服务文件"
+                        echo "  - 符号链接"
+                        ;;
+                    *)
+                        echo "  - OpenResty 安装目录和所有相关文件"
+                        ;;
+                esac
+                echo ""
+                read -p "确认卸载现有 OpenResty？[y/N]: " CONFIRM_UNINSTALL
+                CONFIRM_UNINSTALL="${CONFIRM_UNINSTALL:-N}"
+                
+                if [[ ! "$CONFIRM_UNINSTALL" =~ ^[Yy]$ ]]; then
+                    echo -e "${GREEN}取消卸载，保留现有安装${NC}"
+                    echo -e "${GREEN}跳过 OpenResty 安装${NC}"
+                    exit 0
+                fi
+                
+                echo -e "${YELLOW}确认卸载，开始卸载 OpenResty...${NC}"
                 REINSTALL_MODE="yes"
                 
                 # 调用卸载脚本（非交互模式，完全删除）
@@ -374,6 +402,7 @@ check_existing() {
                     fi
                 fi
                 
+                echo -e "${GREEN}✓ 卸载完成，将开始重新安装${NC}"
                 # 等待一下确保卸载完成
                 sleep 2
                 ;;

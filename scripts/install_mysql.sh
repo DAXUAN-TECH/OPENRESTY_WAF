@@ -1323,40 +1323,78 @@ install_mysql_redhat() {
         local nogpgcheck_flag="--nogpgcheck"
         
         if command -v dnf &> /dev/null; then
+            # 执行安装并捕获输出
             if dnf install -y $nogpgcheck_flag "$version_package" "mysql-community-client-${full_version}" 2>&1 | tee /tmp/mysql_install.log; then
                 # 验证是否真正安装成功
                 if verify_mysql_installation /tmp/mysql_install.log; then
-                INSTALL_SUCCESS=1
-                echo -e "${GREEN}✓ MySQL ${full_version} 安装成功${NC}"
+                    INSTALL_SUCCESS=1
+                    echo -e "${GREEN}✓ MySQL ${full_version} 安装成功${NC}"
                 else
                     echo -e "${RED}✗ MySQL ${full_version} 安装失败${NC}"
-                    echo -e "${YELLOW}安装日志（最后20行）：${NC}"
-                    tail -20 /tmp/mysql_install.log 2>/dev/null || true
+                    echo -e "${YELLOW}安装日志（最后30行）：${NC}"
+                    tail -30 /tmp/mysql_install.log 2>/dev/null || true
+                    echo ""
+                    echo -e "${BLUE}详细错误分析：${NC}"
+                    if grep -qiE "No package|没有可用软件包|No match for argument|Nothing to do" /tmp/mysql_install.log 2>/dev/null; then
+                        echo "  - 软件包不可用，可能原因："
+                        echo "    1. 仓库中不存在该版本"
+                        echo "    2. 仓库未正确配置"
+                        echo "    3. 网络连接问题"
+                    fi
                     INSTALL_SUCCESS=0
                 fi
             else
                 INSTALL_SUCCESS=0
                 echo -e "${RED}✗ dnf install 命令执行失败${NC}"
-                echo -e "${YELLOW}安装日志（最后20行）：${NC}"
-                tail -20 /tmp/mysql_install.log 2>/dev/null || true
+                echo -e "${YELLOW}安装日志（最后30行）：${NC}"
+                tail -30 /tmp/mysql_install.log 2>/dev/null || true
+                echo ""
+                echo -e "${BLUE}详细错误分析：${NC}"
+                if [ -f /tmp/mysql_install.log ]; then
+                    if grep -qiE "No package|没有可用软件包|No match for argument" /tmp/mysql_install.log; then
+                        echo "  - 软件包不可用"
+                        echo "  - 尝试检查可用版本: dnf list available mysql-community-server"
+                    elif grep -qiE "Error|Failed|错误" /tmp/mysql_install.log; then
+                        echo "  - 检测到安装错误，请查看上方日志"
+                    fi
+                fi
             fi
         else
+            # 执行安装并捕获输出
             if yum install -y $nogpgcheck_flag "$version_package" "mysql-community-client-${full_version}" 2>&1 | tee /tmp/mysql_install.log; then
                 # 验证是否真正安装成功
                 if verify_mysql_installation /tmp/mysql_install.log; then
-                INSTALL_SUCCESS=1
-                echo -e "${GREEN}✓ MySQL ${full_version} 安装成功${NC}"
+                    INSTALL_SUCCESS=1
+                    echo -e "${GREEN}✓ MySQL ${full_version} 安装成功${NC}"
                 else
                     echo -e "${RED}✗ MySQL ${full_version} 安装失败${NC}"
-                    echo -e "${YELLOW}安装日志（最后20行）：${NC}"
-                    tail -20 /tmp/mysql_install.log 2>/dev/null || true
+                    echo -e "${YELLOW}安装日志（最后30行）：${NC}"
+                    tail -30 /tmp/mysql_install.log 2>/dev/null || true
+                    echo ""
+                    echo -e "${BLUE}详细错误分析：${NC}"
+                    if grep -qiE "No package|没有可用软件包|No match for argument|Nothing to do" /tmp/mysql_install.log 2>/dev/null; then
+                        echo "  - 软件包不可用，可能原因："
+                        echo "    1. 仓库中不存在该版本"
+                        echo "    2. 仓库未正确配置"
+                        echo "    3. 网络连接问题"
+                    fi
                     INSTALL_SUCCESS=0
                 fi
             else
                 INSTALL_SUCCESS=0
                 echo -e "${RED}✗ yum install 命令执行失败${NC}"
-                echo -e "${YELLOW}安装日志（最后20行）：${NC}"
-                tail -20 /tmp/mysql_install.log 2>/dev/null || true
+                echo -e "${YELLOW}安装日志（最后30行）：${NC}"
+                tail -30 /tmp/mysql_install.log 2>/dev/null || true
+                echo ""
+                echo -e "${BLUE}详细错误分析：${NC}"
+                if [ -f /tmp/mysql_install.log ]; then
+                    if grep -qiE "No package|没有可用软件包|No match for argument" /tmp/mysql_install.log; then
+                        echo "  - 软件包不可用"
+                        echo "  - 尝试检查可用版本: yum list available mysql-community-server"
+                    elif grep -qiE "Error|Failed|错误" /tmp/mysql_install.log; then
+                        echo "  - 检测到安装错误，请查看上方日志"
+                    fi
+                fi
             fi
         fi
         
@@ -1552,10 +1590,30 @@ install_mysql_redhat() {
         echo "  4. 软件包名称不正确"
         echo ""
         if [ -f /tmp/mysql_install.log ]; then
-            echo -e "${BLUE}安装日志（最后20行）：${NC}"
-            tail -20 /tmp/mysql_install.log
+            echo -e "${BLUE}安装日志（最后50行）：${NC}"
+            tail -50 /tmp/mysql_install.log
+            echo ""
+            echo -e "${BLUE}错误分析：${NC}"
+            if grep -qiE "No package|没有可用软件包|No match for argument|Nothing to do" /tmp/mysql_install.log; then
+                echo "  - 软件包不可用"
+                echo "  - 建议：尝试使用系统默认版本或检查仓库配置"
+            elif grep -qiE "GPG key|GPG 密钥" /tmp/mysql_install.log; then
+                echo "  - GPG 密钥问题（已尝试禁用，但可能仍有问题）"
+                echo "  - 建议：检查仓库 GPG 配置"
+            elif grep -qiE "网络|network|timeout|连接" /tmp/mysql_install.log; then
+                echo "  - 网络连接问题"
+                echo "  - 建议：检查网络连接和仓库镜像"
+            else
+                echo "  - 请查看上方日志获取详细错误信息"
+            fi
             echo ""
         fi
+        echo -e "${YELLOW}建议的解决方案：${NC}"
+        echo "  1. 检查可用版本: dnf list available mysql-community-server 或 yum list available mysql-community-server"
+        echo "  2. 尝试使用系统默认版本（选择选项3）"
+        echo "  3. 检查仓库配置: cat /etc/yum.repos.d/mysql-community*.repo"
+        echo "  4. 手动安装: dnf install -y --nogpgcheck mysql-community-server mysql-community-client"
+        echo ""
         echo -e "${YELLOW}请检查错误信息并手动安装，或尝试其他版本${NC}"
         echo ""
         exit 1

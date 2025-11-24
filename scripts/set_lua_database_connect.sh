@@ -11,11 +11,11 @@ if [ -f "${SCRIPT_DIR}/common.sh" ]; then
     source "${SCRIPT_DIR}/common.sh"
 else
     # 如果 common.sh 不存在，定义基本颜色（向后兼容）
-    RED='\033[0;31m'
-    GREEN='\033[0;32m'
-    YELLOW='\033[1;33m'
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
     BLUE='\033[0;34m'
-    NC='\033[0m'
+NC='\033[0m'
 fi
 
 # 获取脚本目录
@@ -200,7 +200,7 @@ interactive_mysql() {
     read -p "MySQL User [waf_user]: " MYSQL_USER
     MYSQL_USER="${MYSQL_USER:-waf_user}"
     
-    read -sp "MySQL Password: " MYSQL_PASS
+    read -p "MySQL Password: " MYSQL_PASS
     echo ""
     
     if [ -z "$MYSQL_PASS" ]; then
@@ -231,7 +231,7 @@ interactive_redis() {
     read -p "Redis DB [0]: " REDIS_DB
     REDIS_DB="${REDIS_DB:-0}"
     
-    read -sp "Redis Password (留空表示无密码): " REDIS_PASS
+    read -p "Redis Password (留空表示无密码): " REDIS_PASS
     echo ""
     
     update_redis_config "$REDIS_HOST" "$REDIS_PORT" "$REDIS_DB" "$REDIS_PASS"

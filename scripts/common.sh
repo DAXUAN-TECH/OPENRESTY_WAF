@@ -228,3 +228,79 @@ download_file_with_fallback() {
     return 0
 }
 
+# 检测硬件配置（统一函数）
+# 返回: 设置全局变量 CPU_CORES, TOTAL_MEM_GB, TOTAL_MEM_MB
+detect_hardware_common() {
+    # 检测 CPU 核心数
+    if command -v nproc &> /dev/null; then
+        CPU_CORES=$(nproc)
+    elif [ -f /proc/cpuinfo ]; then
+        CPU_CORES=$(grep -c "^processor" /proc/cpuinfo)
+    else
+        CPU_CORES=2  # 默认值
+    fi
+    
+    # 检测内存大小（GB）
+    if [ -f /proc/meminfo ]; then
+        TOTAL_MEM_KB=$(grep "^MemTotal:" /proc/meminfo | awk '{print $2}')
+        TOTAL_MEM_MB=$((TOTAL_MEM_KB / 1024))
+        TOTAL_MEM_GB=$((TOTAL_MEM_MB / 1024))
+    elif command -v free &> /dev/null; then
+        TOTAL_MEM_MB=$(free -m | grep "^Mem:" | awk '{print $2}')
+        TOTAL_MEM_GB=$((TOTAL_MEM_MB / 1024))
+    else
+        TOTAL_MEM_GB=4  # 默认值
+        TOTAL_MEM_MB=4096
+    fi
+    
+    # 确保最小值
+    if [ $CPU_CORES -lt 1 ]; then
+        CPU_CORES=1
+    fi
+    if [ $TOTAL_MEM_GB -lt 1 ]; then
+        TOTAL_MEM_GB=1
+        TOTAL_MEM_MB=1024
+    fi
+    
+    # 导出变量供调用者使用
+    export CPU_CORES TOTAL_MEM_GB TOTAL_MEM_MB
+}
+
+# 简化的操作系统检测（仅检测基本类型，不显示详细信息）
+# 返回: 设置全局变量 OS
+detect_os_simple() {
+    # 优先使用 /etc/os-release (标准方法)
+    if [ -f /etc/os-release ]; then
+        . /etc/os-release
+        OS=$ID
+        
+        # 处理特殊发行版
+        case $OS in
+            "ol"|"oracle")
+                OS="oraclelinux"
+                ;;
+            "amzn"|"amazon")
+                OS="amazonlinux"
+                ;;
+            "raspbian")
+                OS="debian"
+                ;;
+            "linuxmint")
+                OS="ubuntu"  # Linux Mint 基于 Ubuntu
+                ;;
+            "kali")
+                OS="debian"  # Kali Linux 基于 Debian
+                ;;
+        esac
+    elif [ -f /etc/redhat-release ]; then
+        OS="centos"
+    elif [ -f /etc/debian_version ]; then
+        OS="debian"
+    else
+        OS="unknown"
+    fi
+    
+    # 导出变量供调用者使用
+    export OS
+}
+

@@ -45,41 +45,10 @@ export MYSQL_USER_FOR_WAF=""
 export MYSQL_PASSWORD_FOR_WAF=""
 export USE_NEW_USER
 
-# 检测硬件配置
+# 检测硬件配置（使用公共函数）
 detect_hardware() {
     echo -e "${BLUE}检测硬件配置...${NC}"
-    
-    # 检测 CPU 核心数
-    if command -v nproc &> /dev/null; then
-        CPU_CORES=$(nproc)
-    elif [ -f /proc/cpuinfo ]; then
-        CPU_CORES=$(grep -c "^processor" /proc/cpuinfo)
-    else
-        CPU_CORES=2  # 默认值
-    fi
-    
-    # 检测内存大小（GB）
-    if [ -f /proc/meminfo ]; then
-        TOTAL_MEM_KB=$(grep "^MemTotal:" /proc/meminfo | awk '{print $2}')
-        TOTAL_MEM_MB=$((TOTAL_MEM_KB / 1024))
-        TOTAL_MEM_GB=$((TOTAL_MEM_MB / 1024))
-    elif command -v free &> /dev/null; then
-        TOTAL_MEM_MB=$(free -m | grep "^Mem:" | awk '{print $2}')
-        TOTAL_MEM_GB=$((TOTAL_MEM_MB / 1024))
-    else
-        TOTAL_MEM_GB=4  # 默认值
-        TOTAL_MEM_MB=4096
-    fi
-    
-    # 确保最小值
-    if [ $CPU_CORES -lt 1 ]; then
-        CPU_CORES=1
-    fi
-    if [ $TOTAL_MEM_GB -lt 1 ]; then
-        TOTAL_MEM_GB=1
-        TOTAL_MEM_MB=1024
-    fi
-    
+    detect_hardware_common
     echo -e "${GREEN}✓ CPU 核心数: ${CPU_CORES}${NC}"
     echo -e "${GREEN}✓ 总内存: ${TOTAL_MEM_GB}GB (${TOTAL_MEM_MB}MB)${NC}"
 }

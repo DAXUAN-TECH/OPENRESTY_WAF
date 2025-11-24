@@ -6,12 +6,18 @@
 
 set -e
 
-# 颜色定义
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+# 引入公共函数库
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ -f "${SCRIPT_DIR}/common.sh" ]; then
+    source "${SCRIPT_DIR}/common.sh"
+else
+    # 如果 common.sh 不存在，定义基本颜色（向后兼容）
+    RED='\033[0;31m'
+    GREEN='\033[0;32m'
+    YELLOW='\033[1;33m'
+    BLUE='\033[0;34m'
+    NC='\033[0m'
+fi
 
 # 配置变量
 INSTALL_DIR="${OPENRESTY_PREFIX:-/usr/local/openresty}"
@@ -23,27 +29,17 @@ if [ "$1" = "--non-interactive" ] || [ "$1" = "-y" ]; then
     shift
 fi
 
-# 检查是否为 root 用户
+# 检查是否为 root 用户（使用公共函数）
 check_root() {
-    if [ "$EUID" -ne 0 ]; then
+    if ! check_root_common; then
         echo -e "${RED}错误: 需要 root 权限来卸载${NC}"
-        echo "请使用: sudo $0"
         exit 1
     fi
 }
 
-# 检测系统类型
+# 检测系统类型（使用公共函数）
 detect_os() {
-    if [ -f /etc/os-release ]; then
-        . /etc/os-release
-        OS=$ID
-    elif [ -f /etc/redhat-release ]; then
-        OS="centos"
-    elif [ -f /etc/debian_version ]; then
-        OS="debian"
-    else
-        OS="unknown"
-    fi
+    detect_os_simple
 }
 
 # 检测 OpenResty 安装方式（包管理器 vs 源码编译）

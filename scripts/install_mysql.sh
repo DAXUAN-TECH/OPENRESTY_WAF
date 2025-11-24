@@ -968,12 +968,24 @@ install_mysql_redhat() {
                 echo ""
                 echo "  诊断命令："
             if command -v dnf &> /dev/null; then
-                    echo "    dnf list available mysql-community-server"
-                    echo "    dnf repolist | grep mysql"
+                echo "    dnf list available mysql-community-server"
+                echo "    dnf repolist | grep mysql"
                 else
                     echo "    yum list available mysql-community-server"
                     echo "    yum repolist | grep mysql"
                 fi
+            elif grep -qiE "filtered out by modular filtering|modular filtering" /tmp/mysql_install.log; then
+                echo "  - 检测到模块化过滤问题"
+                echo "    这是 DNF 的模块化仓库过滤功能导致的"
+                echo ""
+                echo "  解决方案："
+                echo "    1. 手动禁用模块化过滤："
+                echo "       dnf install -y --disable-module-filtering mysql-community-server mysql-community-client"
+                echo "    2. 或禁用 MySQL 模块（如果存在）："
+                echo "       dnf module disable -y mysql"
+                echo "       dnf install -y mysql-community-server mysql-community-client"
+                echo "    3. 或检查可用的 MySQL 模块："
+                echo "       dnf module list mysql"
             elif grep -qiE "Error|Failed|错误" /tmp/mysql_install.log; then
                 echo "  - 检测到安装错误"
                 grep -iE "Error|Failed|错误" /tmp/mysql_install.log | head -10

@@ -888,7 +888,7 @@ install_mysql_redhat() {
     echo "按照 MySQL 官方标准流程安装 MySQL 8.0..."
     echo "正在下载并安装 MySQL 包（这可能需要几分钟，请耐心等待）..."
     
-    if command -v dnf &> /dev/null; then
+        if command -v dnf &> /dev/null; then
         echo "使用 dnf 安装 MySQL..."
         
         # 先尝试正常安装
@@ -898,16 +898,16 @@ install_mysql_redhat() {
         
         if [ $dnf_exit_code -eq 0 ]; then
             # dnf install 成功，验证是否真正安装成功
-            if verify_mysql_installation /tmp/mysql_install.log; then
+                if verify_mysql_installation /tmp/mysql_install.log; then
                 INSTALL_SUCCESS=1
                 echo -e "${GREEN}✓ MySQL 安装成功${NC}"
-            else
+                else
                 echo -e "${RED}✗ MySQL 安装失败（验证失败）${NC}"
-                INSTALL_SUCCESS=0
-            fi
-        else
+                    INSTALL_SUCCESS=0
+                fi
+            else
             # dnf install 失败，检查错误原因
-            INSTALL_SUCCESS=0
+                INSTALL_SUCCESS=0
             echo -e "${YELLOW}第一次安装尝试失败，检查错误原因...${NC}"
             
             # 检查是否是模块化过滤问题
@@ -929,15 +929,15 @@ install_mysql_redhat() {
                 local dnf_retry_exit_code=${PIPESTATUS[0]}
                 
                 if [ $dnf_retry_exit_code -eq 0 ]; then
-                    if verify_mysql_installation /tmp/mysql_install.log; then
-                        INSTALL_SUCCESS=1
+                if verify_mysql_installation /tmp/mysql_install.log; then
+                INSTALL_SUCCESS=1
                         echo -e "${GREEN}✓ MySQL 安装成功（已禁用 MySQL 模块）${NC}"
-                    else
-                        INSTALL_SUCCESS=0
-                        echo -e "${RED}✗ MySQL 安装失败（验证失败）${NC}"
-                    fi
                 else
                     INSTALL_SUCCESS=0
+                        echo -e "${RED}✗ MySQL 安装失败（验证失败）${NC}"
+                fi
+            else
+                INSTALL_SUCCESS=0
                     echo -e "${RED}✗ dnf install 命令执行失败（即使禁用 MySQL 模块）${NC}"
                 fi
             else
@@ -951,16 +951,16 @@ install_mysql_redhat() {
         local yum_exit_code=${PIPESTATUS[0]}
         
         if [ $yum_exit_code -eq 0 ]; then
-            # 验证是否真正安装成功
-            if verify_mysql_installation /tmp/mysql_install.log; then
-                INSTALL_SUCCESS=1
+                    # 验证是否真正安装成功
+                    if verify_mysql_installation /tmp/mysql_install.log; then
+                    INSTALL_SUCCESS=1
                 echo -e "${GREEN}✓ MySQL 安装成功${NC}"
-            else
+                    else
                 echo -e "${RED}✗ MySQL 安装失败（验证失败）${NC}"
-                INSTALL_SUCCESS=0
-            fi
-        else
-            INSTALL_SUCCESS=0
+                        INSTALL_SUCCESS=0
+                    fi
+                else
+                    INSTALL_SUCCESS=0
             echo -e "${RED}✗ yum install 命令执行失败${NC}"
         fi
     fi
@@ -2006,15 +2006,22 @@ set_root_password() {
         read -p "是否现在设置 root 密码？[Y/n]: " SET_PASSWORD
         SET_PASSWORD="${SET_PASSWORD:-Y}"
         if [[ "$SET_PASSWORD" =~ ^[Yy]$ ]]; then
-            # 使用更可靠的方法读取密码（避免特殊字符问题）
+            # 使用 read -s 隐藏密码输入（更可靠的方法）
             echo -n "请输入新的 MySQL root 密码: "
-            # 禁用 echo，读取密码
-            stty -echo
-            IFS= read -r MYSQL_ROOT_PASSWORD
-            stty echo
+            # 使用 read -s 隐藏密码输入
+            IFS= read -rs MYSQL_ROOT_PASSWORD
             echo ""
             if [ -z "$MYSQL_ROOT_PASSWORD" ]; then
                 echo -e "${RED}错误: 密码不能为空${NC}"
+                echo -e "${YELLOW}跳过 root 密码设置${NC}"
+                return 0
+            fi
+            # 确认密码（再次输入以确认）
+            echo -n "请再次输入密码以确认: "
+            IFS= read -rs MYSQL_ROOT_PASSWORD_CONFIRM
+            echo ""
+            if [ "$MYSQL_ROOT_PASSWORD" != "$MYSQL_ROOT_PASSWORD_CONFIRM" ]; then
+                echo -e "${RED}错误: 两次输入的密码不一致${NC}"
                 echo -e "${YELLOW}跳过 root 密码设置${NC}"
                 return 0
             fi

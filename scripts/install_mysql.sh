@@ -583,7 +583,8 @@ check_existing() {
     fi
     
     # 版本选择（如果未设置环境变量或已卸载需要重新选择）
-    if [ -z "$MYSQL_VERSION" ]; then
+    # 注意：检查环境变量 MYSQL_VERSION_FROM_ENV，而不是 MYSQL_VERSION（因为 MYSQL_VERSION 有默认值）
+    if [ -z "${MYSQL_VERSION_FROM_ENV:-}" ]; then
         echo ""
         echo -e "${BLUE}正在检查可用的 MySQL 版本...${NC}"
         
@@ -3323,6 +3324,7 @@ EOF
         # 保存数据库名称到全局变量并导出
         MYSQL_DATABASE="$DB_NAME"
         export CREATED_DB_NAME="$DB_NAME"
+        return 0
     else
         echo -e "${RED}✗ 数据库创建失败${NC}"
         # 显示详细错误信息（过滤掉警告信息）
@@ -4177,10 +4179,32 @@ main() {
     fi
     
     # 创建数据库
-    create_database
+    if ! create_database; then
+        echo ""
+        echo -e "${RED}========================================${NC}"
+        echo -e "${RED}MySQL 安装失败：数据库创建失败${NC}"
+        echo -e "${RED}========================================${NC}"
+        echo ""
+        echo -e "${YELLOW}请按照上面的错误提示手动创建数据库，然后重新运行安装脚本${NC}"
+        echo ""
+        echo -e "${BLUE}手动创建数据库命令:${NC}"
+        echo "  mysql -u root -p"
+        echo "  CREATE DATABASE waf_db DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;"
+        echo ""
+        exit 1
+    fi
     
     # 创建数据库用户
-    create_database_user
+    if ! create_database_user; then
+        echo ""
+        echo -e "${RED}========================================${NC}"
+        echo -e "${RED}MySQL 安装失败：数据库用户创建失败${NC}"
+        echo -e "${RED}========================================${NC}"
+        echo ""
+        echo -e "${YELLOW}请按照上面的错误提示手动创建数据库用户，然后重新运行安装脚本${NC}"
+        echo ""
+        exit 1
+    fi
     
     # 初始化数据库数据
     init_database

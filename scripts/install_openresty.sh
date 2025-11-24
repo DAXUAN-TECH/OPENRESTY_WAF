@@ -340,8 +340,8 @@ check_existing() {
             REINSTALL_CHOICE="1"  # 非交互模式默认重新安装
             echo -e "${BLUE}非交互模式：默认选择重新安装${NC}"
         elif command -v prompt_choice &> /dev/null 2>&1; then
-            # 使用 prompt_choice，但确保输出到标准错误（用户可见）
-            REINSTALL_CHOICE=$(prompt_choice "请选择操作：" "重新安装（卸载现有安装后重新安装）" "跳过安装（保留现有安装）" 2>&1)
+            # 使用 prompt_choice，提示信息输出到标准错误（用户可见），选择结果输出到标准输出（被捕获）
+            REINSTALL_CHOICE=$(prompt_choice "请选择操作：" "重新安装（卸载现有安装后重新安装）" "跳过安装（保留现有安装）")
         else
             echo "请选择操作："
             echo "  1. 重新安装（卸载现有安装后重新安装）"

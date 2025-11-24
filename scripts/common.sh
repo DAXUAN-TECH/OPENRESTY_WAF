@@ -587,7 +587,7 @@ prompt_choice() {
     local options=("$@")
     local choice
     
-    # 确保输出立即显示（刷新标准输出）
+    # 确保输出立即显示到终端（标准错误不会被命令替换捕获）
     echo -e "${BLUE}${prompt}${NC}" >&2
     for i in "${!options[@]}"; do
         echo "  $((i+1)). ${options[$i]}" >&2
@@ -596,8 +596,12 @@ prompt_choice() {
     echo "" >&2
     
     while true; do
-        read -p "请选择 [1-${#options[@]}]: " choice
+        # 将提示输出到标准错误（用户可见，不会被命令替换捕获）
+        echo -n "请选择 [1-${#options[@]}]: " >&2
+        # 从标准输入读取用户输入
+        read choice
         if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le "${#options[@]}" ]; then
+            # 只输出选择结果到标准输出（供命令替换捕获）
             echo "$choice"
             return 0
         else

@@ -296,20 +296,25 @@ if [ -f "${OPENRESTY_PREFIX}/bin/openresty" ]; then
             fi
         fi
         
-        # 在验证之前，再次检查并清理 http 块后的重复内容（防止替换操作产生新的重复）
+        # 在验证之前，强制清理 http 块后的所有内容（防止任何重复内容）
+        echo -e "${BLUE}验证前清理 http 块后的所有内容...${NC}"
         http_start=$(grep -n "^http {" "$NGINX_CONF_DIR/nginx.conf" | cut -d: -f1 | head -1)
         if [ -n "$http_start" ]; then
+            # 使用更可靠的方法找到 http 块的结束位置
+            # 从 http { 开始，计算大括号匹配
             http_end=$(awk -v start="$http_start" '
                 BEGIN { brace_count = 0; found_start = 0 }
                 NR >= start {
                     if (NR == start) found_start = 1
                     if (found_start) {
-                        for (i = 1; i <= length($0); i++) {
-                            char = substr($0, i, 1)
+                        # 处理整行的所有字符
+                        line = $0
+                        for (i = 1; i <= length(line); i++) {
+                            char = substr(line, i, 1)
                             if (char == "{") brace_count++
                             if (char == "}") {
                                 brace_count--
-                                if (brace_count == 0 && found_start) {
+                                if (brace_count == 0) {
                                     print NR
                                     exit
                                 }
@@ -318,17 +323,66 @@ if [ -f "${OPENRESTY_PREFIX}/bin/openresty" ]; then
                     }
                 }
             ' "$NGINX_CONF_DIR/nginx.conf")
-            if [ -n "$http_end" ]; then
+            
+            if [ -n "$http_end" ] && [ "$http_end" -gt 0 ]; then
                 total_lines=$(wc -l < "$NGINX_CONF_DIR/nginx.conf")
+                # 如果 http 块结束后还有内容，强制删除
                 if [ "$http_end" -lt "$total_lines" ]; then
-                    # 检查是否有非空行、非注释的内容
-                    after_http_non_empty=$(sed -n "$((http_end + 1)),\$p" "$NGINX_CONF_DIR/nginx.conf" | grep -v '^[[:space:]]*$' | grep -v '^[[:space:]]*#')
-                    if [ -n "$after_http_non_empty" ]; then
-                        echo -e "${YELLOW}⚠ 验证前再次检测到重复内容，正在清理...${NC}"
-                        sed -i "$((http_end + 1)),\$d" "$NGINX_CONF_DIR/nginx.conf"
-                        echo -e "${GREEN}✓ 已清理重复内容${NC}"
+                    echo -e "${YELLOW}⚠ 检测到 http 块（第 ${http_start}-${http_end} 行）后还有内容（第 $((http_end + 1))-${total_lines} 行），正在清理...${NC}"
+                    # 强制删除 http 块后的所有内容
+                    sed -i "$((http_end + 1)),\$d" "$NGINX_CONF_DIR/nginx.conf"
+                    echo -e "${GREEN}✓ 已清理 http 块后的所有内容${NC}"
+                else
+                    echo -e "${BLUE}✓ http 块后没有多余内容${NC}"
+                fi
+            else
+                echo -e "${YELLOW}⚠ 无法确定 http 块结束位置，尝试使用备用方法...${NC}"
+                # 备用方法：查找最后一个独立的 }
+                last_brace=$(grep -n "^}" "$NGINX_CONF_DIR/nginx.conf" | tail -1 | cut -d: -f1)
+                if [ -n "$last_brace" ] && [ "$last_brace" -gt "$http_start" ]; then
+                    total_lines=$(wc -l < "$NGINX_CONF_DIR/nginx.conf")
+                    if [ "$last_brace" -lt "$total_lines" ]; then
+                        echo -e "${YELLOW}⚠ 使用备用方法清理第 $((last_brace + 1)) 行之后的内容...${NC}"
+                        sed -i "$((last_brace + 1)),\$d" "$NGINX_CONF_DIR/nginx.conf"
+                        echo -e "${GREEN}✓ 已清理${NC}"
                     fi
                 fi
+            fi
+        fi
+    fi
+    
+    # 在验证之前，最后一次强制清理：删除 http 块后的所有内容
+    echo -e "${BLUE}最终清理：确保 http 块后没有内容...${NC}"
+    http_start=$(grep -n "^http {" "$NGINX_CONF_DIR/nginx.conf" | cut -d: -f1 | head -1)
+    if [ -n "$http_start" ]; then
+        # 找到 http 块的结束位置（最后一个独立的 }）
+        http_end=$(awk -v start="$http_start" '
+            BEGIN { brace_count = 0; found_start = 0; last_close = 0 }
+            NR >= start {
+                if (NR == start) found_start = 1
+                if (found_start) {
+                    line = $0
+                    for (i = 1; i <= length(line); i++) {
+                        char = substr(line, i, 1)
+                        if (char == "{") brace_count++
+                        if (char == "}") {
+                            brace_count--
+                            if (brace_count == 0) {
+                                last_close = NR
+                            }
+                        }
+                    }
+                }
+            }
+            END { if (last_close > 0) print last_close }
+        ' "$NGINX_CONF_DIR/nginx.conf")
+        
+        if [ -n "$http_end" ] && [ "$http_end" -gt 0 ]; then
+            total_lines=$(wc -l < "$NGINX_CONF_DIR/nginx.conf")
+            if [ "$http_end" -lt "$total_lines" ]; then
+                echo -e "${YELLOW}⚠ 强制删除第 $((http_end + 1)) 行之后的所有内容...${NC}"
+                sed -i "$((http_end + 1)),\$d" "$NGINX_CONF_DIR/nginx.conf"
+                echo -e "${GREEN}✓ 已删除 http 块后的所有内容${NC}"
             fi
         fi
     fi
@@ -348,6 +402,9 @@ if [ -f "${OPENRESTY_PREFIX}/bin/openresty" ]; then
                 sed -n "${http_start},$((http_start + 10))p" "$NGINX_CONF_DIR/nginx.conf" || true
             fi
             grep -B 2 -A 5 "set \$project_root" "$NGINX_CONF_DIR/nginx.conf" || true
+            echo ""
+            echo -e "${BLUE}配置文件总行数：$(wc -l < "$NGINX_CONF_DIR/nginx.conf")${NC}"
+            echo -e "${BLUE}http 块开始行：${http_start}${NC}"
         fi
         echo ""
         echo -e "${YELLOW}⚠ 请修复配置文件后重新部署${NC}"

@@ -2142,22 +2142,9 @@ set_root_password() {
                 fi
                 
                 if [[ "$REENTER_PWD" =~ ^[Yy]$ ]]; then
-                    # 询问是否显示密码输入
-                    echo -e "${BLUE}密码输入方式：${NC}"
-                    echo "  1. 隐藏输入（推荐，更安全）"
-                    echo "  2. 显示输入（可以看到输入的字符）"
-                    read -p "请选择 [1-2，默认1]: " SHOW_PASSWORD
-                    SHOW_PASSWORD="${SHOW_PASSWORD:-1}"
-                    
-                    if [[ "$SHOW_PASSWORD" == "2" ]]; then
-                        echo -n "请输入新的 MySQL root 密码（必须满足复杂度要求，将显示输入）: "
-                        IFS= read -r MYSQL_ROOT_PASSWORD
-                        echo ""
-                    else
-                        echo -n "请输入新的 MySQL root 密码（必须满足复杂度要求）: "
-                        # 显示密码输入（用户要求显示文本）
-                        IFS= read -r MYSQL_ROOT_PASSWORD
-                    fi
+                    # 显示密码输入（用户要求显示文本）
+                    echo -n "请输入新的 MySQL root 密码（必须满足复杂度要求）: "
+                    IFS= read -r MYSQL_ROOT_PASSWORD
                     
                     if [ -z "$MYSQL_ROOT_PASSWORD" ]; then
                         echo -e "${RED}错误: 密码不能为空${NC}"

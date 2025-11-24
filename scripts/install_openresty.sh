@@ -239,39 +239,224 @@ install_dependencies() {
     esac
 }
 
+# 检测 OpenResty 安装方式（包管理器 vs 源码编译）
+detect_installation_method() {
+    # 检查是否通过包管理器安装
+    if command -v rpm &> /dev/null; then
+        if rpm -qa | grep -qiE "^openresty"; then
+            echo "rpm"
+            return 0
+        fi
+    elif command -v dpkg &> /dev/null; then
+        if dpkg -l | grep -qiE "^ii.*openresty"; then
+            echo "deb"
+            return 0
+        fi
+    fi
+    
+    # 检查是否通过源码编译安装（检查安装目录是否存在）
+    if [ -f "${INSTALL_DIR}/bin/openresty" ]; then
+        # 如果存在但不在包管理器中，可能是源码编译
+        echo "source"
+        return 0
+    fi
+    
+    echo "unknown"
+    return 1
+}
+
+# 卸载 OpenResty（包管理器安装）
+uninstall_openresty_package() {
+    echo -e "${BLUE}使用包管理器卸载 OpenResty...${NC}"
+    
+    # 停止服务
+    if command -v systemctl &> /dev/null; then
+        systemctl stop openresty 2>/dev/null || true
+        systemctl disable openresty 2>/dev/null || true
+    fi
+    
+    # 卸载包
+    if command -v yum &> /dev/null; then
+        yum remove -y openresty openresty-resty 2>/dev/null || true
+        echo -e "${GREEN}✓ 已使用 yum 卸载 OpenResty${NC}"
+    elif command -v dnf &> /dev/null; then
+        dnf remove -y openresty openresty-resty 2>/dev/null || true
+        echo -e "${GREEN}✓ 已使用 dnf 卸载 OpenResty${NC}"
+    elif command -v apt-get &> /dev/null; then
+        apt-get remove -y openresty openresty-resty 2>/dev/null || true
+        apt-get purge -y openresty openresty-resty 2>/dev/null || true
+        apt-get autoremove -y 2>/dev/null || true
+        echo -e "${GREEN}✓ 已使用 apt-get 卸载 OpenResty${NC}"
+    fi
+    
+    # 删除 systemd 服务文件
+    if [ -f /etc/systemd/system/openresty.service ]; then
+        rm -f /etc/systemd/system/openresty.service
+        systemctl daemon-reload 2>/dev/null || true
+        echo -e "${GREEN}✓ 已删除 systemd 服务文件${NC}"
+    fi
+    
+    # 删除符号链接
+    if [ -L /usr/local/bin/openresty ]; then
+        rm -f /usr/local/bin/openresty
+    fi
+    if [ -L /usr/local/bin/opm ]; then
+        rm -f /usr/local/bin/opm
+    fi
+}
+
+# 卸载 OpenResty（源码编译安装）
+uninstall_openresty_source() {
+    echo -e "${BLUE}卸载源码编译安装的 OpenResty...${NC}"
+    
+    # 停止服务
+    if command -v systemctl &> /dev/null; then
+        systemctl stop openresty 2>/dev/null || true
+        systemctl disable openresty 2>/dev/null || true
+    fi
+    
+    # 停止进程（如果还在运行）
+    if pgrep -f "nginx.*master" >/dev/null 2>&1; then
+        echo "停止 OpenResty 进程..."
+        pkill -9 -f "nginx.*master" 2>/dev/null || true
+        sleep 2
+    fi
+    
+    # 删除安装目录
+    if [ -d "${INSTALL_DIR}" ]; then
+        echo "删除安装目录: ${INSTALL_DIR}"
+        rm -rf "${INSTALL_DIR}"
+        echo -e "${GREEN}✓ 已删除安装目录${NC}"
+    fi
+    
+    # 删除 systemd 服务文件
+    if [ -f /etc/systemd/system/openresty.service ]; then
+        rm -f /etc/systemd/system/openresty.service
+        systemctl daemon-reload 2>/dev/null || true
+        echo -e "${GREEN}✓ 已删除 systemd 服务文件${NC}"
+    fi
+    
+    # 删除符号链接
+    if [ -L /usr/local/bin/openresty ]; then
+        rm -f /usr/local/bin/openresty
+    fi
+    if [ -L /usr/local/bin/opm ]; then
+        rm -f /usr/local/bin/opm
+    fi
+    
+    # 检查残留文件
+    echo "检查残留文件..."
+    local has_residue=0
+    
+    # 检查常见的残留位置
+    local residue_paths=(
+        "/usr/local/bin/openresty"
+        "/usr/local/bin/opm"
+        "/usr/bin/openresty"
+        "/usr/bin/opm"
+        "/opt/openresty"
+        "/etc/systemd/system/openresty.service"
+    )
+    
+    for path in "${residue_paths[@]}"; do
+        if [ -e "$path" ]; then
+            echo -e "${YELLOW}  发现残留: $path${NC}"
+            has_residue=1
+        fi
+    done
+    
+    # 检查进程
+    if pgrep -f "nginx.*master" >/dev/null 2>&1; then
+        echo -e "${YELLOW}  发现运行中的进程${NC}"
+        has_residue=1
+    fi
+    
+    if [ $has_residue -eq 0 ]; then
+        echo -e "${GREEN}✓ 未发现残留文件，卸载成功${NC}"
+    else
+        echo -e "${YELLOW}⚠ 发现残留文件，请手动清理${NC}"
+    fi
+}
+
 # 检查 OpenResty 是否已安装
 check_existing() {
     echo -e "${BLUE}[3/8] 检查是否已安装 OpenResty...${NC}"
     
     local openresty_installed=0
     local current_version=""
-    local config_deployed=0
+    local install_method="unknown"
     
-    if [ -f "${INSTALL_DIR}/bin/openresty" ]; then
+    # 检测安装方式
+    install_method=$(detect_installation_method)
+    if [ "$install_method" != "unknown" ]; then
         openresty_installed=1
-        current_version=$(${INSTALL_DIR}/bin/openresty -v 2>&1 | grep -oP 'openresty/\K[0-9.]+' || echo "unknown")
-        echo -e "${YELLOW}检测到已安装 OpenResty 版本: ${current_version}${NC}"
         
-        # 检查配置文件是否已部署
-        if [ -f "${INSTALL_DIR}/nginx/conf/nginx.conf" ]; then
-            if grep -q "project_root\|project_root" "${INSTALL_DIR}/nginx/conf/nginx.conf" 2>/dev/null; then
-                config_deployed=1
-                echo -e "${YELLOW}检测到配置文件已部署${NC}"
-            fi
+        # 获取版本信息
+        if [ -f "${INSTALL_DIR}/bin/openresty" ]; then
+            current_version=$(${INSTALL_DIR}/bin/openresty -v 2>&1 | grep -oP 'openresty/\K[0-9.]+' || echo "unknown")
+        elif command -v openresty &> /dev/null; then
+            current_version=$(openresty -v 2>&1 | grep -oP 'openresty/\K[0-9.]+' || echo "unknown")
         fi
+        
+        echo -e "${YELLOW}检测到已安装 OpenResty${NC}"
+        if [ -n "$current_version" ] && [ "$current_version" != "unknown" ]; then
+            echo -e "${YELLOW}  版本: ${current_version}${NC}"
+        fi
+        
+        # 显示安装方式
+        case "$install_method" in
+            rpm|deb)
+                echo -e "${YELLOW}  安装方式: 包管理器安装${NC}"
+                ;;
+            source)
+                echo -e "${YELLOW}  安装方式: 源码编译安装${NC}"
+                echo -e "${YELLOW}  安装路径: ${INSTALL_DIR}${NC}"
+                ;;
+            *)
+                echo -e "${YELLOW}  安装方式: 未知${NC}"
+                ;;
+        esac
         
         echo ""
-        read -p "是否重新安装？[Y/n]: " REINSTALL_CHOICE
-        REINSTALL_CHOICE="${REINSTALL_CHOICE:-Y}"
+        echo "请选择操作："
+        echo "  1. 重新安装（卸载现有安装后重新安装）"
+        echo "  2. 跳过安装（保留现有安装）"
+        read -p "请选择 [1-2，默认1]: " REINSTALL_CHOICE
+        REINSTALL_CHOICE="${REINSTALL_CHOICE:-1}"
         
-        if [[ ! "$REINSTALL_CHOICE" =~ ^[Yy]$ ]]; then
-            echo -e "${GREEN}跳过 OpenResty 安装，保留现有配置${NC}"
-            exit 0
-        fi
-        
-        # 默认重新安装，保留配置文件
-        echo -e "${YELLOW}将重新安装 OpenResty，但保留配置文件${NC}"
-        REINSTALL_MODE="keep_config"
+        case "$REINSTALL_CHOICE" in
+            1)
+                echo -e "${YELLOW}将重新安装 OpenResty...${NC}"
+                REINSTALL_MODE="yes"
+                
+                # 根据安装方式选择卸载方法
+                case "$install_method" in
+                    rpm|deb)
+                        uninstall_openresty_package
+                        ;;
+                    source)
+                        uninstall_openresty_source
+                        ;;
+                    *)
+                        # 未知安装方式，尝试两种方法
+                        echo -e "${YELLOW}⚠ 未知安装方式，尝试卸载...${NC}"
+                        uninstall_openresty_package
+                        uninstall_openresty_source
+                        ;;
+                esac
+                
+                # 等待一下确保卸载完成
+                sleep 2
+                ;;
+            2)
+                echo -e "${GREEN}跳过 OpenResty 安装，保留现有配置${NC}"
+                exit 0
+                ;;
+            *)
+                echo -e "${YELLOW}无效选择，跳过安装${NC}"
+                exit 0
+                ;;
+        esac
     else
         echo -e "${GREEN}✓ OpenResty 未安装，将进行全新安装${NC}"
     fi
@@ -545,6 +730,10 @@ install_openresty_gentoo() {
 install_openresty_from_source() {
     echo -e "${BLUE}[4/8] 从源码编译安装 OpenResty...${NC}"
     
+    # 确保依赖已安装（自动解决依赖）
+    echo "检查并安装编译依赖..."
+    install_dependencies
+    
     local build_dir="/tmp/openresty-build"
     local version="${OPENRESTY_VERSION}"
     
@@ -554,10 +743,14 @@ install_openresty_from_source() {
     # 下载源码
     if [ ! -f "openresty-${version}.tar.gz" ]; then
         echo "下载 OpenResty ${version} 源码..."
-        wget "https://openresty.org/download/openresty-${version}.tar.gz"
+        if ! wget "https://openresty.org/download/openresty-${version}.tar.gz"; then
+            echo -e "${RED}✗ 下载失败${NC}"
+            exit 1
+        fi
     fi
     
     # 解压
+    echo "解压源码..."
     tar -xzf "openresty-${version}.tar.gz"
     cd "openresty-${version}"
     
@@ -579,6 +772,7 @@ install_openresty_from_source() {
     if ! ./configure $configure_opts; then
         echo -e "${RED}✗ 配置失败，请检查依赖是否完整${NC}"
         echo -e "${YELLOW}所需依赖: gcc, g++, make, pcre-dev, zlib-dev, openssl-dev, perl, readline-dev${NC}"
+        echo -e "${YELLOW}提示: 可以运行 install_dependencies 函数安装依赖${NC}"
         exit 1
     fi
     
@@ -678,6 +872,9 @@ install_openresty_from_source() {
         echo -e "${BLUE}提示: 可以运行以下命令安装 opm:${NC}"
         echo "  sudo ./scripts/install_opm.sh"
     fi
+    
+    # 配置 OpenResty（创建 systemd 服务文件和环境变量）
+    configure_openresty
 }
 
 # 安装 OpenResty
@@ -724,8 +921,9 @@ create_directories() {
 configure_openresty() {
     echo -e "${BLUE}[6/8] 配置 OpenResty...${NC}"
     
-    # 创建 systemd 服务文件
+    # 创建 systemd 服务文件（开机启动脚本）
     if [ ! -f /etc/systemd/system/openresty.service ]; then
+        echo "创建 systemd 服务文件..."
         cat > /etc/systemd/system/openresty.service <<EOF
 [Unit]
 Description=OpenResty HTTP Server
@@ -745,11 +943,78 @@ RestartSec=5s
 WantedBy=multi-user.target
 EOF
         systemctl daemon-reload
+        echo -e "${GREEN}✓ systemd 服务文件已创建${NC}"
+    else
+        echo -e "${BLUE}systemd 服务文件已存在${NC}"
     fi
     
-    # 创建符号链接（可选，方便使用）
+    # 创建符号链接（方便使用）
     if [ ! -L /usr/local/bin/openresty ]; then
         ln -sf ${INSTALL_DIR}/bin/openresty /usr/local/bin/openresty
+        echo -e "${GREEN}✓ 已创建 openresty 符号链接${NC}"
+    fi
+    
+    # 创建 opm 符号链接（如果存在）
+    if [ -f "${INSTALL_DIR}/bin/opm" ] && [ ! -L /usr/local/bin/opm ]; then
+        ln -sf ${INSTALL_DIR}/bin/opm /usr/local/bin/opm
+        echo -e "${GREEN}✓ 已创建 opm 符号链接${NC}"
+    fi
+    
+    # 配置 PATH 环境变量（添加到系统环境变量）
+    echo "配置 PATH 环境变量..."
+    local profile_files=(
+        "/etc/profile"
+        "/etc/bash.bashrc"
+        "/etc/environment"
+    )
+    
+    local path_added=0
+    for profile_file in "${profile_files[@]}"; do
+        if [ -f "$profile_file" ]; then
+            if ! grep -q "${INSTALL_DIR}/bin" "$profile_file" 2>/dev/null; then
+                # 根据文件类型选择不同的添加方式
+                if [[ "$profile_file" == *"environment" ]]; then
+                    # /etc/environment 使用特殊格式
+                    if ! grep -q "PATH=" "$profile_file" 2>/dev/null; then
+                        echo "PATH=\"${INSTALL_DIR}/bin:\$PATH\"" >> "$profile_file"
+                    else
+                        sed -i "s|PATH=\"\(.*\)\"|PATH=\"${INSTALL_DIR}/bin:\1\"|g" "$profile_file" 2>/dev/null || \
+                        sed -i "s|PATH=\(.*\)|PATH=\"${INSTALL_DIR}/bin:\1\"|g" "$profile_file" 2>/dev/null || true
+                    fi
+                else
+                    # 其他文件使用 export
+                    echo "" >> "$profile_file"
+                    echo "# OpenResty PATH" >> "$profile_file"
+                    echo "export PATH=\"${INSTALL_DIR}/bin:\$PATH\"" >> "$profile_file"
+                fi
+                path_added=1
+            fi
+        fi
+    done
+    
+    # 如果上述文件都不存在或无法写入，尝试创建 /etc/profile.d/openresty.sh
+    if [ $path_added -eq 0 ]; then
+        if [ ! -f /etc/profile.d/openresty.sh ]; then
+            cat > /etc/profile.d/openresty.sh <<EOF
+# OpenResty PATH
+export PATH="${INSTALL_DIR}/bin:\$PATH"
+EOF
+            chmod +x /etc/profile.d/openresty.sh
+            path_added=1
+            echo -e "${GREEN}✓ 已创建 /etc/profile.d/openresty.sh${NC}"
+        else
+            if ! grep -q "${INSTALL_DIR}/bin" /etc/profile.d/openresty.sh 2>/dev/null; then
+                echo "export PATH=\"${INSTALL_DIR}/bin:\$PATH\"" >> /etc/profile.d/openresty.sh
+                path_added=1
+            fi
+        fi
+    fi
+    
+    if [ $path_added -eq 1 ]; then
+        echo -e "${GREEN}✓ PATH 环境变量已配置${NC}"
+        echo -e "${BLUE}提示: 请重新登录或运行 'source /etc/profile' 使环境变量生效${NC}"
+    else
+        echo -e "${BLUE}PATH 环境变量已包含 OpenResty 路径${NC}"
     fi
     
     echo -e "${GREEN}✓ OpenResty 配置完成${NC}"

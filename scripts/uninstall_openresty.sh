@@ -184,36 +184,36 @@ uninstall_openresty_package() {
         systemctl disable openresty 2>/dev/null || true
     fi
     
-    # 卸载包
+    # 卸载包（包括 openresty-opm）
     detect_os
     case $OS in
         centos|rhel|fedora|rocky|almalinux|oraclelinux|amazonlinux)
             if command -v dnf &> /dev/null; then
-                dnf remove -y openresty openresty-resty 2>/dev/null || true
-                echo -e "${GREEN}✓ 已使用 dnf 卸载 OpenResty${NC}"
+                dnf remove -y openresty openresty-opm openresty-resty 2>/dev/null || true
+                echo -e "${GREEN}✓ 已使用 dnf 卸载 OpenResty 及相关包${NC}"
             elif command -v yum &> /dev/null; then
-                yum remove -y openresty openresty-resty 2>/dev/null || true
-                echo -e "${GREEN}✓ 已使用 yum 卸载 OpenResty${NC}"
+                yum remove -y openresty openresty-opm openresty-resty 2>/dev/null || true
+                echo -e "${GREEN}✓ 已使用 yum 卸载 OpenResty 及相关包${NC}"
             fi
             ;;
         ubuntu|debian|linuxmint|raspbian|kali)
             if command -v apt-get &> /dev/null; then
-                apt-get remove -y openresty openresty-resty 2>/dev/null || true
-                apt-get purge -y openresty openresty-resty 2>/dev/null || true
+                apt-get remove -y openresty openresty-opm openresty-resty 2>/dev/null || true
+                apt-get purge -y openresty openresty-opm openresty-resty 2>/dev/null || true
                 apt-get autoremove -y 2>/dev/null || true
-                echo -e "${GREEN}✓ 已使用 apt-get 卸载 OpenResty${NC}"
+                echo -e "${GREEN}✓ 已使用 apt-get 卸载 OpenResty 及相关包${NC}"
             fi
             ;;
         opensuse*|sles)
             if command -v zypper &> /dev/null; then
-                zypper remove -y openresty 2>/dev/null || true
-                echo -e "${GREEN}✓ 已使用 zypper 卸载 OpenResty${NC}"
+                zypper remove -y openresty openresty-opm 2>/dev/null || true
+                echo -e "${GREEN}✓ 已使用 zypper 卸载 OpenResty 及相关包${NC}"
             fi
             ;;
         arch|manjaro)
             if command -v pacman &> /dev/null; then
-                pacman -R --noconfirm openresty 2>/dev/null || true
-                echo -e "${GREEN}✓ 已使用 pacman 卸载 OpenResty${NC}"
+                pacman -R --noconfirm openresty openresty-opm 2>/dev/null || true
+                echo -e "${GREEN}✓ 已使用 pacman 卸载 OpenResty 及相关包${NC}"
             fi
             ;;
     esac

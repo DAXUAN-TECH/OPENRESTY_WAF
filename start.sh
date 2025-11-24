@@ -228,13 +228,47 @@ install_opm() {
     echo -e "${BLUE}========================================${NC}"
     echo ""
     
-    if ! bash "${SCRIPTS_DIR}/install_opm.sh"; then
-        echo -e "${YELLOW}⚠ opm 安装失败，但这是可选步骤${NC}"
-        return 0
+    # 检测系统类型
+    local OS=""
+    if [ -f /etc/os-release ]; then
+        . /etc/os-release
+        OS=$ID
+    elif [ -f /etc/redhat-release ]; then
+        OS="centos"
+    elif [ -f /etc/debian_version ]; then
+        OS="debian"
     fi
     
-    echo -e "${GREEN}✓ opm 安装完成${NC}"
-    echo ""
+    local install_success=0
+    
+    # RedHat 系列
+    if [[ "$OS" =~ ^(centos|rhel|fedora|rocky|almalinux|oraclelinux|amazonlinux)$ ]]; then
+        if command -v dnf &> /dev/null; then
+            echo "使用 dnf 安装 openresty-opm..."
+            dnf install -y openresty-opm && install_success=1
+        elif command -v yum &> /dev/null; then
+            echo "使用 yum 安装 openresty-opm..."
+            yum install -y openresty-opm && install_success=1
+        fi
+    # Debian 系列
+    elif [[ "$OS" =~ ^(ubuntu|debian|linuxmint|raspbian|kali)$ ]]; then
+        if command -v apt-get &> /dev/null; then
+            echo "更新软件包列表..."
+            apt-get update -qq
+            echo "使用 apt-get 安装 openresty-opm..."
+            apt-get install -y openresty-opm && install_success=1
+        fi
+    fi
+    
+    if [ $install_success -eq 1 ]; then
+        echo -e "${GREEN}✓ opm 安装成功${NC}"
+        echo ""
+        return 0
+    else
+        echo -e "${YELLOW}⚠ opm 安装失败，但这是可选步骤${NC}"
+        echo ""
+        return 0
+    fi
 }
 
 # 管理依赖

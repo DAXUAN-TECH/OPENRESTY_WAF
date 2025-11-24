@@ -68,7 +68,7 @@ try:
     content = re.sub(r'(user = ")(waf_user)(")', r'\1' + mysql_user + r'\3', content)
     
     # 更新密码（需要转义引号和反斜杠）
-    escaped_password = mysql_password.replace('\\', '\\\\').replace('"', '\\"')
+    escaped_password = mysql_password.replace('\\\\', '\\\\\\\\').replace('"', '\\\\"')
     content = re.sub(r'(password = ")(waf_password)(")', r'\1' + escaped_password + r'\3', content)
     
     with open(config_file, 'w', encoding='utf-8') as f:
@@ -129,7 +129,7 @@ try:
     
     # 更新密码
     if redis_password:
-        escaped_password = redis_password.replace('\\', '\\\\').replace('"', '\\"')
+        escaped_password = redis_password.replace('\\\\', '\\\\\\\\').replace('"', '\\\\"')
         content = re.sub(r'password = nil', f'password = "{escaped_password}"', content)
     
     with open(config_file, 'w', encoding='utf-8') as f:

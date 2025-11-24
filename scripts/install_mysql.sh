@@ -880,14 +880,17 @@ install_mysql_redhat() {
     INSTALL_SUCCESS=0
     
     # 修复 GPG 密钥问题（强制使用 --nogpgcheck 以确保安装成功）
-    fix_mysql_gpg_key
+    # 注意：fix_mysql_gpg_key 返回 1 表示需要使用 --nogpgcheck，这是正常的，不是错误
+    fix_mysql_gpg_key || true
     local nogpgcheck_flag="--nogpgcheck"
     
     # 按照官方标准流程，直接安装 MySQL 8.0（不指定具体版本号）
     echo "按照 MySQL 官方标准流程安装 MySQL 8.0..."
+    echo "正在下载并安装 MySQL 包（这可能需要几分钟，请耐心等待）..."
     
     if command -v dnf &> /dev/null; then
         echo "使用 dnf 安装 MySQL..."
+        echo "正在执行: dnf install -y $nogpgcheck_flag mysql-community-server mysql-community-client"
         if dnf install -y $nogpgcheck_flag mysql-community-server mysql-community-client 2>&1 | tee /tmp/mysql_install.log; then
             # 验证是否真正安装成功
             if verify_mysql_installation /tmp/mysql_install.log; then
@@ -903,6 +906,7 @@ install_mysql_redhat() {
         fi
     elif command -v yum &> /dev/null; then
         echo "使用 yum 安装 MySQL..."
+        echo "正在执行: yum install -y $nogpgcheck_flag mysql-community-server mysql-community-client"
         if yum install -y $nogpgcheck_flag mysql-community-server mysql-community-client 2>&1 | tee /tmp/mysql_install.log; then
             # 验证是否真正安装成功
             if verify_mysql_installation /tmp/mysql_install.log; then

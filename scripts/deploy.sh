@@ -73,20 +73,79 @@ echo -e "${GREEN}✓ 目录检查完成${NC}"
 echo -e "${GREEN}[2/3] 复制并配置主配置文件...${NC}"
 cp "${PROJECT_ROOT}/init_file/nginx.conf" "$NGINX_CONF_DIR/nginx.conf"
 
-# 检查并修复重复的 http 块（如果存在）
+# 检查并修复重复的 http 块和内容（如果存在）
 http_block_count=$(grep -c "^http {" "$NGINX_CONF_DIR/nginx.conf" 2>/dev/null || echo "0")
 if [ "$http_block_count" -gt 1 ]; then
     echo -e "${YELLOW}⚠ 检测到多个 http 块，正在修复...${NC}"
     # 找到第一个 http 块的位置
     first_http_line=$(grep -n "^http {" "$NGINX_CONF_DIR/nginx.conf" | cut -d: -f1 | head -1)
-    # 找到第一个 http 块的结束位置
-    first_http_end=$(awk -v start="$first_http_line" 'NR > start && /^}$/ {print NR; exit}' "$NGINX_CONF_DIR/nginx.conf")
+    # 使用更精确的方法找到第一个 http 块的结束位置
+    first_http_end=$(awk -v start="$first_http_line" '
+        BEGIN { brace_count = 0; found_start = 0 }
+        NR >= start {
+            if (NR == start) found_start = 1
+            if (found_start) {
+                for (i = 1; i <= length($0); i++) {
+                    char = substr($0, i, 1)
+                    if (char == "{") brace_count++
+                    if (char == "}") {
+                        brace_count--
+                        if (brace_count == 0 && found_start) {
+                            print NR
+                            exit
+                        }
+                    }
+                }
+            }
+        }
+    ' "$NGINX_CONF_DIR/nginx.conf")
     if [ -z "$first_http_end" ]; then
         first_http_end=$(wc -l < "$NGINX_CONF_DIR/nginx.conf")
     fi
     # 删除第一个 http 块之后的所有内容，保留第一个 http 块
     sed -i "$((first_http_end + 1)),\$d" "$NGINX_CONF_DIR/nginx.conf"
     echo -e "${GREEN}✓ 已修复重复的 http 块${NC}"
+fi
+
+# 检查是否有重复的内容（在 http 块结束后）
+# 如果 http 块结束后还有内容，可能是重复的配置
+if [ -f "$NGINX_CONF_DIR/nginx.conf" ]; then
+    http_start=$(grep -n "^http {" "$NGINX_CONF_DIR/nginx.conf" | cut -d: -f1 | head -1)
+    if [ -n "$http_start" ]; then
+        http_end=$(awk -v start="$http_start" '
+            BEGIN { brace_count = 0; found_start = 0 }
+            NR >= start {
+                if (NR == start) found_start = 1
+                if (found_start) {
+                    for (i = 1; i <= length($0); i++) {
+                        char = substr($0, i, 1)
+                        if (char == "{") brace_count++
+                        if (char == "}") {
+                            brace_count--
+                            if (brace_count == 0 && found_start) {
+                                print NR
+                                exit
+                            }
+                        }
+                    }
+                }
+            }
+        ' "$NGINX_CONF_DIR/nginx.conf")
+        if [ -n "$http_end" ]; then
+            total_lines=$(wc -l < "$NGINX_CONF_DIR/nginx.conf")
+            # 检查 http 块结束后是否还有内容
+            if [ "$http_end" -lt "$total_lines" ]; then
+                # 检查 http 块后的内容是否包含 set 指令（可能是重复的）
+                after_http_content=$(sed -n "$((http_end + 1)),\$p" "$NGINX_CONF_DIR/nginx.conf")
+                if echo "$after_http_content" | grep -q "set \$project_root"; then
+                    echo -e "${YELLOW}⚠ 检测到 http 块后有重复的 set 指令，正在清理...${NC}"
+                    # 删除 http 块后的所有内容
+                    sed -i "$((http_end + 1)),\$d" "$NGINX_CONF_DIR/nginx.conf"
+                    echo -e "${GREEN}✓ 已清理重复内容${NC}"
+                fi
+            fi
+        fi
+    fi
 fi
 
 # 替换 nginx.conf 中的路径占位符
@@ -123,8 +182,28 @@ if [ -f "${OPENRESTY_PREFIX}/bin/openresty" ]; then
             exit 1
         fi
         
-        # 找到第一个 http 块的结束位置
-        http_end=$(awk -v start="$http_start" 'NR > start && /^[[:space:]]*}[[:space:]]*$/ {print NR; exit}' "$NGINX_CONF_DIR/nginx.conf")
+        # 找到第一个 http 块的结束位置（查找匹配的 }）
+        # 使用更精确的匹配，确保找到正确的 http 块结束
+        http_end=$(awk -v start="$http_start" '
+            BEGIN { brace_count = 0; found_start = 0 }
+            NR >= start {
+                if (NR == start) found_start = 1
+                if (found_start) {
+                    # 计算大括号
+                    for (i = 1; i <= length($0); i++) {
+                        char = substr($0, i, 1)
+                        if (char == "{") brace_count++
+                        if (char == "}") {
+                            brace_count--
+                            if (brace_count == 0 && found_start) {
+                                print NR
+                                exit
+                            }
+                        }
+                    }
+                }
+            }
+        ' "$NGINX_CONF_DIR/nginx.conf")
         if [ -z "$http_end" ]; then
             http_end=$(wc -l < "$NGINX_CONF_DIR/nginx.conf")
         fi
@@ -143,7 +222,27 @@ if [ -f "${OPENRESTY_PREFIX}/bin/openresty" ]; then
         
         # 重新查找 http 块位置（因为可能删除了行）
         http_start=$(grep -n "^http {" "$NGINX_CONF_DIR/nginx.conf" | cut -d: -f1 | head -1)
-        http_end=$(awk -v start="$http_start" 'NR > start && /^[[:space:]]*}[[:space:]]*$/ {print NR; exit}' "$NGINX_CONF_DIR/nginx.conf")
+        # 使用更精确的匹配，确保找到正确的 http 块结束
+        http_end=$(awk -v start="$http_start" '
+            BEGIN { brace_count = 0; found_start = 0 }
+            NR >= start {
+                if (NR == start) found_start = 1
+                if (found_start) {
+                    # 计算大括号
+                    for (i = 1; i <= length($0); i++) {
+                        char = substr($0, i, 1)
+                        if (char == "{") brace_count++
+                        if (char == "}") {
+                            brace_count--
+                            if (brace_count == 0 && found_start) {
+                                print NR
+                                exit
+                            }
+                        }
+                    }
+                }
+            }
+        ' "$NGINX_CONF_DIR/nginx.conf")
         if [ -z "$http_end" ]; then
             http_end=$(wc -l < "$NGINX_CONF_DIR/nginx.conf")
         fi
@@ -170,9 +269,11 @@ if [ -f "${OPENRESTY_PREFIX}/bin/openresty" ]; then
             # 没有 set 指令，在 http { 后添加
             echo -e "${YELLOW}⚠ 在 http 块内添加 set 指令...${NC}"
             # 使用更安全的方式插入（避免 sed 转义问题）
+            # 确保在 http { 行的下一行插入，而不是在同一行
             awk -v start="$http_start" -v project_root="$PROJECT_ROOT_ABS" '
                 NR == start {
                     print
+                    # 在下一行插入 set 指令
                     print "    # 项目根目录变量"
                     print "    set $project_root \"" project_root "\";"
                     next

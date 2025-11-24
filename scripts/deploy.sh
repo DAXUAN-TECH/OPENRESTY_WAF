@@ -84,8 +84,12 @@ cp "${PROJECT_ROOT}/init_file/nginx.conf" "$NGINX_CONF_DIR/nginx.conf"
 
 # 步骤3: 获取项目目录并修改配置（替换路径占位符）
 echo -e "${YELLOW}  替换路径占位符...${NC}"
+# 替换 error.log 路径
 sed -i "s|/path/to/project/logs/error.log|$PROJECT_ROOT_ABS/logs/error.log|g" "$NGINX_CONF_DIR/nginx.conf"
-sed -i 's|set $project_root "/path/to/project"|set $project_root "'"$PROJECT_ROOT_ABS"'"|g' "$NGINX_CONF_DIR/nginx.conf"
+# 替换 conf.d/set_conf 路径
+sed -i "s|/path/to/project/conf.d/set_conf|$PROJECT_ROOT_ABS/conf.d/set_conf|g" "$NGINX_CONF_DIR/nginx.conf"
+# 替换 conf.d/vhost_conf 路径
+sed -i "s|/path/to/project/conf.d/vhost_conf|$PROJECT_ROOT_ABS/conf.d/vhost_conf|g" "$NGINX_CONF_DIR/nginx.conf"
 
 echo -e "${GREEN}✓ 主配置文件已复制并配置${NC}"
 echo -e "${YELLOW}  注意: conf.d、lua、logs、cert 目录保持在项目目录，使用相对路径引用${NC}"

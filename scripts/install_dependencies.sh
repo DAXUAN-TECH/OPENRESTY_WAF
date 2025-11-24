@@ -26,7 +26,7 @@ OPTIONAL_DEPENDENCIES["resty.redis"]="openresty/lua-resty-redis|Redis 客户端�
 OPTIONAL_DEPENDENCIES["resty.maxminddb"]="anjia0532/lua-resty-maxminddb|GeoIP2 数据库查询，用于地域封控"
 OPTIONAL_DEPENDENCIES["resty.http"]="ledgetech/lua-resty-http|HTTP 客户端，用于告警 Webhook"
 OPTIONAL_DEPENDENCIES["resty.file"]="openresty/lua-resty-file|文件操作，用于日志队列"
-OPTIONAL_DEPENDENCIES["resty.msgpack"]="openresty/lua-resty-msgpack|MessagePack 序列化，用于高性能序列化"
+OPTIONAL_DEPENDENCIES["resty.msgpack"]="chronolaw/lua-resty-msgpack|MessagePack 序列化，用于高性能序列化"
 
 # 统计
 TOTAL=0

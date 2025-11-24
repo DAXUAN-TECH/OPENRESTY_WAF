@@ -18,7 +18,7 @@
 | `resty.maxminddb` | `anjia0532/lua-resty-maxminddb` | GeoIP2 数据库查询 | 地域封控功能 |
 | `resty.http` | `ledgetech/lua-resty-http` | HTTP 客户端 | 告警 Webhook 功能 |
 | `resty.file` | `openresty/lua-resty-file` | 文件操作 | 日志队列本地备份 |
-| `resty.msgpack` | `openresty/lua-resty-msgpack` | MessagePack 序列化 | 高性能序列化（可选） |
+| `resty.msgpack` | `chronolaw/lua-resty-msgpack` | MessagePack 序列化 | 高性能序列化（可选） |
 
 ### 内置模块（OpenResty 自带）
 
@@ -84,7 +84,7 @@ sudo ./scripts/install_dependencies.sh
 /usr/local/openresty/bin/opm get anjia0532/lua-resty-maxminddb
 /usr/local/openresty/bin/opm get ledgetech/lua-resty-http
 /usr/local/openresty/bin/opm get openresty/lua-resty-file
-/usr/local/openresty/bin/opm get openresty/lua-resty-msgpack
+/usr/local/openresty/bin/opm get chronolaw/lua-resty-msgpack
 ```
 
 ### 方式三：使用 install_openresty.sh（已包含部分依赖）

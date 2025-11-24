@@ -1323,7 +1323,17 @@ install_mysql_redhat() {
         local nogpgcheck_flag="--nogpgcheck"
         
         if command -v dnf &> /dev/null; then
+            # 先检查包是否可用
+            echo "检查软件包是否可用..."
+            if ! dnf list available "$version_package" 2>&1 | grep -qE "mysql-community-server"; then
+                echo -e "${YELLOW}⚠ 软件包 $version_package 不可用${NC}"
+                echo "尝试列出所有可用的 MySQL 包："
+                dnf list available "mysql-community-server*" 2>&1 | head -20 || true
+                echo ""
+            fi
+            
             # 执行安装并捕获输出
+            echo "执行安装命令: dnf install -y $nogpgcheck_flag $version_package mysql-community-client-${full_version}"
             if dnf install -y $nogpgcheck_flag "$version_package" "mysql-community-client-${full_version}" 2>&1 | tee /tmp/mysql_install.log; then
                 # 验证是否真正安装成功
                 if verify_mysql_installation /tmp/mysql_install.log; then
@@ -1331,36 +1341,75 @@ install_mysql_redhat() {
                     echo -e "${GREEN}✓ MySQL ${full_version} 安装成功${NC}"
                 else
                     echo -e "${RED}✗ MySQL ${full_version} 安装失败${NC}"
-                    echo -e "${YELLOW}安装日志（最后30行）：${NC}"
-                    tail -30 /tmp/mysql_install.log 2>/dev/null || true
+                    echo ""
+                    echo -e "${YELLOW}安装日志（完整输出）：${NC}"
+                    if [ -f /tmp/mysql_install.log ] && [ -s /tmp/mysql_install.log ]; then
+                        cat /tmp/mysql_install.log
+                    else
+                        echo "  日志文件为空或不存在"
+                    fi
                     echo ""
                     echo -e "${BLUE}详细错误分析：${NC}"
-                    if grep -qiE "No package|没有可用软件包|No match for argument|Nothing to do" /tmp/mysql_install.log 2>/dev/null; then
-                        echo "  - 软件包不可用，可能原因："
-                        echo "    1. 仓库中不存在该版本"
-                        echo "    2. 仓库未正确配置"
-                        echo "    3. 网络连接问题"
+                    if [ -f /tmp/mysql_install.log ]; then
+                        if grep -qiE "No package|没有可用软件包|No match for argument|Nothing to do|No packages marked for" /tmp/mysql_install.log; then
+                            echo "  - 软件包不可用，可能原因："
+                            echo "    1. 仓库中不存在该版本"
+                            echo "    2. 仓库未正确配置"
+                            echo "    3. 网络连接问题"
+                            echo ""
+                            echo "  诊断命令："
+                            echo "    dnf list available mysql-community-server*"
+                            echo "    dnf repolist | grep mysql"
+                        elif grep -qiE "Error|Failed|错误" /tmp/mysql_install.log; then
+                            echo "  - 检测到安装错误"
+                            grep -iE "Error|Failed|错误" /tmp/mysql_install.log | head -10
+                        else
+                            echo "  - 安装命令返回成功，但验证失败"
+                            echo "  - 可能原因：包已安装但命令不在 PATH 中"
+                        fi
                     fi
                     INSTALL_SUCCESS=0
                 fi
             else
                 INSTALL_SUCCESS=0
                 echo -e "${RED}✗ dnf install 命令执行失败${NC}"
-                echo -e "${YELLOW}安装日志（最后30行）：${NC}"
-                tail -30 /tmp/mysql_install.log 2>/dev/null || true
+                echo ""
+                echo -e "${YELLOW}安装日志（完整输出）：${NC}"
+                if [ -f /tmp/mysql_install.log ] && [ -s /tmp/mysql_install.log ]; then
+                    cat /tmp/mysql_install.log
+                else
+                    echo "  日志文件为空或不存在"
+                fi
                 echo ""
                 echo -e "${BLUE}详细错误分析：${NC}"
                 if [ -f /tmp/mysql_install.log ]; then
-                    if grep -qiE "No package|没有可用软件包|No match for argument" /tmp/mysql_install.log; then
+                    if grep -qiE "No package|没有可用软件包|No match for argument|Nothing to do" /tmp/mysql_install.log; then
                         echo "  - 软件包不可用"
                         echo "  - 尝试检查可用版本: dnf list available mysql-community-server"
+                        echo "  - 检查仓库: dnf repolist | grep mysql"
                     elif grep -qiE "Error|Failed|错误" /tmp/mysql_install.log; then
-                        echo "  - 检测到安装错误，请查看上方日志"
+                        echo "  - 检测到安装错误"
+                        grep -iE "Error|Failed|错误" /tmp/mysql_install.log | head -10
+                    else
+                        echo "  - 安装命令失败，但日志中没有明确错误信息"
+                        echo "  - 请检查网络连接和仓库配置"
                     fi
+                else
+                    echo "  - 日志文件不存在，无法分析错误"
                 fi
             fi
         else
+            # 先检查包是否可用
+            echo "检查软件包是否可用..."
+            if ! yum list available "$version_package" 2>&1 | grep -qE "mysql-community-server"; then
+                echo -e "${YELLOW}⚠ 软件包 $version_package 不可用${NC}"
+                echo "尝试列出所有可用的 MySQL 包："
+                yum list available "mysql-community-server*" 2>&1 | head -20 || true
+                echo ""
+            fi
+            
             # 执行安装并捕获输出
+            echo "执行安装命令: yum install -y $nogpgcheck_flag $version_package mysql-community-client-${full_version}"
             if yum install -y $nogpgcheck_flag "$version_package" "mysql-community-client-${full_version}" 2>&1 | tee /tmp/mysql_install.log; then
                 # 验证是否真正安装成功
                 if verify_mysql_installation /tmp/mysql_install.log; then
@@ -1368,32 +1417,61 @@ install_mysql_redhat() {
                     echo -e "${GREEN}✓ MySQL ${full_version} 安装成功${NC}"
                 else
                     echo -e "${RED}✗ MySQL ${full_version} 安装失败${NC}"
-                    echo -e "${YELLOW}安装日志（最后30行）：${NC}"
-                    tail -30 /tmp/mysql_install.log 2>/dev/null || true
+                    echo ""
+                    echo -e "${YELLOW}安装日志（完整输出）：${NC}"
+                    if [ -f /tmp/mysql_install.log ] && [ -s /tmp/mysql_install.log ]; then
+                        cat /tmp/mysql_install.log
+                    else
+                        echo "  日志文件为空或不存在"
+                    fi
                     echo ""
                     echo -e "${BLUE}详细错误分析：${NC}"
-                    if grep -qiE "No package|没有可用软件包|No match for argument|Nothing to do" /tmp/mysql_install.log 2>/dev/null; then
-                        echo "  - 软件包不可用，可能原因："
-                        echo "    1. 仓库中不存在该版本"
-                        echo "    2. 仓库未正确配置"
-                        echo "    3. 网络连接问题"
+                    if [ -f /tmp/mysql_install.log ]; then
+                        if grep -qiE "No package|没有可用软件包|No match for argument|Nothing to do|No packages marked for" /tmp/mysql_install.log; then
+                            echo "  - 软件包不可用，可能原因："
+                            echo "    1. 仓库中不存在该版本"
+                            echo "    2. 仓库未正确配置"
+                            echo "    3. 网络连接问题"
+                            echo ""
+                            echo "  诊断命令："
+                            echo "    yum list available mysql-community-server*"
+                            echo "    yum repolist | grep mysql"
+                        elif grep -qiE "Error|Failed|错误" /tmp/mysql_install.log; then
+                            echo "  - 检测到安装错误"
+                            grep -iE "Error|Failed|错误" /tmp/mysql_install.log | head -10
+                        else
+                            echo "  - 安装命令返回成功，但验证失败"
+                            echo "  - 可能原因：包已安装但命令不在 PATH 中"
+                        fi
                     fi
                     INSTALL_SUCCESS=0
                 fi
             else
                 INSTALL_SUCCESS=0
                 echo -e "${RED}✗ yum install 命令执行失败${NC}"
-                echo -e "${YELLOW}安装日志（最后30行）：${NC}"
-                tail -30 /tmp/mysql_install.log 2>/dev/null || true
+                echo ""
+                echo -e "${YELLOW}安装日志（完整输出）：${NC}"
+                if [ -f /tmp/mysql_install.log ] && [ -s /tmp/mysql_install.log ]; then
+                    cat /tmp/mysql_install.log
+                else
+                    echo "  日志文件为空或不存在"
+                fi
                 echo ""
                 echo -e "${BLUE}详细错误分析：${NC}"
                 if [ -f /tmp/mysql_install.log ]; then
-                    if grep -qiE "No package|没有可用软件包|No match for argument" /tmp/mysql_install.log; then
+                    if grep -qiE "No package|没有可用软件包|No match for argument|Nothing to do" /tmp/mysql_install.log; then
                         echo "  - 软件包不可用"
                         echo "  - 尝试检查可用版本: yum list available mysql-community-server"
+                        echo "  - 检查仓库: yum repolist | grep mysql"
                     elif grep -qiE "Error|Failed|错误" /tmp/mysql_install.log; then
-                        echo "  - 检测到安装错误，请查看上方日志"
+                        echo "  - 检测到安装错误"
+                        grep -iE "Error|Failed|错误" /tmp/mysql_install.log | head -10
+                    else
+                        echo "  - 安装命令失败，但日志中没有明确错误信息"
+                        echo "  - 请检查网络连接和仓库配置"
                     fi
+                else
+                    echo "  - 日志文件不存在，无法分析错误"
                 fi
             fi
         fi
@@ -1589,18 +1667,31 @@ install_mysql_redhat() {
         echo "  3. 网络连接问题"
         echo "  4. 软件包名称不正确"
         echo ""
-        if [ -f /tmp/mysql_install.log ]; then
-            echo -e "${BLUE}安装日志（最后50行）：${NC}"
-            tail -50 /tmp/mysql_install.log
+        
+        # 显示完整的安装日志
+        if [ -f /tmp/mysql_install.log ] && [ -s /tmp/mysql_install.log ]; then
+            echo -e "${BLUE}安装日志（完整输出）：${NC}"
+            cat /tmp/mysql_install.log
             echo ""
             echo -e "${BLUE}错误分析：${NC}"
-            if grep -qiE "No package|没有可用软件包|No match for argument|Nothing to do" /tmp/mysql_install.log; then
+            if grep -qiE "No package|没有可用软件包|No match for argument|Nothing to do|No packages marked for" /tmp/mysql_install.log; then
                 echo "  - 软件包不可用"
                 echo "  - 建议：尝试使用系统默认版本或检查仓库配置"
+                echo ""
+                echo "  诊断步骤："
+                if command -v dnf &> /dev/null; then
+                    echo "    1. 检查可用包: dnf list available mysql-community-server*"
+                    echo "    2. 检查仓库: dnf repolist | grep mysql"
+                    echo "    3. 检查仓库配置: cat /etc/yum.repos.d/mysql-community*.repo"
+                else
+                    echo "    1. 检查可用包: yum list available mysql-community-server*"
+                    echo "    2. 检查仓库: yum repolist | grep mysql"
+                    echo "    3. 检查仓库配置: cat /etc/yum.repos.d/mysql-community*.repo"
+                fi
             elif grep -qiE "GPG key|GPG 密钥" /tmp/mysql_install.log; then
                 echo "  - GPG 密钥问题（已尝试禁用，但可能仍有问题）"
                 echo "  - 建议：检查仓库 GPG 配置"
-            elif grep -qiE "网络|network|timeout|连接" /tmp/mysql_install.log; then
+            elif grep -qiE "网络|network|timeout|连接|Connection|DNS" /tmp/mysql_install.log; then
                 echo "  - 网络连接问题"
                 echo "  - 建议：检查网络连接和仓库镜像"
             else

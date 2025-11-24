@@ -132,6 +132,32 @@ remove_symlinks() {
     fi
 }
 
+# 清理 PATH 环境变量配置
+remove_path_config() {
+    echo -e "${BLUE}[5/6] 清理 PATH 环境变量配置...${NC}"
+    
+    # 删除 /etc/profile.d/openresty.sh（安全的方式）
+    if [ -f /etc/profile.d/openresty.sh ]; then
+        rm -f /etc/profile.d/openresty.sh
+        echo -e "${GREEN}✓ 已删除 /etc/profile.d/openresty.sh${NC}"
+    fi
+    
+    # 从 /etc/profile 中移除 OpenResty PATH（如果存在）
+    if [ -f /etc/profile ] && grep -q "OpenResty PATH" /etc/profile 2>/dev/null; then
+        # 删除 OpenResty PATH 相关的行
+        sed -i '/# OpenResty PATH/,/export PATH.*openresty/d' /etc/profile 2>/dev/null || true
+        echo -e "${GREEN}✓ 已从 /etc/profile 中移除 OpenResty PATH${NC}"
+    fi
+    
+    # 注意：不修改 /etc/environment，因为这是系统关键文件
+    # 如果 /etc/environment 中有 OpenResty PATH，需要手动清理
+    if [ -f /etc/environment ] && grep -q "openresty" /etc/environment 2>/dev/null; then
+        echo -e "${YELLOW}⚠ 检测到 /etc/environment 中包含 OpenResty 路径${NC}"
+        echo -e "${YELLOW}  请手动检查并清理 /etc/environment 文件${NC}"
+        echo -e "${YELLOW}  标准 PATH 应该是: PATH=\"/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\"${NC}"
+    fi
+}
+
 # 检查依赖 OpenResty 的服务
 check_dependent_services() {
     echo -e "${BLUE}检查依赖 OpenResty 的服务...${NC}"
@@ -458,6 +484,7 @@ main() {
     disable_service
     remove_service_file
     remove_symlinks
+    remove_path_config
     
     # 获取清理选项（从命令行参数或环境变量）
     local cleanup_option="$1"

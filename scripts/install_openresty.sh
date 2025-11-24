@@ -922,52 +922,46 @@ EOF
         echo -e "${GREEN}✓ 已创建 opm 符号链接${NC}"
     fi
     
-    # 配置 PATH 环境变量（添加到系统环境变量）
+    # 配置 PATH 环境变量（只使用 /etc/profile.d/，不修改 /etc/environment）
+    # 注意：/etc/environment 是系统关键文件，修改可能导致系统命令无法使用
+    # 使用 /etc/profile.d/ 是更安全的方式
     echo "配置 PATH 环境变量..."
-    local profile_files=(
-        "/etc/profile"
-        "/etc/bash.bashrc"
-        "/etc/environment"
-    )
-    
     local path_added=0
-    for profile_file in "${profile_files[@]}"; do
-        if [ -f "$profile_file" ]; then
-            if ! grep -q "${INSTALL_DIR}/bin" "$profile_file" 2>/dev/null; then
-                # 根据文件类型选择不同的添加方式
-                if [[ "$profile_file" == *"environment" ]]; then
-                    # /etc/environment 使用特殊格式
-                    if ! grep -q "PATH=" "$profile_file" 2>/dev/null; then
-                        echo "PATH=\"${INSTALL_DIR}/bin:\$PATH\"" >> "$profile_file"
-                    else
-                        sed -i "s|PATH=\"\(.*\)\"|PATH=\"${INSTALL_DIR}/bin:\1\"|g" "$profile_file" 2>/dev/null || \
-                        sed -i "s|PATH=\(.*\)|PATH=\"${INSTALL_DIR}/bin:\1\"|g" "$profile_file" 2>/dev/null || true
-                    fi
-                else
-                    # 其他文件使用 export
-                    echo "" >> "$profile_file"
-                    echo "# OpenResty PATH" >> "$profile_file"
-                    echo "export PATH=\"${INSTALL_DIR}/bin:\$PATH\"" >> "$profile_file"
-                fi
-                path_added=1
-            fi
-        fi
-    done
     
-    # 如果上述文件都不存在或无法写入，尝试创建 /etc/profile.d/openresty.sh
-    if [ $path_added -eq 0 ]; then
-        if [ ! -f /etc/profile.d/openresty.sh ]; then
-            cat > /etc/profile.d/openresty.sh <<EOF
+    # 优先使用 /etc/profile.d/openresty.sh（最安全的方式）
+    if [ ! -f /etc/profile.d/openresty.sh ]; then
+        cat > /etc/profile.d/openresty.sh <<EOF
 # OpenResty PATH
+# 此文件由 OpenResty 安装脚本自动创建
+# 如需移除，请运行: rm -f /etc/profile.d/openresty.sh
 export PATH="${INSTALL_DIR}/bin:\$PATH"
 EOF
-            chmod +x /etc/profile.d/openresty.sh
+        chmod +x /etc/profile.d/openresty.sh
+        path_added=1
+        echo -e "${GREEN}✓ 已创建 /etc/profile.d/openresty.sh${NC}"
+    else
+        # 检查是否已包含 OpenResty 路径
+        if ! grep -q "${INSTALL_DIR}/bin" /etc/profile.d/openresty.sh 2>/dev/null; then
+            echo "" >> /etc/profile.d/openresty.sh
+            echo "# OpenResty PATH" >> /etc/profile.d/openresty.sh
+            echo "export PATH=\"${INSTALL_DIR}/bin:\$PATH\"" >> /etc/profile.d/openresty.sh
             path_added=1
-            echo -e "${GREEN}✓ 已创建 /etc/profile.d/openresty.sh${NC}"
+            echo -e "${GREEN}✓ 已更新 /etc/profile.d/openresty.sh${NC}"
         else
-            if ! grep -q "${INSTALL_DIR}/bin" /etc/profile.d/openresty.sh 2>/dev/null; then
-                echo "export PATH=\"${INSTALL_DIR}/bin:\$PATH\"" >> /etc/profile.d/openresty.sh
+            echo -e "${BLUE}PATH 环境变量已包含 OpenResty 路径${NC}"
+            path_added=1
+        fi
+    fi
+    
+    # 如果 /etc/profile.d/openresty.sh 创建失败，尝试添加到 /etc/profile（作为备选）
+    if [ $path_added -eq 0 ]; then
+        if [ -f /etc/profile ]; then
+            if ! grep -q "${INSTALL_DIR}/bin" /etc/profile 2>/dev/null; then
+                echo "" >> /etc/profile
+                echo "# OpenResty PATH" >> /etc/profile
+                echo "export PATH=\"${INSTALL_DIR}/bin:\$PATH\"" >> /etc/profile
                 path_added=1
+                echo -e "${GREEN}✓ 已添加到 /etc/profile${NC}"
             fi
         fi
     fi

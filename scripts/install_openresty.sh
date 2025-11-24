@@ -1041,26 +1041,56 @@ find_opm() {
 check_and_install_runtime_deps() {
     echo "检查运行时依赖..."
     local missing_deps=0
+    local missing_libs=()
     
     # 检查 libpcre2-8.so.0
     if ! ldconfig -p 2>/dev/null | grep -q "libpcre2-8.so.0"; then
         echo -e "${YELLOW}⚠ 检测到缺少 libpcre2-8.so.0 运行时库${NC}"
         missing_deps=1
+        missing_libs+=("pcre2")
     fi
     
-    # 检查其他常见依赖
-    local required_libs=(
-        "libz.so.1"
-        "libssl.so"
-        "libcrypto.so"
-    )
+    # 检查 libz.so.1
+    if ! ldconfig -p 2>/dev/null | grep -q "libz.so.1"; then
+        echo -e "${YELLOW}⚠ 检测到缺少 libz.so.1${NC}"
+        missing_deps=1
+        missing_libs+=("zlib")
+    fi
     
-    for lib in "${required_libs[@]}"; do
-        if ! ldconfig -p 2>/dev/null | grep -q "$lib"; then
-            echo -e "${YELLOW}⚠ 检测到缺少 $lib${NC}"
-            missing_deps=1
-        fi
-    done
+    # 检查 OpenSSL 库（检查多个版本）
+    local ssl_found=0
+    local ssl_version=""
+    
+    # 检查 OpenSSL 3.0
+    if ldconfig -p 2>/dev/null | grep -q "libssl.so.3"; then
+        ssl_found=1
+        ssl_version="3"
+    # 检查 OpenSSL 1.1
+    elif ldconfig -p 2>/dev/null | grep -q "libssl.so.1.1"; then
+        ssl_found=1
+        ssl_version="1.1"
+    # 检查 OpenSSL 1.0
+    elif ldconfig -p 2>/dev/null | grep -q "libssl.so.1.0"; then
+        ssl_found=1
+        ssl_version="1.0"
+    # 检查通用 libssl.so
+    elif ldconfig -p 2>/dev/null | grep -q "libssl.so"; then
+        ssl_found=1
+        ssl_version="generic"
+    fi
+    
+    if [ $ssl_found -eq 0 ]; then
+        echo -e "${YELLOW}⚠ 检测到缺少 OpenSSL 运行时库${NC}"
+        missing_deps=1
+        missing_libs+=("openssl")
+    fi
+    
+    # 检查 libcrypto
+    if ! ldconfig -p 2>/dev/null | grep -q "libcrypto.so"; then
+        echo -e "${YELLOW}⚠ 检测到缺少 libcrypto.so${NC}"
+        missing_deps=1
+        missing_libs+=("openssl")
+    fi
     
     if [ $missing_deps -eq 1 ]; then
         echo "安装缺失的运行时依赖..."
@@ -1068,21 +1098,81 @@ check_and_install_runtime_deps() {
         
         case $OS in
             centos|rhel|fedora|rocky|almalinux|oraclelinux|amazonlinux)
-                if command -v dnf &> /dev/null; then
-                    dnf install -y pcre2 zlib openssl-libs 2>/dev/null || true
-                elif command -v yum &> /dev/null; then
-                    yum install -y pcre2 zlib openssl-libs 2>/dev/null || true
+                local packages_to_install=()
+                
+                # 根据缺失的库添加对应的包
+                for lib in "${missing_libs[@]}"; do
+                    case $lib in
+                        pcre2)
+                            packages_to_install+=("pcre2")
+                            ;;
+                        zlib)
+                            packages_to_install+=("zlib")
+                            ;;
+                        openssl)
+                            # 尝试安装 OpenSSL 3.0，如果失败则安装 1.1
+                            if command -v dnf &> /dev/null; then
+                                dnf install -y openssl-libs openssl3-libs 2>/dev/null || \
+                                dnf install -y openssl-libs 2>/dev/null || true
+                            elif command -v yum &> /dev/null; then
+                                # CentOS 7 可能需要安装 openssl11-libs 或从其他源安装
+                                yum install -y openssl-libs 2>/dev/null || \
+                                yum install -y openssl11-libs 2>/dev/null || true
+                            fi
+                            ;;
+                    esac
+                done
+                
+                # 安装其他包
+                if [ ${#packages_to_install[@]} -gt 0 ]; then
+                    if command -v dnf &> /dev/null; then
+                        dnf install -y "${packages_to_install[@]}" 2>/dev/null || true
+                    elif command -v yum &> /dev/null; then
+                        yum install -y "${packages_to_install[@]}" 2>/dev/null || true
+                    fi
                 fi
                 ;;
             ubuntu|debian|linuxmint|raspbian|kali)
-                if command -v apt-get &> /dev/null; then
-                    apt-get install -y libpcre2-8-0 zlib1g libssl1.1 2>/dev/null || \
-                    apt-get install -y libpcre2-8-0 zlib1g libssl3 2>/dev/null || true
+                local packages_to_install=()
+                
+                for lib in "${missing_libs[@]}"; do
+                    case $lib in
+                        pcre2)
+                            packages_to_install+=("libpcre2-8-0")
+                            ;;
+                        zlib)
+                            packages_to_install+=("zlib1g")
+                            ;;
+                        openssl)
+                            # 尝试安装 OpenSSL 3.0，如果失败则安装 1.1
+                            packages_to_install+=("libssl3" "libssl1.1")
+                            ;;
+                    esac
+                done
+                
+                if [ ${#packages_to_install[@]} -gt 0 ]; then
+                    apt-get install -y "${packages_to_install[@]}" 2>/dev/null || true
                 fi
                 ;;
             opensuse*|sles)
-                if command -v zypper &> /dev/null; then
-                    zypper install -y pcre2 zlib libopenssl1_1 2>/dev/null || true
+                local packages_to_install=()
+                
+                for lib in "${missing_libs[@]}"; do
+                    case $lib in
+                        pcre2)
+                            packages_to_install+=("pcre2")
+                            ;;
+                        zlib)
+                            packages_to_install+=("zlib")
+                            ;;
+                        openssl)
+                            packages_to_install+=("libopenssl1_1" "libopenssl3")
+                            ;;
+                    esac
+                done
+                
+                if [ ${#packages_to_install[@]} -gt 0 ]; then
+                    zypper install -y "${packages_to_install[@]}" 2>/dev/null || true
                 fi
                 ;;
             arch|manjaro)
@@ -1099,6 +1189,30 @@ check_and_install_runtime_deps() {
     else
         echo -e "${GREEN}✓ 运行时依赖完整${NC}"
     fi
+}
+
+# 检查 OpenResty 实际需要的库
+check_openresty_libs() {
+    local openresty_bin="${INSTALL_DIR}/bin/openresty"
+    
+    if [ ! -f "$openresty_bin" ]; then
+        return 1
+    fi
+    
+    # 使用 ldd 检查依赖
+    if command -v ldd &> /dev/null; then
+        local missing_libs=$(ldd "$openresty_bin" 2>&1 | grep "not found" | awk '{print $1}' | sed 's/://')
+        
+        if [ -n "$missing_libs" ]; then
+            echo -e "${YELLOW}检测到 OpenResty 缺少以下运行时库:${NC}"
+            echo "$missing_libs" | while read lib; do
+                echo -e "${YELLOW}  - $lib${NC}"
+            done
+            return 1
+        fi
+    fi
+    
+    return 0
 }
 
 # 安装 Lua 模块
@@ -1367,29 +1481,59 @@ verify_installation() {
         # 检查运行时依赖
         check_and_install_runtime_deps
         
+        # 使用 ldd 检查实际缺失的库
+        if ! check_openresty_libs; then
+            echo -e "${YELLOW}⚠ 检测到缺失的运行时库，尝试自动安装...${NC}"
+            check_and_install_runtime_deps
+        fi
+        
         # 测试 OpenResty 命令
         local version_output=$(${INSTALL_DIR}/bin/openresty -v 2>&1)
         if echo "$version_output" | grep -qi "error while loading shared libraries"; then
             echo -e "${RED}✗ OpenResty 运行时依赖缺失${NC}"
             echo -e "${YELLOW}错误信息: $version_output${NC}"
             echo ""
+            
+            # 提取缺失的库名
+            local missing_lib=$(echo "$version_output" | grep -oP "lib\S+\.so[.\d]*" | head -1)
+            
             echo -e "${BLUE}解决方案:${NC}"
-            echo "请运行以下命令安装缺失的运行时库："
             detect_os
             case $OS in
                 centos|rhel|fedora|rocky|almalinux|oraclelinux|amazonlinux)
-                    echo "  sudo yum install -y pcre2 zlib openssl-libs"
-                    echo "  或"
-                    echo "  sudo dnf install -y pcre2 zlib openssl-libs"
+                    if echo "$missing_lib" | grep -q "libssl.so.3"; then
+                        echo "检测到需要 OpenSSL 3.0，但系统可能只有 OpenSSL 1.1"
+                        echo ""
+                        echo "方法1: 安装 OpenSSL 3.0（如果可用）"
+                        echo "  sudo yum install -y openssl3-libs"
+                        echo ""
+                        echo "方法2: 安装兼容的 OpenSSL 1.1"
+                        echo "  sudo yum install -y openssl11-libs"
+                        echo ""
+                        echo "方法3: 从源码重新编译 OpenResty（使用系统 OpenSSL）"
+                        echo "  或使用包管理器安装的 OpenResty（会自动匹配系统库）"
+                    else
+                        echo "  sudo yum install -y pcre2 zlib openssl-libs"
+                        echo "  或"
+                        echo "  sudo dnf install -y pcre2 zlib openssl-libs"
+                    fi
                     ;;
                 ubuntu|debian|linuxmint|raspbian|kali)
-                    echo "  sudo apt-get install -y libpcre2-8-0 zlib1g libssl1.1"
-                    echo "  或"
-                    echo "  sudo apt-get install -y libpcre2-8-0 zlib1g libssl3"
+                    if echo "$missing_lib" | grep -q "libssl.so.3"; then
+                        echo "检测到需要 OpenSSL 3.0"
+                        echo "  sudo apt-get install -y libssl3"
+                    else
+                        echo "  sudo apt-get install -y libpcre2-8-0 zlib1g libssl1.1"
+                        echo "  或"
+                        echo "  sudo apt-get install -y libpcre2-8-0 zlib1g libssl3"
+                    fi
                     ;;
             esac
             echo ""
             echo "安装后运行: sudo ldconfig"
+            echo ""
+            echo -e "${YELLOW}提示: 如果问题仍然存在，建议使用包管理器安装的 OpenResty${NC}"
+            echo "  包管理器安装的版本会自动匹配系统的库版本"
             exit 1
         fi
         

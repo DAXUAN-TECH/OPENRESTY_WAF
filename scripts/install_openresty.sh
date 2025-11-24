@@ -758,74 +758,161 @@ install_lua_modules() {
     # 查找 opm
     local opm_path=$(find_opm)
     
-    # 如果找不到 opm，尝试安装 openresty-resty 包
+    # 如果找不到 opm，尝试调用 install_opm.sh 脚本安装
     if [ -z "$opm_path" ]; then
-        echo -e "${YELLOW}⚠ opm 未找到，尝试安装 openresty-resty 包...${NC}"
+        echo -e "${YELLOW}⚠ opm 未找到，尝试调用 install_opm.sh 脚本安装...${NC}"
         
-        local install_success=0
-        if command -v yum &> /dev/null; then
-            if yum install -y openresty-resty 2>&1 | tee /tmp/openresty_resty_install.log; then
-                if grep -qiE "已安装|installed|complete|Nothing to do|无需" /tmp/openresty_resty_install.log; then
-                    install_success=1
-                    echo -e "${GREEN}✓ openresty-resty 安装成功${NC}"
-                fi
-            fi
-        elif command -v dnf &> /dev/null; then
-            if dnf install -y openresty-resty 2>&1 | tee /tmp/openresty_resty_install.log; then
-                if grep -qiE "已安装|installed|complete|Nothing to do|无需" /tmp/openresty_resty_install.log; then
-                    install_success=1
-                    echo -e "${GREEN}✓ openresty-resty 安装成功${NC}"
-                fi
-            fi
-        elif command -v apt-get &> /dev/null; then
-            if apt-get install -y openresty-resty 2>&1 | tee /tmp/openresty_resty_install.log; then
-                if grep -qiE "已安装|installed|complete|Setting up|已经是最新版本" /tmp/openresty_resty_install.log; then
-                    install_success=1
-                    echo -e "${GREEN}✓ openresty-resty 安装成功${NC}"
-                fi
-            fi
-        fi
+        # 获取脚本目录
+        local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+        local install_opm_script="${script_dir}/install_opm.sh"
         
-        # 安装后重新查找 opm
-        if [ $install_success -eq 1 ]; then
-            echo "正在查找 opm..."
+        # 检查 install_opm.sh 是否存在
+        if [ -f "$install_opm_script" ] && [ -x "$install_opm_script" ]; then
+            echo -e "${BLUE}调用 install_opm.sh 脚本安装 opm...${NC}"
+            # 临时禁用 set -e，以便即使 install_opm.sh 失败也能继续
+            set +e
+            if bash "$install_opm_script" 2>&1; then
+                echo -e "${GREEN}✓ install_opm.sh 执行成功${NC}"
+            else
+                echo -e "${YELLOW}⚠ install_opm.sh 执行完成（可能有警告）${NC}"
+            fi
+            set -e
+            
             # 刷新命令缓存
             hash -r 2>/dev/null || true
+            
             # 重新查找 opm
+            echo "正在重新查找 opm..."
             opm_path=$(find_opm)
             if [ -n "$opm_path" ]; then
                 echo -e "${GREEN}✓ 找到 opm: ${opm_path}${NC}"
             else
-                echo -e "${YELLOW}⚠ 安装后仍未找到 opm，尝试其他方法...${NC}"
-                # 尝试查询包文件列表
-                if command -v rpm &> /dev/null; then
-                    echo "查询 openresty-resty 包文件列表..."
-                    local opm_files=$(rpm -ql openresty-resty 2>/dev/null | grep -E "/opm$")
-                    if [ -n "$opm_files" ]; then
-                        for opm_file in $opm_files; do
-                            if [ -f "$opm_file" ] && [ -x "$opm_file" ]; then
-                                opm_path="$opm_file"
-                                echo -e "${GREEN}✓ 从包文件列表找到 opm: ${opm_path}${NC}"
-                                break
-                            fi
-                        done
+                echo -e "${YELLOW}⚠ install_opm.sh 执行后仍未找到 opm，尝试直接安装 openresty-resty 包...${NC}"
+                
+                # 如果 install_opm.sh 失败，尝试直接安装包
+                local install_success=0
+                if command -v yum &> /dev/null; then
+                    if yum install -y openresty-resty 2>&1 | tee /tmp/openresty_resty_install.log; then
+                        if grep -qiE "已安装|installed|complete|Nothing to do|无需" /tmp/openresty_resty_install.log; then
+                            install_success=1
+                            echo -e "${GREEN}✓ openresty-resty 安装成功${NC}"
+                        fi
                     fi
-                elif command -v dpkg &> /dev/null; then
-                    echo "查询 openresty-resty 包文件列表..."
-                    local opm_files=$(dpkg -L openresty-resty 2>/dev/null | grep -E "/opm$")
-                    if [ -n "$opm_files" ]; then
-                        for opm_file in $opm_files; do
-                            if [ -f "$opm_file" ] && [ -x "$opm_file" ]; then
-                                opm_path="$opm_file"
-                                echo -e "${GREEN}✓ 从包文件列表找到 opm: ${opm_path}${NC}"
-                                break
+                elif command -v dnf &> /dev/null; then
+                    if dnf install -y openresty-resty 2>&1 | tee /tmp/openresty_resty_install.log; then
+                        if grep -qiE "已安装|installed|complete|Nothing to do|无需" /tmp/openresty_resty_install.log; then
+                            install_success=1
+                            echo -e "${GREEN}✓ openresty-resty 安装成功${NC}"
+                        fi
+                    fi
+                elif command -v apt-get &> /dev/null; then
+                    if apt-get install -y openresty-resty 2>&1 | tee /tmp/openresty_resty_install.log; then
+                        if grep -qiE "已安装|installed|complete|Setting up|已经是最新版本" /tmp/openresty_resty_install.log; then
+                            install_success=1
+                            echo -e "${GREEN}✓ openresty-resty 安装成功${NC}"
+                        fi
+                    fi
+                fi
+                
+                # 安装后再次查找 opm
+                if [ $install_success -eq 1 ]; then
+                    hash -r 2>/dev/null || true
+                    opm_path=$(find_opm)
+                    if [ -n "$opm_path" ]; then
+                        echo -e "${GREEN}✓ 找到 opm: ${opm_path}${NC}"
+                    else
+                        # 尝试查询包文件列表
+                        if command -v rpm &> /dev/null; then
+                            local opm_files=$(rpm -ql openresty-resty 2>/dev/null | grep -E "/opm$")
+                            if [ -n "$opm_files" ]; then
+                                for opm_file in $opm_files; do
+                                    if [ -f "$opm_file" ] && [ -x "$opm_file" ]; then
+                                        opm_path="$opm_file"
+                                        echo -e "${GREEN}✓ 从包文件列表找到 opm: ${opm_path}${NC}"
+                                        break
+                                    fi
+                                done
                             fi
-                        done
+                        elif command -v dpkg &> /dev/null; then
+                            local opm_files=$(dpkg -L openresty-resty 2>/dev/null | grep -E "/opm$")
+                            if [ -n "$opm_files" ]; then
+                                for opm_file in $opm_files; do
+                                    if [ -f "$opm_file" ] && [ -x "$opm_file" ]; then
+                                        opm_path="$opm_file"
+                                        echo -e "${GREEN}✓ 从包文件列表找到 opm: ${opm_path}${NC}"
+                                        break
+                                    fi
+                                done
+                            fi
+                        fi
+                    fi
+                fi
+                rm -f /tmp/openresty_resty_install.log 2>/dev/null || true
+            fi
+        else
+            echo -e "${YELLOW}⚠ install_opm.sh 脚本不存在: ${install_opm_script}${NC}"
+            echo -e "${YELLOW}⚠ 尝试直接安装 openresty-resty 包...${NC}"
+            
+            # 如果脚本不存在，尝试直接安装包
+            local install_success=0
+            if command -v yum &> /dev/null; then
+                if yum install -y openresty-resty 2>&1 | tee /tmp/openresty_resty_install.log; then
+                    if grep -qiE "已安装|installed|complete|Nothing to do|无需" /tmp/openresty_resty_install.log; then
+                        install_success=1
+                        echo -e "${GREEN}✓ openresty-resty 安装成功${NC}"
+                    fi
+                fi
+            elif command -v dnf &> /dev/null; then
+                if dnf install -y openresty-resty 2>&1 | tee /tmp/openresty_resty_install.log; then
+                    if grep -qiE "已安装|installed|complete|Nothing to do|无需" /tmp/openresty_resty_install.log; then
+                        install_success=1
+                        echo -e "${GREEN}✓ openresty-resty 安装成功${NC}"
+                    fi
+                fi
+            elif command -v apt-get &> /dev/null; then
+                if apt-get install -y openresty-resty 2>&1 | tee /tmp/openresty_resty_install.log; then
+                    if grep -qiE "已安装|installed|complete|Setting up|已经是最新版本" /tmp/openresty_resty_install.log; then
+                        install_success=1
+                        echo -e "${GREEN}✓ openresty-resty 安装成功${NC}"
                     fi
                 fi
             fi
+            
+            # 安装后查找 opm
+            if [ $install_success -eq 1 ]; then
+                hash -r 2>/dev/null || true
+                opm_path=$(find_opm)
+                if [ -n "$opm_path" ]; then
+                    echo -e "${GREEN}✓ 找到 opm: ${opm_path}${NC}"
+                else
+                    # 尝试查询包文件列表
+                    if command -v rpm &> /dev/null; then
+                        local opm_files=$(rpm -ql openresty-resty 2>/dev/null | grep -E "/opm$")
+                        if [ -n "$opm_files" ]; then
+                            for opm_file in $opm_files; do
+                                if [ -f "$opm_file" ] && [ -x "$opm_file" ]; then
+                                    opm_path="$opm_file"
+                                    echo -e "${GREEN}✓ 从包文件列表找到 opm: ${opm_path}${NC}"
+                                    break
+                                fi
+                            done
+                        fi
+                    elif command -v dpkg &> /dev/null; then
+                        local opm_files=$(dpkg -L openresty-resty 2>/dev/null | grep -E "/opm$")
+                        if [ -n "$opm_files" ]; then
+                            for opm_file in $opm_files; do
+                                if [ -f "$opm_file" ] && [ -x "$opm_file" ]; then
+                                    opm_path="$opm_file"
+                                    echo -e "${GREEN}✓ 从包文件列表找到 opm: ${opm_path}${NC}"
+                                    break
+                                fi
+                            done
+                        fi
+                    fi
+                fi
+            fi
+            rm -f /tmp/openresty_resty_install.log 2>/dev/null || true
         fi
-        rm -f /tmp/openresty_resty_install.log 2>/dev/null || true
     fi
     
     # 检查 opm 是否可用

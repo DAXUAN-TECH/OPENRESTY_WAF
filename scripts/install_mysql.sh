@@ -2006,27 +2006,14 @@ set_root_password() {
         read -p "是否现在设置 root 密码？[Y/n]: " SET_PASSWORD
         SET_PASSWORD="${SET_PASSWORD:-Y}"
         if [[ "$SET_PASSWORD" =~ ^[Yy]$ ]]; then
-            # 使用 read -s 隐藏密码输入（更可靠的方法）
+            # 显示密码输入（用户要求显示文本）
             echo -n "请输入新的 MySQL root 密码: "
-            # 使用 read -s 隐藏密码输入
-            IFS= read -rs MYSQL_ROOT_PASSWORD
-            echo ""
+            IFS= read -r MYSQL_ROOT_PASSWORD
             if [ -z "$MYSQL_ROOT_PASSWORD" ]; then
                 echo -e "${RED}错误: 密码不能为空${NC}"
                 echo -e "${YELLOW}跳过 root 密码设置${NC}"
                 return 0
             fi
-            # 确认密码（再次输入以确认）
-            echo -n "请再次输入密码以确认: "
-            IFS= read -rs MYSQL_ROOT_PASSWORD_CONFIRM
-            echo ""
-            if [ "$MYSQL_ROOT_PASSWORD" != "$MYSQL_ROOT_PASSWORD_CONFIRM" ]; then
-                echo -e "${RED}错误: 两次输入的密码不一致${NC}"
-                echo -e "${YELLOW}跳过 root 密码设置${NC}"
-                return 0
-            fi
-            # 调试：显示密码长度（不显示密码内容）
-            echo -e "${BLUE}调试: 已读取密码，长度 = ${#MYSQL_ROOT_PASSWORD} 字符${NC}"
         else
             echo -e "${YELLOW}跳过 root 密码设置${NC}"
             return 0
@@ -2168,11 +2155,9 @@ set_root_password() {
                         IFS= read -r MYSQL_ROOT_PASSWORD
                         echo ""
                     else
-                    echo -n "请输入新的 MySQL root 密码（必须满足复杂度要求）: "
-                    stty -echo
-                    IFS= read -r MYSQL_ROOT_PASSWORD
-                    stty echo
-                    echo ""
+                        echo -n "请输入新的 MySQL root 密码（必须满足复杂度要求）: "
+                        # 显示密码输入（用户要求显示文本）
+                        IFS= read -r MYSQL_ROOT_PASSWORD
                     fi
                     
                     if [ -z "$MYSQL_ROOT_PASSWORD" ]; then

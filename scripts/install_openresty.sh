@@ -1657,7 +1657,8 @@ check_and_install_runtime_deps() {
     RUNTIME_DEPS_CHECKED=1
 }
 
-# 检查 OpenResty 实际需要的库
+# 检查 OpenResty 实际需要的库（使用 ldd 检查，但可能误报）
+# 注意：此函数可能误报，应以实际命令执行结果为准
 check_openresty_libs() {
     # 使用 find_openresty_cmd 统一查找，避免重复逻辑
     local openresty_bin=$(find_openresty_cmd)
@@ -1666,14 +1667,26 @@ check_openresty_libs() {
         return 1
     fi
     
-    # 使用 ldd 检查依赖
+    # 使用 ldd 检查依赖（注意：ldd 可能误报，应结合实际命令执行结果判断）
     if command -v ldd &> /dev/null; then
-        local missing_libs=$(ldd "$openresty_bin" 2>&1 | grep "not found" | awk '{print $1}' | sed 's/://')
+        local ldd_output=$(ldd "$openresty_bin" 2>&1)
+        local missing_libs=$(echo "$ldd_output" | grep "not found" | awk '{print $1}' | sed 's/://')
         
+        # 过滤掉可能的误报（某些库可能通过其他路径加载）
+        # 如果 ldd 输出包含 "not found"，但实际命令能执行，说明是误报
         if [ -n "$missing_libs" ]; then
+            # 先尝试实际执行命令，如果成功则认为是误报
+            if $openresty_bin -v >/dev/null 2>&1; then
+                # 命令能执行，ldd 的 "not found" 可能是误报，返回成功
+                return 0
+            fi
+            
+            # 命令执行失败，确实缺少库
             echo -e "${YELLOW}检测到 OpenResty 缺少以下运行时库:${NC}"
             echo "$missing_libs" | while read lib; do
-                echo -e "${YELLOW}  - $lib${NC}"
+                if [ -n "$lib" ]; then
+                    echo -e "${YELLOW}  - $lib${NC}"
+                fi
             done
             return 1
         fi
@@ -1962,71 +1975,94 @@ verify_installation() {
     local openresty_cmd=$(find_openresty_cmd)
     
     if [ -n "$openresty_cmd" ]; then
-        # 使用 ldd 检查实际缺失的库（优先检查，避免不必要的依赖安装）
-        if ! check_openresty_libs; then
-            echo -e "${YELLOW}⚠ 检测到缺失的运行时库，尝试自动安装...${NC}"
-            # 只在检测到缺失库时才安装运行时依赖（强制重新检查）
-            FORCE_CHECK_RUNTIME_DEPS=1 check_and_install_runtime_deps
-            # 安装后再次检查（更新库缓存后）
-            ldconfig 2>/dev/null || true
-            if ! check_openresty_libs; then
-                echo -e "${YELLOW}⚠ 安装运行时依赖后仍有缺失的库，可能需要手动处理${NC}"
-            else
-                echo -e "${GREEN}✓ 运行时依赖已修复${NC}"
-            fi
-        fi
-        
-        # 测试 OpenResty 命令
+        # 优先测试 OpenResty 命令是否能正常执行（最准确的检查方式）
         local version_output=$($openresty_cmd -v 2>&1)
-        if echo "$version_output" | grep -qi "error while loading shared libraries"; then
-            echo -e "${RED}✗ OpenResty 运行时依赖缺失${NC}"
-            echo -e "${YELLOW}错误信息: $version_output${NC}"
-            echo ""
-            
+        local version_test_exit_code=$?
+        
+        # 如果命令执行失败且错误信息包含库加载错误，才进行库检查和修复
+        if [ $version_test_exit_code -ne 0 ] || echo "$version_output" | grep -qi "error while loading shared libraries"; then
             # 提取缺失的库名
             local missing_lib=$(echo "$version_output" | grep -oP "lib\S+\.so[.\d]*" | head -1)
             
-            echo -e "${BLUE}解决方案:${NC}"
-            # 使用全局变量 $OS，避免重复检测（主函数已检测）
-            if [ -z "${OS:-}" ]; then
-                detect_os
+            echo -e "${YELLOW}⚠ 检测到运行时库问题，尝试自动修复...${NC}"
+            echo -e "${YELLOW}错误信息: $version_output${NC}"
+            echo ""
+            
+            # 使用 ldd 检查具体缺失的库（用于诊断）
+            local ldd_missing_libs=""
+            if command -v ldd &> /dev/null; then
+                ldd_missing_libs=$(ldd "$openresty_cmd" 2>&1 | grep "not found" | awk '{print $1}' | sed 's/://' | tr '\n' ' ')
             fi
-            case $OS in
-                centos|rhel|fedora|rocky|almalinux|oraclelinux|amazonlinux)
-                    if echo "$missing_lib" | grep -q "libssl.so.3"; then
-                        echo "检测到需要 OpenSSL 3.0，但系统可能只有 OpenSSL 1.1"
-                        echo ""
-                        echo "方法1: 安装 OpenSSL 3.0（如果可用）"
-                        echo "  sudo yum install -y openssl3-libs"
-                        echo ""
-                        echo "方法2: 安装兼容的 OpenSSL 1.1"
-                        echo "  sudo yum install -y openssl11-libs"
-                        echo ""
-                        echo "方法3: 从源码重新编译 OpenResty（使用系统 OpenSSL）"
-                        echo "  或使用包管理器安装的 OpenResty（会自动匹配系统库）"
-                    else
-                        echo "  sudo yum install -y pcre2 zlib openssl-libs"
-                        echo "  或"
-                        echo "  sudo dnf install -y pcre2 zlib openssl-libs"
-                    fi
-                    ;;
-                ubuntu|debian|linuxmint|raspbian|kali)
-                    if echo "$missing_lib" | grep -q "libssl.so.3"; then
-                        echo "检测到需要 OpenSSL 3.0"
-                        echo "  sudo apt-get install -y libssl3"
-                    else
-                        echo "  sudo apt-get install -y libpcre2-8-0 zlib1g libssl1.1"
-                        echo "  或"
-                        echo "  sudo apt-get install -y libpcre2-8-0 zlib1g libssl3"
-                    fi
-                    ;;
-            esac
-            echo ""
-            echo "安装后运行: sudo ldconfig"
-            echo ""
-            echo -e "${YELLOW}提示: 如果问题仍然存在，建议使用包管理器安装的 OpenResty${NC}"
-            echo "  包管理器安装的版本会自动匹配系统的库版本"
-            return 1
+            
+            # 尝试安装运行时依赖（强制重新检查）
+            FORCE_CHECK_RUNTIME_DEPS=1 check_and_install_runtime_deps
+            
+            # 更新库缓存
+            ldconfig 2>/dev/null || true
+            
+            # 再次测试命令是否能执行
+            local retry_version_output=$($openresty_cmd -v 2>&1)
+            local retry_exit_code=$?
+            
+            if [ $retry_exit_code -eq 0 ] && ! echo "$retry_version_output" | grep -qi "error while loading shared libraries"; then
+                echo -e "${GREEN}✓ 运行时依赖已修复，OpenResty 可以正常执行${NC}"
+                version_output="$retry_version_output"
+            else
+                # 修复失败，提供详细解决方案
+                echo -e "${RED}✗ OpenResty 运行时依赖缺失，自动修复失败${NC}"
+                echo ""
+                echo -e "${BLUE}解决方案:${NC}"
+                # 使用全局变量 $OS，避免重复检测（主函数已检测）
+                if [ -z "${OS:-}" ]; then
+                    detect_os
+                fi
+                case $OS in
+                    centos|rhel|fedora|rocky|almalinux|oraclelinux|amazonlinux)
+                        if echo "$missing_lib" | grep -q "libssl.so.3"; then
+                            echo "检测到需要 OpenSSL 3.0，但系统可能只有 OpenSSL 1.1"
+                            echo ""
+                            echo "方法1: 安装 OpenSSL 3.0（如果可用）"
+                            echo "  sudo yum install -y openssl3-libs"
+                            echo ""
+                            echo "方法2: 安装兼容的 OpenSSL 1.1"
+                            echo "  sudo yum install -y openssl11-libs"
+                            echo ""
+                            echo "方法3: 从源码重新编译 OpenResty（使用系统 OpenSSL）"
+                            echo "  或使用包管理器安装的 OpenResty（会自动匹配系统库）"
+                        else
+                            echo "  sudo yum install -y pcre2 zlib openssl-libs"
+                            echo "  或"
+                            echo "  sudo dnf install -y pcre2 zlib openssl-libs"
+                        fi
+                        ;;
+                    ubuntu|debian|linuxmint|raspbian|kali)
+                        if echo "$missing_lib" | grep -q "libssl.so.3"; then
+                            echo "检测到需要 OpenSSL 3.0"
+                            echo "  sudo apt-get install -y libssl3"
+                        else
+                            echo "  sudo apt-get install -y libpcre2-8-0 zlib1g libssl1.1"
+                            echo "  或"
+                            echo "  sudo apt-get install -y libpcre2-8-0 zlib1g libssl3"
+                        fi
+                        ;;
+                esac
+                echo ""
+                if [ -n "$ldd_missing_libs" ]; then
+                    echo -e "${BLUE}ldd 检测到的缺失库: ${ldd_missing_libs}${NC}"
+                fi
+                echo "安装后运行: sudo ldconfig"
+                echo ""
+                echo -e "${YELLOW}提示: 如果问题仍然存在，建议使用包管理器安装的 OpenResty${NC}"
+                echo "  包管理器安装的版本会自动匹配系统的库版本"
+                return 1
+            fi
+        else
+            # 命令执行成功，但可能 ldd 检查有误报，进行预防性检查（静默）
+            # 如果 ldd 检查失败但命令能执行，说明库实际可用，只记录但不报错
+            if ! check_openresty_libs 2>/dev/null; then
+                # ldd 检查失败但命令能执行，可能是误报，静默处理
+                echo -e "${BLUE}提示: ldd 检查可能显示警告，但 OpenResty 可以正常执行${NC}"
+            fi
         fi
         
         local version=$(echo "$version_output" | head -n 1)

@@ -3409,15 +3409,20 @@ update_waf_config() {
         return 0
     fi
     
+    # 获取 MySQL 地址和端口（支持外部 MySQL）
+    local mysql_host="${MYSQL_HOST:-127.0.0.1}"
+    local mysql_port="${MYSQL_PORT:-3306}"
+    
     # 更新配置文件
     echo -e "${BLUE}正在更新配置文件: $config_file${NC}"
-    if bash "$UPDATE_CONFIG_SCRIPT" mysql "127.0.0.1" "3306" "$db_name" "$db_user" "$db_password"; then
+    echo -e "${BLUE}MySQL 地址: ${mysql_host}:${mysql_port}${NC}"
+    if bash "$UPDATE_CONFIG_SCRIPT" mysql "$mysql_host" "$mysql_port" "$db_name" "$db_user" "$db_password"; then
         echo -e "${GREEN}✓ WAF 配置文件已更新${NC}"
         echo -e "${GREEN}  配置文件路径: $config_file${NC}"
         return 0
     else
         echo -e "${YELLOW}⚠ 配置文件更新失败，请手动更新 lua/config.lua${NC}"
-        echo -e "${YELLOW}  或运行: bash $UPDATE_CONFIG_SCRIPT mysql 127.0.0.1 3306 ${db_name} ${db_user} <password>${NC}"
+        echo -e "${YELLOW}  或运行: bash $UPDATE_CONFIG_SCRIPT mysql ${mysql_host} ${mysql_port} ${db_name} ${db_user} <password>${NC}"
         return 1
     fi
 }
@@ -3947,6 +3952,279 @@ show_next_steps() {
     echo ""
 }
 
+# 配置外部 MySQL（不安装 MySQL，只配置数据库和导入数据）
+configure_external_mysql() {
+    echo -e "${BLUE}========================================${NC}"
+    echo -e "${BLUE}配置外部 MySQL${NC}"
+    echo -e "${BLUE}========================================${NC}"
+    echo ""
+    
+    # 输入外部 MySQL 连接信息
+    read -p "请输入外部 MySQL 地址 [127.0.0.1]: " EXTERNAL_MYSQL_HOST
+    EXTERNAL_MYSQL_HOST="${EXTERNAL_MYSQL_HOST:-127.0.0.1}"
+    
+    read -p "请输入外部 MySQL 端口 [3306]: " EXTERNAL_MYSQL_PORT
+    EXTERNAL_MYSQL_PORT="${EXTERNAL_MYSQL_PORT:-3306}"
+    
+    echo -e "${YELLOW}提示: 需要使用管理员账户（如 root）来创建数据库和用户${NC}"
+    read -p "请输入管理员用户名 [root]: " EXTERNAL_MYSQL_ADMIN_USER
+    EXTERNAL_MYSQL_ADMIN_USER="${EXTERNAL_MYSQL_ADMIN_USER:-root}"
+    
+    read -p "请输入管理员密码: " EXTERNAL_MYSQL_ADMIN_PASSWORD
+    if [ -z "$EXTERNAL_MYSQL_ADMIN_PASSWORD" ]; then
+        echo -e "${YELLOW}⚠ 未输入密码，尝试无密码连接${NC}"
+    fi
+    
+    # 测试连接
+    echo ""
+    echo -e "${BLUE}正在测试 MySQL 连接...${NC}"
+    local test_cnf=$(mktemp)
+    if [ -n "$EXTERNAL_MYSQL_ADMIN_PASSWORD" ]; then
+        cat > "$test_cnf" <<CNF_EOF
+[client]
+host=${EXTERNAL_MYSQL_HOST}
+port=${EXTERNAL_MYSQL_PORT}
+user=${EXTERNAL_MYSQL_ADMIN_USER}
+password=${EXTERNAL_MYSQL_ADMIN_PASSWORD}
+CNF_EOF
+    else
+        cat > "$test_cnf" <<CNF_EOF
+[client]
+host=${EXTERNAL_MYSQL_HOST}
+port=${EXTERNAL_MYSQL_PORT}
+user=${EXTERNAL_MYSQL_ADMIN_USER}
+CNF_EOF
+    fi
+    chmod 600 "$test_cnf"
+    
+    if ! mysql --defaults-file="$test_cnf" -e "SELECT 1;" > /dev/null 2>&1; then
+        echo -e "${RED}✗ MySQL 连接失败，请检查连接信息${NC}"
+        rm -f "$test_cnf"
+        return 1
+    fi
+    
+    echo -e "${GREEN}✓ MySQL 连接成功${NC}"
+    rm -f "$test_cnf"
+    echo ""
+    
+    # 设置变量供后续函数使用
+    MYSQL_ROOT_PASSWORD="$EXTERNAL_MYSQL_ADMIN_PASSWORD"
+    MYSQL_HOST="$EXTERNAL_MYSQL_HOST"
+    MYSQL_PORT="$EXTERNAL_MYSQL_PORT"
+    export EXTERNAL_MYSQL_MODE=1
+    
+    # 创建数据库
+    echo -e "${BLUE}创建数据库...${NC}"
+    read -p "请输入数据库名称 [waf_db]: " DB_NAME
+    DB_NAME="${DB_NAME:-waf_db}"
+    
+    local create_db_cnf=$(mktemp)
+    if [ -n "$EXTERNAL_MYSQL_ADMIN_PASSWORD" ]; then
+        cat > "$create_db_cnf" <<CNF_EOF
+[client]
+host=${EXTERNAL_MYSQL_HOST}
+port=${EXTERNAL_MYSQL_PORT}
+user=${EXTERNAL_MYSQL_ADMIN_USER}
+password=${EXTERNAL_MYSQL_ADMIN_PASSWORD}
+CNF_EOF
+    else
+        cat > "$create_db_cnf" <<CNF_EOF
+[client]
+host=${EXTERNAL_MYSQL_HOST}
+port=${EXTERNAL_MYSQL_PORT}
+user=${EXTERNAL_MYSQL_ADMIN_USER}
+CNF_EOF
+    fi
+    chmod 600 "$create_db_cnf"
+    
+    if mysql --defaults-file="$create_db_cnf" -e "CREATE DATABASE IF NOT EXISTS ${DB_NAME} DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;" 2>/dev/null; then
+        echo -e "${GREEN}✓ 数据库 ${DB_NAME} 创建成功${NC}"
+        MYSQL_DATABASE="$DB_NAME"
+        export CREATED_DB_NAME="$DB_NAME"
+    else
+        echo -e "${RED}✗ 数据库创建失败${NC}"
+        rm -f "$create_db_cnf"
+        return 1
+    fi
+    rm -f "$create_db_cnf"
+    echo ""
+    
+    # 创建应用连接用户
+    echo -e "${BLUE}创建应用连接用户...${NC}"
+    read -p "请输入应用用户名 [waf_user]: " APP_USER
+    APP_USER="${APP_USER:-waf_user}"
+    
+    read -p "请输入应用用户密码: " APP_USER_PASSWORD
+    if [ -z "$APP_USER_PASSWORD" ]; then
+        echo -e "${RED}错误: 应用用户密码不能为空${NC}"
+        return 1
+    fi
+    
+    local create_user_cnf=$(mktemp)
+    if [ -n "$EXTERNAL_MYSQL_ADMIN_PASSWORD" ]; then
+        cat > "$create_user_cnf" <<CNF_EOF
+[client]
+host=${EXTERNAL_MYSQL_HOST}
+port=${EXTERNAL_MYSQL_PORT}
+user=${EXTERNAL_MYSQL_ADMIN_USER}
+password=${EXTERNAL_MYSQL_ADMIN_PASSWORD}
+CNF_EOF
+    else
+        cat > "$create_user_cnf" <<CNF_EOF
+[client]
+host=${EXTERNAL_MYSQL_HOST}
+port=${EXTERNAL_MYSQL_PORT}
+user=${EXTERNAL_MYSQL_ADMIN_USER}
+CNF_EOF
+    fi
+    chmod 600 "$create_user_cnf"
+    
+    # 创建用户并授权
+    mysql --defaults-file="$create_user_cnf" <<EOF 2>/dev/null
+CREATE USER IF NOT EXISTS '${APP_USER}'@'%' IDENTIFIED BY '${APP_USER_PASSWORD}';
+GRANT ALL PRIVILEGES ON ${DB_NAME}.* TO '${APP_USER}'@'%';
+FLUSH PRIVILEGES;
+EOF
+    
+    if [ $? -eq 0 ]; then
+        echo -e "${GREEN}✓ 用户 ${APP_USER} 创建成功并已授权${NC}"
+        MYSQL_USER="$APP_USER"
+        MYSQL_USER_PASSWORD="$APP_USER_PASSWORD"
+        export MYSQL_USER_FOR_WAF="$APP_USER"
+        export MYSQL_PASSWORD_FOR_WAF="$APP_USER_PASSWORD"
+        export USE_NEW_USER="Y"
+    else
+        echo -e "${RED}✗ 用户创建失败${NC}"
+        rm -f "$create_user_cnf"
+        return 1
+    fi
+    rm -f "$create_user_cnf"
+    echo ""
+    
+    # 导入数据
+    echo -e "${BLUE}导入数据库数据...${NC}"
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    SQL_FILE="${SCRIPT_DIR}/../init_file/数据库设计.sql"
+    
+    if [ ! -f "$SQL_FILE" ]; then
+        echo -e "${YELLOW}⚠ SQL 文件不存在: ${SQL_FILE}${NC}"
+        echo "请手动导入 SQL 脚本"
+        return 1
+    fi
+    
+    local import_cnf=$(mktemp)
+    if [ -n "$EXTERNAL_MYSQL_ADMIN_PASSWORD" ]; then
+        cat > "$import_cnf" <<CNF_EOF
+[client]
+host=${EXTERNAL_MYSQL_HOST}
+port=${EXTERNAL_MYSQL_PORT}
+user=${EXTERNAL_MYSQL_ADMIN_USER}
+password=${EXTERNAL_MYSQL_ADMIN_PASSWORD}
+database=${DB_NAME}
+CNF_EOF
+    else
+        cat > "$import_cnf" <<CNF_EOF
+[client]
+host=${EXTERNAL_MYSQL_HOST}
+port=${EXTERNAL_MYSQL_PORT}
+user=${EXTERNAL_MYSQL_ADMIN_USER}
+database=${DB_NAME}
+CNF_EOF
+    fi
+    chmod 600 "$import_cnf"
+    
+    echo -e "${BLUE}正在导入 SQL 脚本: ${SQL_FILE}${NC}"
+    local sql_file_size=$(du -h "$SQL_FILE" | cut -f1)
+    echo -e "${BLUE}SQL 文件大小: ${sql_file_size}${NC}"
+    echo -e "${BLUE}开始导入...${NC}"
+    
+    local import_log=$(mktemp)
+    mysql --defaults-file="$import_cnf" < "$SQL_FILE" > "$import_log" 2>&1
+    local sql_exit_code=$?
+    
+    local sql_output=$(cat "$import_log")
+    rm -f "$import_cnf" "$import_log"
+    
+    # 过滤掉警告信息
+    sql_output=$(echo "$sql_output" | grep -v "Warning: Using a password on the command line")
+    
+    # 检查导入后的表数量
+    local check_cnf=$(mktemp)
+    if [ -n "$EXTERNAL_MYSQL_ADMIN_PASSWORD" ]; then
+        cat > "$check_cnf" <<CNF_EOF
+[client]
+host=${EXTERNAL_MYSQL_HOST}
+port=${EXTERNAL_MYSQL_PORT}
+user=${EXTERNAL_MYSQL_ADMIN_USER}
+password=${EXTERNAL_MYSQL_ADMIN_PASSWORD}
+CNF_EOF
+    else
+        cat > "$check_cnf" <<CNF_EOF
+[client]
+host=${EXTERNAL_MYSQL_HOST}
+port=${EXTERNAL_MYSQL_PORT}
+user=${EXTERNAL_MYSQL_ADMIN_USER}
+CNF_EOF
+    fi
+    chmod 600 "$check_cnf"
+    
+    local table_count=$(mysql --defaults-file="$check_cnf" -e "SELECT COUNT(*) as table_count FROM information_schema.tables WHERE table_schema='${DB_NAME}';" 2>/dev/null | grep -v "table_count" | grep -v "^$" | awk '{print $1}')
+    rm -f "$check_cnf"
+    
+    if [ -n "$table_count" ] && [ "$table_count" -gt 0 ]; then
+        echo ""
+        echo -e "${GREEN}✓ 数据库初始化完成（已创建 ${table_count} 个表）${NC}"
+        
+        # 列出所有创建的表
+        echo -e "${BLUE}已创建的表：${NC}"
+        local list_cnf=$(mktemp)
+        if [ -n "$EXTERNAL_MYSQL_ADMIN_PASSWORD" ]; then
+            cat > "$list_cnf" <<CNF_EOF
+[client]
+host=${EXTERNAL_MYSQL_HOST}
+port=${EXTERNAL_MYSQL_PORT}
+user=${EXTERNAL_MYSQL_ADMIN_USER}
+password=${EXTERNAL_MYSQL_ADMIN_PASSWORD}
+CNF_EOF
+        else
+            cat > "$list_cnf" <<CNF_EOF
+[client]
+host=${EXTERNAL_MYSQL_HOST}
+port=${EXTERNAL_MYSQL_PORT}
+user=${EXTERNAL_MYSQL_ADMIN_USER}
+CNF_EOF
+        fi
+        chmod 600 "$list_cnf"
+        mysql --defaults-file="$list_cnf" -e "SELECT table_name FROM information_schema.tables WHERE table_schema='${DB_NAME}' ORDER BY table_name;" 2>/dev/null | grep -v "table_name" | while read table_name; do
+            if [ -n "$table_name" ]; then
+                echo -e "  ${GREEN}✓${NC} ${table_name}"
+            fi
+        done
+        rm -f "$list_cnf"
+    else
+        echo -e "${YELLOW}⚠ 未检测到表，可能导入失败${NC}"
+        if [ -n "$sql_output" ]; then
+            echo -e "${YELLOW}错误信息：${NC}"
+            echo "$sql_output" | head -20
+        fi
+        return 1
+    fi
+    
+    # 更新 WAF 配置文件
+    update_waf_config
+    
+    echo ""
+    echo -e "${GREEN}✓ 外部 MySQL 配置完成${NC}"
+    echo ""
+    echo -e "${BLUE}连接信息：${NC}"
+    echo "  地址: ${EXTERNAL_MYSQL_HOST}:${EXTERNAL_MYSQL_PORT}"
+    echo "  数据库: ${DB_NAME}"
+    echo "  应用用户: ${APP_USER}"
+    echo ""
+    
+    return 0
+}
+
 # 主函数
 main() {
     echo -e "${GREEN}========================================${NC}"
@@ -3954,7 +4232,32 @@ main() {
     echo -e "${GREEN}========================================${NC}"
     echo ""
     
-    # 检查 root 权限
+    # 询问是否安装 MySQL
+    read -p "是否安装 MySQL？[Y/n]: " INSTALL_MYSQL
+    INSTALL_MYSQL="${INSTALL_MYSQL:-Y}"
+    
+    if [[ ! "$INSTALL_MYSQL" =~ ^[Yy]$ ]]; then
+        # 不安装 MySQL，询问是否导入 SQL
+        echo ""
+        read -p "是否导入 SQL 到外部 MySQL？[Y/n]: " IMPORT_SQL
+        IMPORT_SQL="${IMPORT_SQL:-Y}"
+        
+        if [[ "$IMPORT_SQL" =~ ^[Yy]$ ]]; then
+            # 配置外部 MySQL
+            if configure_external_mysql; then
+                echo -e "${GREEN}✓ 外部 MySQL 配置完成${NC}"
+                return 0
+            else
+                echo -e "${RED}✗ 外部 MySQL 配置失败${NC}"
+                return 1
+            fi
+        else
+            echo -e "${YELLOW}跳过 MySQL 安装和配置${NC}"
+            return 0
+        fi
+    fi
+    
+    # 检查 root 权限（安装 MySQL 需要 root 权限）
     check_root
     
     # 检测操作系统

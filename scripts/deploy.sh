@@ -72,57 +72,20 @@ echo -e "${GREEN}✓ 目录检查完成${NC}"
 # 复制 nginx.conf（只复制主配置文件）
 echo -e "${GREEN}[2/3] 复制并配置主配置文件...${NC}"
 
-# 先删除旧文件，确保干净开始
-rm -f "$NGINX_CONF_DIR/nginx.conf"
-
-# 直接使用 sed 在复制时替换，避免多次操作导致重复
-# 一次性完成：读取模板文件 -> 替换路径 -> 写入目标文件
-sed -e "s|/path/to/project/logs/error.log|$PROJECT_ROOT_ABS/logs/error.log|g" \
-    -e 's|set $project_root "/path/to/project"|set $project_root "'"$PROJECT_ROOT_ABS"'"|g' \
-    "${PROJECT_ROOT}/init_file/nginx.conf" > "$NGINX_CONF_DIR/nginx.conf.tmp" && \
-    mv "$NGINX_CONF_DIR/nginx.conf.tmp" "$NGINX_CONF_DIR/nginx.conf"
-
-# 强制清理：确保 http 块后没有任何内容
-# 找到 http 块结束位置，删除之后的所有内容
-http_start=$(grep -n "^http {" "$NGINX_CONF_DIR/nginx.conf" 2>/dev/null | cut -d: -f1 | head -1)
-if [ -n "$http_start" ]; then
-    # 找到 http 块结束位置（最后一个匹配的 }）
-    http_end=$(awk -v start="$http_start" '
-        BEGIN { brace_count = 0; found_start = 0 }
-        NR >= start {
-            if (!found_start) found_start = 1
-            for (i = 1; i <= length($0); i++) {
-                char = substr($0, i, 1)
-                if (char == "{") brace_count++
-                if (char == "}") {
-                    brace_count--
-                    if (brace_count == 0 && found_start) {
-                        print NR
-                        exit
-                    }
-                }
-            }
-        }
-    ' "$NGINX_CONF_DIR/nginx.conf" 2>/dev/null)
-    
-    if [ -n "$http_end" ]; then
-        total_lines=$(wc -l < "$NGINX_CONF_DIR/nginx.conf" 2>/dev/null)
-        # 如果 http 块后还有内容，强制删除
-        if [ -n "$total_lines" ] && [ "$http_end" -lt "$total_lines" ]; then
-            echo -e "${YELLOW}⚠ 检测到 http 块后有多余内容（第 $((http_end + 1))-$total_lines 行），正在清理...${NC}"
-            head -n "$http_end" "$NGINX_CONF_DIR/nginx.conf" > "$NGINX_CONF_DIR/nginx.conf.tmp" && \
-                mv "$NGINX_CONF_DIR/nginx.conf.tmp" "$NGINX_CONF_DIR/nginx.conf"
-            echo -e "${GREEN}✓ 已清理多余内容${NC}"
-        fi
-    fi
-fi
-
-# 确保文件以换行符结尾
+# 步骤1: 先删除旧文件，确保干净开始
 if [ -f "$NGINX_CONF_DIR/nginx.conf" ]; then
-    if ! tail -c 1 "$NGINX_CONF_DIR/nginx.conf" | grep -q '^$'; then
-        echo "" >> "$NGINX_CONF_DIR/nginx.conf"
-    fi
+    echo -e "${YELLOW}  删除旧配置文件: $NGINX_CONF_DIR/nginx.conf${NC}"
+    rm -f "$NGINX_CONF_DIR/nginx.conf"
 fi
+
+# 步骤2: 复制模板文件到目标位置（不进行任何替换）
+echo -e "${YELLOW}  复制模板文件: ${PROJECT_ROOT}/init_file/nginx.conf -> $NGINX_CONF_DIR/nginx.conf${NC}"
+cp "${PROJECT_ROOT}/init_file/nginx.conf" "$NGINX_CONF_DIR/nginx.conf"
+
+# 步骤3: 获取项目目录并修改配置（替换路径占位符）
+echo -e "${YELLOW}  替换路径占位符...${NC}"
+sed -i "s|/path/to/project/logs/error.log|$PROJECT_ROOT_ABS/logs/error.log|g" "$NGINX_CONF_DIR/nginx.conf"
+sed -i 's|set $project_root "/path/to/project"|set $project_root "'"$PROJECT_ROOT_ABS"'"|g' "$NGINX_CONF_DIR/nginx.conf"
 
 echo -e "${GREEN}✓ 主配置文件已复制并配置${NC}"
 echo -e "${YELLOW}  注意: conf.d、lua、logs、cert 目录保持在项目目录，使用相对路径引用${NC}"

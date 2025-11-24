@@ -3053,8 +3053,7 @@ CNF_EOF
             read -p "是否重新输入 root 密码？[Y/n]: " REENTER_PWD
             REENTER_PWD="${REENTER_PWD:-Y}"
             if [[ "$REENTER_PWD" =~ ^[Yy]$ ]]; then
-                read -sp "请输入正确的 MySQL root 密码: " MYSQL_ROOT_PASSWORD
-                echo ""
+                read -p "请输入正确的 MySQL root 密码: " MYSQL_ROOT_PASSWORD
                 if [ -z "$MYSQL_ROOT_PASSWORD" ]; then
                     echo -e "${RED}错误: 密码不能为空${NC}"
                     rm -f "$verify_cnf"

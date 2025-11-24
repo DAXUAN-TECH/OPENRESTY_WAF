@@ -93,6 +93,47 @@ sed -i "s|/path/to/project/conf.d/vhost_conf|$PROJECT_ROOT_ABS/conf.d/vhost_conf
 # 替换 set $project_root 变量中的占位符
 sed -i 's|set $project_root "/path/to/project"|set $project_root "'"$PROJECT_ROOT_ABS"'"|g' "$NGINX_CONF_DIR/nginx.conf"
 
+# 步骤4: 清理 http 块后的重复内容（防止之前部署遗留的问题）
+# 找到 http 块结束位置（最后一个匹配的 }）
+http_start_line=$(grep -n "^http {" "$NGINX_CONF_DIR/nginx.conf" | cut -d: -f1 | head -1)
+if [ -n "$http_start_line" ]; then
+    http_end_line=$(awk -v start="$http_start_line" '
+        BEGIN { brace_count = 0; found_start = 0 }
+        NR >= start {
+            if (!found_start) found_start = 1
+            for (i = 1; i <= length($0); i++) {
+                char = substr($0, i, 1)
+                if (char == "{") brace_count++
+                if (char == "}") {
+                    brace_count--
+                    if (brace_count == 0 && found_start) {
+                        print NR
+                        exit
+                    }
+                }
+            }
+        }
+    ' "$NGINX_CONF_DIR/nginx.conf" 2>/dev/null)
+    
+    if [ -n "$http_end_line" ]; then
+        total_lines=$(wc -l < "$NGINX_CONF_DIR/nginx.conf" 2>/dev/null)
+        # 如果 http 块后还有内容，强制删除
+        if [ -n "$total_lines" ] && [ "$http_end_line" -lt "$total_lines" ]; then
+            echo -e "${YELLOW}  检测到 http 块后有多余内容（第 $((http_end_line + 1))-$total_lines 行），正在清理...${NC}"
+            head -n "$http_end_line" "$NGINX_CONF_DIR/nginx.conf" > "$NGINX_CONF_DIR/nginx.conf.tmp" && \
+                mv "$NGINX_CONF_DIR/nginx.conf.tmp" "$NGINX_CONF_DIR/nginx.conf"
+            echo -e "${GREEN}✓ 已清理多余内容${NC}"
+        fi
+    fi
+fi
+
+# 步骤5: 确保文件以换行符结尾
+if [ -f "$NGINX_CONF_DIR/nginx.conf" ]; then
+    if ! tail -c 1 "$NGINX_CONF_DIR/nginx.conf" | grep -q '^$'; then
+        echo "" >> "$NGINX_CONF_DIR/nginx.conf"
+    fi
+fi
+
 echo -e "${GREEN}✓ 主配置文件已复制并配置${NC}"
 echo -e "${YELLOW}  注意: conf.d、lua、logs、cert 目录保持在项目目录，使用相对路径引用${NC}"
 

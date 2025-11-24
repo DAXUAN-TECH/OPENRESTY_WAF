@@ -1409,6 +1409,16 @@ install_mysql_redhat() {
         if command -v dnf &> /dev/null; then
         echo "使用 dnf 安装 MySQL..."
         
+        # 在安装前，先检查并禁用 MySQL 模块（如果存在），避免模块化过滤问题
+        if dnf module list mysql 2>/dev/null | grep -qE "^mysql\s+.*\[.*\]"; then
+            echo -e "${YELLOW}检测到 MySQL 模块，先禁用模块以避免模块化过滤问题...${NC}"
+            dnf module disable -y mysql 2>&1 | grep -vE "GPG|密钥" || true
+            # 清理缓存，确保模块禁用生效
+            dnf clean all 2>/dev/null || true
+            dnf makecache 2>&1 | grep -vE "GPG|密钥" || true
+            echo -e "${GREEN}✓ MySQL 模块已禁用${NC}"
+        fi
+        
         # 先尝试正常安装
         echo "正在执行: dnf install -y $nogpgcheck_flag mysql-community-server mysql-community-client"
         dnf install -y $nogpgcheck_flag mysql-community-server mysql-community-client 2>&1 | tee /tmp/mysql_install.log
@@ -1428,8 +1438,8 @@ install_mysql_redhat() {
                 INSTALL_SUCCESS=0
             echo -e "${YELLOW}第一次安装尝试失败，检查错误原因...${NC}"
             
-            # 检查是否是模块化过滤问题
-            if grep -qiE "filtered out by modular filtering|modular filtering" /tmp/mysql_install.log; then
+            # 检查是否是模块化过滤问题（支持中英文错误信息）
+            if grep -qiE "filtered out by modular filtering|modular filtering|模块化过滤条件筛除|模块化过滤" /tmp/mysql_install.log; then
                 echo -e "${YELLOW}检测到模块化过滤问题，尝试禁用模块化过滤...${NC}"
                 # 尝试禁用 MySQL 模块（如果存在）
                 echo "尝试禁用 MySQL 模块..."
@@ -1447,15 +1457,15 @@ install_mysql_redhat() {
                 local dnf_retry_exit_code=${PIPESTATUS[0]}
                 
                 if [ $dnf_retry_exit_code -eq 0 ]; then
-                if verify_mysql_installation /tmp/mysql_install.log; then
-                INSTALL_SUCCESS=1
+                    if verify_mysql_installation /tmp/mysql_install.log; then
+                        INSTALL_SUCCESS=1
                         echo -e "${GREEN}✓ MySQL 安装成功（已禁用 MySQL 模块）${NC}"
+                    else
+                        INSTALL_SUCCESS=0
+                        echo -e "${RED}✗ MySQL 安装失败（验证失败）${NC}"
+                    fi
                 else
                     INSTALL_SUCCESS=0
-                        echo -e "${RED}✗ MySQL 安装失败（验证失败）${NC}"
-                fi
-            else
-                INSTALL_SUCCESS=0
                     echo -e "${RED}✗ dnf install 命令执行失败（即使禁用 MySQL 模块）${NC}"
                 fi
             else
@@ -1509,7 +1519,7 @@ install_mysql_redhat() {
                     echo "    yum list available mysql-community-server"
                     echo "    yum repolist | grep mysql"
                 fi
-            elif grep -qiE "filtered out by modular filtering|modular filtering" /tmp/mysql_install.log; then
+            elif grep -qiE "filtered out by modular filtering|modular filtering|模块化过滤条件筛除|模块化过滤" /tmp/mysql_install.log; then
                 echo "  - 检测到模块化过滤问题"
                 echo "    这是 DNF 的模块化仓库过滤功能导致的"
                 echo ""

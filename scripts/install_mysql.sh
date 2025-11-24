@@ -893,8 +893,11 @@ install_mysql_redhat() {
         
         # 先尝试正常安装
         echo "正在执行: dnf install -y $nogpgcheck_flag mysql-community-server mysql-community-client"
-        if dnf install -y $nogpgcheck_flag mysql-community-server mysql-community-client 2>&1 | tee /tmp/mysql_install.log; then
-            # 验证是否真正安装成功
+        dnf install -y $nogpgcheck_flag mysql-community-server mysql-community-client 2>&1 | tee /tmp/mysql_install.log
+        local dnf_exit_code=${PIPESTATUS[0]}
+        
+        if [ $dnf_exit_code -eq 0 ]; then
+            # dnf install 成功，验证是否真正安装成功
             if verify_mysql_installation /tmp/mysql_install.log; then
                 INSTALL_SUCCESS=1
                 echo -e "${GREEN}✓ MySQL 安装成功${NC}"
@@ -903,6 +906,7 @@ install_mysql_redhat() {
                 INSTALL_SUCCESS=0
             fi
         else
+            # dnf install 失败，检查错误原因
             INSTALL_SUCCESS=0
             echo -e "${YELLOW}第一次安装尝试失败，检查错误原因...${NC}"
             
@@ -916,7 +920,10 @@ install_mysql_redhat() {
                 # 使用 --disable-module-filtering 重新安装
                 echo -e "${YELLOW}使用 --disable-module-filtering 重新安装...${NC}"
                 echo "正在执行: dnf install -y $nogpgcheck_flag --disable-module-filtering mysql-community-server mysql-community-client"
-                if dnf install -y $nogpgcheck_flag --disable-module-filtering mysql-community-server mysql-community-client 2>&1 | tee -a /tmp/mysql_install.log; then
+                dnf install -y $nogpgcheck_flag --disable-module-filtering mysql-community-server mysql-community-client 2>&1 | tee -a /tmp/mysql_install.log
+                local dnf_retry_exit_code=${PIPESTATUS[0]}
+                
+                if [ $dnf_retry_exit_code -eq 0 ]; then
                     if verify_mysql_installation /tmp/mysql_install.log; then
                         INSTALL_SUCCESS=1
                         echo -e "${GREEN}✓ MySQL 安装成功（使用 --disable-module-filtering）${NC}"
@@ -935,17 +942,20 @@ install_mysql_redhat() {
     elif command -v yum &> /dev/null; then
         echo "使用 yum 安装 MySQL..."
         echo "正在执行: yum install -y $nogpgcheck_flag mysql-community-server mysql-community-client"
-        if yum install -y $nogpgcheck_flag mysql-community-server mysql-community-client 2>&1 | tee /tmp/mysql_install.log; then
-                    # 验证是否真正安装成功
-                    if verify_mysql_installation /tmp/mysql_install.log; then
-                    INSTALL_SUCCESS=1
+        yum install -y $nogpgcheck_flag mysql-community-server mysql-community-client 2>&1 | tee /tmp/mysql_install.log
+        local yum_exit_code=${PIPESTATUS[0]}
+        
+        if [ $yum_exit_code -eq 0 ]; then
+            # 验证是否真正安装成功
+            if verify_mysql_installation /tmp/mysql_install.log; then
+                INSTALL_SUCCESS=1
                 echo -e "${GREEN}✓ MySQL 安装成功${NC}"
-                    else
+            else
                 echo -e "${RED}✗ MySQL 安装失败（验证失败）${NC}"
-                        INSTALL_SUCCESS=0
-                    fi
-                else
-                    INSTALL_SUCCESS=0
+                INSTALL_SUCCESS=0
+            fi
+        else
+            INSTALL_SUCCESS=0
             echo -e "${RED}✗ yum install 命令执行失败${NC}"
         fi
     fi

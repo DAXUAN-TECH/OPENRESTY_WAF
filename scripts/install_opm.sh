@@ -128,6 +128,81 @@ check_opm() {
     fi
 }
 
+# 检查 OpenResty 版本
+check_openresty_version() {
+    local openresty_path=""
+    if command -v openresty &> /dev/null; then
+        openresty_path=$(command -v openresty)
+    elif [ -f "/usr/local/openresty/bin/openresty" ]; then
+        openresty_path="/usr/local/openresty/bin/openresty"
+    fi
+    
+    if [ -n "$openresty_path" ] && [ -f "$openresty_path" ]; then
+        # 提取版本号
+        local version_output=$($openresty_path -v 2>&1)
+        local version=$(echo "$version_output" | grep -oP 'openresty/\K[0-9.]+' | head -1)
+        echo "$version"
+    fi
+}
+
+# 从源码安装 opm（手动复制）
+install_opm_from_source() {
+    echo -e "${BLUE}尝试从源码安装 opm...${NC}"
+    
+    local openresty_prefix="/usr/local/openresty"
+    if [ -n "$OPENRESTY_PREFIX" ]; then
+        openresty_prefix="$OPENRESTY_PREFIX"
+    elif [ -f "/usr/local/openresty/bin/openresty" ]; then
+        openresty_prefix="/usr/local/openresty"
+    elif [ -f "/opt/openresty/bin/openresty" ]; then
+        openresty_prefix="/opt/openresty"
+    fi
+    
+    # 检查是否有 opm 源码
+    local opm_source=""
+    local possible_sources=(
+        "/tmp/opm-0.0.9/bin/opm"
+        "$(dirname "$0")/../opm/bin/opm"
+        "$(pwd)/opm/bin/opm"
+        "/usr/src/opm/bin/opm"
+    )
+    
+    for source in "${possible_sources[@]}"; do
+        if [ -f "$source" ] && [ -x "$source" ]; then
+            opm_source="$source"
+            break
+        fi
+    done
+    
+    if [ -z "$opm_source" ]; then
+        echo -e "${YELLOW}⚠ 未找到 opm 源码文件${NC}"
+        echo -e "${BLUE}提示: 可以从 https://github.com/openresty/opm 下载源码${NC}"
+        return 1
+    fi
+    
+    echo "找到 opm 源码: $opm_source"
+    echo "目标路径: ${openresty_prefix}/bin/opm"
+    
+    # 确保目标目录存在
+    mkdir -p "${openresty_prefix}/bin"
+    
+    # 复制 opm
+    if cp "$opm_source" "${openresty_prefix}/bin/opm" 2>/dev/null; then
+        chmod +x "${openresty_prefix}/bin/opm"
+        
+        # 创建必要的目录（如果不存在）
+        mkdir -p "${openresty_prefix}/site/lualib"
+        mkdir -p "${openresty_prefix}/site/manifest"
+        mkdir -p "${openresty_prefix}/site/pod"
+        
+        echo -e "${GREEN}✓ opm 已从源码安装到 ${openresty_prefix}/bin/opm${NC}"
+        return 0
+    else
+        echo -e "${RED}✗ 复制 opm 失败${NC}"
+        return 1
+    fi
+}
+
 # 安装 opm
 install_opm() {
     echo -e "${BLUE}[3/4] 安装 opm...${NC}"
@@ -135,57 +210,183 @@ install_opm() {
     detect_os
     
     local install_success=0
+    local install_method=""
+    
+    # 方法1: 检查 OpenResty 版本，1.11.2.2+ 可能已包含 opm
+    local openresty_version=$(check_openresty_version)
+    if [ -n "$openresty_version" ]; then
+        echo "检测到 OpenResty 版本: $openresty_version"
+        # 比较版本（简单比较，假设格式为 x.y.z.w）
+        local major=$(echo "$openresty_version" | cut -d. -f1)
+        local minor=$(echo "$openresty_version" | cut -d. -f2)
+        local patch=$(echo "$openresty_version" | cut -d. -f3)
+        local build=$(echo "$openresty_version" | cut -d. -f4)
+        
+        if [ "$major" -gt 1 ] || ([ "$major" -eq 1 ] && [ "$minor" -gt 11 ]) || \
+           ([ "$major" -eq 1 ] && [ "$minor" -eq 11 ] && [ "$patch" -gt 2 ]) || \
+           ([ "$major" -eq 1 ] && [ "$minor" -eq 11 ] && [ "$patch" -eq 2 ] && [ "$build" -ge 2 ]); then
+            echo -e "${BLUE}OpenResty 版本 >= 1.11.2.2，可能已包含 opm${NC}"
+            # 先检查是否已存在
+            local opm_path=$(find_opm)
+            if [ -n "$opm_path" ]; then
+                echo -e "${GREEN}✓ opm 已存在于: ${opm_path}${NC}"
+                return 0
+            fi
+        fi
+    fi
+    
+    # 方法2: 尝试安装 openresty-opm 包（官方推荐方式）
+    echo "尝试安装 openresty-opm 包..."
     
     # RedHat 系列
     if [[ "$OS" =~ ^(centos|rhel|fedora|rocky|almalinux|oraclelinux|amazonlinux)$ ]]; then
-        echo "检测到 RedHat 系列系统，使用 yum/dnf 安装..."
+        echo "检测到 RedHat 系列系统..."
         
         if command -v dnf &> /dev/null; then
-            echo "使用 dnf 安装 openresty-resty..."
-            if dnf install -y openresty-resty 2>&1 | tee /tmp/opm_install.log; then
+            # 优先尝试 openresty-opm
+            if dnf install -y openresty-opm 2>&1 | tee /tmp/opm_install.log; then
                 if grep -qiE "已安装|installed|complete|Nothing to do|无需" /tmp/opm_install.log; then
                     install_success=1
-                    echo -e "${GREEN}✓ openresty-resty 安装成功${NC}"
+                    install_method="openresty-opm"
+                    echo -e "${GREEN}✓ openresty-opm 安装成功${NC}"
+                fi
+            fi
+            
+            # 如果 openresty-opm 失败，尝试 openresty-resty
+            if [ $install_success -eq 0 ]; then
+                echo "尝试安装 openresty-resty..."
+                if dnf install -y openresty-resty 2>&1 | tee /tmp/opm_install.log; then
+                    if grep -qiE "已安装|installed|complete|Nothing to do|无需" /tmp/opm_install.log; then
+                        install_success=1
+                        install_method="openresty-resty"
+                        echo -e "${GREEN}✓ openresty-resty 安装成功${NC}"
+                    fi
                 fi
             fi
         elif command -v yum &> /dev/null; then
-            echo "使用 yum 安装 openresty-resty..."
-            if yum install -y openresty-resty 2>&1 | tee /tmp/opm_install.log; then
+            # 优先尝试 openresty-opm
+            if yum install -y openresty-opm 2>&1 | tee /tmp/opm_install.log; then
                 if grep -qiE "已安装|installed|complete|Nothing to do|无需" /tmp/opm_install.log; then
                     install_success=1
-                    echo -e "${GREEN}✓ openresty-resty 安装成功${NC}"
+                    install_method="openresty-opm"
+                    echo -e "${GREEN}✓ openresty-opm 安装成功${NC}"
+                fi
+            fi
+            
+            # 如果 openresty-opm 失败，尝试 openresty-resty
+            if [ $install_success -eq 0 ]; then
+                echo "尝试安装 openresty-resty..."
+                if yum install -y openresty-resty 2>&1 | tee /tmp/opm_install.log; then
+                    if grep -qiE "已安装|installed|complete|Nothing to do|无需" /tmp/opm_install.log; then
+                        install_success=1
+                        install_method="openresty-resty"
+                        echo -e "${GREEN}✓ openresty-resty 安装成功${NC}"
+                    fi
                 fi
             fi
         fi
         
     # Debian 系列
     elif [[ "$OS" =~ ^(ubuntu|debian|linuxmint|raspbian|kali)$ ]]; then
-        echo "检测到 Debian 系列系统，使用 apt-get 安装..."
+        echo "检测到 Debian 系列系统..."
         
         if command -v apt-get &> /dev/null; then
             echo "更新软件包列表..."
             apt-get update -qq
             
-            echo "使用 apt-get 安装 openresty-resty..."
-            if apt-get install -y openresty-resty 2>&1 | tee /tmp/opm_install.log; then
+            # 优先尝试 openresty-opm
+            echo "尝试安装 openresty-opm..."
+            if apt-get install -y openresty-opm 2>&1 | tee /tmp/opm_install.log; then
                 if grep -qiE "已安装|installed|complete|Setting up|已经是最新版本" /tmp/opm_install.log; then
                     install_success=1
-                    echo -e "${GREEN}✓ openresty-resty 安装成功${NC}"
+                    install_method="openresty-opm"
+                    echo -e "${GREEN}✓ openresty-opm 安装成功${NC}"
+                fi
+            fi
+            
+            # 如果 openresty-opm 失败，尝试 openresty-resty
+            if [ $install_success -eq 0 ]; then
+                echo "尝试安装 openresty-resty..."
+                if apt-get install -y openresty-resty 2>&1 | tee /tmp/opm_install.log; then
+                    if grep -qiE "已安装|installed|complete|Setting up|已经是最新版本" /tmp/opm_install.log; then
+                        install_success=1
+                        install_method="openresty-resty"
+                        echo -e "${GREEN}✓ openresty-resty 安装成功${NC}"
+                    fi
                 fi
             fi
         fi
+        
+    # SUSE 系列
+    elif [[ "$OS" =~ ^(opensuse|sles)$ ]]; then
+        echo "检测到 SUSE 系列系统..."
+        
+        if command -v zypper &> /dev/null; then
+            if zypper install -y openresty-opm 2>&1 | tee /tmp/opm_install.log; then
+                if grep -qiE "已安装|installed|complete|Nothing to do" /tmp/opm_install.log; then
+                    install_success=1
+                    install_method="openresty-opm"
+                    echo -e "${GREEN}✓ openresty-opm 安装成功${NC}"
+                fi
+            fi
+            
+            if [ $install_success -eq 0 ]; then
+                if zypper install -y openresty-resty 2>&1 | tee /tmp/opm_install.log; then
+                    if grep -qiE "已安装|installed|complete|Nothing to do" /tmp/opm_install.log; then
+                        install_success=1
+                        install_method="openresty-resty"
+                        echo -e "${GREEN}✓ openresty-resty 安装成功${NC}"
+                    fi
+                fi
+            fi
+        fi
+        
+    # Arch 系列
+    elif [[ "$OS" =~ ^(arch|manjaro)$ ]]; then
+        echo "检测到 Arch 系列系统..."
+        
+        if command -v pacman &> /dev/null; then
+            if pacman -S --noconfirm openresty-opm 2>&1 | tee /tmp/opm_install.log; then
+                if grep -qiE "已安装|installed|complete|Nothing to do" /tmp/opm_install.log; then
+                    install_success=1
+                    install_method="openresty-opm"
+                    echo -e "${GREEN}✓ openresty-opm 安装成功${NC}"
+                fi
+            fi
+        fi
+        
+    # Alpine Linux
+    elif [[ "$OS" =~ ^(alpine)$ ]]; then
+        echo "检测到 Alpine Linux..."
+        
+        if command -v apk &> /dev/null; then
+            if apk add --no-cache openresty-opm 2>&1 | tee /tmp/opm_install.log; then
+                if grep -qiE "已安装|installed|complete" /tmp/opm_install.log; then
+                    install_success=1
+                    install_method="openresty-opm"
+                    echo -e "${GREEN}✓ openresty-opm 安装成功${NC}"
+                fi
+            fi
+        fi
+        
     else
         echo -e "${YELLOW}⚠ 未识别的系统类型，尝试通用方法...${NC}"
         
         if command -v yum &> /dev/null || command -v dnf &> /dev/null; then
             if command -v dnf &> /dev/null; then
-                dnf install -y openresty-resty && install_success=1
+                dnf install -y openresty-opm openresty-resty 2>/dev/null && install_success=1
             else
-                yum install -y openresty-resty && install_success=1
+                yum install -y openresty-opm openresty-resty 2>/dev/null && install_success=1
             fi
         elif command -v apt-get &> /dev/null; then
             apt-get update -qq
-            apt-get install -y openresty-resty && install_success=1
+            apt-get install -y openresty-opm openresty-resty 2>/dev/null && install_success=1
+        elif command -v zypper &> /dev/null; then
+            zypper install -y openresty-opm openresty-resty 2>/dev/null && install_success=1
+        elif command -v pacman &> /dev/null; then
+            pacman -S --noconfirm openresty-opm 2>/dev/null && install_success=1
+        elif command -v apk &> /dev/null; then
+            apk add --no-cache openresty-opm 2>/dev/null && install_success=1
         fi
     fi
     
@@ -198,14 +399,21 @@ install_opm() {
         # 重新查找 opm
         local opm_path=$(find_opm)
         if [ -n "$opm_path" ]; then
-            echo -e "${GREEN}✓ opm 安装成功，路径: ${opm_path}${NC}"
+            echo -e "${GREEN}✓ opm 安装成功（通过 ${install_method}），路径: ${opm_path}${NC}"
             return 0
         else
             echo -e "${YELLOW}⚠ 包安装成功但未找到 opm，尝试查询包文件列表...${NC}"
             
             # 查询包文件列表
+            local package_name=""
+            if [ "$install_method" = "openresty-opm" ]; then
+                package_name="openresty-opm"
+            else
+                package_name="openresty-resty"
+            fi
+            
             if command -v rpm &> /dev/null; then
-                local opm_files=$(rpm -ql openresty-resty 2>/dev/null | grep -E "/opm$")
+                local opm_files=$(rpm -ql "$package_name" 2>/dev/null | grep -E "/opm$")
                 if [ -n "$opm_files" ]; then
                     for opm_file in $opm_files; do
                         if [ -f "$opm_file" ] && [ -x "$opm_file" ]; then
@@ -215,7 +423,7 @@ install_opm() {
                     done
                 fi
             elif command -v dpkg &> /dev/null; then
-                local opm_files=$(dpkg -L openresty-resty 2>/dev/null | grep -E "/opm$")
+                local opm_files=$(dpkg -L "$package_name" 2>/dev/null | grep -E "/opm$")
                 if [ -n "$opm_files" ]; then
                     for opm_file in $opm_files; do
                         if [ -f "$opm_file" ] && [ -x "$opm_file" ]; then
@@ -226,13 +434,38 @@ install_opm() {
                 fi
             fi
             
-            echo -e "${RED}✗ 无法找到 opm，请手动检查${NC}"
-            return 1
+            echo -e "${YELLOW}⚠ 包安装成功但无法找到 opm 可执行文件${NC}"
         fi
-    else
-        echo -e "${RED}✗ openresty-resty 安装失败${NC}"
-        return 1
     fi
+    
+    # 方法3: 如果包管理器安装失败，尝试从源码安装
+    if [ $install_success -eq 0 ] || [ -z "$opm_path" ]; then
+        echo -e "${YELLOW}⚠ 包管理器安装失败或未找到 opm，尝试从源码安装...${NC}"
+        if install_opm_from_source; then
+            return 0
+        fi
+    fi
+    
+    # 所有方法都失败
+    echo -e "${RED}✗ opm 安装失败${NC}"
+    echo ""
+    echo -e "${BLUE}手动安装方法:${NC}"
+    echo ""
+    echo "1. RedHat 系列 (CentOS/RHEL/Fedora/Rocky/AlmaLinux):"
+    echo "   sudo yum install -y openresty-opm"
+    echo "   或"
+    echo "   sudo dnf install -y openresty-opm"
+    echo ""
+    echo "2. Debian 系列 (Ubuntu/Debian):"
+    echo "   sudo apt-get update"
+    echo "   sudo apt-get install -y openresty-opm"
+    echo ""
+    echo "3. 从源码安装:"
+    echo "   git clone https://github.com/openresty/opm.git"
+    echo "   sudo cp opm/bin/opm /usr/local/openresty/bin/"
+    echo "   sudo chmod +x /usr/local/openresty/bin/opm"
+    echo ""
+    return 1
 }
 
 # 验证 opm 安装

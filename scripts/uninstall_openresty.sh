@@ -12,10 +12,10 @@ if [ -f "${SCRIPT_DIR}/common.sh" ]; then
     source "${SCRIPT_DIR}/common.sh"
 else
     # 如果 common.sh 不存在，定义基本颜色（向后兼容）
-    RED='\033[0;31m'
-    GREEN='\033[0;32m'
-    YELLOW='\033[1;33m'
-    BLUE='\033[0;34m'
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
     NC='\033[0m'
 fi
 
@@ -390,28 +390,28 @@ uninstall_openresty() {
             uninstall_openresty_package
             
             # 根据清理选项处理安装目录
-            case "$DELETE_DIR" in
-                keep_all)
-                    echo -e "${GREEN}✓ 保留安装目录和配置${NC}"
-                    echo -e "${BLUE}安装目录位置: $INSTALL_DIR${NC}"
-                    ;;
-                keep_dir)
-                    echo -e "${YELLOW}删除配置文件，但保留安装目录...${NC}"
-                    if [ -f "${INSTALL_DIR}/nginx/conf/nginx.conf" ]; then
-                        rm -f "${INSTALL_DIR}/nginx/conf/nginx.conf"
-                        echo -e "${GREEN}✓ 已删除配置文件${NC}"
-                    fi
-                    if [ -d "${INSTALL_DIR}/nginx/logs" ]; then
-                        rm -rf "${INSTALL_DIR}/nginx/logs"/*
-                        echo -e "${GREEN}✓ 已清理日志目录${NC}"
-                    fi
-                    ;;
+    case "$DELETE_DIR" in
+        keep_all)
+            echo -e "${GREEN}✓ 保留安装目录和配置${NC}"
+            echo -e "${BLUE}安装目录位置: $INSTALL_DIR${NC}"
+            ;;
+        keep_dir)
+            echo -e "${YELLOW}删除配置文件，但保留安装目录...${NC}"
+            if [ -f "${INSTALL_DIR}/nginx/conf/nginx.conf" ]; then
+                rm -f "${INSTALL_DIR}/nginx/conf/nginx.conf"
+                echo -e "${GREEN}✓ 已删除配置文件${NC}"
+            fi
+            if [ -d "${INSTALL_DIR}/nginx/logs" ]; then
+                rm -rf "${INSTALL_DIR}/nginx/logs"/*
+                echo -e "${GREEN}✓ 已清理日志目录${NC}"
+            fi
+            ;;
                 delete_all)
                     if [ -d "$INSTALL_DIR" ]; then
-                        rm -rf "$INSTALL_DIR"
-                        echo -e "${GREEN}✓ 安装目录已删除${NC}"
+            rm -rf "$INSTALL_DIR"
+            echo -e "${GREEN}✓ 安装目录已删除${NC}"
                     fi
-                    ;;
+            ;;
             esac
             ;;
         source)
@@ -428,8 +428,8 @@ uninstall_openresty() {
                     if [ -f /etc/systemd/system/openresty.service ]; then
                         rm -f /etc/systemd/system/openresty.service
                         systemctl daemon-reload 2>/dev/null || true
-                    fi
-                    ;;
+            fi
+            ;;
                 keep_dir)
                     echo -e "${YELLOW}删除配置文件，但保留安装目录...${NC}"
                     if [ -f "${INSTALL_DIR}/nginx/conf/nginx.conf" ]; then
@@ -444,12 +444,12 @@ uninstall_openresty() {
                     if command -v systemctl &> /dev/null; then
                         systemctl stop openresty 2>/dev/null || true
                         systemctl disable openresty 2>/dev/null || true
-                    fi
+            fi
                     if [ -f /etc/systemd/system/openresty.service ]; then
                         rm -f /etc/systemd/system/openresty.service
                         systemctl daemon-reload 2>/dev/null || true
-                    fi
-                    ;;
+            fi
+            ;;
                 delete_all)
                     uninstall_openresty_source
                     ;;
@@ -498,32 +498,32 @@ main() {
     
     # 根据清理选项显示不同的提示（仅在交互模式下）
     if [ "$NON_INTERACTIVE" -eq 0 ]; then
-        if [ "$DELETE_DIR" = "keep_all" ]; then
-            echo -e "${GREEN}数据保留情况：${NC}"
-            echo "  ✓ 安装目录已保留"
-            echo "  ✓ 配置文件已保留"
-            echo ""
-            echo -e "${BLUE}重新安装 OpenResty 后，配置将自动恢复${NC}"
-        elif [ "$DELETE_DIR" = "keep_dir" ]; then
-            echo -e "${GREEN}数据保留情况：${NC}"
-            echo "  ✓ 安装目录已保留"
-            echo "  ✗ 配置文件已删除"
-            echo ""
-            echo -e "${BLUE}重新安装 OpenResty 后，需要重新部署配置${NC}"
-        else
-            echo -e "${YELLOW}数据清理情况：${NC}"
-            echo "  ✗ 安装目录已删除"
-            echo "  ✗ 所有配置已删除"
-            echo ""
-            echo -e "${BLUE}如需重新安装 OpenResty，请运行安装脚本${NC}"
-        fi
-        
+    if [ "$DELETE_DIR" = "keep_all" ]; then
+        echo -e "${GREEN}数据保留情况：${NC}"
+        echo "  ✓ 安装目录已保留"
+        echo "  ✓ 配置文件已保留"
         echo ""
-        echo -e "${YELLOW}后续操作建议：${NC}"
-        echo "  1. 如果保留了安装目录，重新安装 OpenResty 后配置会自动恢复"
-        echo "  2. 如果删除了安装目录，需要重新安装和部署配置"
-        echo "  3. 检查依赖 OpenResty 的应用是否需要重新配置"
+        echo -e "${BLUE}重新安装 OpenResty 后，配置将自动恢复${NC}"
+    elif [ "$DELETE_DIR" = "keep_dir" ]; then
+        echo -e "${GREEN}数据保留情况：${NC}"
+        echo "  ✓ 安装目录已保留"
+        echo "  ✗ 配置文件已删除"
         echo ""
+        echo -e "${BLUE}重新安装 OpenResty 后，需要重新部署配置${NC}"
+    else
+        echo -e "${YELLOW}数据清理情况：${NC}"
+        echo "  ✗ 安装目录已删除"
+        echo "  ✗ 所有配置已删除"
+        echo ""
+        echo -e "${BLUE}如需重新安装 OpenResty，请运行安装脚本${NC}"
+    fi
+    
+    echo ""
+    echo -e "${YELLOW}后续操作建议：${NC}"
+    echo "  1. 如果保留了安装目录，重新安装 OpenResty 后配置会自动恢复"
+    echo "  2. 如果删除了安装目录，需要重新安装和部署配置"
+    echo "  3. 检查依赖 OpenResty 的应用是否需要重新配置"
+    echo ""
     fi
 }
 

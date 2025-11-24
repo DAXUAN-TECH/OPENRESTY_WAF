@@ -11,10 +11,10 @@ if [ -f "${SCRIPT_DIR}/common.sh" ]; then
     source "${SCRIPT_DIR}/common.sh"
 else
     # 如果 common.sh 不存在，定义基本颜色（向后兼容）
-    RED='\033[0;31m'
-    GREEN='\033[0;32m'
-    YELLOW='\033[1;33m'
-    BLUE='\033[0;34m'
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
     NC='\033[0m'
 fi
 
@@ -159,9 +159,9 @@ install_module() {
     if [ $install_status -eq 0 ]; then
         # 检查是否真的安装成功（验证文件是否存在）
         if check_module_installed "$module_name"; then
-            echo -e "  ${GREEN}✓ 安装成功${NC}"
-            INSTALLED=$((INSTALLED + 1))
-            return 0
+        echo -e "  ${GREEN}✓ 安装成功${NC}"
+        INSTALLED=$((INSTALLED + 1))
+        return 0
         else
             # 安装命令成功但文件不存在，可能是包结构问题
             echo -e "  ${YELLOW}⚠ 安装命令成功，但模块文件未找到${NC}"
@@ -175,10 +175,10 @@ install_module() {
         echo "$install_output" | sed 's/^/    /'
         FAILED=$((FAILED + 1))
     fi
-    
-    if [ "$is_required" = "required" ]; then
-        echo -e "${RED}错误: 必需模块安装失败${NC}"
-        echo -e "${YELLOW}手动安装命令: ${OPM_BIN} get ${opm_package}${NC}"
+        
+        if [ "$is_required" = "required" ]; then
+            echo -e "${RED}错误: 必需模块安装失败${NC}"
+            echo -e "${YELLOW}手动安装命令: ${OPM_BIN} get ${opm_package}${NC}"
         echo -e "${YELLOW}调试信息:${NC}"
         echo "  - OPM 路径: ${OPM_BIN}"
         if [ -f "${OPM_BIN}" ] && [ -x "${OPM_BIN}" ]; then
@@ -193,9 +193,9 @@ install_module() {
         fi
         echo "  - 目标目录: ${LUALIB_DIR}"
         echo "  - 模块路径: ${LUALIB_DIR}/${module_name//\./\/}.lua"
-        return 1
-    else
-        echo -e "${YELLOW}警告: 可选模块安装失败，功能可能受限${NC}"
+            return 1
+        else
+            echo -e "${YELLOW}警告: 可选模块安装失败，功能可能受限${NC}"
         echo -e "${BLUE}提示: 可以稍后手动安装: ${OPM_BIN} get ${opm_package}${NC}"
         echo -e "${YELLOW}调试信息:${NC}"
         echo "  - OPM 路径: ${OPM_BIN}"

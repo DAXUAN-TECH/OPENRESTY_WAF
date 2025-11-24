@@ -693,16 +693,64 @@ EOF
     echo -e "${GREEN}✓ OpenResty 配置完成${NC}"
 }
 
+# 查找 opm 可执行文件
+find_opm() {
+    local opm_path=""
+    
+    # 检查多个可能的位置
+    local possible_paths=(
+        "${INSTALL_DIR}/bin/opm"
+        "/usr/local/bin/opm"
+        "/usr/bin/opm"
+        "$(which opm 2>/dev/null || echo "")"
+    )
+    
+    for path in "${possible_paths[@]}"; do
+        if [ -n "$path" ] && [ -f "$path" ] && [ -x "$path" ]; then
+            opm_path="$path"
+            break
+        fi
+    done
+    
+    echo "$opm_path"
+}
+
 # 安装 Lua 模块
 install_lua_modules() {
     echo -e "${BLUE}[7/8] 安装 Lua 模块...${NC}"
     
+    # 查找 opm
+    local opm_path=$(find_opm)
+    
+    # 如果找不到 opm，尝试安装 openresty-resty 包
+    if [ -z "$opm_path" ]; then
+        echo -e "${YELLOW}⚠ opm 未找到，尝试安装 openresty-resty 包...${NC}"
+        
+        if command -v yum &> /dev/null; then
+            if yum install -y openresty-resty 2>&1 | grep -qE "已安装|installed|complete"; then
+                echo -e "${GREEN}✓ openresty-resty 安装成功${NC}"
+                opm_path=$(find_opm)
+            fi
+        elif command -v dnf &> /dev/null; then
+            if dnf install -y openresty-resty 2>&1 | grep -qE "已安装|installed|complete"; then
+                echo -e "${GREEN}✓ openresty-resty 安装成功${NC}"
+                opm_path=$(find_opm)
+            fi
+        elif command -v apt-get &> /dev/null; then
+            if apt-get install -y openresty-resty 2>&1 | grep -qE "已安装|installed|complete"; then
+                echo -e "${GREEN}✓ openresty-resty 安装成功${NC}"
+                opm_path=$(find_opm)
+            fi
+        fi
+    fi
+    
     # 检查 opm 是否可用
-    if [ -f "${INSTALL_DIR}/bin/opm" ]; then
+    if [ -n "$opm_path" ] && [ -f "$opm_path" ] && [ -x "$opm_path" ]; then
+        echo -e "${GREEN}✓ 找到 opm: ${opm_path}${NC}"
         local critical_modules_failed=0
         
         echo "安装 lua-resty-mysql（关键模块）..."
-        if ${INSTALL_DIR}/bin/opm get openresty/lua-resty-mysql 2>&1; then
+        if "$opm_path" get openresty/lua-resty-mysql 2>&1; then
             echo -e "${GREEN}  ✓ lua-resty-mysql 安装成功${NC}"
         else
             echo -e "${RED}  ✗ lua-resty-mysql 安装失败（关键模块）${NC}"
@@ -710,14 +758,14 @@ install_lua_modules() {
         fi
         
         echo "安装 lua-resty-redis（可选模块）..."
-        if ${INSTALL_DIR}/bin/opm get openresty/lua-resty-redis 2>&1; then
+        if "$opm_path" get openresty/lua-resty-redis 2>&1; then
             echo -e "${GREEN}  ✓ lua-resty-redis 安装成功${NC}"
         else
             echo -e "${YELLOW}  ⚠ lua-resty-redis 安装失败（可选，不影响基本功能）${NC}"
         fi
         
         echo "安装 lua-resty-maxminddb（可选模块）..."
-        if ${INSTALL_DIR}/bin/opm get anjia0532/lua-resty-maxminddb 2>&1; then
+        if "$opm_path" get anjia0532/lua-resty-maxminddb 2>&1; then
             echo -e "${GREEN}  ✓ lua-resty-maxminddb 安装成功${NC}"
         else
             echo -e "${YELLOW}  ⚠ lua-resty-maxminddb 安装失败（可选，仅影响地域封控功能）${NC}"
@@ -730,18 +778,37 @@ install_lua_modules() {
             echo ""
             echo -e "${BLUE}手动安装方法:${NC}"
             echo "1. 使用 opm 手动安装:"
-            echo "   ${INSTALL_DIR}/bin/opm get openresty/lua-resty-mysql"
+            echo "   $opm_path get openresty/lua-resty-mysql"
             echo ""
             echo "2. 或从源码安装:"
             echo "   cd /tmp"
             echo "   git clone https://github.com/openresty/lua-resty-mysql.git"
-            echo "   cp -r lua-resty-mysql/lib/resty ${INSTALL_DIR}/site/lualib/resty/"
+            echo "   mkdir -p ${INSTALL_DIR}/site/lualib/resty"
+            echo "   cp -r lua-resty-mysql/lib/resty/* ${INSTALL_DIR}/site/lualib/resty/"
             echo ""
             echo -e "${YELLOW}安装完成后，请重启 OpenResty 服务${NC}"
         fi
     else
         echo -e "${YELLOW}警告: opm 未找到，跳过 Lua 模块安装${NC}"
-        echo -e "${YELLOW}请手动安装 Lua 模块或使用源码编译方式${NC}"
+        echo ""
+        echo -e "${BLUE}解决方案:${NC}"
+        echo "1. 确保已安装 openresty-resty 包:"
+        if command -v yum &> /dev/null || command -v dnf &> /dev/null; then
+            echo "   yum install -y openresty-resty"
+            echo "   或"
+            echo "   dnf install -y openresty-resty"
+        elif command -v apt-get &> /dev/null; then
+            echo "   apt-get install -y openresty-resty"
+        fi
+        echo ""
+        echo "2. 或者手动安装 Lua 模块（从源码）:"
+        echo "   cd /tmp"
+        echo "   git clone https://github.com/openresty/lua-resty-mysql.git"
+        echo "   mkdir -p ${INSTALL_DIR}/site/lualib/resty"
+        echo "   cp -r lua-resty-mysql/lib/resty/* ${INSTALL_DIR}/site/lualib/resty/"
+        echo ""
+        echo "3. 安装完成后，可以运行以下命令安装依赖:"
+        echo "   sudo ./scripts/install_dependencies.sh"
     fi
     
     echo -e "${GREEN}✓ Lua 模块安装完成${NC}"

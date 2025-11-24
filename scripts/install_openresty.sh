@@ -263,7 +263,7 @@ detect_installation_method() {
     fi
     
     echo "unknown"
-    return 1
+    return 0  # 返回 0 而不是 1，避免命令替换失败导致脚本退出
 }
 
 # 调用卸载脚本
@@ -297,8 +297,8 @@ check_existing() {
     local current_version=""
     local install_method="unknown"
     
-    # 检测安装方式
-    install_method=$(detect_installation_method)
+    # 检测安装方式（忽略返回值，避免 set -e 导致脚本退出）
+    install_method=$(detect_installation_method 2>/dev/null || echo "unknown")
     if [ "$install_method" != "unknown" ]; then
         openresty_installed=1
         

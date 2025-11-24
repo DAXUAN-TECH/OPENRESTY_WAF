@@ -587,10 +587,13 @@ prompt_choice() {
     local options=("$@")
     local choice
     
-    echo -e "${BLUE}${prompt}${NC}"
+    # 确保输出立即显示（刷新标准输出）
+    echo -e "${BLUE}${prompt}${NC}" >&2
     for i in "${!options[@]}"; do
-        echo "  $((i+1)). ${options[$i]}"
+        echo "  $((i+1)). ${options[$i]}" >&2
     done
+    # 强制刷新输出缓冲区
+    echo "" >&2
     
     while true; do
         read -p "请选择 [1-${#options[@]}]: " choice
@@ -598,7 +601,7 @@ prompt_choice() {
             echo "$choice"
             return 0
         else
-            echo -e "${YELLOW}无效选择，请输入 1-${#options[@]} 之间的数字${NC}"
+            echo -e "${YELLOW}无效选择，请输入 1-${#options[@]} 之间的数字${NC}" >&2
         fi
     done
 }

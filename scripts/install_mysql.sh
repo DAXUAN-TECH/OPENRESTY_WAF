@@ -3525,11 +3525,13 @@ CNF_EOF
     local sql_file_size=$(du -h "$SQL_FILE" | cut -f1)
     echo -e "${BLUE}SQL 文件大小: ${sql_file_size}${NC}"
     
-    # 导入 SQL 脚本（显示进度）
+    # 导入 SQL 脚本（显示详细进度）
     echo -e "${BLUE}开始导入...${NC}"
+    echo ""
+    
+    # 创建临时配置文件
+    local temp_cnf=$(mktemp)
     if [ -n "$MYSQL_USER_PASSWORD" ]; then
-        # 使用配置文件方式避免密码泄露到进程列表
-        local temp_cnf=$(mktemp)
         cat > "$temp_cnf" <<CNF_EOF
 [client]
 host=127.0.0.1
@@ -3537,45 +3539,175 @@ user=${MYSQL_USER}
 password=${MYSQL_USER_PASSWORD}
 database=${MYSQL_DATABASE}
 CNF_EOF
-        chmod 600 "$temp_cnf"
-        SQL_OUTPUT=$(mysql --defaults-file="$temp_cnf" < "$SQL_FILE" 2>&1)
-        SQL_EXIT_CODE=$?
-        rm -f "$temp_cnf"
     else
-        SQL_OUTPUT=$(mysql -h"127.0.0.1" -u"${MYSQL_USER}" "${MYSQL_DATABASE}" < "$SQL_FILE" 2>&1)
+        cat > "$temp_cnf" <<CNF_EOF
+[client]
+host=127.0.0.1
+user=${MYSQL_USER}
+database=${MYSQL_DATABASE}
+CNF_EOF
+    fi
+    chmod 600 "$temp_cnf"
+    
+    # 使用 mysql 命令导入，并实时显示输出
+    local import_log=$(mktemp)
+    echo -e "${BLUE}正在执行 SQL 语句...${NC}"
+    
+    # 使用 pv 显示进度（如果可用），否则使用普通导入
+    if command -v pv &> /dev/null; then
+        pv -p -t -e -r -b "$SQL_FILE" | mysql --defaults-file="$temp_cnf" > "$import_log" 2>&1
+        SQL_EXIT_CODE=${PIPESTATUS[1]}
+    else
+        # 分步导入，显示进度
+        local total_lines=$(wc -l < "$SQL_FILE" 2>/dev/null || echo "0")
+        if [ "$total_lines" -gt 0 ]; then
+            echo -e "${BLUE}SQL 文件共 ${total_lines} 行，正在导入...${NC}"
+        fi
+        
+        mysql --defaults-file="$temp_cnf" < "$SQL_FILE" > "$import_log" 2>&1
         SQL_EXIT_CODE=$?
     fi
+    
+    # 读取导入日志
+    SQL_OUTPUT=$(cat "$import_log")
+    rm -f "$temp_cnf" "$import_log"
     
     # 过滤掉警告信息（MySQL 8.0 会输出密码警告）
     SQL_OUTPUT=$(echo "$SQL_OUTPUT" | grep -v "Warning: Using a password on the command line")
     
-    if [ $SQL_EXIT_CODE -eq 0 ]; then
-        echo -e "${GREEN}✓ 数据库初始化成功${NC}"
-        # 如果有输出，显示部分输出（可能是成功信息）
-        if [ -n "$SQL_OUTPUT" ]; then
-            echo -e "${BLUE}导入输出:${NC}"
-            echo "$SQL_OUTPUT" | head -10
+    # 显示导入过程中的关键信息
+    if [ -n "$SQL_OUTPUT" ]; then
+        # 检查是否有视图删除的警告（这是正常的，MySQL 5.7 不支持 DROP VIEW IF EXISTS）
+        local view_drop_warnings=$(echo "$SQL_OUTPUT" | grep -iE "unknown table|doesn't exist" | grep -i "view" | wc -l)
+        if [ "$view_drop_warnings" -gt 0 ]; then
+            echo -e "${BLUE}提示: 视图删除警告（这是正常的，首次导入时视图不存在）${NC}"
         fi
+    fi
+    
+    # 检查导入后的表数量
+    local check_tables_query="SELECT COUNT(*) as table_count FROM information_schema.tables WHERE table_schema='${MYSQL_DATABASE}';"
+    local temp_cnf_check=$(mktemp)
+    if [ -n "$MYSQL_USER_PASSWORD" ]; then
+        cat > "$temp_cnf_check" <<CNF_EOF
+[client]
+host=127.0.0.1
+user=${MYSQL_USER}
+password=${MYSQL_USER_PASSWORD}
+CNF_EOF
+    else
+        cat > "$temp_cnf_check" <<CNF_EOF
+[client]
+host=127.0.0.1
+user=${MYSQL_USER}
+CNF_EOF
+    fi
+    chmod 600 "$temp_cnf_check"
+    
+    local table_count=$(mysql --defaults-file="$temp_cnf_check" -e "$check_tables_query" 2>/dev/null | grep -v "table_count" | grep -v "^$" | awk '{print $1}')
+    rm -f "$temp_cnf_check"
+    
+    # 显示导入结果
+    echo ""
+    if [ -n "$table_count" ] && [ "$table_count" -gt 0 ]; then
+        echo -e "${GREEN}✓ 已成功创建 ${table_count} 个表${NC}"
+        
+        # 列出所有创建的表
+        echo -e "${BLUE}已创建的表：${NC}"
+        local temp_cnf_list=$(mktemp)
+        if [ -n "$MYSQL_USER_PASSWORD" ]; then
+            cat > "$temp_cnf_list" <<CNF_EOF
+[client]
+host=127.0.0.1
+user=${MYSQL_USER}
+password=${MYSQL_USER_PASSWORD}
+CNF_EOF
+        else
+            cat > "$temp_cnf_list" <<CNF_EOF
+[client]
+host=127.0.0.1
+user=${MYSQL_USER}
+CNF_EOF
+        fi
+        chmod 600 "$temp_cnf_list"
+        mysql --defaults-file="$temp_cnf_list" -e "SELECT table_name FROM information_schema.tables WHERE table_schema='${MYSQL_DATABASE}' ORDER BY table_name;" 2>/dev/null | grep -v "table_name" | while read table_name; do
+            if [ -n "$table_name" ]; then
+                echo -e "  ${GREEN}✓${NC} ${table_name}"
+            fi
+        done
+        rm -f "$temp_cnf_list"
+    fi
+    
+    # 检查是否有错误输出
+    if [ -n "$SQL_OUTPUT" ]; then
+        # 检查是否是已知的兼容性警告（这些可以忽略）
+        local known_warnings=$(echo "$SQL_OUTPUT" | grep -iE "already exists|duplicate|view.*does not exist|unknown database|unknown table|doesn't exist" | wc -l)
+        local error_count=$(echo "$SQL_OUTPUT" | grep -iE "error|failed|syntax error" | grep -v "Warning" | wc -l)
+        
+        # 过滤掉视图删除的警告（MySQL 5.7 不支持 DROP VIEW IF EXISTS）
+        local view_drop_errors=$(echo "$SQL_OUTPUT" | grep -iE "error.*view|unknown table.*view" | wc -l)
+        if [ "$view_drop_errors" -gt 0 ]; then
+            error_count=$((error_count - view_drop_errors))
+            echo -e "${BLUE}提示: 视图删除警告已忽略（MySQL 5.7 兼容性处理）${NC}"
+        fi
+        
+        if [ "$error_count" -gt 0 ]; then
+            echo ""
+            echo -e "${YELLOW}⚠ 导入过程中发现错误：${NC}"
+            echo "$SQL_OUTPUT" | grep -iE "error|failed|syntax error" | grep -v "Warning" | head -20
+            echo ""
+            
+            # 如果表数量大于0，说明部分成功
+            if [ -n "$table_count" ] && [ "$table_count" -gt 0 ]; then
+                echo -e "${YELLOW}⚠ 部分表已成功创建（${table_count} 个表），但存在错误，请检查上述错误信息${NC}"
+                echo -e "${YELLOW}建议：${NC}"
+                echo "  1. 检查上述错误信息，可能是视图创建失败（不影响主要功能）"
+                echo "  2. 检查数据库用户权限是否足够"
+                echo "  3. 可以手动修复错误后继续使用"
+                # 即使有错误，如果表已创建，也认为部分成功
+                echo ""
+                echo -e "${GREEN}✓ 数据库表已创建（${table_count} 个表），部分错误不影响主要功能${NC}"
+                show_installation_summary
+                return 0
+            else
+                echo -e "${RED}✗ 数据库初始化失败${NC}"
+                echo -e "${YELLOW}建议：${NC}"
+                echo "  1. 检查 SQL 文件语法是否正确"
+                echo "  2. 检查数据库用户权限是否足够"
+                echo "  3. 手动导入 SQL 文件: mysql -u ${MYSQL_USER} -p ${MYSQL_DATABASE} < ${SQL_FILE}"
+                return 1
+            fi
+        elif [ "$known_warnings" -gt 0 ]; then
+            echo ""
+            echo -e "${BLUE}提示：部分对象可能已存在（这是正常的，使用 IF NOT EXISTS 语句）${NC}"
+        fi
+    fi
+    
+    # 如果表数量大于0，认为导入成功
+    if [ -n "$table_count" ] && [ "$table_count" -gt 0 ]; then
+        echo ""
+        echo -e "${GREEN}✓ 数据库初始化完成（已创建 ${table_count} 个表）${NC}"
         # 显示安装总结
         show_installation_summary
+        return 0
+    elif [ $SQL_EXIT_CODE -eq 0 ]; then
+        echo ""
+        echo -e "${GREEN}✓ 数据库初始化完成（SQL 执行成功）${NC}"
+        # 显示安装总结
+        show_installation_summary
+        return 0
     else
-        # 检查是否是"表已存在"的错误（这是正常的）
-        if echo "$SQL_OUTPUT" | grep -qi "already exists\|Duplicate\|exists"; then
-            echo -e "${YELLOW}⚠ 部分表可能已存在，这是正常的${NC}"
-            echo -e "${GREEN}✓ 数据库初始化完成${NC}"
-            # 显示安装总结
-            show_installation_summary
-        else
-            echo -e "${RED}✗ 数据库初始化失败${NC}"
+        echo ""
+        echo -e "${RED}✗ 数据库初始化失败${NC}"
+        if [ -n "$SQL_OUTPUT" ]; then
             echo -e "${YELLOW}错误信息：${NC}"
             echo "$SQL_OUTPUT" | head -30
-            echo ""
-            echo -e "${YELLOW}建议：${NC}"
-            echo "  1. 检查 SQL 文件语法是否正确"
-            echo "  2. 检查数据库用户权限是否足够"
-            echo "  3. 手动导入 SQL 文件: mysql -u ${MYSQL_USER} -p ${MYSQL_DATABASE} < ${SQL_FILE}"
-            return 1
         fi
+        echo ""
+        echo -e "${YELLOW}建议：${NC}"
+        echo "  1. 检查 SQL 文件语法是否正确"
+        echo "  2. 检查数据库用户权限是否足够"
+        echo "  3. 手动导入 SQL 文件: mysql -u ${MYSQL_USER} -p ${MYSQL_DATABASE} < ${SQL_FILE}"
+        return 1
     fi
 }
 

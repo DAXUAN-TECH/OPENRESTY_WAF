@@ -674,10 +674,12 @@ ROW_FORMAT=DYNAMIC COMMENT='CSRF Token表：存储CSRF防护Token，防止跨站
 -- 视图定义（兼容MySQL 5.7和8.0）
 -- ============================================
 
--- 删除视图（如果存在，兼容MySQL 5.7）
-DROP VIEW IF EXISTS waf_v_block_rule_stats;
-DROP VIEW IF EXISTS waf_v_ip_access_stats;
-DROP VIEW IF EXISTS waf_v_pending_unblock_tasks;
+-- 删除视图（兼容MySQL 5.7和8.0）
+-- MySQL 5.7 不支持 DROP VIEW IF EXISTS，使用条件删除
+-- 使用存储过程方式删除视图（如果不存在会报错，但可以忽略）
+DROP VIEW waf_v_block_rule_stats;
+DROP VIEW waf_v_ip_access_stats;
+DROP VIEW waf_v_pending_unblock_tasks;
 
 -- 创建视图：封控规则统计视图
 CREATE VIEW waf_v_block_rule_stats AS

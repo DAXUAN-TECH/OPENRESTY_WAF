@@ -108,7 +108,7 @@ if [ "$http_block_count" -gt 1 ]; then
 fi
 
 # 检查是否有重复的内容（在 http 块结束后）
-# 如果 http 块结束后还有内容，可能是重复的配置
+# 如果 http 块结束后还有内容，可能是重复的配置，需要清理
 if [ -f "$NGINX_CONF_DIR/nginx.conf" ]; then
     http_start=$(grep -n "^http {" "$NGINX_CONF_DIR/nginx.conf" | cut -d: -f1 | head -1)
     if [ -n "$http_start" ]; then
@@ -133,15 +133,16 @@ if [ -f "$NGINX_CONF_DIR/nginx.conf" ]; then
         ' "$NGINX_CONF_DIR/nginx.conf")
         if [ -n "$http_end" ]; then
             total_lines=$(wc -l < "$NGINX_CONF_DIR/nginx.conf")
-            # 检查 http 块结束后是否还有内容
+            # 检查 http 块结束后是否还有内容（除了空行和注释）
             if [ "$http_end" -lt "$total_lines" ]; then
-                # 检查 http 块后的内容是否包含 set 指令（可能是重复的）
-                after_http_content=$(sed -n "$((http_end + 1)),\$p" "$NGINX_CONF_DIR/nginx.conf")
-                if echo "$after_http_content" | grep -q "set \$project_root"; then
-                    echo -e "${YELLOW}⚠ 检测到 http 块后有重复的 set 指令，正在清理...${NC}"
-                    # 删除 http 块后的所有内容
+                # 检查 http 块后的内容（跳过空行）
+                after_http_content=$(sed -n "$((http_end + 1)),\$p" "$NGINX_CONF_DIR/nginx.conf" | grep -v '^[[:space:]]*$' | grep -v '^[[:space:]]*#')
+                if [ -n "$after_http_content" ]; then
+                    echo -e "${YELLOW}⚠ 检测到 http 块后有重复内容，正在清理...${NC}"
+                    # 删除 http 块后的所有内容（保留空行和注释，但删除实际配置）
+                    # 更安全的方式：只保留到 http 块结束
                     sed -i "$((http_end + 1)),\$d" "$NGINX_CONF_DIR/nginx.conf"
-                    echo -e "${GREEN}✓ 已清理重复内容${NC}"
+                    echo -e "${GREEN}✓ 已清理 http 块后的重复内容${NC}"
                 fi
             fi
         fi
@@ -292,6 +293,42 @@ if [ -f "${OPENRESTY_PREFIX}/bin/openresty" ]; then
                 echo -e "${GREEN}✓ 已更新 set 指令的值${NC}"
             else
                 echo -e "${GREEN}✓ set 指令已在 http 块内且值正确${NC}"
+            fi
+        fi
+        
+        # 在验证之前，再次检查并清理 http 块后的重复内容（防止替换操作产生新的重复）
+        http_start=$(grep -n "^http {" "$NGINX_CONF_DIR/nginx.conf" | cut -d: -f1 | head -1)
+        if [ -n "$http_start" ]; then
+            http_end=$(awk -v start="$http_start" '
+                BEGIN { brace_count = 0; found_start = 0 }
+                NR >= start {
+                    if (NR == start) found_start = 1
+                    if (found_start) {
+                        for (i = 1; i <= length($0); i++) {
+                            char = substr($0, i, 1)
+                            if (char == "{") brace_count++
+                            if (char == "}") {
+                                brace_count--
+                                if (brace_count == 0 && found_start) {
+                                    print NR
+                                    exit
+                                }
+                            }
+                        }
+                    }
+                }
+            ' "$NGINX_CONF_DIR/nginx.conf")
+            if [ -n "$http_end" ]; then
+                total_lines=$(wc -l < "$NGINX_CONF_DIR/nginx.conf")
+                if [ "$http_end" -lt "$total_lines" ]; then
+                    # 检查是否有非空行、非注释的内容
+                    after_http_non_empty=$(sed -n "$((http_end + 1)),\$p" "$NGINX_CONF_DIR/nginx.conf" | grep -v '^[[:space:]]*$' | grep -v '^[[:space:]]*#')
+                    if [ -n "$after_http_non_empty" ]; then
+                        echo -e "${YELLOW}⚠ 验证前再次检测到重复内容，正在清理...${NC}"
+                        sed -i "$((http_end + 1)),\$d" "$NGINX_CONF_DIR/nginx.conf"
+                        echo -e "${GREEN}✓ 已清理重复内容${NC}"
+                    fi
+                fi
             fi
         fi
     fi

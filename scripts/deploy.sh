@@ -110,8 +110,11 @@ if [ -f "${OPENRESTY_PREFIX}/bin/openresty" ]; then
     echo "验证 nginx.conf 语法..."
     
     # 确保 set 指令在 http 块内的正确位置
-    # 注意：由于第 100 行已经替换了 set 指令的值，这里只需要验证和确保位置正确
+    # 注意：由于第 100 行已经替换了 set 指令的值，这里需要清理和重新组织
     if [ -f "$NGINX_CONF_DIR/nginx.conf" ]; then
+        # 首先，删除所有在 http 块外的 set 指令（防止语法错误）
+        echo -e "${BLUE}清理 http 块外的 set 指令...${NC}"
+        
         # 查找第一个 http 块（确保只有一个）
         http_start=$(grep -n "^http {" "$NGINX_CONF_DIR/nginx.conf" | cut -d: -f1 | head -1)
         
@@ -126,11 +129,41 @@ if [ -f "${OPENRESTY_PREFIX}/bin/openresty" ]; then
             http_end=$(wc -l < "$NGINX_CONF_DIR/nginx.conf")
         fi
         
+        # 删除 http 块外的所有 set 指令及其注释
+        # 1. 删除 http 块之前的所有 set 指令
+        if [ "$http_start" -gt 1 ]; then
+            sed -i "1,$((http_start - 1)){/set \$project_root/d; /#.*项目根目录/d; /#.*project_root/d}" "$NGINX_CONF_DIR/nginx.conf"
+        fi
+        
+        # 2. 删除 http 块之后的所有 set 指令
+        total_lines=$(wc -l < "$NGINX_CONF_DIR/nginx.conf")
+        if [ "$http_end" -lt "$total_lines" ]; then
+            sed -i "$((http_end + 1)),\${/set \$project_root/d; /#.*项目根目录/d; /#.*project_root/d}" "$NGINX_CONF_DIR/nginx.conf"
+        fi
+        
+        # 重新查找 http 块位置（因为可能删除了行）
+        http_start=$(grep -n "^http {" "$NGINX_CONF_DIR/nginx.conf" | cut -d: -f1 | head -1)
+        http_end=$(awk -v start="$http_start" 'NR > start && /^[[:space:]]*}[[:space:]]*$/ {print NR; exit}' "$NGINX_CONF_DIR/nginx.conf")
+        if [ -z "$http_end" ]; then
+            http_end=$(wc -l < "$NGINX_CONF_DIR/nginx.conf")
+        fi
+        
         # 检查 http 块内是否有 set 指令
         set_in_http=$(sed -n "${http_start},${http_end}p" "$NGINX_CONF_DIR/nginx.conf" | grep -c "set \$project_root" 2>/dev/null || echo "0")
         set_in_http=$(echo "$set_in_http" | tr -d '\n\r' | head -n1)
         if ! [[ "$set_in_http" =~ ^[0-9]+$ ]]; then
             set_in_http=0
+        fi
+        
+        # 如果 http 块内有多个 set 指令，只保留第一个，删除其他的
+        if [ "$set_in_http" -gt 1 ]; then
+            echo -e "${YELLOW}⚠ 检测到 http 块内有多个 set 指令，正在清理...${NC}"
+            # 在 http 块内找到第一个 set 指令的位置
+            first_set_line=$(sed -n "${http_start},${http_end}p" "$NGINX_CONF_DIR/nginx.conf" | grep -n "set \$project_root" | head -1 | cut -d: -f1)
+            first_set_line=$((http_start + first_set_line - 1))
+            # 删除 http 块内第一个 set 指令之后的所有 set 指令
+            sed -i "$((first_set_line + 1)),${http_end}{/set \$project_root/d; /#.*项目根目录/d; /#.*project_root/d}" "$NGINX_CONF_DIR/nginx.conf"
+            set_in_http=1
         fi
         
         if [ "$set_in_http" -eq 0 ]; then
@@ -149,11 +182,12 @@ if [ -f "${OPENRESTY_PREFIX}/bin/openresty" ]; then
             mv "$NGINX_CONF_DIR/nginx.conf.tmp" "$NGINX_CONF_DIR/nginx.conf"
             echo -e "${GREEN}✓ 已添加 set 指令到 http 块内${NC}"
         else
-            # 已有 set 指令，确保其值是正确的（第 100 行应该已经替换了，这里只是验证）
+            # 已有 set 指令，确保其值是正确的
             current_value=$(sed -n "${http_start},${http_end}p" "$NGINX_CONF_DIR/nginx.conf" | grep "set \$project_root" | sed 's/.*"\(.*\)".*/\1/' | head -1)
             if [ "$current_value" != "$PROJECT_ROOT_ABS" ]; then
                 echo -e "${YELLOW}⚠ 更新 set 指令的值...${NC}"
-                sed -i 's|set $project_root "[^"]*"|set $project_root "'"$PROJECT_ROOT_ABS"'"|g' "$NGINX_CONF_DIR/nginx.conf"
+                # 只在 http 块内替换
+                sed -i "${http_start},${http_end}s|set \$project_root \"[^\"]*\"|set \$project_root \"$PROJECT_ROOT_ABS\"|g" "$NGINX_CONF_DIR/nginx.conf"
                 echo -e "${GREEN}✓ 已更新 set 指令的值${NC}"
             else
                 echo -e "${GREEN}✓ set 指令已在 http 块内且值正确${NC}"

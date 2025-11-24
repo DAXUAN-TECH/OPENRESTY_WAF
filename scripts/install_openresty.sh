@@ -244,12 +244,12 @@ install_dependencies() {
 detect_installation_method() {
     # 检查是否通过包管理器安装
     if command -v rpm &> /dev/null; then
-        if rpm -qa | grep -qiE "^openresty"; then
+        if rpm -qa 2>/dev/null | grep -qiE "^openresty"; then
             echo "rpm"
             return 0
         fi
     elif command -v dpkg &> /dev/null; then
-        if dpkg -l | grep -qiE "^ii.*openresty"; then
+        if dpkg -l 2>/dev/null | grep -qiE "^ii.*openresty"; then
             echo "deb"
             return 0
         fi
@@ -304,9 +304,9 @@ check_existing() {
         
         # 获取版本信息
         if [ -f "${INSTALL_DIR}/bin/openresty" ]; then
-        current_version=$(${INSTALL_DIR}/bin/openresty -v 2>&1 | grep -oP 'openresty/\K[0-9.]+' || echo "unknown")
+            current_version=$(${INSTALL_DIR}/bin/openresty -v 2>&1 | grep -oP 'openresty/\K[0-9.]+' || echo "unknown") || current_version="unknown"
         elif command -v openresty &> /dev/null; then
-            current_version=$(openresty -v 2>&1 | grep -oP 'openresty/\K[0-9.]+' || echo "unknown")
+            current_version=$(openresty -v 2>&1 | grep -oP 'openresty/\K[0-9.]+' || echo "unknown") || current_version="unknown"
         fi
         
         echo -e "${YELLOW}检测到已安装 OpenResty${NC}"
@@ -362,8 +362,8 @@ check_existing() {
                 if [[ ! "$CONFIRM_UNINSTALL" =~ ^[Yy]$ ]]; then
                     echo -e "${GREEN}取消卸载，保留现有安装${NC}"
                     echo -e "${GREEN}跳过 OpenResty 安装${NC}"
-            exit 0
-        fi
+                    exit 0
+                fi
         
                 echo -e "${YELLOW}确认卸载，开始卸载 OpenResty...${NC}"
                 REINSTALL_MODE="yes"

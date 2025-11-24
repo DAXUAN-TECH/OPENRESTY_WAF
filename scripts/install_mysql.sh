@@ -873,25 +873,96 @@ install_mysql_redhat() {
         repo_version="80"
     fi
     
-    # 安装 MySQL 仓库
+    # 安装 MySQL 仓库（从官方下载页面获取）
     if [ ! -f /etc/yum.repos.d/mysql-community.repo ]; then
+        echo -e "${BLUE}从 MySQL 官方下载页面获取安装源...${NC}"
+        echo -e "${BLUE}官方下载页面: https://dev.mysql.com/downloads/repo/yum/${NC}"
         echo "添加 MySQL ${repo_version} 官方仓库..."
         
         # 下载 MySQL Yum Repository
+        # 官方下载链接格式：https://dev.mysql.com/get/mysql{version}-community-release-{el_version}-{version}.noarch.rpm
+        # 注意：MySQL 8.0+ 使用新的仓库包格式，可能包含版本号后缀
         local repo_downloaded=0
-        local repo_file="mysql${repo_version}-community-release-${el_version}-1.noarch.rpm"
+        local repo_file=""
+        
+        # 尝试多个 el_version 变体（从最匹配到通用）
+        local el_versions_to_try=()
+        case $el_version in
+            el9)
+                el_versions_to_try=("el9" "el8" "el7")
+                ;;
+            el8)
+                el_versions_to_try=("el8" "el7" "el9")
+                ;;
+            el7)
+                el_versions_to_try=("el7" "el8" "el9")
+                ;;
+            *)
+                el_versions_to_try=("el8" "el7" "el9")
+                ;;
+        esac
+        
+        # 尝试多个仓库包版本格式（MySQL 可能更新了包名格式）
+        local repo_versions=("1" "2" "3")
         
         # 尝试下载对应版本的仓库
-        for el_ver in $el_version el8 el7; do
-            local repo_url="https://dev.mysql.com/get/${repo_file}"
-            if wget -q "$repo_url" -O /tmp/mysql-community-release.rpm 2>/dev/null && [ -s /tmp/mysql-community-release.rpm ]; then
-                repo_downloaded=1
-                break
-            fi
+        for el_ver in "${el_versions_to_try[@]}"; do
+            for repo_ver in "${repo_versions[@]}"; do
+                # 尝试标准格式：mysql80-community-release-el8-1.noarch.rpm
+                repo_file="mysql${repo_version}-community-release-${el_ver}-${repo_ver}.noarch.rpm"
+                local repo_url="https://dev.mysql.com/get/${repo_file}"
+                echo "尝试下载: $repo_url"
+                
+                if wget -q "$repo_url" -O /tmp/mysql-community-release.rpm 2>/dev/null && [ -s /tmp/mysql-community-release.rpm ]; then
+                    # 验证下载的文件是否为有效的 RPM 包
+                    if file /tmp/mysql-community-release.rpm 2>/dev/null | grep -qi "RPM\|rpm"; then
+                        repo_downloaded=1
+                        echo -e "${GREEN}✓ 成功从官方下载 MySQL 仓库: ${repo_file}${NC}"
+                        break 2
+                    else
+                        echo -e "${YELLOW}  下载的文件不是有效的 RPM 包，尝试下一个...${NC}"
+                        rm -f /tmp/mysql-community-release.rpm
+                    fi
+                else
+                    echo -e "${YELLOW}  ${repo_file} 下载失败，尝试下一个...${NC}"
+                fi
+            done
         done
         
+        # 如果标准格式都失败，尝试使用 curl 直接访问下载页面
         if [ $repo_downloaded -eq 0 ]; then
-            echo -e "${YELLOW}⚠ 无法下载 MySQL 仓库，尝试使用系统仓库${NC}"
+            echo -e "${YELLOW}⚠ 标准格式下载失败，尝试从下载页面获取...${NC}"
+            echo -e "${BLUE}提示: 可以访问 https://dev.mysql.com/downloads/repo/yum/ 手动下载${NC}"
+            
+            # 尝试使用 curl 获取重定向后的实际下载链接
+            for el_ver in "${el_versions_to_try[@]}"; do
+                repo_file="mysql${repo_version}-community-release-${el_ver}-1.noarch.rpm"
+                local repo_url="https://dev.mysql.com/get/${repo_file}"
+                
+                # 使用 curl 跟随重定向下载
+                if command -v curl &> /dev/null; then
+                    if curl -L -f -s "$repo_url" -o /tmp/mysql-community-release.rpm 2>/dev/null && [ -s /tmp/mysql-community-release.rpm ]; then
+                        if file /tmp/mysql-community-release.rpm 2>/dev/null | grep -qi "RPM\|rpm"; then
+                            repo_downloaded=1
+                            echo -e "${GREEN}✓ 使用 curl 成功下载 MySQL 仓库: ${repo_file}${NC}"
+                            break
+                        fi
+                    fi
+                fi
+            done
+        fi
+        
+        if [ $repo_downloaded -eq 0 ]; then
+            echo -e "${YELLOW}⚠ 无法从官方下载 MySQL 仓库${NC}"
+            echo -e "${YELLOW}  官方下载页面: https://dev.mysql.com/downloads/repo/yum/${NC}"
+            echo -e "${YELLOW}  请手动访问下载页面并安装对应的仓库包${NC}"
+            echo -e "${YELLOW}  或尝试使用系统仓库${NC}"
+            echo ""
+            echo -e "${BLUE}手动安装步骤：${NC}"
+            echo "  1. 访问: https://dev.mysql.com/downloads/repo/yum/"
+            echo "  2. 选择适合您系统的 RPM 包（el7/el8/el9）"
+            echo "  3. 下载后运行: rpm -ivh mysql80-community-release-el*.rpm"
+            echo "  4. 然后重新运行此脚本"
         fi
         
         if [ -f /tmp/mysql-community-release.rpm ]; then
@@ -1403,39 +1474,100 @@ install_mysql_debian() {
             fi
         fi
         
-        # 方法3: 如果还是失败，尝试添加 MySQL 官方仓库后安装
+        # 方法3: 如果还是失败，尝试从 MySQL 官方下载页面添加仓库
         if [ $INSTALL_SUCCESS -eq 0 ]; then
-            echo -e "${YELLOW}⚠ 系统仓库安装失败，尝试添加 MySQL 官方仓库...${NC}"
+            echo -e "${YELLOW}⚠ 系统仓库安装失败，尝试从 MySQL 官方下载页面添加仓库...${NC}"
+            echo -e "${BLUE}官方下载页面: https://dev.mysql.com/downloads/repo/apt/${NC}"
             
             # 安装必要的工具
             apt-get install -y wget gnupg lsb-release 2>/dev/null || true
             
             # 下载并安装 MySQL APT 仓库配置
-            local repo_file="mysql-apt-config_0.8.28-1_all.deb"
-            if wget -q "https://dev.mysql.com/get/${repo_file}" -O /tmp/${repo_file} 2>/dev/null && [ -s /tmp/${repo_file} ]; then
-                # 安装仓库配置（非交互式）
-                DEBIAN_FRONTEND=noninteractive dpkg -i /tmp/${repo_file} 2>/dev/null || true
-                apt-get update
+            # 官方下载链接格式：https://dev.mysql.com/get/mysql-apt-config_{version}_all.deb
+            # 尝试多个版本号（从最新到较旧版本）
+            echo -e "${BLUE}从 MySQL 官方下载页面获取 APT 安装源...${NC}"
+            echo -e "${BLUE}官方下载页面: https://dev.mysql.com/downloads/repo/apt/${NC}"
+            
+            local repo_downloaded=0
+            # 尝试更多版本号（包括最新版本）
+            local apt_config_versions=("0.8.36-1" "0.8.35-1" "0.8.34-1" "0.8.33-1" "0.8.32-1" "0.8.31-1" "0.8.30-1" "0.8.29-1" "0.8.28-1" "0.8.27-1" "0.8.26-1" "0.8.25-1" "0.8.24-1")
+            
+            for config_version in "${apt_config_versions[@]}"; do
+                local repo_file="mysql-apt-config_${config_version}_all.deb"
+                local repo_url="https://dev.mysql.com/get/${repo_file}"
+                echo "尝试从官方下载: $repo_url"
                 
-                # 根据版本选择仓库
-                if echo "$major_minor" | grep -qE "^5\.7"; then
-                    # 配置 MySQL 5.7 仓库
-                    echo "mysql-apt-config mysql-apt-config/select-server select mysql-5.7" | debconf-set-selections 2>/dev/null || true
-                elif echo "$major_minor" | grep -qE "^8\.0"; then
-                    # 配置 MySQL 8.0 仓库
-                    echo "mysql-apt-config mysql-apt-config/select-server select mysql-8.0" | debconf-set-selections 2>/dev/null || true
+                # 先尝试 wget
+                if wget -q "$repo_url" -O /tmp/${repo_file} 2>/dev/null && [ -s /tmp/${repo_file} ]; then
+                    # 验证下载的文件是否为有效的 DEB 包
+                    if file /tmp/${repo_file} 2>/dev/null | grep -qi "Debian\|deb"; then
+                        repo_downloaded=1
+                        echo -e "${GREEN}✓ 成功从官方下载 MySQL APT 仓库配置: ${repo_file}${NC}"
+                    else
+                        echo -e "${YELLOW}  下载的文件不是有效的 DEB 包，尝试下一个...${NC}"
+                        rm -f /tmp/${repo_file}
+                        continue
+                    fi
+                # 如果 wget 失败，尝试 curl
+                elif command -v curl &> /dev/null; then
+                    if curl -L -f -s "$repo_url" -o /tmp/${repo_file} 2>/dev/null && [ -s /tmp/${repo_file} ]; then
+                        if file /tmp/${repo_file} 2>/dev/null | grep -qi "Debian\|deb"; then
+                            repo_downloaded=1
+                            echo -e "${GREEN}✓ 使用 curl 成功下载 MySQL APT 仓库配置: ${repo_file}${NC}"
+                        else
+                            echo -e "${YELLOW}  下载的文件不是有效的 DEB 包，尝试下一个...${NC}"
+                            rm -f /tmp/${repo_file}
+                            continue
+                        fi
+                    else
+                        echo -e "${YELLOW}  版本 ${config_version} 下载失败，尝试下一个...${NC}"
+                        continue
+                    fi
+                else
+                    echo -e "${YELLOW}  版本 ${config_version} 下载失败，尝试下一个...${NC}"
+                    continue
                 fi
                 
-                # 重新更新包列表
-                apt-get update
-                
-                # 尝试安装指定版本
-                if DEBIAN_FRONTEND=noninteractive apt-get install -y mysql-server mysql-client 2>&1 | tee /tmp/mysql_install.log; then
-                    INSTALL_SUCCESS=1
-                    echo -e "${GREEN}✓ MySQL ${major_minor} 系列安装成功${NC}"
+                # 如果下载成功，安装仓库配置
+                if [ $repo_downloaded -eq 1 ]; then
+                    # 安装仓库配置（非交互式）
+                    DEBIAN_FRONTEND=noninteractive dpkg -i /tmp/${repo_file} 2>/dev/null || true
+                    apt-get update -qq 2>/dev/null || true
+                    
+                    # 根据版本选择仓库
+                    if echo "$major_minor" | grep -qE "^5\.7"; then
+                        # 配置 MySQL 5.7 仓库
+                        echo "mysql-apt-config mysql-apt-config/select-server select mysql-5.7" | debconf-set-selections 2>/dev/null || true
+                    elif echo "$major_minor" | grep -qE "^8\.0"; then
+                        # 配置 MySQL 8.0 仓库
+                        echo "mysql-apt-config mysql-apt-config/select-server select mysql-8.0" | debconf-set-selections 2>/dev/null || true
+                    fi
+                    
+                    # 重新更新包列表
+                    apt-get update -qq 2>/dev/null || true
+                    
+                    # 尝试安装指定版本
+                    if DEBIAN_FRONTEND=noninteractive apt-get install -y mysql-server mysql-client 2>&1 | tee /tmp/mysql_install.log; then
+                        INSTALL_SUCCESS=1
+                        echo -e "${GREEN}✓ MySQL ${major_minor} 系列安装成功${NC}"
+                    fi
+                    
+                    rm -f /tmp/${repo_file}
+                    break
                 fi
-                
-                rm -f /tmp/${repo_file}
+            done
+            
+            if [ $repo_downloaded -eq 0 ]; then
+                echo -e "${YELLOW}⚠ 无法从官方下载 MySQL APT 仓库配置${NC}"
+                echo -e "${YELLOW}  官方下载页面: https://dev.mysql.com/downloads/repo/apt/${NC}"
+                echo -e "${YELLOW}  请手动访问下载页面并安装对应的仓库包${NC}"
+                echo ""
+                echo -e "${BLUE}手动安装步骤：${NC}"
+                echo "  1. 访问: https://dev.mysql.com/downloads/repo/apt/"
+                echo "  2. 下载 mysql-apt-config_*.deb 包"
+                echo "  3. 运行: dpkg -i mysql-apt-config_*.deb"
+                echo "  4. 运行: apt-get update"
+                echo "  5. 然后重新运行此脚本"
             fi
         fi
     fi

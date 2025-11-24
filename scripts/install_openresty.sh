@@ -11,12 +11,18 @@
 
 set -e
 
-# 颜色定义
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+# 引入公共函数库
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ -f "${SCRIPT_DIR}/common.sh" ]; then
+    source "${SCRIPT_DIR}/common.sh"
+else
+    # 如果 common.sh 不存在，定义基本颜色（向后兼容）
+    RED='\033[0;31m'
+    GREEN='\033[0;32m'
+    YELLOW='\033[1;33m'
+    BLUE='\033[0;34m'
+    NC='\033[0m'
+fi
 
 # 配置变量
 OPENRESTY_VERSION="${OPENRESTY_VERSION:-1.21.4.1}"
@@ -25,102 +31,18 @@ NGINX_CONF_DIR="${INSTALL_DIR}/nginx/conf"
 NGINX_LUA_DIR="${INSTALL_DIR}/nginx/lua"
 NGINX_LOG_DIR="${INSTALL_DIR}/nginx/logs"
 
-# 检测系统类型
+# 检测系统类型（使用公共函数）
 detect_os() {
-    echo -e "${BLUE}[1/8] 检测操作系统...${NC}"
-    
-    # 优先使用 /etc/os-release (标准方法)
-    if [ -f /etc/os-release ]; then
-        . /etc/os-release
-        OS=$ID
-        OS_LIKE=${ID_LIKE:-""}
-        OS_VERSION=$VERSION_ID
-        
-        # 处理特殊发行版
-        case $OS in
-            "ol"|"oracle")
-                OS="oraclelinux"
-                ;;
-            "amzn"|"amazon")
-                OS="amazonlinux"
-                ;;
-            "raspbian")
-                OS="debian"
-                ;;
-            "linuxmint")
-                OS="ubuntu"  # Linux Mint 基于 Ubuntu
-                ;;
-            "kali")
-                OS="debian"  # Kali Linux 基于 Debian
-                ;;
-        esac
-        
-        # 如果没有版本号，尝试从其他文件获取
-        if [ -z "$OS_VERSION" ]; then
-            if [ -f /etc/redhat-release ]; then
-                OS_VERSION=$(cat /etc/redhat-release | sed 's/.*release \([0-9.]*\).*/\1/')
-            elif [ -f /etc/debian_version ]; then
-                OS_VERSION=$(cat /etc/debian_version)
-            fi
-        fi
-    elif [ -f /etc/redhat-release ]; then
-        # RedHat 系列
-        local release_info=$(cat /etc/redhat-release)
-        if echo "$release_info" | grep -qi "centos"; then
-            OS="centos"
-        elif echo "$release_info" | grep -qi "red hat\|rhel"; then
-            OS="rhel"
-        elif echo "$release_info" | grep -qi "rocky"; then
-            OS="rocky"
-        elif echo "$release_info" | grep -qi "alma"; then
-            OS="almalinux"
-        elif echo "$release_info" | grep -qi "oracle"; then
-            OS="oraclelinux"
-        elif echo "$release_info" | grep -qi "amazon"; then
-            OS="amazonlinux"
-        else
-            OS="centos"  # 默认
-        fi
-        OS_VERSION=$(echo "$release_info" | sed 's/.*release \([0-9.]*\).*/\1/')
-    elif [ -f /etc/debian_version ]; then
-        # Debian 系列
-        OS="debian"
-        OS_VERSION=$(cat /etc/debian_version)
-    elif [ -f /etc/alpine-release ]; then
-        # Alpine Linux
-        OS="alpine"
-        OS_VERSION=$(cat /etc/alpine-release)
-    elif [ -f /etc/arch-release ]; then
-        # Arch Linux
-        OS="arch"
-        OS_VERSION="rolling"
-    elif [ -f /etc/SuSE-release ]; then
-        # SUSE
-        OS="opensuse"
-        OS_VERSION=$(grep VERSION /etc/SuSE-release | awk '{print $3}')
-    else
-        echo -e "${YELLOW}警告: 无法自动检测操作系统类型${NC}"
+    detect_os_common "[1/8]"
+    if [ "$OS" = "unknown" ]; then
         echo -e "${YELLOW}将尝试使用通用方法（从源码编译）${NC}"
-        OS="unknown"
-        OS_VERSION="unknown"
-    fi
-    
-    # 显示检测结果
-    if [ "$OS" != "unknown" ]; then
-        echo -e "${GREEN}✓ 检测到系统: ${OS} ${OS_VERSION}${NC}"
-        if [ -n "$OS_LIKE" ] && [ "$OS_LIKE" != "$OS" ]; then
-            echo -e "${BLUE}  基于: ${OS_LIKE}${NC}"
-        fi
-    else
-        echo -e "${YELLOW}⚠ 系统类型: 未知（将使用源码编译）${NC}"
     fi
 }
 
-# 检查是否为 root 用户
+# 检查是否为 root 用户（使用公共函数）
 check_root() {
-    if [ "$EUID" -ne 0 ]; then 
+    if ! check_root_common; then
         echo -e "${RED}错误: 需要 root 权限来安装 OpenResty${NC}"
-        echo "请使用: sudo $0"
         exit 1
     fi
 }

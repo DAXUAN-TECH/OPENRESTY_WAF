@@ -11,12 +11,18 @@
 
 set -e
 
-# 颜色定义
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+# 引入公共函数库
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ -f "${SCRIPT_DIR}/common.sh" ]; then
+    source "${SCRIPT_DIR}/common.sh"
+else
+    # 如果 common.sh 不存在，定义基本颜色（向后兼容）
+    RED='\033[0;31m'
+    GREEN='\033[0;32m'
+    YELLOW='\033[1;33m'
+    BLUE='\033[0;34m'
+    NC='\033[0m'
+fi
 
 # 配置变量
 # 保存原始环境变量（如果通过环境变量设置）
@@ -78,102 +84,18 @@ detect_hardware() {
     echo -e "${GREEN}✓ 总内存: ${TOTAL_MEM_GB}GB (${TOTAL_MEM_MB}MB)${NC}"
 }
 
-# 检测系统类型
+# 检测系统类型（使用公共函数）
 detect_os() {
-    echo -e "${BLUE}[1/8] 检测操作系统...${NC}"
-    
-    # 优先使用 /etc/os-release (标准方法)
-    if [ -f /etc/os-release ]; then
-        . /etc/os-release
-        OS=$ID
-        OS_LIKE=${ID_LIKE:-""}
-        OS_VERSION=$VERSION_ID
-        
-        # 处理特殊发行版
-        case $OS in
-            "ol"|"oracle")
-                OS="oraclelinux"
-                ;;
-            "amzn"|"amazon")
-                OS="amazonlinux"
-                ;;
-            "raspbian")
-                OS="debian"
-                ;;
-            "linuxmint")
-                OS="ubuntu"  # Linux Mint 基于 Ubuntu
-                ;;
-            "kali")
-                OS="debian"  # Kali Linux 基于 Debian
-                ;;
-        esac
-        
-        # 如果没有版本号，尝试从其他文件获取
-        if [ -z "$OS_VERSION" ]; then
-            if [ -f /etc/redhat-release ]; then
-                OS_VERSION=$(cat /etc/redhat-release | sed 's/.*release \([0-9.]*\).*/\1/')
-            elif [ -f /etc/debian_version ]; then
-                OS_VERSION=$(cat /etc/debian_version)
-            fi
-        fi
-    elif [ -f /etc/redhat-release ]; then
-        # RedHat 系列
-        local release_info=$(cat /etc/redhat-release)
-        if echo "$release_info" | grep -qi "centos"; then
-            OS="centos"
-        elif echo "$release_info" | grep -qi "red hat\|rhel"; then
-            OS="rhel"
-        elif echo "$release_info" | grep -qi "rocky"; then
-            OS="rocky"
-        elif echo "$release_info" | grep -qi "alma"; then
-            OS="almalinux"
-        elif echo "$release_info" | grep -qi "oracle"; then
-            OS="oraclelinux"
-        elif echo "$release_info" | grep -qi "amazon"; then
-            OS="amazonlinux"
-        else
-            OS="centos"  # 默认
-        fi
-        OS_VERSION=$(echo "$release_info" | sed 's/.*release \([0-9.]*\).*/\1/')
-    elif [ -f /etc/debian_version ]; then
-        # Debian 系列
-        OS="debian"
-        OS_VERSION=$(cat /etc/debian_version)
-    elif [ -f /etc/alpine-release ]; then
-        # Alpine Linux
-        OS="alpine"
-        OS_VERSION=$(cat /etc/alpine-release)
-    elif [ -f /etc/arch-release ]; then
-        # Arch Linux
-        OS="arch"
-        OS_VERSION="rolling"
-    elif [ -f /etc/SuSE-release ]; then
-        # SUSE
-        OS="opensuse"
-        OS_VERSION=$(grep VERSION /etc/SuSE-release | awk '{print $3}')
-    else
-        echo -e "${YELLOW}警告: 无法自动检测操作系统类型${NC}"
+    detect_os_common "[1/8]"
+    if [ "$OS" = "unknown" ]; then
         echo -e "${YELLOW}将尝试使用通用方法${NC}"
-        OS="unknown"
-        OS_VERSION="unknown"
-    fi
-    
-    # 显示检测结果
-    if [ "$OS" != "unknown" ]; then
-        echo -e "${GREEN}✓ 检测到系统: ${OS} ${OS_VERSION}${NC}"
-        if [ -n "$OS_LIKE" ] && [ "$OS_LIKE" != "$OS" ]; then
-            echo -e "${BLUE}  基于: ${OS_LIKE}${NC}"
-        fi
-    else
-        echo -e "${YELLOW}⚠ 系统类型: 未知（将尝试通用方法）${NC}"
     fi
 }
 
-# 检查是否为 root 用户
+# 检查是否为 root 用户（使用公共函数）
 check_root() {
-    if [ "$EUID" -ne 0 ]; then 
+    if ! check_root_common; then
         echo -e "${RED}错误: 需要 root 权限来安装 MySQL${NC}"
-        echo "请使用: sudo $0"
         exit 1
     fi
 }
@@ -913,31 +835,11 @@ install_mysql_redhat() {
                 local repo_url="https://dev.mysql.com/get/${repo_file}"
                 echo "尝试下载: $repo_url"
                 
-                # 优先使用 wget
-                if command -v wget &> /dev/null; then
-                    if wget -q "$repo_url" -O /tmp/mysql-community-release.rpm 2>/dev/null && [ -s /tmp/mysql-community-release.rpm ]; then
-                        # 验证下载的文件是否为有效的 RPM 包
-                        if file /tmp/mysql-community-release.rpm 2>/dev/null | grep -qi "RPM\|rpm"; then
-                            repo_downloaded=1
-                            echo -e "${GREEN}✓ 成功从官方下载 MySQL 仓库: ${repo_file}${NC}"
-                            break 2
-                        else
-                            echo -e "${YELLOW}  下载的文件不是有效的 RPM 包，尝试下一个...${NC}"
-                            rm -f /tmp/mysql-community-release.rpm
-                        fi
-                    fi
-                # 如果 wget 不可用，使用 curl
-                elif command -v curl &> /dev/null; then
-                    if curl -L -f -s "$repo_url" -o /tmp/mysql-community-release.rpm 2>/dev/null && [ -s /tmp/mysql-community-release.rpm ]; then
-                        if file /tmp/mysql-community-release.rpm 2>/dev/null | grep -qi "RPM\|rpm"; then
-                            repo_downloaded=1
-                            echo -e "${GREEN}✓ 使用 curl 成功下载 MySQL 仓库: ${repo_file}${NC}"
-                            break 2
-                        else
-                            echo -e "${YELLOW}  下载的文件不是有效的 RPM 包，尝试下一个...${NC}"
-                            rm -f /tmp/mysql-community-release.rpm
-                        fi
-                    fi
+                # 使用公共下载函数
+                if download_file_common "$repo_url" "/tmp/mysql-community-release.rpm" "RPM"; then
+                    repo_downloaded=1
+                    echo -e "${GREEN}✓ 成功从官方下载 MySQL 仓库: ${repo_file}${NC}"
+                    break 2
                 fi
             done
         done
@@ -1128,31 +1030,13 @@ install_mysql_debian() {
             local repo_url="https://dev.mysql.com/get/${repo_file}"
             echo "尝试从官方下载: $repo_url"
             
-            # 先尝试 wget
-            if command -v wget &> /dev/null; then
-                if wget -q "$repo_url" -O /tmp/${repo_file} 2>/dev/null && [ -s /tmp/${repo_file} ]; then
-                    # 验证下载的文件是否为有效的 DEB 包
-                    if file /tmp/${repo_file} 2>/dev/null | grep -qi "Debian\|deb"; then
-                        repo_downloaded=1
-                        echo -e "${GREEN}✓ 成功从官方下载 MySQL APT 仓库配置: ${repo_file}${NC}"
-                    else
-                        echo -e "${YELLOW}  下载的文件不是有效的 DEB 包，尝试下一个...${NC}"
-                        rm -f /tmp/${repo_file}
-                        continue
-                    fi
-                fi
-            # 如果 wget 失败，尝试 curl
-            elif command -v curl &> /dev/null; then
-                if curl -L -f -s "$repo_url" -o /tmp/${repo_file} 2>/dev/null && [ -s /tmp/${repo_file} ]; then
-                    if file /tmp/${repo_file} 2>/dev/null | grep -qi "Debian\|deb"; then
-                        repo_downloaded=1
-                        echo -e "${GREEN}✓ 使用 curl 成功下载 MySQL APT 仓库配置: ${repo_file}${NC}"
-                    else
-                        echo -e "${YELLOW}  下载的文件不是有效的 DEB 包，尝试下一个...${NC}"
-                        rm -f /tmp/${repo_file}
-                        continue
-                    fi
-                fi
+            # 使用公共下载函数
+            if download_file_common "$repo_url" "/tmp/${repo_file}" "DEB"; then
+                repo_downloaded=1
+                echo -e "${GREEN}✓ 成功从官方下载 MySQL APT 仓库配置: ${repo_file}${NC}"
+            else
+                echo -e "${YELLOW}  版本 ${config_version} 下载失败，尝试下一个...${NC}"
+                continue
             fi
             
             # 如果下载成功，安装仓库配置
@@ -1286,23 +1170,11 @@ install_mysql_suse() {
                 local repo_url="https://dev.mysql.com/get/${repo_file}"
                 echo "尝试从官方下载: $repo_url"
                 
-                # 使用 wget 或 curl 下载
-                if command -v wget &> /dev/null; then
-                    if wget -q "$repo_url" -O /tmp/${repo_file} 2>/dev/null && [ -s /tmp/${repo_file} ]; then
-                        if file /tmp/${repo_file} 2>/dev/null | grep -qi "RPM\|rpm"; then
-                            repo_downloaded=1
-                            echo -e "${GREEN}✓ 成功从官方下载 MySQL SUSE 仓库: ${repo_file}${NC}"
-                            break 2
-                        fi
-                    fi
-                elif command -v curl &> /dev/null; then
-                    if curl -L -f -s "$repo_url" -o /tmp/${repo_file} 2>/dev/null && [ -s /tmp/${repo_file} ]; then
-                        if file /tmp/${repo_file} 2>/dev/null | grep -qi "RPM\|rpm"; then
-                            repo_downloaded=1
-                            echo -e "${GREEN}✓ 使用 curl 成功下载 MySQL SUSE 仓库: ${repo_file}${NC}"
-                            break 2
-                        fi
-                    fi
+                # 使用公共下载函数
+                if download_file_common "$repo_url" "/tmp/${repo_file}" "RPM"; then
+                    repo_downloaded=1
+                    echo -e "${GREEN}✓ 成功从官方下载 MySQL SUSE 仓库: ${repo_file}${NC}"
+                    break 2
                 fi
             done
         done

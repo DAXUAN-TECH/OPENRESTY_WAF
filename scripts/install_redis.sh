@@ -600,7 +600,6 @@ set_redis_password() {
     
     if [ -z "$REDIS_PASSWORD" ]; then
         read -p "请输入 Redis 密码（直接回车跳过）: " REDIS_PASSWORD
-        echo ""
     fi
     
     if [ -n "$REDIS_PASSWORD" ] && [ -n "$REDIS_CONF" ]; then

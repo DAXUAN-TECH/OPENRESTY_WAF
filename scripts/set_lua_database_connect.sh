@@ -201,7 +201,6 @@ interactive_mysql() {
     MYSQL_USER="${MYSQL_USER:-waf_user}"
     
     read -p "MySQL Password: " MYSQL_PASS
-    echo ""
     
     if [ -z "$MYSQL_PASS" ]; then
         echo -e "${YELLOW}警告: 密码为空${NC}"
@@ -232,7 +231,6 @@ interactive_redis() {
     REDIS_DB="${REDIS_DB:-0}"
     
     read -p "Redis Password (留空表示无密码): " REDIS_PASS
-    echo ""
     
     update_redis_config "$REDIS_HOST" "$REDIS_PORT" "$REDIS_DB" "$REDIS_PASS"
     verify_config_syntax

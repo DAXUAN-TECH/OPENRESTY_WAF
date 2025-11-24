@@ -30,17 +30,19 @@ show_usage() {
     echo "  sudo $0 uninstall <module>      # 卸载某个模块"
     echo ""
     echo "可用模块（安装）:"
-    echo "  openresty    - 安装 OpenResty"
-    echo "  mysql        - 安装 MySQL"
-    echo "  redis        - 安装 Redis"
-    echo "  geoip        - 安装 GeoIP 数据库"
-    echo "  deploy       - 部署配置文件"
+    echo "  openresty    - 安装 OpenResty（基础组件）"
+    echo "  opm          - 安装 opm（OpenResty 包管理器）"
+    echo "  dependencies - 安装 Lua 模块依赖（需要 opm）"
+    echo "  mysql        - 安装 MySQL（数据库）"
+    echo "  redis        - 安装 Redis（可选，缓存）"
+    echo "  geoip        - 安装 GeoIP 数据库（可选，地域封控）"
+    echo "  deploy       - 部署配置文件（需要 OpenResty）"
     echo "  optimize     - 系统优化"
     echo "  check        - 项目全面检查"
-    echo "  dependencies - 安装/检查 Lua 模块依赖"
-    echo "  update-config - 更新数据库连接配置"
+    echo "  check-deps   - 检查 Lua 模块依赖"
+    echo "  update-config - 更新数据库连接配置（需要 MySQL）"
     echo "  update-geoip - 更新 GeoIP 数据库"
-    echo "  all          - 完整安装（交互式）"
+    echo "  all          - 完整安装（交互式，按依赖顺序）"
     echo ""
     echo "可用模块（卸载）:"
     echo "  uninstall openresty    - 卸载 OpenResty"
@@ -219,6 +221,22 @@ update_geoip() {
     echo ""
 }
 
+# 安装 opm
+install_opm() {
+    echo -e "${BLUE}========================================${NC}"
+    echo -e "${BLUE}安装 opm (OpenResty Package Manager)${NC}"
+    echo -e "${BLUE}========================================${NC}"
+    echo ""
+    
+    if ! bash "${SCRIPTS_DIR}/install_opm.sh"; then
+        echo -e "${YELLOW}⚠ opm 安装失败，但这是可选步骤${NC}"
+        return 0
+    fi
+    
+    echo -e "${GREEN}✓ opm 安装完成${NC}"
+    echo ""
+}
+
 # 管理依赖
 manage_dependencies() {
     echo -e "${BLUE}========================================${NC}"
@@ -232,6 +250,22 @@ manage_dependencies() {
     fi
     
     echo -e "${GREEN}✓ 依赖管理完成${NC}"
+    echo ""
+}
+
+# 检查依赖
+check_dependencies() {
+    echo -e "${BLUE}========================================${NC}"
+    echo -e "${BLUE}检查 Lua 模块依赖${NC}"
+    echo -e "${BLUE}========================================${NC}"
+    echo ""
+    
+    if ! bash "${SCRIPTS_DIR}/check_dependencies.sh"; then
+        echo -e "${YELLOW}⚠ 依赖检查完成（可能有警告）${NC}"
+        return 0
+    fi
+    
+    echo -e "${GREEN}✓ 依赖检查完成${NC}"
     echo ""
 }
 
@@ -689,41 +723,60 @@ install_all() {
     echo -e "${BLUE}========================================${NC}"
     echo ""
     
-    # OpenResty 配置
-    read -p "是否安装 OpenResty？[Y/n]: " INSTALL_OPENRESTY
+    # OpenResty 配置（基础组件）
+    read -p "是否安装 OpenResty（基础组件，必需）？[Y/n]: " INSTALL_OPENRESTY
     INSTALL_OPENRESTY="${INSTALL_OPENRESTY:-Y}"
     
+    # opm 配置（需要 OpenResty）
+    if [[ "$INSTALL_OPENRESTY" =~ ^[Yy]$ ]]; then
+        read -p "是否安装 opm（OpenResty 包管理器，推荐）？[Y/n]: " INSTALL_OPM
+        INSTALL_OPM="${INSTALL_OPM:-Y}"
+        
+        # Lua 模块依赖配置（需要 opm）
+        if [[ "$INSTALL_OPM" =~ ^[Yy]$ ]]; then
+            read -p "是否安装 Lua 模块依赖（必需，用于数据库连接等）？[Y/n]: " INSTALL_DEPENDENCIES
+            INSTALL_DEPENDENCIES="${INSTALL_DEPENDENCIES:-Y}"
+        else
+            INSTALL_DEPENDENCIES="N"
+        fi
+    else
+        INSTALL_OPM="N"
+        INSTALL_DEPENDENCIES="N"
+    fi
+    
     # MySQL 配置
-    read -p "是否安装 MySQL？[Y/n]: " INSTALL_MYSQL
+    read -p "是否安装 MySQL（数据库，必需）？[Y/n]: " INSTALL_MYSQL
     INSTALL_MYSQL="${INSTALL_MYSQL:-Y}"
     
     # Redis 配置
-    read -p "是否安装 Redis？[Y/n]: " INSTALL_REDIS
+    read -p "是否安装 Redis（可选，用于缓存）？[Y/n]: " INSTALL_REDIS
     INSTALL_REDIS="${INSTALL_REDIS:-Y}"
     
     # GeoIP 配置
-    read -p "是否安装 GeoIP 数据库？[Y/n]: " INSTALL_GEOIP
+    read -p "是否安装 GeoIP 数据库（可选，用于地域封控）？[Y/n]: " INSTALL_GEOIP
     INSTALL_GEOIP="${INSTALL_GEOIP:-Y}"
     
     # 系统优化
-    read -p "是否执行系统优化？[Y/n]: " OPTIMIZE_SYSTEM
+    read -p "是否执行系统优化（可选）？[Y/n]: " OPTIMIZE_SYSTEM
     OPTIMIZE_SYSTEM="${OPTIMIZE_SYSTEM:-Y}"
     
     echo ""
     echo -e "${GREEN}✓ 配置信息收集完成${NC}"
     echo ""
     
-    # 计算步骤
+    # 计算步骤（按依赖顺序）
     CURRENT_STEP=2
     TOTAL_STEPS=0
     [[ "$INSTALL_OPENRESTY" =~ ^[Yy]$ ]] && TOTAL_STEPS=$((TOTAL_STEPS + 1))  # OpenResty
+    [[ "$INSTALL_OPM" =~ ^[Yy]$ ]] && TOTAL_STEPS=$((TOTAL_STEPS + 1))  # opm（需要 OpenResty）
+    [[ "$INSTALL_DEPENDENCIES" =~ ^[Yy]$ ]] && TOTAL_STEPS=$((TOTAL_STEPS + 1))  # Lua 模块依赖（需要 opm）
     [[ "$INSTALL_OPENRESTY" =~ ^[Yy]$ ]] && TOTAL_STEPS=$((TOTAL_STEPS + 1))  # Deploy（需要 OpenResty）
     [[ "$INSTALL_MYSQL" =~ ^[Yy]$ ]] && TOTAL_STEPS=$((TOTAL_STEPS + 1))
     [[ "$INSTALL_REDIS" =~ ^[Yy]$ ]] && TOTAL_STEPS=$((TOTAL_STEPS + 1))
     [[ "$INSTALL_GEOIP" =~ ^[Yy]$ ]] && TOTAL_STEPS=$((TOTAL_STEPS + 1))
     [[ "$OPTIMIZE_SYSTEM" =~ ^[Yy]$ ]] && TOTAL_STEPS=$((TOTAL_STEPS + 1))
     
-    # 步骤 1: 安装 OpenResty
+    # 步骤 1: 安装 OpenResty（基础组件，必须先安装）
     if [[ "$INSTALL_OPENRESTY" =~ ^[Yy]$ ]]; then
         echo -e "${BLUE}========================================${NC}"
         echo -e "${BLUE}步骤 ${CURRENT_STEP}/${TOTAL_STEPS}: 安装 OpenResty${NC}"
@@ -732,7 +785,27 @@ install_all() {
         install_openresty
         CURRENT_STEP=$((CURRENT_STEP + 1))
         
-        # 步骤 2: 部署配置文件（需要 OpenResty）
+        # 步骤 2: 安装 opm（OpenResty 包管理器，需要 OpenResty）
+        if [[ "$INSTALL_OPM" =~ ^[Yy]$ ]]; then
+            echo -e "${BLUE}========================================${NC}"
+            echo -e "${BLUE}步骤 ${CURRENT_STEP}/${TOTAL_STEPS}: 安装 opm${NC}"
+            echo -e "${BLUE}========================================${NC}"
+            echo ""
+            install_opm
+            CURRENT_STEP=$((CURRENT_STEP + 1))
+        fi
+        
+        # 步骤 3: 安装 Lua 模块依赖（需要 opm）
+        if [[ "$INSTALL_DEPENDENCIES" =~ ^[Yy]$ ]]; then
+            echo -e "${BLUE}========================================${NC}"
+            echo -e "${BLUE}步骤 ${CURRENT_STEP}/${TOTAL_STEPS}: 安装 Lua 模块依赖${NC}"
+            echo -e "${BLUE}========================================${NC}"
+            echo ""
+            manage_dependencies
+            CURRENT_STEP=$((CURRENT_STEP + 1))
+        fi
+        
+        # 步骤 4: 部署配置文件（需要 OpenResty）
         echo -e "${BLUE}========================================${NC}"
         echo -e "${BLUE}步骤 ${CURRENT_STEP}/${TOTAL_STEPS}: 部署配置文件${NC}"
         echo -e "${BLUE}========================================${NC}"
@@ -740,7 +813,7 @@ install_all() {
         deploy_config
         CURRENT_STEP=$((CURRENT_STEP + 1))
     else
-        echo -e "${YELLOW}跳过 OpenResty 安装，配置文件部署也将跳过${NC}"
+        echo -e "${YELLOW}跳过 OpenResty 安装，相关步骤也将跳过${NC}"
         echo ""
     fi
     
@@ -874,10 +947,16 @@ main() {
     
     # 处理安装命令
     if [ "$action" = "install" ]; then
-        # 处理 install <module> 格式
+        # 处理 install <module> 格式（按依赖顺序）
         case "$module" in
             openresty)
                 install_openresty
+                ;;
+            opm)
+                install_opm
+                ;;
+            dependencies)
+                manage_dependencies
                 ;;
             mysql)
                 install_mysql
@@ -897,8 +976,8 @@ main() {
             check)
                 check_all
                 ;;
-            dependencies)
-                manage_dependencies
+            check-deps)
+                check_dependencies
                 ;;
             update-config)
                 update_config
@@ -924,13 +1003,16 @@ main() {
         -h|--help|help)
             show_usage
             ;;
-        openresty|mysql|redis|geoip|deploy|optimize|check|dependencies|update-config|update-geoip)
+        openresty|opm|mysql|redis|geoip|deploy|optimize|check|dependencies|check-deps|update-config|update-geoip)
             # 向后兼容：直接使用模块名作为安装命令
             echo -e "${YELLOW}提示: 建议使用 'sudo $0 install $action' 格式${NC}"
             echo ""
             case "$action" in
                 openresty)
                     install_openresty
+                    ;;
+                opm)
+                    install_opm
                     ;;
                 mysql)
                     install_mysql
@@ -953,6 +1035,9 @@ main() {
                 dependencies)
                     manage_dependencies
                     ;;
+                check-deps)
+                    check_dependencies
+                    ;;
                 update-config)
                     update_config
                     ;;
@@ -973,7 +1058,7 @@ main() {
             echo -e "${YELLOW}提示: 请使用以下格式之一：${NC}"
             echo "  sudo $0                      # 显示帮助信息"
             echo "  sudo $0 install <module>    # 安装模块"
-            echo "  sudo $0 install all          # 完整安装"
+            echo "  sudo $0 install all          # 完整安装（按依赖顺序）"
             echo "  sudo $0 uninstall <module>  # 卸载模块"
             echo ""
             show_usage

@@ -697,12 +697,40 @@ EOF
 find_opm() {
     local opm_path=""
     
+    # 首先尝试使用 which/command 查找（会检查 PATH）
+    if command -v opm &> /dev/null; then
+        opm_path=$(command -v opm)
+        if [ -n "$opm_path" ] && [ -f "$opm_path" ] && [ -x "$opm_path" ]; then
+            echo "$opm_path"
+            return 0
+        fi
+    fi
+    
+    # 如果通过包管理器安装，尝试查询包文件列表
+    if command -v rpm &> /dev/null; then
+        # RedHat 系列：查询 openresty-resty 包的文件列表
+        local rpm_opm=$(rpm -ql openresty-resty 2>/dev/null | grep -E "/opm$" | head -1)
+        if [ -n "$rpm_opm" ] && [ -f "$rpm_opm" ] && [ -x "$rpm_opm" ]; then
+            echo "$rpm_opm"
+            return 0
+        fi
+    elif command -v dpkg &> /dev/null; then
+        # Debian 系列：查询 openresty-resty 包的文件列表
+        local dpkg_opm=$(dpkg -L openresty-resty 2>/dev/null | grep -E "/opm$" | head -1)
+        if [ -n "$dpkg_opm" ] && [ -f "$dpkg_opm" ] && [ -x "$dpkg_opm" ]; then
+            echo "$dpkg_opm"
+            return 0
+        fi
+    fi
+    
     # 检查多个可能的位置
     local possible_paths=(
         "${INSTALL_DIR}/bin/opm"
+        "/usr/local/openresty/bin/opm"
         "/usr/local/bin/opm"
         "/usr/bin/opm"
-        "$(which opm 2>/dev/null || echo "")"
+        "/opt/openresty/bin/opm"
+        "/opt/openresty/nginx/sbin/opm"
     )
     
     for path in "${possible_paths[@]}"; do
@@ -711,6 +739,14 @@ find_opm() {
             break
         fi
     done
+    
+    # 如果还是找不到，尝试使用 find 命令搜索
+    if [ -z "$opm_path" ]; then
+        local found_opm=$(find /usr /opt /usr/local -name "opm" -type f -executable 2>/dev/null | head -1)
+        if [ -n "$found_opm" ]; then
+            opm_path="$found_opm"
+        fi
+    fi
     
     echo "$opm_path"
 }
@@ -726,22 +762,70 @@ install_lua_modules() {
     if [ -z "$opm_path" ]; then
         echo -e "${YELLOW}⚠ opm 未找到，尝试安装 openresty-resty 包...${NC}"
         
+        local install_success=0
         if command -v yum &> /dev/null; then
-            if yum install -y openresty-resty 2>&1 | grep -qE "已安装|installed|complete"; then
-                echo -e "${GREEN}✓ openresty-resty 安装成功${NC}"
-                opm_path=$(find_opm)
+            if yum install -y openresty-resty 2>&1 | tee /tmp/openresty_resty_install.log; then
+                if grep -qiE "已安装|installed|complete|Nothing to do|无需" /tmp/openresty_resty_install.log; then
+                    install_success=1
+                    echo -e "${GREEN}✓ openresty-resty 安装成功${NC}"
+                fi
             fi
         elif command -v dnf &> /dev/null; then
-            if dnf install -y openresty-resty 2>&1 | grep -qE "已安装|installed|complete"; then
-                echo -e "${GREEN}✓ openresty-resty 安装成功${NC}"
-                opm_path=$(find_opm)
+            if dnf install -y openresty-resty 2>&1 | tee /tmp/openresty_resty_install.log; then
+                if grep -qiE "已安装|installed|complete|Nothing to do|无需" /tmp/openresty_resty_install.log; then
+                    install_success=1
+                    echo -e "${GREEN}✓ openresty-resty 安装成功${NC}"
+                fi
             fi
         elif command -v apt-get &> /dev/null; then
-            if apt-get install -y openresty-resty 2>&1 | grep -qE "已安装|installed|complete"; then
-                echo -e "${GREEN}✓ openresty-resty 安装成功${NC}"
-                opm_path=$(find_opm)
+            if apt-get install -y openresty-resty 2>&1 | tee /tmp/openresty_resty_install.log; then
+                if grep -qiE "已安装|installed|complete|Setting up|已经是最新版本" /tmp/openresty_resty_install.log; then
+                    install_success=1
+                    echo -e "${GREEN}✓ openresty-resty 安装成功${NC}"
+                fi
             fi
         fi
+        
+        # 安装后重新查找 opm
+        if [ $install_success -eq 1 ]; then
+            echo "正在查找 opm..."
+            # 刷新命令缓存
+            hash -r 2>/dev/null || true
+            # 重新查找 opm
+            opm_path=$(find_opm)
+            if [ -n "$opm_path" ]; then
+                echo -e "${GREEN}✓ 找到 opm: ${opm_path}${NC}"
+            else
+                echo -e "${YELLOW}⚠ 安装后仍未找到 opm，尝试其他方法...${NC}"
+                # 尝试查询包文件列表
+                if command -v rpm &> /dev/null; then
+                    echo "查询 openresty-resty 包文件列表..."
+                    local opm_files=$(rpm -ql openresty-resty 2>/dev/null | grep -E "/opm$")
+                    if [ -n "$opm_files" ]; then
+                        for opm_file in $opm_files; do
+                            if [ -f "$opm_file" ] && [ -x "$opm_file" ]; then
+                                opm_path="$opm_file"
+                                echo -e "${GREEN}✓ 从包文件列表找到 opm: ${opm_path}${NC}"
+                                break
+                            fi
+                        done
+                    fi
+                elif command -v dpkg &> /dev/null; then
+                    echo "查询 openresty-resty 包文件列表..."
+                    local opm_files=$(dpkg -L openresty-resty 2>/dev/null | grep -E "/opm$")
+                    if [ -n "$opm_files" ]; then
+                        for opm_file in $opm_files; do
+                            if [ -f "$opm_file" ] && [ -x "$opm_file" ]; then
+                                opm_path="$opm_file"
+                                echo -e "${GREEN}✓ 从包文件列表找到 opm: ${opm_path}${NC}"
+                                break
+                            fi
+                        done
+                    fi
+                fi
+            fi
+        fi
+        rm -f /tmp/openresty_resty_install.log 2>/dev/null || true
     fi
     
     # 检查 opm 是否可用
@@ -791,23 +875,44 @@ install_lua_modules() {
     else
         echo -e "${YELLOW}警告: opm 未找到，跳过 Lua 模块安装${NC}"
         echo ""
-        echo -e "${BLUE}解决方案:${NC}"
-        echo "1. 确保已安装 openresty-resty 包:"
-        if command -v yum &> /dev/null || command -v dnf &> /dev/null; then
-            echo "   yum install -y openresty-resty"
-            echo "   或"
-            echo "   dnf install -y openresty-resty"
-        elif command -v apt-get &> /dev/null; then
-            echo "   apt-get install -y openresty-resty"
+        echo -e "${BLUE}调试信息:${NC}"
+        echo "正在检查 openresty-resty 包是否已安装..."
+        
+        # 检查包是否已安装
+        if command -v rpm &> /dev/null; then
+            if rpm -q openresty-resty &>/dev/null; then
+                echo -e "${GREEN}✓ openresty-resty 包已安装${NC}"
+                echo "包文件列表:"
+                rpm -ql openresty-resty 2>/dev/null | grep -E "/opm$" | head -5 || echo "  未找到 opm 文件"
+            else
+                echo -e "${RED}✗ openresty-resty 包未安装${NC}"
+            fi
+        elif command -v dpkg &> /dev/null; then
+            if dpkg -l | grep -qE "^ii.*openresty-resty"; then
+                echo -e "${GREEN}✓ openresty-resty 包已安装${NC}"
+                echo "包文件列表:"
+                dpkg -L openresty-resty 2>/dev/null | grep -E "/opm$" | head -5 || echo "  未找到 opm 文件"
+            else
+                echo -e "${RED}✗ openresty-resty 包未安装${NC}"
+            fi
         fi
+        
         echo ""
-        echo "2. 或者手动安装 Lua 模块（从源码）:"
+        echo -e "${BLUE}解决方案:${NC}"
+        echo "1. 手动查找 opm:"
+        echo "   find /usr /opt /usr/local -name opm -type f 2>/dev/null"
+        echo ""
+        echo "2. 如果找到 opm，手动安装 Lua 模块:"
+        echo "   /path/to/opm get openresty/lua-resty-mysql"
+        echo "   /path/to/opm get openresty/lua-resty-redis"
+        echo ""
+        echo "3. 或者手动安装 Lua 模块（从源码）:"
         echo "   cd /tmp"
         echo "   git clone https://github.com/openresty/lua-resty-mysql.git"
         echo "   mkdir -p ${INSTALL_DIR}/site/lualib/resty"
         echo "   cp -r lua-resty-mysql/lib/resty/* ${INSTALL_DIR}/site/lualib/resty/"
         echo ""
-        echo "3. 安装完成后，可以运行以下命令安装依赖:"
+        echo "4. 安装完成后，可以运行以下命令安装依赖:"
         echo "   sudo ./scripts/install_dependencies.sh"
     fi
     

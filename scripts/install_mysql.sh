@@ -888,46 +888,48 @@ install_mysql_redhat() {
     echo "按照 MySQL 官方标准流程安装 MySQL 8.0..."
     echo "正在下载并安装 MySQL 包（这可能需要几分钟，请耐心等待）..."
     
-        if command -v dnf &> /dev/null; then
+    if command -v dnf &> /dev/null; then
         echo "使用 dnf 安装 MySQL..."
         
-        # 检查是否有模块化过滤问题，如果有则禁用模块化过滤
-        echo "检查 DNF 模块化过滤..."
-        if dnf list available mysql-community-server mysql-community-client 2>&1 | grep -qi "filtered out by modular filtering"; then
-            echo -e "${YELLOW}检测到模块化过滤问题，尝试禁用模块化过滤...${NC}"
-            # 尝试禁用 MySQL 模块（如果存在）
-            dnf module disable -y mysql 2>/dev/null || true
-            # 使用 --disable-module-filtering 禁用模块化过滤
-            local dnf_flags="$nogpgcheck_flag --disable-module-filtering"
-        else
-            local dnf_flags="$nogpgcheck_flag"
-        fi
-        
-        echo "正在执行: dnf install -y $dnf_flags mysql-community-server mysql-community-client"
-        if dnf install -y $dnf_flags mysql-community-server mysql-community-client 2>&1 | tee /tmp/mysql_install.log; then
-                # 验证是否真正安装成功
-                if verify_mysql_installation /tmp/mysql_install.log; then
+        # 先尝试正常安装
+        echo "正在执行: dnf install -y $nogpgcheck_flag mysql-community-server mysql-community-client"
+        if dnf install -y $nogpgcheck_flag mysql-community-server mysql-community-client 2>&1 | tee /tmp/mysql_install.log; then
+            # 验证是否真正安装成功
+            if verify_mysql_installation /tmp/mysql_install.log; then
                 INSTALL_SUCCESS=1
                 echo -e "${GREEN}✓ MySQL 安装成功${NC}"
-                else
-                echo -e "${RED}✗ MySQL 安装失败（验证失败）${NC}"
-                    INSTALL_SUCCESS=0
-                fi
             else
+                echo -e "${RED}✗ MySQL 安装失败（验证失败）${NC}"
                 INSTALL_SUCCESS=0
-            echo -e "${RED}✗ dnf install 命令执行失败${NC}"
+            fi
+        else
+            INSTALL_SUCCESS=0
+            echo -e "${YELLOW}第一次安装尝试失败，检查错误原因...${NC}"
             
-            # 如果失败，尝试使用 --disable-module-filtering
-            if echo "$dnf_flags" | grep -qv "disable-module-filtering"; then
-                echo -e "${YELLOW}尝试使用 --disable-module-filtering 重新安装...${NC}"
+            # 检查是否是模块化过滤问题
+            if grep -qiE "filtered out by modular filtering|modular filtering" /tmp/mysql_install.log; then
+                echo -e "${YELLOW}检测到模块化过滤问题，尝试禁用模块化过滤...${NC}"
+                # 尝试禁用 MySQL 模块（如果存在）
+                echo "尝试禁用 MySQL 模块..."
+                dnf module disable -y mysql 2>/dev/null || true
+                
+                # 使用 --disable-module-filtering 重新安装
+                echo -e "${YELLOW}使用 --disable-module-filtering 重新安装...${NC}"
+                echo "正在执行: dnf install -y $nogpgcheck_flag --disable-module-filtering mysql-community-server mysql-community-client"
                 if dnf install -y $nogpgcheck_flag --disable-module-filtering mysql-community-server mysql-community-client 2>&1 | tee -a /tmp/mysql_install.log; then
                     if verify_mysql_installation /tmp/mysql_install.log; then
-                    INSTALL_SUCCESS=1
+                        INSTALL_SUCCESS=1
                         echo -e "${GREEN}✓ MySQL 安装成功（使用 --disable-module-filtering）${NC}"
                     else
                         INSTALL_SUCCESS=0
+                        echo -e "${RED}✗ MySQL 安装失败（验证失败）${NC}"
                     fi
+                else
+                    INSTALL_SUCCESS=0
+                    echo -e "${RED}✗ dnf install 命令执行失败（即使使用 --disable-module-filtering）${NC}"
                 fi
+            else
+                echo -e "${RED}✗ dnf install 命令执行失败${NC}"
             fi
         fi
     elif command -v yum &> /dev/null; then

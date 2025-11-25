@@ -257,16 +257,16 @@ function _M.route()
         return
     end
     
-    -- 规则管理界面
+    -- 防护管理界面
     if path == "/admin/rules" then
-        -- 检查功能开关（规则管理功能必须启用）
+        -- 检查功能开关（防护管理功能必须启用）
         if not feature_switches.is_enabled("rule_management_ui") then
             ngx.status = 403
             ngx.header.content_type = "text/html; charset=utf-8"
-            ngx.say("<html><body><h1>403 Forbidden</h1><p>规则管理界面功能已禁用</p></body></html>")
+            ngx.say("<html><body><h1>403 Forbidden</h1><p>防护管理界面功能已禁用</p></body></html>")
             return
         end
-        return serve_html_with_layout("rule_management.html", "规则管理", session)
+        return serve_html_with_layout("rule_management.html", "防护管理", session)
     end
     
     -- 功能管理界面（必须可用，用于管理功能开关）

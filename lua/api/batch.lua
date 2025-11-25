@@ -4,6 +4,7 @@
 
 local batch_operations = require "waf.batch_operations"
 local api_utils = require "api.utils"
+local audit_log = require "waf.audit_log"
 
 local _M = {}
 
@@ -15,9 +16,14 @@ function _M.export_json()
     
     local rules, err = batch_operations.export_rules_json(rule_type, status)
     if err then
+        -- 记录审计日志（失败）
+        audit_log.log_rule_action("export_json", nil, "批量导出规则(JSON)", false, err)
         api_utils.json_response({error = err}, 500)
         return
     end
+    
+    -- 记录审计日志（成功）
+    audit_log.log_rule_action("export_json", nil, "批量导出规则(JSON)", true, nil)
     
     api_utils.json_response({
         success = true,
@@ -34,9 +40,14 @@ function _M.export_csv()
     
     local csv_data, err = batch_operations.export_rules_csv(rule_type, status)
     if err then
+        -- 记录审计日志（失败）
+        audit_log.log_rule_action("export_csv", nil, "批量导出规则(CSV)", false, err)
         api_utils.json_response({error = err}, 500)
         return
     end
+    
+    -- 记录审计日志（成功）
+    audit_log.log_rule_action("export_csv", nil, "批量导出规则(CSV)", true, nil)
     
     local filename = "rules_export_" .. os.date("%Y%m%d_%H%M%S") .. ".csv"
     api_utils.csv_response(csv_data, filename)
@@ -59,9 +70,17 @@ function _M.import_json()
     
     local results, err = batch_operations.import_rules_json(body, options)
     if err then
+        -- 记录审计日志（失败）
+        audit_log.log_rule_action("import_json", nil, "批量导入规则(JSON)", false, err)
         api_utils.json_response({error = err}, 400)
         return
     end
+    
+    -- 记录审计日志（成功）
+    local imported_count = results and results.imported and #results.imported or 0
+    local failed_count = results and results.failed and #results.failed or 0
+    local description = string.format("批量导入规则(JSON): 成功%d条, 失败%d条", imported_count, failed_count)
+    audit_log.log_rule_action("import_json", nil, description, true, nil)
     
     api_utils.json_response({
         success = true,
@@ -87,9 +106,17 @@ function _M.import_csv()
     
     local results, err = batch_operations.import_rules_csv(body, options)
     if err then
+        -- 记录审计日志（失败）
+        audit_log.log_rule_action("import_csv", nil, "批量导入规则(CSV)", false, err)
         api_utils.json_response({error = err}, 400)
         return
     end
+    
+    -- 记录审计日志（成功）
+    local imported_count = results and results.imported and #results.imported or 0
+    local failed_count = results and results.failed and #results.failed or 0
+    local description = string.format("批量导入规则(CSV): 成功%d条, 失败%d条", imported_count, failed_count)
+    audit_log.log_rule_action("import_csv", nil, description, true, nil)
     
     api_utils.json_response({
         success = true,

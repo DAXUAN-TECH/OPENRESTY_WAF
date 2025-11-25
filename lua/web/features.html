@@ -233,20 +233,39 @@
         
         // 加载功能列表
         async function loadFeatures() {
+            const container = document.getElementById('features-container');
             try {
+                // 显示加载状态
+                container.innerHTML = '<div class="loading">加载中...</div>';
+                
                 const response = await fetch('/api/features');
+                
+                // 检查响应状态
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    let errorData;
+                    try {
+                        errorData = JSON.parse(errorText);
+                    } catch (e) {
+                        errorData = { error: errorText || `HTTP ${response.status}: ${response.statusText}` };
+                    }
+                    throw new Error(errorData.error || errorData.message || `HTTP ${response.status}: ${response.statusText}`);
+                }
+                
                 const data = await response.json();
                 
                 if (data.success) {
-                    features = data.features;
+                    features = data.features || [];
                     renderFeatures();
                 } else {
-                    showAlert(data.error || '加载失败', 'error');
-                    document.getElementById('features-container').innerHTML = '<div class="loading">加载失败</div>';
+                    const errorMsg = data.error || data.message || '加载失败';
+                    showAlert(errorMsg, 'error');
+                    container.innerHTML = '<div class="loading" style="color: #e74c3c;">' + escapeHtml(errorMsg) + '</div>';
                 }
             } catch (error) {
+                console.error('loadFeatures error:', error);
                 showAlert('网络错误: ' + error.message, 'error');
-                document.getElementById('features-container').innerHTML = '<div class="loading">网络错误</div>';
+                container.innerHTML = '<div class="loading" style="color: #e74c3c;">网络错误: ' + escapeHtml(error.message) + '</div>';
             }
         }
         

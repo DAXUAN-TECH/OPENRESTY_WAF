@@ -741,18 +741,42 @@
             if (proxyType) url += `&proxy_type=${proxyType}`;
             if (status) url += `&status=${status}`;
             
+            const tbody = document.getElementById('proxies-tbody');
             try {
+                // 显示加载状态
+                tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 20px;">加载中...</td></tr>';
+                
                 const response = await fetch(url);
+                
+                // 检查响应状态
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    let errorData;
+                    try {
+                        errorData = JSON.parse(errorText);
+                    } catch (e) {
+                        errorData = { error: errorText || `HTTP ${response.status}: ${response.statusText}` };
+                    }
+                    throw new Error(errorData.error || errorData.message || `HTTP ${response.status}: ${response.statusText}`);
+                }
+                
                 const data = await response.json();
                 
                 if (data.success) {
-                    renderProxiesTable(data.data.proxies);
-                    renderPagination(data.data, 'pagination', loadProxies);
+                    const proxies = data.data && data.data.proxies ? data.data.proxies : [];
+                    renderProxiesTable(proxies);
+                    if (data.data) {
+                        renderPagination(data.data, 'pagination', loadProxies);
+                    }
                 } else {
-                    showAlert(data.error || '加载失败', 'error');
+                    const errorMsg = data.error || data.message || '加载失败';
+                    showAlert(errorMsg, 'error');
+                    tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 20px; color: #e74c3c;">' + escapeHtml(errorMsg) + '</td></tr>';
                 }
             } catch (error) {
+                console.error('loadProxies error:', error);
                 showAlert('网络错误: ' + error.message, 'error');
+                tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 20px; color: #e74c3c;">加载失败: ' + escapeHtml(error.message) + '</td></tr>';
             }
         }
         

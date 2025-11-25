@@ -258,10 +258,23 @@
             try {
                 // 加载概览统计
                 const overviewRes = await fetch(`/api/stats/overview?start_time=${encodeURIComponent(startTime)}&end_time=${encodeURIComponent(endTime)}`);
+                
+                // 检查响应状态
+                if (!overviewRes.ok) {
+                    const errorText = await overviewRes.text();
+                    let errorData;
+                    try {
+                        errorData = JSON.parse(errorText);
+                    } catch (e) {
+                        errorData = { error: errorText || `HTTP ${overviewRes.status}: ${overviewRes.statusText}` };
+                    }
+                    throw new Error(errorData.error || errorData.message || `HTTP ${overviewRes.status}: ${overviewRes.statusText}`);
+                }
+                
                 const overviewData = await overviewRes.json();
                 
                 if (!overviewData.success) {
-                    throw new Error(overviewData.error || '查询失败');
+                    throw new Error(overviewData.error || overviewData.message || '查询失败');
                 }
                 
                 // 更新概览卡片

@@ -212,6 +212,41 @@ function _M.route()
         return serve_html_file("login.html")
     end
     
+    -- 静态文件服务（JavaScript、CSS等）- 不需要认证
+    if path:match("%.js$") or path:match("%.css$") then
+        local filename = path:match("([^/]+)$")
+        if filename then
+            local project_root = path_utils.get_project_root()
+            if project_root then
+                local file_path = project_root .. "/lua/web/" .. filename
+                local file = io.open(file_path, "r")
+                if file then
+                    local content = file:read("*all")
+                    file:close()
+                    if content then
+                        if path:match("%.js$") then
+                            ngx.header.content_type = "application/javascript; charset=utf-8"
+                        elseif path:match("%.css$") then
+                            ngx.header.content_type = "text/css; charset=utf-8"
+                        end
+                        ngx.say(content)
+                        return
+                    else
+                        ngx.log(ngx.ERR, "Failed to read content from static file: ", file_path)
+                    end
+                else
+                    ngx.log(ngx.ERR, "Static file not found: ", file_path, " (project_root: ", project_root, ")")
+                end
+            else
+                ngx.log(ngx.ERR, "Failed to determine project root for serving static file: ", filename)
+            end
+        end
+        ngx.status = 404
+        ngx.header.content_type = "text/plain; charset=utf-8"
+        ngx.say("Static file not found")
+        return
+    end
+    
     -- 以下页面需要认证（包括metrics端点）
     -- 检查是否已登录
     local auth_ok, session = check_auth()
@@ -293,31 +328,6 @@ function _M.route()
     -- 日志查看页面
     if path == "/admin/logs" then
         return serve_html_with_layout("logs.html", "日志查看", session)
-    end
-    
-    -- 静态文件服务（JavaScript、CSS等）
-    if path:match("%.js$") or path:match("%.css$") then
-        local filename = path:match("([^/]+)$")
-        if filename then
-            local project_root = path_utils.get_project_root()
-            if project_root then
-                local file_path = project_root .. "/lua/web/" .. filename
-                local file = io.open(file_path, "r")
-                if file then
-                    local content = file:read("*all")
-                    file:close()
-                    if path:match("%.js$") then
-                        ngx.header.content_type = "application/javascript; charset=utf-8"
-                    elseif path:match("%.css$") then
-                        ngx.header.content_type = "text/css; charset=utf-8"
-                    end
-                    ngx.say(content)
-                    return
-                end
-            end
-        end
-        ngx.status = 404
-        return
     end
     
     -- 默认首页（根路径和管理首页）- 重定向到Dashboard

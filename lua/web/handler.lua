@@ -25,8 +25,8 @@ local function escape_html(text)
     return text
 end
 
--- 读取并返回HTML文件
-local function serve_html_file(filename)
+-- 获取项目根目录
+local function get_project_root()
     local project_root = nil
     
     -- 优先从当前文件路径推断（最可靠的方法）
@@ -69,27 +69,16 @@ local function serve_html_file(filename)
         end
     end
     
-    if not project_root then
-        ngx.status = 500
-        ngx.header.content_type = "text/html; charset=utf-8"
-        ngx.say([[
-<html><body>
-<h1>500 Internal Server Error</h1>
-<p>Failed to determine project root. Please check:</p>
-<ul>
-    <li>lua_package_path configuration in lua.conf</li>
-    <li>Project root path in config.lua</li>
-</ul>
-<p>Debug info:</p>
-<pre>
-package.path: ]] .. (package.path or "nil") .. [[
+    return project_root
+end
 
-debug.getinfo: ]] .. (debug.getinfo(1, "S").source or "nil") .. [[
-</pre>
-</body></html>
-        ]])
+-- 读取HTML文件内容
+local function read_html_file(filename)
+    local project_root = get_project_root()
+    
+    if not project_root then
         ngx.log(ngx.ERR, "Failed to determine project root for serving HTML file: ", filename)
-        return
+        return nil
     end
     
     local file_path = project_root .. "/lua/web/" .. filename
@@ -97,6 +86,75 @@ debug.getinfo: ]] .. (debug.getinfo(1, "S").source or "nil") .. [[
     if file then
         local content = file:read("*all")
         file:close()
+        return content
+    else
+        ngx.log(ngx.ERR, "HTML file not found: ", file_path, " (project_root: ", project_root, ")")
+        return nil
+    end
+end
+
+-- 生成带布局的HTML页面
+local function serve_html_with_layout(filename, page_title, session)
+    local content = read_html_file(filename)
+    if not content then
+        ngx.status = 404
+        ngx.header.content_type = "text/html; charset=utf-8"
+        ngx.say([[
+<html><body>
+<h1>404 Not Found</h1>
+<p>File not found: ]] .. escape_html(filename) .. [[</p>
+</body></html>
+        ]])
+        return
+    end
+    
+    local username = session and session.username or "用户"
+    
+    -- 读取布局模板
+    local layout_content = read_html_file("layout.html")
+    if not layout_content then
+        -- 如果布局文件不存在，直接返回内容
+        ngx.header.content_type = "text/html; charset=utf-8"
+        ngx.say(content)
+        return
+    end
+    
+    -- 替换布局模板中的占位符
+    layout_content = layout_content:gsub("{{TITLE}}", escape_html(page_title))
+    layout_content = layout_content:gsub("{{PAGE_TITLE}}", escape_html(page_title))
+    layout_content = layout_content:gsub("{{USERNAME}}", escape_html(username))
+    layout_content = layout_content:gsub("{{CONTENT}}", content)
+    
+    -- 提取额外的样式和脚本
+    local extra_styles = ""
+    local extra_scripts = ""
+    
+    -- 提取style标签
+    for style in content:gmatch("<style>([^<]+)</style>") do
+        extra_styles = extra_styles .. "<style>" .. style .. "</style>"
+    end
+    
+    -- 提取script标签（排除layout.html中的script）
+    for script in content:gmatch("<script>([^<]+)</script>") do
+        extra_scripts = extra_scripts .. "<script>" .. script .. "</script>"
+    end
+    
+    -- 提取外部script标签
+    for script_src in content:gmatch('<script[^>]*src="([^"]+)"[^>]*></script>') do
+        extra_scripts = extra_scripts .. '<script src="' .. script_src .. '"></script>'
+    end
+    
+    layout_content = layout_content:gsub("{{EXTRA_STYLES}}", extra_styles)
+    layout_content = layout_content:gsub("{{EXTRA_SCRIPTS}}", extra_scripts)
+    
+    ngx.header.content_type = "text/html; charset=utf-8"
+    ngx.say(layout_content)
+end
+
+-- 读取并返回HTML文件（兼容旧代码，不使用布局）
+local function serve_html_file(filename)
+    local content = read_html_file(filename)
+    if content then
         ngx.header.content_type = "text/html; charset=utf-8"
         ngx.say(content)
     else
@@ -105,17 +163,9 @@ debug.getinfo: ]] .. (debug.getinfo(1, "S").source or "nil") .. [[
         ngx.say([[
 <html><body>
 <h1>404 Not Found</h1>
-<p>File not found: ]] .. escape_html(file_path) .. [[</p>
-<p>Project root: ]] .. escape_html(project_root) .. [[</p>
-<p>Please check:</p>
-<ul>
-    <li>File exists: ]] .. escape_html(file_path) .. [[</li>
-    <li>File permissions</li>
-    <li>Project root path configuration</li>
-</ul>
+<p>File not found: ]] .. escape_html(filename) .. [[</p>
 </body></html>
         ]])
-        ngx.log(ngx.ERR, "HTML file not found: ", file_path, " (project_root: ", project_root, ")")
     end
 end
 
@@ -169,12 +219,12 @@ function _M.route()
             ngx.say("<html><body><h1>403 Forbidden</h1><p>规则管理界面功能已禁用</p></body></html>")
             return
         end
-        return serve_html_file("rule_management.html")
+        return serve_html_with_layout("rule_management.html", "规则管理", session)
     end
     
     -- 功能管理界面（必须可用，用于管理功能开关）
     if path == "/admin/features" then
-        return serve_html_file("features.html")
+        return serve_html_with_layout("features.html", "功能管理", session)
     end
     
     -- 统计报表界面
@@ -186,19 +236,19 @@ function _M.route()
             ngx.say("<html><body><h1>403 Forbidden</h1><p>统计报表功能已禁用</p></body></html>")
             return
         end
-        return serve_html_file("stats.html")
+        return serve_html_with_layout("stats.html", "统计报表", session)
     end
     
-    -- 监控面板界面
-    if path == "/admin/monitor" then
+    -- Dashboard界面（原监控面板）
+    if path == "/admin/dashboard" or path == "/admin/monitor" then
         -- 检查功能开关
         if not feature_switches.is_enabled("monitor") then
             ngx.status = 403
             ngx.header.content_type = "text/html; charset=utf-8"
-            ngx.say("<html><body><h1>403 Forbidden</h1><p>监控面板功能已禁用</p></body></html>")
+            ngx.say("<html><body><h1>403 Forbidden</h1><p>Dashboard功能已禁用</p></body></html>")
             return
         end
-        return serve_html_file("monitor.html")
+        return serve_html_with_layout("dashboard.html", "Dashboard", session)
     end
     
     -- 反向代理管理界面
@@ -210,64 +260,22 @@ function _M.route()
             ngx.say("<html><body><h1>403 Forbidden</h1><p>反向代理管理功能已禁用</p></body></html>")
             return
         end
-        return serve_html_file("proxy_management.html")
+        return serve_html_with_layout("proxy_management.html", "反向代理", session)
     end
     
     -- 用户设置页面
     if path == "/admin/settings" or path == "/admin/profile" then
-        return serve_html_file("user_settings.html")
+        return serve_html_with_layout("user_settings.html", "用户设置", session)
     end
     
     -- 日志查看页面
     if path == "/admin/logs" then
-        return serve_html_file("logs.html")
+        return serve_html_with_layout("logs.html", "日志查看", session)
     end
     
-    -- 默认首页（根路径和管理首页）
+    -- 默认首页（根路径和管理首页）- 重定向到Dashboard
     if path == "/" or path == "/admin" or path == "/admin/" then
-        ngx.status = 200
-        ngx.header.content_type = "text/html; charset=utf-8"
-        local username = session and session.username or "用户"
-        ngx.say([[
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <title>WAF 管理界面</title>
-    <style>
-        body { font-family: Arial, sans-serif; padding: 50px; }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }
-        h1 { color: #333; margin: 0; }
-        .user-info { color: #666; }
-        .user-info a { color: #0066cc; text-decoration: none; margin-left: 10px; }
-        .user-info a:hover { text-decoration: underline; }
-        ul { list-style: none; padding: 0; }
-        li { margin: 10px 0; }
-        a { color: #0066cc; text-decoration: none; font-size: 18px; }
-        a:hover { text-decoration: underline; }
-    </style>
-</head>
-<body>
-    <div class="header">
-        <h1>WAF 管理界面</h1>
-        <div class="user-info">
-            欢迎，]] .. escape_html(username) .. [[
-            <a href="/api/auth/logout">退出</a>
-        </div>
-    </div>
-    <ul>
-        <li><a href="/admin/features">功能管理</a></li>
-        <li><a href="/admin/rules">规则管理</a></li>
-        <li><a href="/admin/proxy">反向代理</a></li>
-        <li><a href="/admin/stats">统计报表</a></li>
-        <li><a href="/admin/monitor">监控面板</a></li>
-        <li><a href="/admin/logs">日志查看</a></li>
-        <li><a href="/admin/settings">用户设置</a></li>
-        <li><a href="/metrics">监控指标</a></li>
-    </ul>
-</body>
-</html>
-        ]])
+        ngx.redirect("/admin/dashboard")
         return
     end
     

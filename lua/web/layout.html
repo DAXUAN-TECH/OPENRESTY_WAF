@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{TITLE}} - WAF管理</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: #f5f5f5;
+            color: #333;
+            display: flex;
+            min-height: 100vh;
+        }
+        /* 左侧菜单栏 */
+        .sidebar {
+            width: 240px;
+            background: #2c3e50;
+            color: #ecf0f1;
+            position: fixed;
+            left: 0;
+            top: 0;
+            height: 100vh;
+            overflow-y: auto;
+            box-shadow: 2px 0 4px rgba(0,0,0,0.1);
+            z-index: 1000;
+        }
+        .sidebar-header {
+            padding: 20px;
+            background: #1a252f;
+            border-bottom: 1px solid #34495e;
+        }
+        .sidebar-header h1 {
+            font-size: 20px;
+            font-weight: 600;
+            color: #fff;
+        }
+        .sidebar-header .subtitle {
+            font-size: 12px;
+            color: #95a5a6;
+            margin-top: 5px;
+        }
+        .sidebar-menu {
+            padding: 10px 0;
+        }
+        .menu-item {
+            display: block;
+            padding: 12px 20px;
+            color: #bdc3c7;
+            text-decoration: none;
+            transition: all 0.3s;
+            border-left: 3px solid transparent;
+        }
+        .menu-item:hover {
+            background: #34495e;
+            color: #fff;
+            border-left-color: #3498db;
+        }
+        .menu-item.active {
+            background: #34495e;
+            color: #fff;
+            border-left-color: #3498db;
+            font-weight: 500;
+        }
+        .menu-item i {
+            width: 20px;
+            display: inline-block;
+            margin-right: 10px;
+        }
+        .menu-divider {
+            height: 1px;
+            background: #34495e;
+            margin: 10px 20px;
+        }
+        /* 主内容区域 */
+        .main-content {
+            flex: 1;
+            margin-left: 240px;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+        /* 顶部Banner栏 */
+        .top-banner {
+            height: 60px;
+            background: #fff;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 30px;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        .banner-title {
+            font-size: 20px;
+            font-weight: 600;
+            color: #2c3e50;
+        }
+        .banner-actions {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: #555;
+            font-size: 14px;
+        }
+        .user-info .username {
+            font-weight: 500;
+        }
+        .logout-btn {
+            padding: 6px 15px;
+            background: #e74c3c;
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            text-decoration: none;
+            display: inline-block;
+            transition: background 0.3s;
+        }
+        .logout-btn:hover {
+            background: #c0392b;
+        }
+        /* 内容显示区域 */
+        .content-area {
+            flex: 1;
+            padding: 30px;
+            overflow-y: auto;
+        }
+        /* 响应式设计 */
+        @media (max-width: 768px) {
+            .sidebar {
+                width: 200px;
+            }
+            .main-content {
+                margin-left: 200px;
+            }
+            .top-banner {
+                padding: 0 15px;
+            }
+            .banner-title {
+                font-size: 18px;
+            }
+        }
+    </style>
+    {{EXTRA_STYLES}}
+</head>
+<body>
+    <!-- 左侧菜单栏 -->
+    <div class="sidebar">
+        <div class="sidebar-header">
+            <h1>WAF 管理</h1>
+            <div class="subtitle">Web应用防火墙</div>
+        </div>
+        <nav class="sidebar-menu">
+            <a href="/admin/dashboard" class="menu-item" data-page="dashboard">
+                <i>📊</i> Dashboard
+            </a>
+            <a href="/admin/rules" class="menu-item" data-page="rules">
+                <i>🛡️</i> 规则管理
+            </a>
+            <a href="/admin/features" class="menu-item" data-page="features">
+                <i>⚙️</i> 功能管理
+            </a>
+            <a href="/admin/proxy" class="menu-item" data-page="proxy">
+                <i>🔄</i> 反向代理
+            </a>
+            <a href="/admin/stats" class="menu-item" data-page="stats">
+                <i>📈</i> 统计报表
+            </a>
+            <a href="/admin/logs" class="menu-item" data-page="logs">
+                <i>📋</i> 日志查看
+            </a>
+            <div class="menu-divider"></div>
+            <a href="/admin/settings" class="menu-item" data-page="settings">
+                <i>👤</i> 用户设置
+            </a>
+            <a href="/metrics" class="menu-item" data-page="metrics" target="_blank">
+                <i>📊</i> 监控指标
+            </a>
+        </nav>
+    </div>
+    
+    <!-- 主内容区域 -->
+    <div class="main-content">
+        <!-- 顶部Banner栏 -->
+        <div class="top-banner">
+            <div class="banner-title">{{PAGE_TITLE}}</div>
+            <div class="banner-actions">
+                <div class="user-info">
+                    <span class="username">{{USERNAME}}</span>
+                    <a href="/api/auth/logout" class="logout-btn">退出</a>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 内容显示区域 -->
+        <div class="content-area">
+            {{CONTENT}}
+        </div>
+    </div>
+    
+    {{EXTRA_SCRIPTS}}
+    <script>
+        // 设置当前页面的菜单项为激活状态
+        (function() {
+            const currentPath = window.location.pathname;
+            const menuItems = document.querySelectorAll('.menu-item');
+            menuItems.forEach(item => {
+                const href = item.getAttribute('href');
+                if (href && (currentPath === href || currentPath.startsWith(href + '/'))) {
+                    item.classList.add('active');
+                }
+            });
+        })();
+    </script>
+</body>
+</html>
+

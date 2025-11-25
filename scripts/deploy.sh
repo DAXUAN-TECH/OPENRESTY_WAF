@@ -93,8 +93,8 @@ sed -i "s|/path/to/project/conf.d/vhost_conf|$PROJECT_ROOT_ABS/conf.d/vhost_conf
 # 替换 set $project_root 变量中的占位符
 sed -i 's|set $project_root "/path/to/project"|set $project_root "'"$PROJECT_ROOT_ABS"'"|g' "$NGINX_CONF_DIR/nginx.conf"
 
-# 步骤4: 清理 http 块后的重复内容（防止之前部署遗留的问题）
-# 找到 http 块结束位置（最后一个匹配的 }）
+# 步骤3.5: 立即验证并清理重复内容（在替换后立即执行）
+# 找到 http 块结束位置
 http_start_line=$(grep -n "^http {" "$NGINX_CONF_DIR/nginx.conf" | cut -d: -f1 | head -1)
 if [ -n "$http_start_line" ]; then
     http_end_line=$(awk -v start="$http_start_line" '
@@ -116,18 +116,91 @@ if [ -n "$http_start_line" ]; then
     ' "$NGINX_CONF_DIR/nginx.conf" 2>/dev/null)
     
     if [ -n "$http_end_line" ]; then
-        total_lines=$(wc -l < "$NGINX_CONF_DIR/nginx.conf" 2>/dev/null)
+        # 强制截取到 http 块结束位置（确保没有多余内容）
+        head -n "$http_end_line" "$NGINX_CONF_DIR/nginx.conf" > "$NGINX_CONF_DIR/nginx.conf.tmp" && \
+            mv "$NGINX_CONF_DIR/nginx.conf.tmp" "$NGINX_CONF_DIR/nginx.conf"
+    fi
+fi
+
+# 步骤4: 清理 http 块后的重复内容（防止之前部署遗留的问题）
+# 使用更简单可靠的方法：找到 http 块结束的 } 行
+http_start_line=$(grep -n "^http {" "$NGINX_CONF_DIR/nginx.conf" | cut -d: -f1 | head -1)
+if [ -n "$http_start_line" ]; then
+    # 使用 awk 找到 http 块的结束位置（括号匹配）
+    http_end_line=$(awk -v start="$http_start_line" '
+        BEGIN { 
+            brace_count = 0
+            found_start = 0
+        }
+        NR >= start {
+            if (!found_start) {
+                found_start = 1
+            }
+            line = $0
+            for (i = 1; i <= length(line); i++) {
+                char = substr(line, i, 1)
+                if (char == "{") {
+                    brace_count++
+                } else if (char == "}") {
+                    brace_count--
+                    if (brace_count == 0 && found_start) {
+                        print NR
+                        exit
+                    }
+                }
+            }
+        }
+    ' "$NGINX_CONF_DIR/nginx.conf" 2>/dev/null)
+    
+    if [ -n "$http_end_line" ]; then
+        total_lines=$(wc -l < "$NGINX_CONF_DIR/nginx.conf" 2>/dev/null | tr -d ' ')
         # 如果 http 块后还有内容，强制删除
         if [ -n "$total_lines" ] && [ "$http_end_line" -lt "$total_lines" ]; then
             echo -e "${YELLOW}  检测到 http 块后有多余内容（第 $((http_end_line + 1))-$total_lines 行），正在清理...${NC}"
+            # 使用 head 截取到 http 块结束位置
+            head -n "$http_end_line" "$NGINX_CONF_DIR/nginx.conf" > "$NGINX_CONF_DIR/nginx.conf.tmp"
+            if [ $? -eq 0 ]; then
+                mv "$NGINX_CONF_DIR/nginx.conf.tmp" "$NGINX_CONF_DIR/nginx.conf"
+                echo -e "${GREEN}✓ 已清理多余内容${NC}"
+            else
+                echo -e "${YELLOW}⚠ 清理失败，但继续执行...${NC}"
+                rm -f "$NGINX_CONF_DIR/nginx.conf.tmp"
+            fi
+        else
+            echo -e "${GREEN}✓ http 块后无多余内容${NC}"
+        fi
+    else
+        echo -e "${YELLOW}⚠ 无法确定 http 块结束位置，跳过清理${NC}"
+    fi
+fi
+
+# 步骤5: 验证文件行数并强制清理（双重保护）
+template_lines=$(wc -l < "${PROJECT_ROOT}/init_file/nginx.conf" 2>/dev/null | tr -d ' ')
+deployed_lines=$(wc -l < "$NGINX_CONF_DIR/nginx.conf" 2>/dev/null | tr -d ' ')
+
+# 如果行数不一致，强制截取
+if [ -n "$template_lines" ] && [ -n "$deployed_lines" ]; then
+    if [ "$deployed_lines" -gt "$template_lines" ]; then
+        echo -e "${YELLOW}⚠ 警告: 部署后的文件行数 ($deployed_lines) 大于模板文件 ($template_lines)，强制截取到正确行数...${NC}"
+        head -n "$template_lines" "$NGINX_CONF_DIR/nginx.conf" > "$NGINX_CONF_DIR/nginx.conf.tmp" && \
+            mv "$NGINX_CONF_DIR/nginx.conf.tmp" "$NGINX_CONF_DIR/nginx.conf"
+        echo -e "${GREEN}✓ 已截取到正确行数${NC}"
+    fi
+    
+    # 额外检查：确保 http 块结束后没有内容（即使行数一致，也可能有重复内容）
+    if [ -n "$http_end_line" ]; then
+        # 检查 http 块结束后的内容是否包含 set 或 include 指令
+        after_http_content=$(sed -n "$((http_end_line + 1)),\$p" "$NGINX_CONF_DIR/nginx.conf" 2>/dev/null | grep -E "^\s*(set|include)" | head -1)
+        if [ -n "$after_http_content" ]; then
+            echo -e "${YELLOW}⚠ 检测到 http 块后有重复的配置指令，强制清理...${NC}"
             head -n "$http_end_line" "$NGINX_CONF_DIR/nginx.conf" > "$NGINX_CONF_DIR/nginx.conf.tmp" && \
                 mv "$NGINX_CONF_DIR/nginx.conf.tmp" "$NGINX_CONF_DIR/nginx.conf"
-            echo -e "${GREEN}✓ 已清理多余内容${NC}"
+            echo -e "${GREEN}✓ 已清理重复配置${NC}"
         fi
     fi
 fi
 
-# 步骤5: 确保文件以换行符结尾
+# 步骤6: 确保文件以换行符结尾
 if [ -f "$NGINX_CONF_DIR/nginx.conf" ]; then
     if ! tail -c 1 "$NGINX_CONF_DIR/nginx.conf" | grep -q '^$'; then
         echo "" >> "$NGINX_CONF_DIR/nginx.conf"

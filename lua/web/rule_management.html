@@ -1752,6 +1752,34 @@
             }
         }
         
+        // 显示创建成功提示框
+        function showCreateSuccessModal() {
+            document.getElementById('create-success-modal').style.display = 'block';
+        }
+        
+        // 关闭创建成功提示框
+        function closeCreateSuccessModal() {
+            document.getElementById('create-success-modal').style.display = 'none';
+            // 重置表单并切换到规则列表
+            resetCreateForm();
+            switchTab('rules');
+        }
+        
+        // 继续添加规则
+        function continueAddRule() {
+            // 关闭提示框
+            document.getElementById('create-success-modal').style.display = 'none';
+            // 重置表单但保持在创建页面
+            resetCreateForm();
+            // 切换到创建规则标签页
+            switchTab('create');
+            // 滚动到表单顶部
+            const createTab = document.getElementById('create-tab');
+            if (createTab) {
+                createTab.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        }
+        
         // 初始化
         document.addEventListener('DOMContentLoaded', function() {
             loadGroups();

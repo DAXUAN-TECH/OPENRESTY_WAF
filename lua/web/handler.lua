@@ -27,28 +27,52 @@ end
 
 -- 读取并返回HTML文件
 local function serve_html_file(filename)
-    local project_root = path_utils.get_project_root()
+    local project_root = nil
+    
+    -- 优先从当前文件路径推断（最可靠的方法）
+    local current_file = debug.getinfo(1, "S").source
+    if current_file then
+        current_file = current_file:gsub("^@", "")
+        -- 从 lua/web/handler.lua 推断项目根目录
+        project_root = current_file:match("(.+)/lua/web/handler%.lua")
+    end
+    
+    -- 如果无法从当前文件推断，尝试使用 path_utils
     if not project_root then
-        -- 尝试从 package.path 推断项目根目录（备用方案）
-        local first_path = package.path:match("([^;]+)")
-        if first_path then
-            project_root = first_path:match("(.+)/lua/%?%.lua")
-        end
-        
-        -- 如果仍然无法获取，尝试从当前文件路径推断
-        if not project_root then
-            local current_file = debug.getinfo(1, "S").source
-            if current_file then
-                current_file = current_file:gsub("^@", "")
-                -- 从 lua/web/handler.lua 推断项目根目录
-                project_root = current_file:match("(.+)/lua/web/handler%.lua")
+        project_root = path_utils.get_project_root()
+    end
+    
+    -- 如果仍然无法获取，尝试从 package.path 中查找包含项目特定目录的路径
+    if not project_root then
+        -- 遍历所有 package.path 路径，查找包含 "waf" 目录的路径（项目特定）
+        for path in package.path:gmatch("([^;]+)") do
+            -- 查找包含 waf 目录的路径（项目特定标识）
+            if path:match("/waf/") then
+                project_root = path:match("(.+)/lua/waf/%?%.lua")
+                if project_root and project_root ~= "" then
+                    break
+                end
             end
         end
         
+        -- 如果仍然找不到，尝试从第一个包含 lua 的路径推断（排除系统路径）
         if not project_root then
-            ngx.status = 500
-            ngx.header.content_type = "text/html; charset=utf-8"
-            ngx.say([[
+            for path in package.path:gmatch("([^;]+)") do
+                -- 排除系统默认路径（/usr/local/share, /usr/share 等）
+                if not path:match("^/usr/") and path:match("/lua/") then
+                    project_root = path:match("(.+)/lua/%?%.lua")
+                    if project_root and project_root ~= "" then
+                        break
+                    end
+                end
+            end
+        end
+    end
+    
+    if not project_root then
+        ngx.status = 500
+        ngx.header.content_type = "text/html; charset=utf-8"
+        ngx.say([[
 <html><body>
 <h1>500 Internal Server Error</h1>
 <p>Failed to determine project root. Please check:</p>
@@ -63,10 +87,9 @@ package.path: ]] .. (package.path or "nil") .. [[
 debug.getinfo: ]] .. (debug.getinfo(1, "S").source or "nil") .. [[
 </pre>
 </body></html>
-            ]])
-            ngx.log(ngx.ERR, "Failed to determine project root for serving HTML file: ", filename)
-            return
-        end
+        ]])
+        ngx.log(ngx.ERR, "Failed to determine project root for serving HTML file: ", filename)
+        return
     end
     
     local file_path = project_root .. "/lua/web/" .. filename

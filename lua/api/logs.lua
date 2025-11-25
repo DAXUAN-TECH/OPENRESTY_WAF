@@ -82,14 +82,14 @@ function _M.get_access_logs()
         total = tonumber(count_res[1].total) or 0
     end
     
-    -- 查询日志列表
+    -- 查询日志列表（按时间倒序，最新的在最前面）
     local sql = string.format([[
         SELECT 
             id, client_ip, request_domain, request_path, request_method,
             status_code, user_agent, referer, request_time, response_time, created_at
         FROM waf_access_logs
         %s
-        ORDER BY request_time DESC
+        ORDER BY request_time DESC, id DESC
         LIMIT ? OFFSET ?
     ]], where_sql)
     
@@ -106,9 +106,36 @@ function _M.get_access_logs()
         return
     end
     
+    -- 确保 res 是数组类型（用于 JSON 序列化）
+    local logs_array = {}
+    if res then
+        if type(res) == "table" then
+            -- 检查是否是数组
+            local is_array = false
+            for i, _ in ipairs(res) do
+                is_array = true
+                logs_array[i] = res[i]
+            end
+            
+            -- 如果不是数组，尝试转换
+            if not is_array then
+                local temp_array = {}
+                for k, v in pairs(res) do
+                    if type(k) == "number" and k > 0 then
+                        table.insert(temp_array, {key = k, value = v})
+                    end
+                end
+                table.sort(temp_array, function(a, b) return a.key < b.key end)
+                for _, item in ipairs(temp_array) do
+                    table.insert(logs_array, item.value)
+                end
+            end
+        end
+    end
+    
     api_utils.json_response({
         success = true,
-        data = res or {},
+        data = logs_array,
         pagination = {
             page = page,
             page_size = page_size,

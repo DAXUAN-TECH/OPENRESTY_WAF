@@ -771,8 +771,76 @@
                 const data = await response.json();
                 
                 if (data.success) {
-                    const proxies = data.data && data.data.proxies ? data.data.proxies : [];
-                    renderProxiesTable(proxies);
+                    // 确保 data.data 存在
+                    if (!data.data) {
+                        console.error('API response missing data field:', data);
+                        showAlert('响应数据格式错误：缺少 data 字段', 'error');
+                        tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 20px; color: #e74c3c;">响应数据格式错误</td></tr>';
+                        return;
+                    }
+                    
+                    // 获取 proxies 数据
+                    let proxies = data.data.proxies;
+                    console.log('=== Proxies Data Debug ===');
+                    console.log('Received proxies type:', typeof proxies);
+                    console.log('Is Array:', Array.isArray(proxies));
+                    console.log('Proxies value:', proxies);
+                    console.log('========================');
+                    
+                    // 处理各种可能的格式
+                    let proxiesArray = [];
+                    
+                    if (proxies === undefined || proxies === null) {
+                        proxiesArray = [];
+                    } else if (Array.isArray(proxies)) {
+                        // 已经是数组，直接使用
+                        proxiesArray = proxies;
+                    } else if (typeof proxies === 'object') {
+                        // 是对象，尝试转换
+                        const keys = Object.keys(proxies);
+                        console.log('Object keys:', keys);
+                        
+                        if (keys.length === 0) {
+                            // 空对象，转换为空数组
+                            proxiesArray = [];
+                        } else {
+                            // 检查是否是数字键（可能是序列化的数组对象）
+                            const numericKeys = keys.filter(k => {
+                                const num = parseInt(k);
+                                return !isNaN(num) && num.toString() === k && num >= 0;
+                            });
+                            
+                            if (numericKeys.length > 0) {
+                                // 有数字键，按数字排序后转换为数组
+                                numericKeys.sort((a, b) => parseInt(a) - parseInt(b));
+                                proxiesArray = numericKeys.map(k => proxies[k]);
+                                console.log('Converted object with numeric keys to array:', proxiesArray);
+                            } else {
+                                // 非数字键，可能是单个对象，包装成数组
+                                proxiesArray = [proxies];
+                                console.log('Wrapped single object in array:', proxiesArray);
+                            }
+                        }
+                    } else {
+                        // 既不是数组也不是对象
+                        console.error('Proxies is neither array nor object, type:', typeof proxies);
+                        showAlert('响应数据格式错误：proxies 类型不正确 (' + typeof proxies + ')', 'error');
+                        tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 20px; color: #e74c3c;">数据格式错误</td></tr>';
+                        return;
+                    }
+                    
+                    // 验证转换后的数组
+                    if (!Array.isArray(proxiesArray)) {
+                        console.error('Failed to convert proxies to array, final type:', typeof proxiesArray);
+                        showAlert('响应数据格式错误：无法将 proxies 转换为数组', 'error');
+                        tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 20px; color: #e74c3c;">数据格式错误</td></tr>';
+                        return;
+                    }
+                    
+                    console.log('Final proxies array length:', proxiesArray.length);
+                    
+                    // 使用转换后的数组
+                    renderProxiesTable(proxiesArray);
                     if (data.data) {
                         renderPagination(data.data, 'pagination', loadProxies);
                     }

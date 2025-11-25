@@ -85,6 +85,92 @@ function _M.list()
         return
     end
     
+    -- 确保 result 存在且包含 proxies 数组
+    if not result then
+        ngx.log(ngx.WARN, "list_proxies returned nil result")
+        result = {
+            proxies = {},
+            total = 0,
+            page = params.page,
+            page_size = params.page_size,
+            total_pages = 0
+        }
+    end
+    
+    -- 确保 proxies 是数组类型（用于 JSON 序列化）
+    if not result.proxies then
+        ngx.log(ngx.WARN, "result.proxies is nil, setting to empty array")
+        result.proxies = {}
+    elseif type(result.proxies) ~= "table" then
+        ngx.log(ngx.ERR, "result.proxies is not a table, type: ", type(result.proxies), ", value: ", tostring(result.proxies))
+        result.proxies = {}
+    else
+        -- 检查是否是数组（使用 # 和 ipairs 判断）
+        local is_array = false
+        local array_length = 0
+        
+        -- 尝试使用 ipairs 遍历
+        for i, _ in ipairs(result.proxies) do
+            array_length = i
+            is_array = true
+        end
+        
+        -- 如果 ipairs 没有遍历到任何元素，检查是否是空数组
+        if array_length == 0 then
+            if next(result.proxies) == nil then
+                -- 空数组，保持原样
+                is_array = true
+                ngx.log(ngx.DEBUG, "result.proxies is empty array")
+            else
+                -- 非空但不是数组，需要转换
+                ngx.log(ngx.WARN, "result.proxies is not an array, converting...")
+                is_array = false
+            end
+        end
+        
+        -- 如果不是数组，转换为数组
+        if not is_array then
+            local proxies_array = {}
+            local temp_array = {}
+            
+            -- 收集所有数字键的值
+            for k, v in pairs(result.proxies) do
+                if type(k) == "number" and k > 0 then
+                    table.insert(temp_array, {key = k, value = v})
+                end
+            end
+            
+            -- 按 key 排序
+            table.sort(temp_array, function(a, b) return a.key < b.key end)
+            
+            -- 转换为数组
+            for _, item in ipairs(temp_array) do
+                table.insert(proxies_array, item.value)
+            end
+            
+            result.proxies = proxies_array
+            ngx.log(ngx.INFO, "converted proxies to array, length: ", #result.proxies)
+        else
+            ngx.log(ngx.DEBUG, "result.proxies is already an array, length: ", array_length)
+        end
+    end
+    
+    -- 最终验证：确保 proxies 是数组
+    if type(result.proxies) ~= "table" then
+        ngx.log(ngx.ERR, "FATAL: result.proxies is still not a table after conversion!")
+        result.proxies = {}
+    end
+    
+    -- 强制转换为标准数组（确保 JSON 序列化时是数组）
+    local final_proxies = {}
+    if #result.proxies > 0 then
+        -- 使用 ipairs 确保只复制数组部分
+        for i = 1, #result.proxies do
+            final_proxies[i] = result.proxies[i]
+        end
+    end
+    result.proxies = final_proxies
+    
     api_utils.json_response({
         success = true,
         data = result

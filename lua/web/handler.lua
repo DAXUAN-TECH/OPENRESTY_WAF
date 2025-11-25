@@ -256,6 +256,7 @@ function _M.route()
         <li><a href="/admin/proxy">反向代理</a></li>
         <li><a href="/admin/stats">统计报表</a></li>
         <li><a href="/admin/monitor">监控面板</a></li>
+        <li><a href="/admin/settings">用户设置</a></li>
         <li><a href="/metrics">监控指标</a></li>
     </ul>
 </body>

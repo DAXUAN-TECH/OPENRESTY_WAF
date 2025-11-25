@@ -1799,6 +1799,11 @@
                 if (event.target == datetimeModal) {
                     closeDateTimePicker();
                 }
+                
+                const successModal = document.getElementById('create-success-modal');
+                if (event.target == successModal) {
+                    closeCreateSuccessModal();
+                }
             }
         });
     </script>

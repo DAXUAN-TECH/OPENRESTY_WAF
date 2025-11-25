@@ -59,17 +59,23 @@ try:
         content = f.read()
     
     # 更新 MySQL 配置（只更新 MySQL 部分，不更新 Redis 部分）
-    mysql_block_pattern = r'(_M\.mysql = \{[\s\S]*?)(host = "127\.0\.0\.1")'
-    replacement = r'\1host = "' + mysql_host + '"'
-    content = re.sub(mysql_block_pattern, replacement, content)
+    # 使用更灵活的正则表达式，匹配任何当前值（不仅仅是默认值）
     
-    content = re.sub(r'(port = )3306', r'\1' + mysql_port, content)
-    content = re.sub(r'(database = ")(waf_db)(")', r'\1' + mysql_database + r'\3', content)
-    content = re.sub(r'(user = ")(waf_user)(")', r'\1' + mysql_user + r'\3', content)
+    # 更新 host（匹配任何引号内的值）
+    content = re.sub(r'(_M\.mysql = \{[\s\S]*?)(host\s*=\s*")[^"]+(")', r'\1' + mysql_host + r'\2', content)
     
-    # 更新密码（需要转义引号和反斜杠）
+    # 更新 port（匹配任何数字，包括逗号）
+    content = re.sub(r'(_M\.mysql = \{[\s\S]*?)(port\s*=\s*)\d+', r'\1' + mysql_port, content)
+    
+    # 更新 database（匹配任何引号内的值）
+    content = re.sub(r'(_M\.mysql = \{[\s\S]*?)(database\s*=\s*")[^"]+(")', r'\1' + mysql_database + r'\2', content)
+    
+    # 更新 user（匹配任何引号内的值）
+    content = re.sub(r'(_M\.mysql = \{[\s\S]*?)(user\s*=\s*")[^"]+(")', r'\1' + mysql_user + r'\2', content)
+    
+    # 更新密码（需要转义引号和反斜杠，匹配任何引号内的值）
     escaped_password = mysql_password.replace('\\\\', '\\\\\\\\').replace('"', '\\\\"')
-    content = re.sub(r'(password = ")(waf_password)(")', r'\1' + escaped_password + r'\3', content)
+    content = re.sub(r'(_M\.mysql = \{[\s\S]*?)(password\s*=\s*")[^"]+(")', r'\1' + escaped_password + r'\2', content)
     
     with open(config_file, 'w', encoding='utf-8') as f:
         f.write(content)
@@ -82,11 +88,19 @@ PYTHON_EOF
         return $?
     else
         # 备用方案：使用 sed（简单情况，不支持特殊字符）
-        sed -i.bak "s|host = \"127.0.0.1\"|host = \"${mysql_host}\"|" "$CONFIG_FILE"
-        sed -i.bak "s|port = 3306|port = ${mysql_port}|" "$CONFIG_FILE"
-        sed -i.bak "s|database = \"waf_db\"|database = \"${mysql_database}\"|" "$CONFIG_FILE"
-        sed -i.bak "s|user = \"waf_user\"|user = \"${mysql_user}\"|" "$CONFIG_FILE"
-        echo -e "${YELLOW}警告: 请手动更新 MySQL 密码（密码可能包含特殊字符）${NC}"
+        # 使用更灵活的正则表达式，匹配任何当前值
+        sed -i.bak "s|host = \"[^\"]*\"|host = \"${mysql_host}\"|" "$CONFIG_FILE"
+        sed -i.bak "s|port = [0-9]*|port = ${mysql_port}|" "$CONFIG_FILE"
+        sed -i.bak "s|database = \"[^\"]*\"|database = \"${mysql_database}\"|" "$CONFIG_FILE"
+        sed -i.bak "s|user = \"[^\"]*\"|user = \"${mysql_user}\"|" "$CONFIG_FILE"
+        if [ -n "$mysql_password" ]; then
+            # 转义特殊字符用于 sed（转义 |、\、& 等）
+            escaped_password=$(echo "$mysql_password" | sed 's/[[\.*^$()+?{|]/\\&/g' | sed 's/|/\\|/g' | sed 's/\\/\\\\/g')
+            sed -i.bak "s|password = \"[^\"]*\"|password = \"${escaped_password}\"|" "$CONFIG_FILE"
+        else
+            # 即使密码为空，也更新配置文件（设置为空字符串）
+            sed -i.bak "s|password = \"[^\"]*\"|password = \"\"|" "$CONFIG_FILE"
+        fi
         return 0
     fi
 }
@@ -120,17 +134,25 @@ try:
         content = f.read()
     
     # 更新 Redis 配置（只更新 Redis 部分）
-    redis_block_pattern = r'(_M\.redis = \{[\s\S]*?)(host = "127\.0\.0\.1")'
-    replacement = r'\1host = "' + redis_host + '"'
-    content = re.sub(redis_block_pattern, replacement, content)
+    # 使用更灵活的正则表达式，匹配任何当前值（不仅仅是默认值）
     
-    content = re.sub(r'(port = )6379', r'\1' + redis_port, content)
-    content = re.sub(r'(db = )0', r'\1' + redis_db, content)
+    # 更新 host（匹配任何引号内的值）
+    content = re.sub(r'(_M\.redis = \{[\s\S]*?)(host\s*=\s*")[^"]+(")', r'\1' + redis_host + r'\2', content)
+    
+    # 更新 port（匹配任何数字，包括逗号）
+    content = re.sub(r'(_M\.redis = \{[\s\S]*?)(port\s*=\s*)\d+', r'\1' + redis_port, content)
+    
+    # 更新 db（匹配任何数字，包括逗号）
+    content = re.sub(r'(_M\.redis = \{[\s\S]*?)(db\s*=\s*)\d+', r'\1' + redis_db, content)
     
     # 更新密码
     if redis_password:
         escaped_password = redis_password.replace('\\\\', '\\\\\\\\').replace('"', '\\\\"')
-        content = re.sub(r'password = nil', f'password = "{escaped_password}"', content)
+        # 匹配 password = nil 或 password = "xxx" 两种情况
+        content = re.sub(r'(_M\.redis = \{[\s\S]*?)(password\s*=\s*)(nil|"[^"]*")', r'\1password = "' + escaped_password + '"', content)
+    else:
+        # 如果没有密码，设置为 nil
+        content = re.sub(r'(_M\.redis = \{[\s\S]*?)(password\s*=\s*)(nil|"[^"]*")', r'\1password = nil', content)
     
     with open(config_file, 'w', encoding='utf-8') as f:
         f.write(content)
@@ -143,11 +165,20 @@ PYTHON_EOF
         return $?
     else
         # 备用方案：使用 sed
-        sed -i.bak "s|host = \"127.0.0.1\"|host = \"${redis_host}\"|" "$CONFIG_FILE"
-        sed -i.bak "s|port = 6379|port = ${redis_port}|" "$CONFIG_FILE"
-        sed -i.bak "s|db = 0|db = ${redis_db}|" "$CONFIG_FILE"
+        # 使用更灵活的正则表达式，匹配任何当前值
+        sed -i.bak "s|host = \"[^\"]*\"|host = \"${redis_host}\"|" "$CONFIG_FILE"
+        sed -i.bak "s|port = [0-9]*|port = ${redis_port}|" "$CONFIG_FILE"
+        sed -i.bak "s|db = [0-9]*|db = ${redis_db}|" "$CONFIG_FILE"
         if [ -n "$redis_password" ]; then
-            echo -e "${YELLOW}警告: 请手动更新 Redis 密码${NC}"
+            # 转义特殊字符用于 sed（转义 |、\、& 等）
+            escaped_password=$(echo "$redis_password" | sed 's/[[\.*^$()+?{|]/\\&/g' | sed 's/|/\\|/g' | sed 's/\\/\\\\/g')
+            # 匹配 password = nil 或 password = "xxx"
+            sed -i.bak "s|password = nil|password = \"${escaped_password}\"|" "$CONFIG_FILE"
+            sed -i.bak "s|password = \"[^\"]*\"|password = \"${escaped_password}\"|" "$CONFIG_FILE"
+        else
+            # 如果没有密码，设置为 nil
+            sed -i.bak "s|password = nil|password = nil|" "$CONFIG_FILE"  # 已经是 nil，不需要修改
+            sed -i.bak "s|password = \"[^\"]*\"|password = nil|" "$CONFIG_FILE"
         fi
         return 0
     fi

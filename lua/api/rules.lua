@@ -7,6 +7,7 @@ local api_utils = require "api.utils"
 local cjson = require "cjson"
 local config = require "config"
 local feature_switches = require "waf.feature_switches"
+local audit_log = require "waf.audit_log"
 
 local _M = {}
 
@@ -44,9 +45,14 @@ function _M.create()
     
     local result, err = rule_management.create_rule(rule_data)
     if err then
+        -- 记录审计日志（失败）
+        audit_log.log_rule_action("create", result and result.id or nil, rule_data.rule_name, false, err)
         api_utils.json_response({error = err}, 400)
         return
     end
+    
+    -- 记录审计日志（成功）
+    audit_log.log_rule_action("create", result.id, rule_data.rule_name, true, nil)
     
     api_utils.json_response({
         success = true,
@@ -238,11 +244,20 @@ function _M.update()
         return
     end
     
+    -- 获取规则信息用于审计日志
+    local old_rule = rule_management.get_rule(rule_id)
+    local rule_name = old_rule and old_rule.rule_name or rule_data.rule_name or ""
+    
     local result, err = rule_management.update_rule(rule_id, rule_data)
     if err then
+        -- 记录审计日志（失败）
+        audit_log.log_rule_action("update", rule_id, rule_name, false, err)
         api_utils.json_response({error = err}, 400)
         return
     end
+    
+    -- 记录审计日志（成功）
+    audit_log.log_rule_action("update", rule_id, rule_name, true, nil)
     
     api_utils.json_response({
         success = true,
@@ -267,11 +282,20 @@ function _M.delete()
         return
     end
     
+    -- 获取规则信息用于审计日志
+    local old_rule = rule_management.get_rule(rule_id)
+    local rule_name = old_rule and old_rule.rule_name or ""
+    
     local result, err = rule_management.delete_rule(rule_id)
     if err then
+        -- 记录审计日志（失败）
+        audit_log.log_rule_action("delete", rule_id, rule_name, false, err)
         api_utils.json_response({error = err}, 400)
         return
     end
+    
+    -- 记录审计日志（成功）
+    audit_log.log_rule_action("delete", rule_id, rule_name, true, nil)
     
     api_utils.json_response({
         success = true,
@@ -291,11 +315,20 @@ function _M.enable()
         return
     end
     
+    -- 获取规则信息用于审计日志
+    local rule = rule_management.get_rule(rule_id)
+    local rule_name = rule and rule.rule_name or ""
+    
     local result, err = rule_management.enable_rule(rule_id)
     if err then
+        -- 记录审计日志（失败）
+        audit_log.log_rule_action("enable", rule_id, rule_name, false, err)
         api_utils.json_response({error = err}, 400)
         return
     end
+    
+    -- 记录审计日志（成功）
+    audit_log.log_rule_action("enable", rule_id, rule_name, true, nil)
     
     api_utils.json_response({
         success = true,
@@ -315,11 +348,20 @@ function _M.disable()
         return
     end
     
+    -- 获取规则信息用于审计日志
+    local rule = rule_management.get_rule(rule_id)
+    local rule_name = rule and rule.rule_name or ""
+    
     local result, err = rule_management.disable_rule(rule_id)
     if err then
+        -- 记录审计日志（失败）
+        audit_log.log_rule_action("disable", rule_id, rule_name, false, err)
         api_utils.json_response({error = err}, 400)
         return
     end
+    
+    -- 记录审计日志（成功）
+    audit_log.log_rule_action("disable", rule_id, rule_name, true, nil)
     
     api_utils.json_response({
         success = true,

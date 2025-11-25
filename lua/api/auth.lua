@@ -257,6 +257,9 @@ function _M.setup_totp()
         response.qr_url = qr_url
     end
     
+    -- 记录审计日志（设置TOTP）
+    audit_log.log_totp_action("setup", session.username, true, nil)
+    
     api_utils.json_response(response, 200)
 end
 
@@ -292,12 +295,17 @@ function _M.enable_totp()
     -- 保存 TOTP 密钥
     local ok = auth.set_user_totp_secret(session.username, secret)
     if not ok then
+        -- 记录审计日志（失败）
+        audit_log.log_totp_action("enable", session.username, false, "保存密钥失败")
         api_utils.json_response({
             error = "Internal Server Error",
             message = "保存密钥失败"
         }, 500)
         return
     end
+    
+    -- 记录审计日志（成功）
+    audit_log.log_totp_action("enable", session.username, true, nil)
     
     api_utils.json_response({
         success = true,
@@ -344,7 +352,19 @@ function _M.disable_totp()
     end
     
     -- 清除 TOTP 密钥
-    auth.set_user_totp_secret(session.username, nil)
+    local ok = auth.set_user_totp_secret(session.username, nil)
+    if not ok then
+        -- 记录审计日志（失败）
+        audit_log.log_totp_action("disable", session.username, false, "清除密钥失败")
+        api_utils.json_response({
+            error = "Internal Server Error",
+            message = "清除密钥失败"
+        }, 500)
+        return
+    end
+    
+    -- 记录审计日志（成功）
+    audit_log.log_totp_action("disable", session.username, true, nil)
     
     api_utils.json_response({
         success = true,

@@ -6,6 +6,7 @@ local config = require "config"
 local api_utils = require "api.utils"
 local feature_switches = require "waf.feature_switches"
 local cjson = require "cjson"
+local audit_log = require "waf.audit_log"
 
 local _M = {}
 
@@ -136,6 +137,8 @@ function _M.update()
     local enable_value = data.enable == true or data.enable == "true" or data.enable == 1
     local ok, err = feature_switches.update(feature_key, enable_value)
     if err then
+        -- 记录审计日志（失败）
+        audit_log.log_feature_action("update", feature_key, false, err)
         api_utils.json_response({error = "failed to update feature switch: " .. err}, 500)
         return
     end
@@ -147,6 +150,9 @@ function _M.update()
         feature_name = config.features[feature_key].feature_name or feature_key
         description = config.features[feature_key].description or ""
     end
+    
+    -- 记录审计日志（成功）
+    audit_log.log_feature_action("update", feature_key, true, nil)
     
     ngx.log(ngx.INFO, "Feature ", feature_key, " updated to ", enable_value and "enabled" or "disabled")
     
@@ -187,6 +193,8 @@ function _M.batch_update()
     -- 使用feature_switches模块批量更新
     local result, err = feature_switches.batch_update(data.features)
     if err then
+        -- 记录审计日志（失败）
+        audit_log.log_feature_action("batch_update", "multiple", false, err)
         api_utils.json_response({
             success = false,
             error = err,
@@ -195,6 +203,9 @@ function _M.batch_update()
         }, 500)
         return
     end
+    
+    -- 记录审计日志（成功）
+    audit_log.log_feature_action("batch_update", "multiple", true, nil)
     
     api_utils.json_response({
         success = true,

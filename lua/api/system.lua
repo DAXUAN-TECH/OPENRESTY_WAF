@@ -5,6 +5,7 @@
 local api_utils = require "api.utils"
 local cjson = require "cjson"
 local path_utils = require "waf.path_utils"
+local audit_log = require "waf.audit_log"
 
 local _M = {}
 
@@ -92,12 +93,17 @@ end
 function _M.reload_nginx()
     local ok, result = do_reload_nginx()
     if not ok then
+        -- 记录审计日志（失败）
+        audit_log.log_system_action("reload_nginx", "重新加载nginx配置", false, result)
         api_utils.json_response({
             success = false,
             error = result
         }, 500)
         return
     end
+    
+    -- 记录审计日志（成功）
+    audit_log.log_system_action("reload_nginx", "重新加载nginx配置", true, nil)
     
     api_utils.json_response({
         success = true,
@@ -131,6 +137,8 @@ function _M.test_nginx_config()
     local test_code = test_result:close()
     
     if test_code ~= 0 then
+        -- 记录审计日志（失败）
+        audit_log.log_system_action("test_nginx_config", "测试nginx配置", false, test_output)
         api_utils.json_response({
             success = false,
             error = "nginx配置测试失败",
@@ -138,6 +146,9 @@ function _M.test_nginx_config()
         }, 400)
         return
     end
+    
+    -- 记录审计日志（成功）
+    audit_log.log_system_action("test_nginx_config", "测试nginx配置", true, nil)
     
     api_utils.json_response({
         success = true,

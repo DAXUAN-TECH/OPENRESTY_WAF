@@ -7,6 +7,7 @@ local api_utils = require "api.utils"
 local cjson = require "cjson"
 local feature_switches = require "waf.feature_switches"
 local system_api = require "api.system"
+local audit_log = require "waf.audit_log"
 
 local _M = {}
 
@@ -43,9 +44,14 @@ function _M.create()
     
     local result, err = proxy_management.create_proxy(proxy_data)
     if err then
+        -- 记录审计日志（失败）
+        audit_log.log_proxy_action("create", nil, proxy_data.proxy_name, false, err)
         api_utils.json_response({error = err}, 400)
         return
     end
+    
+    -- 记录审计日志（成功）
+    audit_log.log_proxy_action("create", result.id, proxy_data.proxy_name, true, nil)
     
     -- 如果代理配置已启用，尝试触发nginx重载（异步，不阻塞响应）
     if proxy_data.status ~= 0 then
@@ -236,11 +242,20 @@ function _M.update()
         return
     end
     
+    -- 获取代理信息用于审计日志
+    local old_proxy = proxy_management.get_proxy(proxy_id)
+    local proxy_name = old_proxy and old_proxy.proxy_name or proxy_data.proxy_name or ""
+    
     local result, err = proxy_management.update_proxy(proxy_id, proxy_data)
     if err then
+        -- 记录审计日志（失败）
+        audit_log.log_proxy_action("update", proxy_id, proxy_name, false, err)
         api_utils.json_response({error = err}, 400)
         return
     end
+    
+    -- 记录审计日志（成功）
+    audit_log.log_proxy_action("update", proxy_id, proxy_name, true, nil)
     
     -- 如果代理配置已启用或状态改变，尝试触发nginx重载（异步，不阻塞响应）
     if proxy_data.status == 1 or proxy_data.status == nil then
@@ -278,11 +293,20 @@ function _M.delete()
         return
     end
     
+    -- 获取代理信息用于审计日志
+    local old_proxy = proxy_management.get_proxy(proxy_id)
+    local proxy_name = old_proxy and old_proxy.proxy_name or ""
+    
     local result, err = proxy_management.delete_proxy(proxy_id)
     if err then
+        -- 记录审计日志（失败）
+        audit_log.log_proxy_action("delete", proxy_id, proxy_name, false, err)
         api_utils.json_response({error = err}, 400)
         return
     end
+    
+    -- 记录审计日志（成功）
+    audit_log.log_proxy_action("delete", proxy_id, proxy_name, true, nil)
     
     api_utils.json_response({
         success = true,
@@ -302,11 +326,20 @@ function _M.enable()
         return
     end
     
+    -- 获取代理信息用于审计日志
+    local proxy = proxy_management.get_proxy(proxy_id)
+    local proxy_name = proxy and proxy.proxy_name or ""
+    
     local result, err = proxy_management.enable_proxy(proxy_id)
     if err then
+        -- 记录审计日志（失败）
+        audit_log.log_proxy_action("enable", proxy_id, proxy_name, false, err)
         api_utils.json_response({error = err}, 400)
         return
     end
+    
+    -- 记录审计日志（成功）
+    audit_log.log_proxy_action("enable", proxy_id, proxy_name, true, nil)
     
     -- 启用代理后，尝试触发nginx重载（异步，不阻塞响应）
     ngx.timer.at(0, function()
@@ -336,11 +369,20 @@ function _M.disable()
         return
     end
     
+    -- 获取代理信息用于审计日志
+    local proxy = proxy_management.get_proxy(proxy_id)
+    local proxy_name = proxy and proxy.proxy_name or ""
+    
     local result, err = proxy_management.disable_proxy(proxy_id)
     if err then
+        -- 记录审计日志（失败）
+        audit_log.log_proxy_action("disable", proxy_id, proxy_name, false, err)
         api_utils.json_response({error = err}, 400)
         return
     end
+    
+    -- 记录审计日志（成功）
+    audit_log.log_proxy_action("disable", proxy_id, proxy_name, true, nil)
     
     -- 禁用代理后，尝试触发nginx重载（异步，不阻塞响应）
     ngx.timer.at(0, function()

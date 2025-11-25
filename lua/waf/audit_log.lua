@@ -114,5 +114,53 @@ function _M.log_config_action(action_type, config_key, success, error_message)
     )
 end
 
+-- 记录功能开关操作
+function _M.log_feature_action(action_type, feature_key, success, error_message)
+    _M.log(
+        action_type,
+        "feature",
+        feature_key,
+        "功能开关操作: " .. feature_key,
+        success and "success" or "failed",
+        error_message
+    )
+end
+
+-- 记录代理操作
+function _M.log_proxy_action(action_type, proxy_id, proxy_name, success, error_message)
+    _M.log(
+        action_type,
+        "proxy",
+        tostring(proxy_id),
+        "代理操作: " .. (proxy_name or ""),
+        success and "success" or "failed",
+        error_message
+    )
+end
+
+-- 记录TOTP操作
+function _M.log_totp_action(action_type, username, success, error_message)
+    _M.log(
+        action_type,
+        "totp",
+        username,
+        "双因素认证操作: " .. action_type,
+        success and "success" or "failed",
+        error_message
+    )
+end
+
+-- 记录系统操作
+function _M.log_system_action(action_type, description, success, error_message)
+    _M.log(
+        action_type,
+        "system",
+        nil,
+        description or ("系统操作: " .. action_type),
+        success and "success" or "failed",
+        error_message
+    )
+end
+
 return _M
 

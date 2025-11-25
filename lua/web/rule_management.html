@@ -369,11 +369,42 @@
         
         .selected-geo {
             margin-top: 15px;
-            padding: 10px;
+            padding: 15px;
             background: #e8f5e9;
             border-radius: 4px;
             font-size: 14px;
-            color: #2e7d32;
+        }
+        
+        .selected-geo-item {
+            display: inline-flex;
+            align-items: center;
+            margin: 5px;
+            padding: 6px 12px;
+            background: white;
+            border: 1px solid #4CAF50;
+            border-radius: 4px;
+            font-size: 13px;
+        }
+        
+        .selected-geo-item .remove-btn {
+            margin-left: 8px;
+            padding: 2px 6px;
+            background: #f44336;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 12px;
+            line-height: 1;
+        }
+        
+        .selected-geo-item .remove-btn:hover {
+            background: #d32f2f;
+        }
+        
+        .selected-geo-empty {
+            color: #999;
+            font-style: italic;
         }
         
         .form-group textarea {
@@ -538,7 +569,10 @@
                         </div>
                     </div>
                     
-                    <div class="selected-geo" id="selected-geo" style="display: none;"></div>
+                    <div class="selected-geo" id="selected-geo" style="display: none;">
+                        <div style="margin-bottom: 10px; font-weight: bold; color: #333;">已选择的地域：</div>
+                        <div id="selected-geo-list"></div>
+                    </div>
                 </div>
                 
                 <div class="form-group">
@@ -1102,9 +1136,10 @@
         
         // 全局变量：存储地域数据
         let geoData = null;
-        let selectedCountry = null;
-        let selectedProvince = null;
-        let selectedCity = null;
+        // 多选支持：使用数组存储多个选择
+        let selectedCountries = [];  // [{code, name}]
+        let selectedProvinces = [];  // [{code, name, cities: []}]
+        let selectedCities = [];    // [{provinceCode, provinceName, city}]
         
         // 选择规则类型
         function selectRuleType(type) {
@@ -1146,9 +1181,9 @@
             
             // 清空规则值
             ruleValueInput.value = '';
-            selectedCountry = null;
-            selectedProvince = null;
-            selectedCity = null;
+            selectedCountries = [];
+            selectedProvinces = [];
+            selectedCities = [];
             updateSelectedGeo();
         }
         
@@ -1208,13 +1243,16 @@
                 section.innerHTML = `
                     <div class="continent-title">${continent.continent}</div>
                     <div class="country-buttons">
-                        ${continent.countries.map(country => `
-                            <button type="button" class="country-btn" 
+                        ${continent.countries.map(country => {
+                            const isSelected = selectedCountries.some(c => c.code === country.code);
+                            return `
+                            <button type="button" class="country-btn ${isSelected ? 'active' : ''}" 
                                     data-code="${country.code}" 
                                     onclick="selectCountry('${country.code}', '${country.name}')">
                                 ${country.name}
                             </button>
-                        `).join('')}
+                        `;
+                        }).join('')}
                     </div>
                 `;
                 foreignContainer.appendChild(section);
@@ -1230,30 +1268,36 @@
                 section.innerHTML = `
                     <div class="region-title">${region.region}</div>
                     <div class="province-buttons">
-                        ${region.provinces.map(province => `
-                            <button type="button" class="province-btn" 
+                        ${region.provinces.map(province => {
+                            const isSelected = selectedProvinces.some(p => p.code === province.code);
+                            return `
+                            <button type="button" class="province-btn ${isSelected ? 'active' : ''}" 
                                     data-code="${province.code}" 
                                     onclick="selectProvince('${province.code}', '${province.name}')">
                                 ${province.name}
                             </button>
-                        `).join('')}
+                        `;
+                        }).join('')}
                     </div>
                 `;
                 chinaContainer.appendChild(section);
             });
         }
         
-        // 选择国家（国外）
+        // 选择国家（国外）- 支持多选
         function selectCountry(code, name) {
-            selectedCountry = {code, name};
-            selectedProvince = null;
-            selectedCity = null;
+            const btn = document.querySelector(`.country-btn[data-code="${code}"]`);
+            const index = selectedCountries.findIndex(c => c.code === code);
             
-            // 更新按钮状态
-            document.querySelectorAll('.country-btn').forEach(btn => {
+            if (index >= 0) {
+                // 已选中，取消选择
+                selectedCountries.splice(index, 1);
                 btn.classList.remove('active');
-            });
-            document.querySelector(`.country-btn[data-code="${code}"]`).classList.add('active');
+            } else {
+                // 未选中，添加到选择列表
+                selectedCountries.push({code, name});
+                btn.classList.add('active');
+            }
             
             // 隐藏城市选择
             document.getElementById('cities-container').style.display = 'none';
@@ -1261,91 +1305,201 @@
             updateSelectedGeo();
         }
         
-        // 选择省份（国内）
+        // 选择省份（国内）- 支持多选
         async function selectProvince(code, name) {
-            selectedProvince = {code, name};
-            selectedCity = null;
+            const btn = document.querySelector(`.province-btn[data-code="${code}"]`);
+            const index = selectedProvinces.findIndex(p => p.code === code);
             
-            // 更新按钮状态
-            document.querySelectorAll('.province-btn').forEach(btn => {
+            if (index >= 0) {
+                // 已选中，取消选择
+                selectedProvinces.splice(index, 1);
+                // 同时移除该省份下的所有城市选择
+                selectedCities = selectedCities.filter(c => c.provinceCode !== code);
                 btn.classList.remove('active');
-            });
-            document.querySelector(`.province-btn[data-code="${code}"]`).classList.add('active');
-            
-            // 加载城市列表
-            try {
-                const response = await fetch(`/api/geo/cities?province_code=${code}`);
-                const data = await response.json();
-                
-                if (data.success && data.data && data.data.length > 0) {
-                    const citiesContainer = document.getElementById('cities-container');
-                    const citiesButtons = document.getElementById('cities-buttons');
-                    
-                    citiesButtons.innerHTML = data.data.map(city => `
-                        <button type="button" class="city-btn" 
-                                data-city="${city}" 
-                                onclick="selectCity('${city}')">
-                            ${city}
-                        </button>
-                    `).join('');
-                    
-                    citiesContainer.style.display = 'block';
-                } else {
+                // 如果当前显示的是该省份的城市，隐藏城市选择
+                const currentProvince = document.querySelector('.province-btn.active');
+                if (!currentProvince || currentProvince.dataset.code !== code) {
                     document.getElementById('cities-container').style.display = 'none';
                 }
-            } catch (error) {
-                console.error('Failed to load cities:', error);
-                document.getElementById('cities-container').style.display = 'none';
-            }
-            
-            updateSelectedGeo();
-        }
-        
-        // 选择城市（国内）
-        function selectCity(city) {
-            selectedCity = city;
-            
-            // 更新按钮状态
-            document.querySelectorAll('.city-btn').forEach(btn => {
-                btn.classList.remove('active');
-            });
-            document.querySelector(`.city-btn[data-city="${city}"]`).classList.add('active');
-            
-            updateSelectedGeo();
-        }
-        
-        // 更新选中的地域显示和规则值
-        function updateSelectedGeo() {
-            const selectedGeoDiv = document.getElementById('selected-geo');
-            const ruleValueInput = document.getElementById('create-rule-value');
-            
-            let ruleValue = '';
-            let displayText = '';
-            
-            if (selectedCountry) {
-                // 国外：国家代码
-                ruleValue = selectedCountry.code;
-                displayText = `已选择: ${selectedCountry.name} (${selectedCountry.code})`;
-            } else if (selectedProvince) {
-                if (selectedCity) {
-                    // 国内：国家:省份:城市
-                    ruleValue = `CN:${selectedProvince.code}:${selectedCity}`;
-                    displayText = `已选择: 中国 - ${selectedProvince.name} - ${selectedCity}`;
-                } else {
-                    // 国内：国家:省份
-                    ruleValue = `CN:${selectedProvince.code}`;
-                    displayText = `已选择: 中国 - ${selectedProvince.name}`;
+            } else {
+                // 未选中，添加到选择列表
+                selectedProvinces.push({code, name});
+                btn.classList.add('active');
+                
+                // 加载城市列表
+                try {
+                    const response = await fetch(`/api/geo/cities?province_code=${code}`);
+                    const data = await response.json();
+                    
+                    if (data.success && data.data && data.data.length > 0) {
+                        const citiesContainer = document.getElementById('cities-container');
+                        const citiesButtons = document.getElementById('cities-buttons');
+                        
+                        citiesButtons.innerHTML = data.data.map(city => {
+                            const isSelected = selectedCities.some(c => c.provinceCode === code && c.city === city);
+                            return `
+                                <button type="button" class="city-btn ${isSelected ? 'active' : ''}" 
+                                        data-city="${city}" 
+                                        data-province="${code}"
+                                        onclick="selectCity('${code}', '${name}', '${city}')">
+                                    ${city}
+                                </button>
+                            `;
+                        }).join('');
+                        
+                        citiesContainer.style.display = 'block';
+                    } else {
+                        document.getElementById('cities-container').style.display = 'none';
+                    }
+                } catch (error) {
+                    console.error('Failed to load cities:', error);
+                    document.getElementById('cities-container').style.display = 'none';
                 }
             }
             
-            if (ruleValue) {
-                ruleValueInput.value = ruleValue;
-                selectedGeoDiv.textContent = displayText;
+            updateSelectedGeo();
+        }
+        
+        // 选择城市（国内）- 支持多选
+        function selectCity(provinceCode, provinceName, city) {
+            const btn = document.querySelector(`.city-btn[data-city="${city}"][data-province="${provinceCode}"]`);
+            const index = selectedCities.findIndex(c => c.provinceCode === provinceCode && c.city === city);
+            
+            if (index >= 0) {
+                // 已选中，取消选择
+                selectedCities.splice(index, 1);
+                btn.classList.remove('active');
+            } else {
+                // 未选中，添加到选择列表
+                selectedCities.push({provinceCode, provinceName, city});
+                btn.classList.add('active');
+            }
+            
+            updateSelectedGeo();
+        }
+        
+        // 更新选中的地域显示和规则值（支持多选）
+        function updateSelectedGeo() {
+            const selectedGeoDiv = document.getElementById('selected-geo');
+            const selectedGeoList = document.getElementById('selected-geo-list');
+            const ruleValueInput = document.getElementById('create-rule-value');
+            
+            let ruleValues = [];
+            let displayItems = [];
+            
+            // 处理选中的国家
+            selectedCountries.forEach(country => {
+                ruleValues.push(country.code);
+                displayItems.push({
+                    type: 'country',
+                    code: country.code,
+                    name: country.name,
+                    display: `${country.name} (${country.code})`
+                });
+            });
+            
+            // 处理选中的省份（不包括已选择城市的省份）
+            selectedProvinces.forEach(province => {
+                const hasCity = selectedCities.some(c => c.provinceCode === province.code);
+                if (!hasCity) {
+                    ruleValues.push(`CN:${province.code}`);
+                    displayItems.push({
+                        type: 'province',
+                        code: province.code,
+                        name: province.name,
+                        display: `中国 - ${province.name}`
+                    });
+                }
+            });
+            
+            // 处理选中的城市
+            selectedCities.forEach(city => {
+                ruleValues.push(`CN:${city.provinceCode}:${city.city}`);
+                displayItems.push({
+                    type: 'city',
+                    code: city.provinceCode,
+                    name: city.city,
+                    provinceName: city.provinceName,
+                    display: `中国 - ${city.provinceName} - ${city.city}`
+                });
+            });
+            
+            // 更新规则值（用逗号分隔）
+            if (ruleValues.length > 0) {
+                ruleValueInput.value = ruleValues.join(',');
                 selectedGeoDiv.style.display = 'block';
+                
+                // 显示已选择的地域列表
+                if (displayItems.length > 0) {
+                    selectedGeoList.innerHTML = displayItems.map((item, index) => `
+                        <div class="selected-geo-item">
+                            <span>${item.display}</span>
+                            <button type="button" class="remove-btn" onclick="removeSelectedGeo(${index}, '${item.type}')" title="移除">×</button>
+                        </div>
+                    `).join('');
+                } else {
+                    selectedGeoList.innerHTML = '<div class="selected-geo-empty">暂无选择</div>';
+                }
             } else {
                 ruleValueInput.value = '';
                 selectedGeoDiv.style.display = 'none';
+                selectedGeoList.innerHTML = '';
             }
+        }
+        
+        // 移除选中的地域
+        function removeSelectedGeo(index, type) {
+            // 重新构建显示项列表以获取正确的索引
+            let displayItems = [];
+            
+            // 处理选中的国家
+            selectedCountries.forEach(country => {
+                displayItems.push({type: 'country', code: country.code, name: country.name});
+            });
+            
+            // 处理选中的省份（不包括已选择城市的省份）
+            selectedProvinces.forEach(province => {
+                const hasCity = selectedCities.some(c => c.provinceCode === province.code);
+                if (!hasCity) {
+                    displayItems.push({type: 'province', code: province.code, name: province.name});
+                }
+            });
+            
+            // 处理选中的城市
+            selectedCities.forEach(city => {
+                displayItems.push({type: 'city', code: city.provinceCode, name: city.city, provinceName: city.provinceName});
+            });
+            
+            const item = displayItems[index];
+            if (!item) return;
+            
+            if (item.type === 'country') {
+                const countryIndex = selectedCountries.findIndex(c => c.code === item.code);
+                if (countryIndex >= 0) {
+                    selectedCountries.splice(countryIndex, 1);
+                    // 更新按钮状态
+                    const btn = document.querySelector(`.country-btn[data-code="${item.code}"]`);
+                    if (btn) btn.classList.remove('active');
+                }
+            } else if (item.type === 'province') {
+                const provinceIndex = selectedProvinces.findIndex(p => p.code === item.code);
+                if (provinceIndex >= 0) {
+                    selectedProvinces.splice(provinceIndex, 1);
+                    // 更新按钮状态
+                    const btn = document.querySelector(`.province-btn[data-code="${item.code}"]`);
+                    if (btn) btn.classList.remove('active');
+                }
+            } else if (item.type === 'city') {
+                const cityIndex = selectedCities.findIndex(c => c.provinceCode === item.code && c.city === item.name);
+                if (cityIndex >= 0) {
+                    selectedCities.splice(cityIndex, 1);
+                    // 更新按钮状态
+                    const btn = document.querySelector(`.city-btn[data-city="${item.name}"][data-province="${item.code}"]`);
+                    if (btn) btn.classList.remove('active');
+                }
+            }
+            
+            updateSelectedGeo();
         }
         
         // 重置创建表单
@@ -1365,10 +1519,11 @@
             ruleValueInput.placeholder = '例如: 192.168.1.100 或 192.168.1.0/24 或 192.168.1.1-192.168.1.100';
             ruleValueHint.textContent = '支持单个IP（如：192.168.1.100）或IP段（如：192.168.1.0/24 或 192.168.1.1-192.168.1.100）';
             // 清空地域选择
-            selectedCountry = null;
-            selectedProvince = null;
-            selectedCity = null;
+            selectedCountries = [];
+            selectedProvinces = [];
+            selectedCities = [];
             document.getElementById('selected-geo').style.display = 'none';
+            document.getElementById('selected-geo-list').innerHTML = '';
             document.getElementById('cities-container').style.display = 'none';
             // 重置按钮状态
             document.querySelectorAll('.country-btn, .province-btn, .city-btn').forEach(btn => {

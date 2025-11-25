@@ -41,14 +41,11 @@ function _M.generate_token(user_id)
         if not authenticated then
             return nil
         end
-        -- 从会话中获取用户ID（优先使用 user_id，如果没有则使用 username 作为标识）
-        -- 注意：user_id 应该是整数，如果 session 中没有 user_id，使用 username 作为字符串标识
+        -- 从会话中获取用户ID（优先使用 user_id，如果没有则使用 username）
         user_id = session.user_id or session.username
-        -- 确保 user_id 是数字或字符串
-        if type(user_id) == "number" then
-            -- user_id 是数字，直接使用
-        elseif type(user_id) == "string" then
-            -- user_id 是字符串（可能是 username），需要转换为用户ID
+        
+        -- 如果 user_id 是字符串（可能是 username），需要转换为用户ID
+        if type(user_id) == "string" then
             -- 从数据库查询用户ID
             local ok, user_res = pcall(function()
                 local sql = [[
@@ -59,18 +56,9 @@ function _M.generate_token(user_id)
             if ok and user_res and #user_res > 0 then
                 user_id = user_res[1].id
             else
-                -- 如果查询失败，使用 username 作为字符串标识（但数据库字段是整数，会报错）
-                -- 这种情况下，不保存到数据库，只保存到缓存
-                ngx.log(ngx.WARN, "csrf.generate_token: failed to get user_id for username: ", user_id, ", using cache only")
-                local token = generate_csrf_token()
-                local expires_at = ngx.time() + CSRF_CACHE_TTL
-                local cache_key = CSRF_CACHE_PREFIX .. token
-                local token_data = {
-                    user_id = user_id,  -- 使用 username 作为标识
-                    expires_at = expires_at
-                }
-                cache:set(cache_key, cjson.encode(token_data), CSRF_CACHE_TTL)
-                return token
+                -- 如果查询失败，记录错误但不保存到数据库
+                ngx.log(ngx.ERR, "csrf.generate_token: failed to get user_id for username: ", user_id)
+                return nil
             end
         end
     end

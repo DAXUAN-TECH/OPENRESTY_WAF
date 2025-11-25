@@ -29,7 +29,20 @@ local function is_trusted_proxy(ip)
         return cached == "1"
     end
 
-    -- 查询数据库
+    -- 检查是否在 log_by_lua 阶段（不能使用 TCP API）
+    local is_log_phase = false
+    local ok, phase = pcall(ngx.get_phase)
+    if ok and phase == "log" then
+        is_log_phase = true
+    end
+    
+    if is_log_phase then
+        -- 在 log_by_lua 阶段，只能使用缓存
+        -- 如果缓存中没有，默认返回 false（安全起见）
+        return false
+    end
+
+    -- 查询数据库（不在 log_by_lua 阶段时）
     local mysql_pool = require "waf.mysql_pool"
     local sql = [[
         SELECT proxy_ip FROM waf_trusted_proxies 
@@ -38,6 +51,11 @@ local function is_trusted_proxy(ip)
     
     local res, err = mysql_pool.query(sql)
     if err then
+        -- 检查是否是 TCP API 被禁用的错误
+        if err:match("API disabled") or err:match("log_by_lua") then
+            -- 在 log_by_lua 阶段，只能使用缓存
+            return false
+        end
         ngx.log(ngx.ERR, "trusted proxy query error: ", err)
         return false
     end

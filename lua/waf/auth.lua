@@ -5,6 +5,21 @@
 local cjson = require "cjson"
 local password_utils = require "waf.password_utils"
 
+-- 加载 bit 库（用于位运算）
+local bit = bit
+if not bit then
+    local ok, bit_module = pcall(require, "bit")
+    if ok and bit_module then
+        bit = bit_module
+    else
+        -- 如果 bit 库不可用，使用数学运算替代
+        bit = {
+            rshift = function(x, n) return math.floor(x / (2^n)) end,
+            band = function(x, y) return x % (2^32) & y % (2^32) end
+        }
+    end
+end
+
 local _M = {}
 local cache = ngx.shared.waf_cache
 
@@ -36,8 +51,18 @@ local function generate_session_id()
         local hex_string = ""
         for i = 1, #random_bytes do
             local byte = string.byte(random_bytes, i)
-            hex_string = hex_string .. hex_chars:sub((byte >> 4) + 1, (byte >> 4) + 1)
-            hex_string = hex_string .. hex_chars:sub((byte & 0xF) + 1, (byte & 0xF) + 1)
+            -- 使用 bit 库进行位运算（如果可用），否则使用数学运算
+            local high_nibble, low_nibble
+            if bit and bit.rshift and bit.band then
+                high_nibble = bit.rshift(byte, 4)
+                low_nibble = bit.band(byte, 0xF)
+            else
+                -- 回退到数学运算
+                high_nibble = math.floor(byte / 16)
+                low_nibble = byte % 16
+            end
+            hex_string = hex_string .. hex_chars:sub(high_nibble + 1, high_nibble + 1)
+            hex_string = hex_string .. hex_chars:sub(low_nibble + 1, low_nibble + 1)
         end
         return hex_string
     end

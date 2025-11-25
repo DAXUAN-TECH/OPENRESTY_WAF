@@ -316,7 +316,9 @@ if [ -f "${OPENRESTY_PREFIX}/bin/openresty" ]; then
                 
                 # 检查是否有重复的 set 指令
                 set_count=$(grep -c "set \$project_root" "$NGINX_CONF_DIR/nginx.conf" 2>/dev/null || echo "0")
-                if [ "$set_count" -gt 1 ]; then
+                # 清理 set_count 中的换行符和空格
+                set_count=$(echo "$set_count" | tr -d '\n\r ' | head -1)
+                if [ -n "$set_count" ] && [ "$set_count" -gt 1 ] 2>/dev/null; then
                     echo ""
                     echo -e "${RED}⚠ 检测到重复的 set \$project_root 指令（共 $set_count 个）${NC}"
                     echo "所有 set \$project_root 指令位置："

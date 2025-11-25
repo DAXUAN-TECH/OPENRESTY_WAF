@@ -172,6 +172,21 @@ function _M.me()
     end
 end
 
+-- 获取当前用户的 TOTP 状态
+function _M.get_totp_status()
+    local session = auth.require_auth()
+    if not session then
+        return
+    end
+    
+    local has_totp = auth.user_has_totp(session.username)
+    
+    api_utils.json_response({
+        enabled = has_totp,
+        username = session.username
+    }, 200)
+end
+
 -- 生成 TOTP 密钥和 QR 码
 function _M.setup_totp()
     local session = auth.require_auth()

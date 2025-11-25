@@ -611,6 +611,8 @@ function _M.route_auth(path, method)
         return auth_api.check()
     elseif path == "/api/auth/me" then
         return auth_api.me()
+    elseif path == "/api/auth/totp/status" then
+        return auth_api.get_totp_status()
     elseif path == "/api/auth/totp/setup" then
         return auth_api.setup_totp()
     elseif path == "/api/auth/totp/enable" then

@@ -213,6 +213,11 @@ function _M.route()
         return serve_html_file("proxy_management.html")
     end
     
+    -- 用户设置页面
+    if path == "/admin/settings" or path == "/admin/profile" then
+        return serve_html_file("user_settings.html")
+    end
+    
     -- 默认首页（根路径和管理首页）
     if path == "/" or path == "/admin" or path == "/admin/" then
         ngx.status = 200

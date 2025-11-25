@@ -145,29 +145,105 @@ install_dependencies() {
 }
 
 # 安装 Redis（CentOS/RHEL/Fedora/Rocky/AlmaLinux/Oracle Linux/Amazon Linux）
+# 按照官方文档：https://redis.io/docs/latest/operate/oss_and_stack/install/install-stack/rpm/
 install_redis_redhat() {
     echo -e "${BLUE}[4/7] 安装 Redis（RedHat 系列）...${NC}"
     
     INSTALL_SUCCESS=0
     
-    # 尝试使用 EPEL 仓库安装（某些系统需要）
-    if ! rpm -q epel-release &> /dev/null; then
-        echo "尝试安装 EPEL 仓库..."
-        if command -v dnf &> /dev/null; then
-            dnf install -y epel-release 2>/dev/null || yum install -y epel-release 2>/dev/null || true
-        else
-            yum install -y epel-release 2>/dev/null || true
+    # 按照官方文档，仅支持 Rocky Linux 8/9 和 AlmaLinux 8/9
+    # 对于其他 RedHat 系列系统，先尝试官方方法，失败则使用 EPEL 或源码编译
+    local use_official_repo=0
+    local repo_baseurl=""
+    
+    # 检测是否支持官方仓库（Rocky Linux 8/9 或 AlmaLinux 8/9）
+    if [ "$OS" = "rocky" ] || [ "$OS" = "almalinux" ]; then
+        # 检测版本号（主版本号）
+        local major_version=$(echo "$OS_VERSION" | cut -d. -f1)
+        if [ "$major_version" = "9" ]; then
+            use_official_repo=1
+            repo_baseurl="http://packages.redis.io/rpm/rockylinux9"
+            echo -e "${BLUE}检测到 ${OS} ${OS_VERSION}，使用官方 Redis 仓库（rockylinux9）${NC}"
+        elif [ "$major_version" = "8" ]; then
+            use_official_repo=1
+            repo_baseurl="http://packages.redis.io/rpm/rockylinux8"
+            echo -e "${BLUE}检测到 ${OS} ${OS_VERSION}，使用官方 Redis 仓库（rockylinux8）${NC}"
         fi
     fi
     
-    # 尝试使用包管理器安装
-    if command -v dnf &> /dev/null; then
-        if dnf install -y redis 2>&1; then
-            INSTALL_SUCCESS=1
+    # 如果支持官方仓库，按照官方文档安装
+    if [ $use_official_repo -eq 1 ]; then
+        echo -e "${BLUE}[步骤1/3] 创建 Redis 官方仓库配置文件...${NC}"
+        
+        # 创建仓库配置文件
+        cat > /etc/yum.repos.d/redis.repo <<EOF
+[Redis]
+name=Redis
+baseurl=${repo_baseurl}
+enabled=1
+gpgcheck=1
+EOF
+        
+        if [ -f /etc/yum.repos.d/redis.repo ]; then
+            echo -e "${GREEN}✓ Redis 仓库配置文件已创建${NC}"
+        else
+            echo -e "${RED}✗ 创建仓库配置文件失败${NC}"
+            INSTALL_SUCCESS=0
+        fi
+        
+        if [ $INSTALL_SUCCESS -eq 0 ]; then
+            echo -e "${BLUE}[步骤2/3] 导入 Redis GPG 密钥...${NC}"
+            
+            # 下载并导入 GPG 密钥
+            if curl -fsSL https://packages.redis.io/gpg > /tmp/redis.key 2>/dev/null; then
+                if rpm --import /tmp/redis.key 2>/dev/null; then
+                    rm -f /tmp/redis.key
+                    echo -e "${GREEN}✓ GPG 密钥已导入${NC}"
+                else
+                    echo -e "${YELLOW}⚠ GPG 密钥导入失败，继续尝试安装${NC}"
+                    rm -f /tmp/redis.key
+                fi
+            else
+                echo -e "${YELLOW}⚠ 下载 GPG 密钥失败，继续尝试安装${NC}"
+            fi
+        fi
+        
+        if [ $INSTALL_SUCCESS -eq 0 ]; then
+            echo -e "${BLUE}[步骤3/3] 安装 Redis...${NC}"
+            
+            # 使用 yum 或 dnf 安装
+            if command -v dnf &> /dev/null; then
+                if dnf install -y redis 2>&1; then
+                    INSTALL_SUCCESS=1
+                fi
+            else
+                if yum install -y redis 2>&1; then
+                    INSTALL_SUCCESS=1
+                fi
+            fi
         fi
     else
-        if yum install -y redis 2>&1; then
-            INSTALL_SUCCESS=1
+        # 对于不支持官方仓库的系统，先尝试 EPEL，失败则使用源码编译
+        echo -e "${BLUE}检测到 ${OS} ${OS_VERSION}，官方仓库不支持，尝试使用 EPEL 仓库...${NC}"
+        
+        if ! rpm -q epel-release &> /dev/null; then
+            echo "尝试安装 EPEL 仓库..."
+            if command -v dnf &> /dev/null; then
+                dnf install -y epel-release 2>/dev/null || yum install -y epel-release 2>/dev/null || true
+            else
+                yum install -y epel-release 2>/dev/null || true
+            fi
+        fi
+        
+        # 尝试使用包管理器安装
+        if command -v dnf &> /dev/null; then
+            if dnf install -y redis 2>&1; then
+                INSTALL_SUCCESS=1
+            fi
+        else
+            if yum install -y redis 2>&1; then
+                INSTALL_SUCCESS=1
+            fi
         fi
     fi
     
@@ -181,22 +257,103 @@ install_redis_redhat() {
 }
 
 # 安装 Redis（Ubuntu/Debian/Linux Mint/Kali Linux）
+# 按照官方文档：https://redis.io/docs/latest/operate/oss_and_stack/install/install-stack/apt/
 install_redis_debian() {
     echo -e "${BLUE}[4/7] 安装 Redis（Debian 系列）...${NC}"
     
     INSTALL_SUCCESS=0
     
-    # 尝试使用包管理器安装
-    if apt-get install -y redis-server 2>&1; then
+    echo -e "${BLUE}[步骤1/5] 安装依赖工具（lsb-release, curl, gpg）...${NC}"
+    if ! apt-get install -y lsb-release curl gpg 2>&1; then
+        echo -e "${YELLOW}⚠ 安装依赖工具失败，尝试继续...${NC}"
+    else
+        echo -e "${GREEN}✓ 依赖工具安装完成${NC}"
+    fi
+    
+    echo -e "${BLUE}[步骤2/5] 下载并导入 Redis GPG 密钥...${NC}"
+    if curl -fsSL https://packages.redis.io/gpg | gpg --dearmor -o /usr/share/keyrings/redis-archive-keyring.gpg 2>/dev/null; then
+        # 设置权限
+        chmod 644 /usr/share/keyrings/redis-archive-keyring.gpg 2>/dev/null || true
+        echo -e "${GREEN}✓ GPG 密钥已导入${NC}"
+    else
+        echo -e "${YELLOW}⚠ GPG 密钥导入失败，尝试继续...${NC}"
+    fi
+    
+    echo -e "${BLUE}[步骤3/5] 添加 Redis 官方仓库...${NC}"
+    # 获取发行版代号
+    local dist_codename=""
+    if command -v lsb_release &> /dev/null; then
+        dist_codename=$(lsb_release -cs 2>/dev/null || echo "")
+    fi
+    
+    # 如果无法获取代号，尝试从 /etc/os-release 获取
+    if [ -z "$dist_codename" ] && [ -f /etc/os-release ]; then
+        . /etc/os-release
+        case "$VERSION_CODENAME" in
+            "")
+                # 如果没有 VERSION_CODENAME，尝试根据版本号推断
+                case "$OS" in
+                    ubuntu)
+                        case "$VERSION_ID" in
+                            "22.04") dist_codename="jammy" ;;
+                            "20.04") dist_codename="focal" ;;
+                            "18.04") dist_codename="bionic" ;;
+                            "16.04") dist_codename="xenial" ;;
+                        esac
+                        ;;
+                    debian)
+                        case "$VERSION_ID" in
+                            "12") dist_codename="bookworm" ;;
+                            "11") dist_codename="bullseye" ;;
+                            "10") dist_codename="buster" ;;
+                            "9") dist_codename="stretch" ;;
+                        esac
+                        ;;
+                esac
+                ;;
+            *)
+                dist_codename="$VERSION_CODENAME"
+                ;;
+        esac
+    fi
+    
+    if [ -z "$dist_codename" ]; then
+        echo -e "${YELLOW}⚠ 无法确定发行版代号，尝试使用通用方法...${NC}"
+        # 尝试添加仓库（可能会失败，但继续尝试）
+        echo "deb [signed-by=/usr/share/keyrings/redis-archive-keyring.gpg] https://packages.redis.io/deb $(lsb_release -cs) main" | tee /etc/apt/sources.list.d/redis.list >/dev/null 2>&1 || true
+    else
+        echo "deb [signed-by=/usr/share/keyrings/redis-archive-keyring.gpg] https://packages.redis.io/deb ${dist_codename} main" | tee /etc/apt/sources.list.d/redis.list >/dev/null 2>&1
+        if [ -f /etc/apt/sources.list.d/redis.list ]; then
+            echo -e "${GREEN}✓ Redis 仓库已添加（${dist_codename}）${NC}"
+        else
+            echo -e "${YELLOW}⚠ 添加仓库失败，尝试继续...${NC}"
+        fi
+    fi
+    
+    echo -e "${BLUE}[步骤4/5] 更新包列表...${NC}"
+    if apt-get update 2>&1; then
+        echo -e "${GREEN}✓ 包列表已更新${NC}"
+    else
+        echo -e "${YELLOW}⚠ 包列表更新失败，尝试继续安装...${NC}"
+    fi
+    
+    echo -e "${BLUE}[步骤5/5] 安装 Redis...${NC}"
+    if apt-get install -y redis 2>&1; then
         INSTALL_SUCCESS=1
+        echo -e "${GREEN}✓ Redis 安装完成（官方仓库）${NC}"
+    else
+        echo -e "${YELLOW}⚠ 官方仓库安装失败，尝试使用系统默认仓库...${NC}"
+        # 尝试使用系统默认的 redis-server 包
+        if apt-get install -y redis-server 2>&1; then
+            INSTALL_SUCCESS=1
+            echo -e "${GREEN}✓ Redis 安装完成（系统默认仓库）${NC}"
+        fi
     fi
     
     # 如果包管理器安装失败，从源码编译
     if [ $INSTALL_SUCCESS -eq 0 ]; then
         echo -e "${YELLOW}⚠ 包管理器安装失败，从源码编译安装...${NC}"
         install_redis_from_source
-    else
-        echo -e "${GREEN}✓ Redis 安装完成（包管理器）${NC}"
     fi
 }
 
@@ -642,26 +799,50 @@ start_redis() {
     if command -v systemctl &> /dev/null; then
         systemctl daemon-reload
         
-        # 启用开机自启动
-        if systemctl enable redis >/dev/null 2>&1 || systemctl enable redis-server >/dev/null 2>&1; then
-            echo -e "${GREEN}✓ 已启用 Redis 开机自启动${NC}"
+        # 按照官方文档，启用开机自启动
+        # Ubuntu/Debian 使用 redis-server，RedHat 使用 redis
+        if systemctl enable redis-server >/dev/null 2>&1; then
+            echo -e "${GREEN}✓ 已启用 Redis 开机自启动（redis-server）${NC}"
+        elif systemctl enable redis >/dev/null 2>&1; then
+            echo -e "${GREEN}✓ 已启用 Redis 开机自启动（redis）${NC}"
         else
             echo -e "${YELLOW}⚠ 启用开机自启动失败，将在服务启动后重试${NC}"
         fi
         
-        if systemctl start redis 2>/dev/null || systemctl start redis-server 2>/dev/null; then
+        # 按照官方文档，启动服务
+        if systemctl start redis-server >/dev/null 2>&1; then
             # 等待服务启动
             sleep 2
             # 检查服务状态
-            if systemctl is-active --quiet redis 2>/dev/null || systemctl is-active --quiet redis-server 2>/dev/null; then
+            if systemctl is-active --quiet redis-server 2>/dev/null; then
                 service_started=true
-                echo -e "${GREEN}✓ Redis 服务启动成功（systemd）${NC}"
+                echo -e "${GREEN}✓ Redis 服务启动成功（redis-server）${NC}"
                 # 再次确保开机自启动已启用
-                systemctl enable redis >/dev/null 2>&1 || systemctl enable redis-server >/dev/null 2>&1 || true
+                systemctl enable redis-server >/dev/null 2>&1 || true
             else
-                echo -e "${YELLOW}⚠ systemd 服务启动后状态异常${NC}"
+                echo -e "${YELLOW}⚠ redis-server 服务启动后状态异常，尝试 redis 服务...${NC}"
             fi
-        else
+        fi
+        
+        # 如果 redis-server 不存在，尝试 redis
+        if [ "$service_started" = false ]; then
+            if systemctl start redis >/dev/null 2>&1; then
+                # 等待服务启动
+                sleep 2
+                # 检查服务状态
+                if systemctl is-active --quiet redis 2>/dev/null; then
+                    service_started=true
+                    echo -e "${GREEN}✓ Redis 服务启动成功（redis）${NC}"
+                    # 再次确保开机自启动已启用
+                    systemctl enable redis >/dev/null 2>&1 || true
+                else
+                    echo -e "${YELLOW}⚠ redis 服务启动后状态异常${NC}"
+                fi
+            fi
+        fi
+        
+        # 如果官方服务启动失败，尝试直接启动
+        if [ "$service_started" = false ]; then
             echo -e "${YELLOW}⚠ systemd 服务启动失败，尝试直接启动${NC}"
             # 如果服务启动失败，尝试直接启动
             if command -v redis-server &> /dev/null; then

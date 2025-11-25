@@ -10,6 +10,21 @@ local path_utils = require "waf.path_utils"
 
 local _M = {}
 
+-- HTML 转义函数（OpenResty 没有内置的 ngx.escape_html）
+local function escape_html(text)
+    if not text then
+        return ""
+    end
+    text = tostring(text)
+    -- 转义 HTML 特殊字符
+    text = text:gsub("&", "&amp;")
+    text = text:gsub("<", "&lt;")
+    text = text:gsub(">", "&gt;")
+    text = text:gsub('"', "&quot;")
+    text = text:gsub("'", "&#39;")
+    return text
+end
+
 -- 读取并返回HTML文件
 local function serve_html_file(filename)
     local project_root = path_utils.get_project_root()
@@ -67,11 +82,11 @@ debug.getinfo: ]] .. (debug.getinfo(1, "S").source or "nil") .. [[
         ngx.say([[
 <html><body>
 <h1>404 Not Found</h1>
-<p>File not found: ]] .. ngx.escape_html(file_path) .. [[</p>
-<p>Project root: ]] .. ngx.escape_html(project_root) .. [[</p>
+<p>File not found: ]] .. escape_html(file_path) .. [[</p>
+<p>Project root: ]] .. escape_html(project_root) .. [[</p>
 <p>Please check:</p>
 <ul>
-    <li>File exists: ]] .. ngx.escape_html(file_path) .. [[</li>
+    <li>File exists: ]] .. escape_html(file_path) .. [[</li>
     <li>File permissions</li>
     <li>Project root path configuration</li>
 </ul>
@@ -203,7 +218,7 @@ function _M.route()
     <div class="header">
         <h1>WAF 管理界面</h1>
         <div class="user-info">
-            欢迎，]] .. ngx.escape_html(username) .. [[
+            欢迎，]] .. escape_html(username) .. [[
             <a href="/api/auth/logout">退出</a>
         </div>
     </div>
@@ -224,7 +239,7 @@ function _M.route()
     -- 未匹配的路径
     ngx.status = 404
     ngx.header.content_type = "text/html; charset=utf-8"
-    ngx.say("<html><body><h1>404 Not Found</h1><p>页面不存在: " .. ngx.escape_html(path) .. "</p></body></html>")
+    ngx.say("<html><body><h1>404 Not Found</h1><p>页面不存在: " .. escape_html(path) .. "</p></body></html>")
 end
 
 return _M

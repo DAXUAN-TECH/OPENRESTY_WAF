@@ -573,6 +573,16 @@
                         return;
                     }
                     
+                    // 如果 data.data 存在但没有 rules 字段，使用空数组
+                    if (!data.data.hasOwnProperty('rules')) {
+                        console.warn('API response missing rules field, using empty array');
+                        renderRulesTable([]);
+                        if (data.data.total !== undefined) {
+                            renderPagination(data.data, 'pagination', loadRules);
+                        }
+                        return;
+                    }
+                    
                     // 确保 rules 是数组
                     const rules = data.data.rules;
                     console.log('=== Rules Data Debug ===');

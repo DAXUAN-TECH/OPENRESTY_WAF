@@ -16,9 +16,40 @@ local function escape_html(text)
     return web_utils.escape_html(text)
 end
 
+-- 获取项目根目录（优先使用备用路径检测方法）
+local function get_project_root_smart()
+    -- 优先从当前文件路径推断（最可靠的方法）
+    local current_file = debug.getinfo(1, "S").source
+    if current_file then
+        current_file = current_file:gsub("^@", "")
+        local project_root = current_file:match("(.+)/lua/web/handler%.lua")
+        if project_root and project_root ~= "" then
+            -- 验证路径是否存在（检查 lua/web 目录）
+            local test_file = io.open(project_root .. "/lua/web/handler.lua", "r")
+            if test_file then
+                test_file:close()
+                return project_root
+            end
+        end
+    end
+    
+    -- 如果备用路径失败，尝试使用 path_utils
+    local project_root = path_utils.get_project_root()
+    if project_root then
+        -- 验证路径是否正确（检查 lua/web 目录）
+        local test_file = io.open(project_root .. "/lua/web/handler.lua", "r")
+        if test_file then
+            test_file:close()
+            return project_root
+        end
+    end
+    
+    return nil
+end
+
 -- 读取HTML文件内容
 local function read_html_file(filename)
-    local project_root = path_utils.get_project_root()
+    local project_root = get_project_root_smart()
     
     if not project_root then
         ngx.log(ngx.ERR, "Failed to determine project root for serving HTML file: ", filename)
@@ -39,31 +70,7 @@ local function read_html_file(filename)
             return nil
         end
     else
-        -- 记录详细的错误信息
         ngx.log(ngx.ERR, "HTML file not found: ", file_path, " (project_root: ", project_root, ")")
-        
-        -- 尝试备用路径（如果项目根目录检测有问题）
-        -- 尝试从当前文件路径推断
-        local current_file = debug.getinfo(1, "S").source
-        if current_file then
-            current_file = current_file:gsub("^@", "")
-            local alt_project_root = current_file:match("(.+)/lua/web/handler%.lua")
-            if alt_project_root and alt_project_root ~= project_root then
-                local alt_file_path = alt_project_root .. "/lua/web/" .. filename
-                local alt_file = io.open(alt_file_path, "r")
-                if alt_file then
-                    ngx.log(ngx.WARN, "Using alternative path for HTML file: ", alt_file_path)
-                    local content = alt_file:read("*all")
-                    alt_file:close()
-                    if content then
-                        return content
-                    end
-                else
-                    ngx.log(ngx.ERR, "Alternative path also failed: ", alt_file_path)
-                end
-            end
-        end
-        
         return nil
     end
 end

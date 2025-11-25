@@ -29,13 +29,6 @@ REDIS_VERSION="${REDIS_VERSION:-7.0}"
 REDIS_PASSWORD="${REDIS_PASSWORD:-}"
 REDIS_PORT="${REDIS_PORT:-6379}"
 
-# 外部 Redis 模式标志
-EXTERNAL_REDIS_MODE=0
-EXTERNAL_REDIS_HOST=""
-EXTERNAL_REDIS_PORT=""
-EXTERNAL_REDIS_PASSWORD=""
-SKIP_INSTALL=0
-
 # 硬件信息变量（将在检测后填充）
 CPU_CORES=0
 TOTAL_MEM_GB=0
@@ -43,10 +36,6 @@ TOTAL_MEM_MB=0
 
 # 导出变量供父脚本使用
 export REDIS_PASSWORD
-export EXTERNAL_REDIS_MODE
-export EXTERNAL_REDIS_HOST
-export EXTERNAL_REDIS_PORT
-export EXTERNAL_REDIS_PASSWORD
 
 # 检测硬件配置（使用公共函数）
 detect_hardware() {
@@ -79,110 +68,13 @@ check_existing() {
     if command -v redis-server &> /dev/null; then
         local redis_version=$(redis-server --version 2>&1 | head -n 1)
         echo -e "${YELLOW}检测到已安装 Redis: ${redis_version}${NC}"
-        echo ""
-        echo "请选择操作："
-        echo "  1. 保留现有安装，跳过安装"
-        echo "  2. 重新安装 Redis（先卸载，保留配置）"
-        echo "  3. 完全重新安装（先卸载，删除所有配置）"
-        read -p "请选择 [1-3] (默认: 1): " REINSTALL_CHOICE
-        REINSTALL_CHOICE="${REINSTALL_CHOICE:-1}"
-        
-        case "$REINSTALL_CHOICE" in
-            1)
-                echo -e "${GREEN}跳过 Redis 安装，保留现有安装${NC}"
-                SKIP_INSTALL=1
-                ;;
-            2)
-                echo -e "${YELLOW}将重新安装 Redis，先卸载现有安装，但保留配置${NC}"
-                # 停止服务
-                if command -v systemctl &> /dev/null; then
-                    systemctl stop redis 2>/dev/null || systemctl stop redis-server 2>/dev/null || true
-                fi
-                # 根据系统类型卸载
-                case $OS in
-                    centos|rhel|fedora|rocky|almalinux|oraclelinux|amazonlinux)
-                        if command -v dnf &> /dev/null; then
-                            dnf remove -y redis 2>/dev/null || yum remove -y redis 2>/dev/null || true
-                        else
-                            yum remove -y redis 2>/dev/null || true
-                        fi
-                        ;;
-                    ubuntu|debian|linuxmint|raspbian|kali)
-                        apt-get remove -y redis-server 2>/dev/null || true
-                        ;;
-                    opensuse*|sles)
-                        zypper remove -y redis 2>/dev/null || true
-                        ;;
-                    arch|manjaro)
-                        pacman -R --noconfirm redis 2>/dev/null || true
-                        ;;
-                    alpine)
-                        apk del redis 2>/dev/null || true
-                        ;;
-                    gentoo)
-                        emerge --unmerge dev-db/redis 2>/dev/null || true
-                        ;;
-                esac
-                # 清除 SKIP_INSTALL 标志，确保继续执行安装
-                SKIP_INSTALL=0
-                ;;
-            3)
-                echo -e "${RED}警告: 将删除所有 Redis 数据和配置！${NC}"
-                read -p "确认删除所有数据？[y/N]: " CONFIRM_DELETE
-                CONFIRM_DELETE="${CONFIRM_DELETE:-N}"
-                if [[ "$CONFIRM_DELETE" =~ ^[Yy]$ ]]; then
-                    # 停止服务
-                    if command -v systemctl &> /dev/null; then
-                        systemctl stop redis 2>/dev/null || systemctl stop redis-server 2>/dev/null || true
-                    fi
-                    # 卸载 Redis
-                    case $OS in
-                        centos|rhel|fedora|rocky|almalinux|oraclelinux|amazonlinux)
-                            if command -v dnf &> /dev/null; then
-                                dnf remove -y redis 2>/dev/null || yum remove -y redis 2>/dev/null || true
-                            else
-                                yum remove -y redis 2>/dev/null || true
-                            fi
-                            ;;
-                        ubuntu|debian|linuxmint|raspbian|kali)
-                            apt-get remove -y redis-server 2>/dev/null || true
-                            ;;
-                        opensuse*|sles)
-                            zypper remove -y redis 2>/dev/null || true
-                            ;;
-                        arch|manjaro)
-                            pacman -R --noconfirm redis 2>/dev/null || true
-                            ;;
-                        alpine)
-                            apk del redis 2>/dev/null || true
-                            ;;
-                        gentoo)
-                            emerge --unmerge dev-db/redis 2>/dev/null || true
-                            ;;
-                    esac
-                    # 删除配置和数据
-                    rm -rf /etc/redis 2>/dev/null || true
-                    rm -rf /var/lib/redis 2>/dev/null || true
-                    rm -rf /var/log/redis 2>/dev/null || true
-                    # 清除 SKIP_INSTALL 标志，确保继续执行安装
-                    SKIP_INSTALL=0
-                else
-                    echo -e "${GREEN}取消删除，将保留数据重新安装${NC}"
-                    # 清除 SKIP_INSTALL 标志，确保继续执行安装
-                    SKIP_INSTALL=0
-                fi
-                ;;
-            *)
-                echo -e "${YELLOW}无效选择，将跳过安装${NC}"
-                SKIP_INSTALL=1
-                ;;
-        esac
-    fi
-    
-    # 如果设置了 SKIP_INSTALL，确保函数正确返回
-    if [ "${SKIP_INSTALL:-0}" -eq 1 ]; then
-        echo -e "${GREEN}✓ 检查完成（将跳过安装步骤）${NC}"
-        return 0
+        read -p "是否继续安装/更新？[Y/n]: " -n 1 -r
+        echo
+        REPLY="${REPLY:-Y}"
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            echo -e "${YELLOW}安装已取消${NC}"
+            exit 0
+        fi
     fi
     
     echo -e "${GREEN}✓ 检查完成${NC}"
@@ -253,71 +145,22 @@ install_dependencies() {
 }
 
 # 安装 Redis（CentOS/RHEL/Fedora/Rocky/AlmaLinux/Oracle Linux/Amazon Linux）
-# 按照官方文档：https://redis.io/docs/latest/operate/oss_and_stack/install/install-stack/
 install_redis_redhat() {
     echo -e "${BLUE}[4/7] 安装 Redis（RedHat 系列）...${NC}"
-    echo -e "${BLUE}按照官方文档安装 Redis Open Source${NC}"
     
     INSTALL_SUCCESS=0
     
-    # 按照官方文档，使用官方 RPM 仓库
-    # 官方仓库地址：https://packages.redis.io/rpm/
-    echo -e "${BLUE}[步骤1/3] 添加 Redis 官方 RPM 仓库...${NC}"
-    
-    # 检测系统版本
-    local el_version="el8"
-    case $OS in
-        rocky|almalinux|rhel)
-            if echo "$OS_VERSION" | grep -qE "^9\."; then
-                el_version="el9"
-            elif echo "$OS_VERSION" | grep -qE "^8\."; then
-                el_version="el8"
-            else
-                el_version="el7"
-            fi
-            ;;
-        fedora)
-            if echo "$OS_VERSION" | grep -qE "^3[0-9]"; then
-                el_version="el9"
-            else
-                el_version="el8"
-            fi
-            ;;
-    esac
-    
-    # 下载并安装官方仓库
-    local repo_file="/tmp/redis-rpm.repo"
-    if [ ! -f "$repo_file" ] || [ ! -f /etc/yum.repos.d/redis.repo ]; then
-        echo "下载 Redis 官方仓库配置..."
-        cat > "$repo_file" <<EOF
-[redis]
-name=Redis
-baseurl=https://packages.redis.io/rpm/${el_version}
-enabled=1
-gpgcheck=1
-gpgkey=https://packages.redis.io/gpg
-EOF
-        
-        # 安装仓库配置
-        if [ -f "$repo_file" ]; then
-            cp "$repo_file" /etc/yum.repos.d/redis.repo
-            echo -e "${GREEN}✓ Redis 官方仓库已添加${NC}"
+    # 尝试使用 EPEL 仓库安装（某些系统需要）
+    if ! rpm -q epel-release &> /dev/null; then
+        echo "尝试安装 EPEL 仓库..."
+        if command -v dnf &> /dev/null; then
+            dnf install -y epel-release 2>/dev/null || yum install -y epel-release 2>/dev/null || true
+        else
+            yum install -y epel-release 2>/dev/null || true
         fi
-    else
-        echo -e "${GREEN}✓ Redis 官方仓库已存在${NC}"
     fi
     
-    # 更新包管理器缓存
-    echo -e "${BLUE}[步骤2/3] 更新包管理器缓存...${NC}"
-    if command -v dnf &> /dev/null; then
-        dnf makecache 2>&1 | grep -vE "GPG|密钥" || true
-    else
-        yum makecache 2>&1 | grep -vE "GPG|密钥" || true
-    fi
-    echo -e "${GREEN}✓ 缓存更新完成${NC}"
-    
-    # 安装 Redis
-    echo -e "${BLUE}[步骤3/3] 安装 Redis...${NC}"
+    # 尝试使用包管理器安装
     if command -v dnf &> /dev/null; then
         if dnf install -y redis 2>&1; then
             INSTALL_SUCCESS=1
@@ -325,29 +168,6 @@ EOF
     else
         if yum install -y redis 2>&1; then
             INSTALL_SUCCESS=1
-        fi
-    fi
-    
-    # 如果官方仓库安装失败，尝试 EPEL 仓库
-    if [ $INSTALL_SUCCESS -eq 0 ]; then
-        echo -e "${YELLOW}⚠ 官方仓库安装失败，尝试使用 EPEL 仓库...${NC}"
-        if ! rpm -q epel-release &> /dev/null; then
-            echo "尝试安装 EPEL 仓库..."
-            if command -v dnf &> /dev/null; then
-                dnf install -y epel-release 2>/dev/null || yum install -y epel-release 2>/dev/null || true
-            else
-                yum install -y epel-release 2>/dev/null || true
-            fi
-        fi
-        
-        if command -v dnf &> /dev/null; then
-            if dnf install -y redis 2>&1; then
-                INSTALL_SUCCESS=1
-            fi
-        else
-            if yum install -y redis 2>&1; then
-                INSTALL_SUCCESS=1
-            fi
         fi
     fi
     
@@ -361,110 +181,14 @@ EOF
 }
 
 # 安装 Redis（Ubuntu/Debian/Linux Mint/Kali Linux）
-# 按照官方文档：https://redis.io/docs/latest/operate/oss_and_stack/install/install-stack/
 install_redis_debian() {
     echo -e "${BLUE}[4/7] 安装 Redis（Debian 系列）...${NC}"
-    echo -e "${BLUE}按照官方文档安装 Redis Open Source${NC}"
     
     INSTALL_SUCCESS=0
     
-    # 按照官方文档，使用官方 APT 仓库
-    # 官方仓库地址：https://packages.redis.io/deb/
-    echo -e "${BLUE}[步骤1/3] 添加 Redis 官方 APT 仓库...${NC}"
-    
-    # 检测系统版本
-    local codename=""
-    if [ -f /etc/os-release ]; then
-        codename=$(grep VERSION_CODENAME /etc/os-release | cut -d= -f2)
-    fi
-    
-    # 如果没有检测到 codename，尝试使用 lsb_release
-    if [ -z "$codename" ] && command -v lsb_release &> /dev/null; then
-        codename=$(lsb_release -cs)
-    fi
-    
-    # 如果仍然没有，使用默认值
-    if [ -z "$codename" ]; then
-        case $OS in
-            ubuntu)
-                if echo "$OS_VERSION" | grep -qE "^24\."; then
-                    codename="noble"
-                elif echo "$OS_VERSION" | grep -qE "^22\."; then
-                    codename="jammy"
-                else
-                    codename="jammy"  # 默认使用 jammy
-                fi
-                ;;
-            debian)
-                if echo "$OS_VERSION" | grep -qE "^13\."; then
-                    codename="trixie"
-                elif echo "$OS_VERSION" | grep -qE "^12\."; then
-                    codename="bookworm"
-                else
-                    codename="bookworm"  # 默认使用 bookworm
-                fi
-                ;;
-            *)
-                codename="jammy"  # 默认值
-                ;;
-        esac
-    fi
-    
-    # 安装必要的工具
-    if ! command -v curl &> /dev/null || ! command -v gpg &> /dev/null; then
-        apt-get update
-        apt-get install -y curl ca-certificates gnupg lsb-release
-    fi
-    
-    # 添加官方 GPG 密钥（按照官方文档）
-    if [ ! -f /etc/apt/keyrings/redis.asc ]; then
-        mkdir -p /etc/apt/keyrings
-        curl -fsSL https://packages.redis.io/gpg | gpg --dearmor -o /etc/apt/keyrings/redis.asc 2>/dev/null || {
-            echo -e "${YELLOW}⚠ GPG 密钥下载失败，尝试使用 wget...${NC}"
-            if command -v wget &> /dev/null; then
-                wget -qO- https://packages.redis.io/gpg | gpg --dearmor -o /etc/apt/keyrings/redis.asc 2>/dev/null || true
-            fi
-        }
-        if [ -f /etc/apt/keyrings/redis.asc ]; then
-            echo -e "${GREEN}✓ Redis GPG 密钥已添加${NC}"
-        else
-            echo -e "${YELLOW}⚠ GPG 密钥添加失败，将尝试不使用 GPG 验证${NC}"
-        fi
-    else
-        echo -e "${GREEN}✓ Redis GPG 密钥已存在${NC}"
-    fi
-    
-    # 添加官方仓库（按照官方文档）
-    if [ ! -f /etc/apt/sources.list.d/redis.list ]; then
-        if [ -f /etc/apt/keyrings/redis.asc ]; then
-            echo "deb [signed-by=/etc/apt/keyrings/redis.asc] https://packages.redis.io/deb ${codename} main" > /etc/apt/sources.list.d/redis.list
-        else
-            # 如果 GPG 密钥不存在，使用不验证的方式（不推荐，但作为后备方案）
-            echo "deb https://packages.redis.io/deb ${codename} main" > /etc/apt/sources.list.d/redis.list
-            echo -e "${YELLOW}⚠ 使用不验证 GPG 的仓库配置（不推荐）${NC}"
-        fi
-        echo -e "${GREEN}✓ Redis 官方仓库已添加${NC}"
-    else
-        echo -e "${GREEN}✓ Redis 官方仓库已存在${NC}"
-    fi
-    
-    # 更新包管理器缓存
-    echo -e "${BLUE}[步骤2/3] 更新包管理器缓存...${NC}"
-    apt-get update 2>&1 | grep -vE "GPG|密钥" || true
-    echo -e "${GREEN}✓ 缓存更新完成${NC}"
-    
-    # 安装 Redis
-    echo -e "${BLUE}[步骤3/3] 安装 Redis...${NC}"
-    if apt-get install -y redis 2>&1; then
+    # 尝试使用包管理器安装
+    if apt-get install -y redis-server 2>&1; then
         INSTALL_SUCCESS=1
-    fi
-    
-    # 如果官方仓库安装失败，尝试系统仓库
-    if [ $INSTALL_SUCCESS -eq 0 ]; then
-        echo -e "${YELLOW}⚠ 官方仓库安装失败，尝试使用系统仓库...${NC}"
-        if apt-get install -y redis-server 2>&1; then
-            INSTALL_SUCCESS=1
-        fi
     fi
     
     # 如果包管理器安装失败，从源码编译
@@ -1009,88 +733,6 @@ start_redis() {
     fi
 }
 
-# 配置外部 Redis（不安装 Redis，只配置连接信息）
-configure_external_redis() {
-    echo -e "${BLUE}========================================${NC}"
-    echo -e "${BLUE}配置外部 Redis${NC}"
-    echo -e "${BLUE}========================================${NC}"
-    echo ""
-    
-    # 输入外部 Redis 连接信息
-    echo -e "${BLUE}请输入外部 Redis 连接信息：${NC}"
-    echo ""
-    read -p "Redis 地址 [127.0.0.1]: " EXTERNAL_REDIS_HOST
-    EXTERNAL_REDIS_HOST="${EXTERNAL_REDIS_HOST:-127.0.0.1}"
-    
-    read -p "Redis 端口 [6379]: " EXTERNAL_REDIS_PORT
-    EXTERNAL_REDIS_PORT="${EXTERNAL_REDIS_PORT:-6379}"
-    
-    read -p "Redis 密码（直接回车表示无密码）: " EXTERNAL_REDIS_PASSWORD
-    if [ -z "$EXTERNAL_REDIS_PASSWORD" ]; then
-        echo -e "${GREEN}✓ 将使用无密码连接${NC}"
-    else
-        echo -e "${GREEN}✓ 密码已设置${NC}"
-    fi
-    echo ""
-    
-    # 测试连接
-    echo ""
-    echo -e "${BLUE}正在测试 Redis 连接...${NC}"
-    
-    # 检查 redis-cli 是否可用
-    if ! command -v redis-cli &> /dev/null; then
-        echo -e "${YELLOW}⚠ redis-cli 未安装，无法测试连接${NC}"
-        echo -e "${YELLOW}  请手动测试: redis-cli -h ${EXTERNAL_REDIS_HOST} -p ${EXTERNAL_REDIS_PORT} ping${NC}"
-        read -p "是否继续配置？[Y/n]: " CONTINUE_CONFIG
-        CONTINUE_CONFIG="${CONTINUE_CONFIG:-Y}"
-        if [[ ! "$CONTINUE_CONFIG" =~ ^[Yy]$ ]]; then
-            return 1
-        fi
-    else
-        # 测试连接
-        local test_result=""
-        if [ -n "$EXTERNAL_REDIS_PASSWORD" ]; then
-            test_result=$(redis-cli -h "$EXTERNAL_REDIS_HOST" -p "$EXTERNAL_REDIS_PORT" -a "$EXTERNAL_REDIS_PASSWORD" ping 2>&1)
-        else
-            test_result=$(redis-cli -h "$EXTERNAL_REDIS_HOST" -p "$EXTERNAL_REDIS_PORT" ping 2>&1)
-        fi
-        
-        if echo "$test_result" | grep -q "PONG"; then
-            echo -e "${GREEN}✓ Redis 连接成功${NC}"
-        else
-            echo -e "${YELLOW}⚠ Redis 连接测试失败: $test_result${NC}"
-            read -p "是否继续配置？[Y/n]: " CONTINUE_CONFIG
-            CONTINUE_CONFIG="${CONTINUE_CONFIG:-Y}"
-            if [[ ! "$CONTINUE_CONFIG" =~ ^[Yy]$ ]]; then
-                return 1
-            fi
-        fi
-    fi
-    
-    # 设置变量供后续函数使用
-    export EXTERNAL_REDIS_MODE=1
-    export EXTERNAL_REDIS_HOST
-    export EXTERNAL_REDIS_PORT
-    export EXTERNAL_REDIS_PASSWORD
-    
-    # 更新 WAF 配置文件
-    update_waf_config
-    
-    echo ""
-    echo -e "${GREEN}✓ 外部 Redis 配置完成${NC}"
-    echo ""
-    echo -e "${BLUE}连接信息：${NC}"
-    echo "  地址: ${EXTERNAL_REDIS_HOST}:${EXTERNAL_REDIS_PORT}"
-    if [ -n "$EXTERNAL_REDIS_PASSWORD" ]; then
-        echo "  密码: ${EXTERNAL_REDIS_PASSWORD}"
-    else
-        echo "  密码: 未设置"
-    fi
-    echo ""
-    
-    return 0
-}
-
 # 更新 WAF 配置文件
 update_waf_config() {
     echo -e "${BLUE}更新 WAF 配置文件...${NC}"
@@ -1106,23 +748,8 @@ update_waf_config() {
         return 0
     fi
     
-    # 根据模式选择 Redis 配置
-    local redis_host="127.0.0.1"
-    local redis_port="6379"
-    local redis_password=""
-    
-    if [ "${EXTERNAL_REDIS_MODE:-0}" -eq 1 ]; then
-        redis_host="${EXTERNAL_REDIS_HOST:-127.0.0.1}"
-        redis_port="${EXTERNAL_REDIS_PORT:-6379}"
-        redis_password="${EXTERNAL_REDIS_PASSWORD:-}"
-    else
-        redis_host="127.0.0.1"
-        redis_port="${REDIS_PORT:-6379}"
-        redis_password="${REDIS_PASSWORD:-}"
-    fi
-    
-    # 更新配置文件
-    if bash "$UPDATE_CONFIG_SCRIPT" redis "$redis_host" "$redis_port" "0" "$redis_password"; then
+    # 更新配置文件（使用默认的本地 Redis 配置）
+    if bash "$UPDATE_CONFIG_SCRIPT" redis "127.0.0.1" "6379" "0" "${REDIS_PASSWORD:-}"; then
         echo -e "${GREEN}✓ WAF 配置文件已更新${NC}"
     else
         echo -e "${YELLOW}⚠ 配置文件更新失败，请手动更新 lua/config.lua${NC}"
@@ -1133,40 +760,6 @@ update_waf_config() {
 verify_installation() {
     echo -e "${BLUE}[8/8] 验证安装...${NC}"
     
-    # 如果是外部 Redis 模式，跳过本地安装验证
-    if [ "${EXTERNAL_REDIS_MODE:-0}" -eq 1 ]; then
-        echo -e "${BLUE}使用外部 Redis，跳过本地安装验证${NC}"
-        
-        # 测试外部 Redis 连接
-        local redis_host="${EXTERNAL_REDIS_HOST:-127.0.0.1}"
-        local redis_port="${EXTERNAL_REDIS_PORT:-6379}"
-        local redis_password="${EXTERNAL_REDIS_PASSWORD:-}"
-        
-        echo -e "${BLUE}测试外部 Redis 连接: ${redis_host}:${redis_port}...${NC}"
-        
-        if command -v redis-cli &> /dev/null; then
-            if [ -n "$redis_password" ]; then
-                if redis-cli -h "$redis_host" -p "$redis_port" -a "$redis_password" ping 2>/dev/null | grep -q "PONG"; then
-                    echo -e "${GREEN}✓ 外部 Redis 连接测试成功${NC}"
-                else
-                    echo -e "${YELLOW}⚠ 外部 Redis 连接测试失败，请检查连接信息和服务状态${NC}"
-                fi
-            else
-                if redis-cli -h "$redis_host" -p "$redis_port" ping 2>/dev/null | grep -q "PONG"; then
-                    echo -e "${GREEN}✓ 外部 Redis 连接测试成功${NC}"
-                else
-                    echo -e "${YELLOW}⚠ 外部 Redis 连接测试失败，请检查服务状态${NC}"
-                fi
-            fi
-        else
-            echo -e "${YELLOW}⚠ redis-cli 未安装，无法测试连接${NC}"
-            echo -e "${YELLOW}  请手动测试: redis-cli -h ${redis_host} -p ${redis_port} ping${NC}"
-        fi
-        
-        return 0
-    fi
-    
-    # 本地安装验证
     if command -v redis-server &> /dev/null; then
         local version=$(redis-server --version 2>&1 | head -n 1)
         echo -e "${GREEN}✓ Redis 安装成功${NC}"
@@ -1198,54 +791,28 @@ verify_installation() {
 show_installation_summary() {
     echo ""
     echo -e "${GREEN}========================================${NC}"
-    if [ "${EXTERNAL_REDIS_MODE:-0}" -eq 1 ]; then
-        echo -e "${GREEN}外部 Redis 配置完成！${NC}"
-    else
-        echo -e "${GREEN}Redis 安装完成！${NC}"
-    fi
+    echo -e "${GREEN}Redis 安装完成！${NC}"
     echo -e "${GREEN}========================================${NC}"
     echo ""
     
     # 显示配置信息
     echo -e "${BLUE}Redis 配置信息:${NC}"
-    if [ "${EXTERNAL_REDIS_MODE:-0}" -eq 1 ]; then
-        echo "  地址: ${EXTERNAL_REDIS_HOST:-127.0.0.1}:${EXTERNAL_REDIS_PORT:-6379}"
-        if [ -n "${EXTERNAL_REDIS_PASSWORD:-}" ]; then
-            echo "  密码: ${EXTERNAL_REDIS_PASSWORD}"
-        else
-            echo "  密码: 未设置"
-        fi
+    echo "  端口: ${REDIS_PORT}"
+    if [ -n "$REDIS_PASSWORD" ]; then
+        echo "  密码: ${REDIS_PASSWORD}"
     else
-        echo "  端口: ${REDIS_PORT}"
-        if [ -n "$REDIS_PASSWORD" ]; then
-            echo "  密码: ${REDIS_PASSWORD}"
-        else
-            echo "  密码: 未设置"
-        fi
+        echo "  密码: 未设置"
     fi
     
     # 显示连接URL信息
     echo ""
     echo -e "${BLUE}连接 URL 信息:${NC}"
-    if [ "${EXTERNAL_REDIS_MODE:-0}" -eq 1 ]; then
-        local redis_host="${EXTERNAL_REDIS_HOST:-127.0.0.1}"
-        local redis_port="${EXTERNAL_REDIS_PORT:-6379}"
-        local redis_password="${EXTERNAL_REDIS_PASSWORD:-}"
-        if [ -n "$redis_password" ]; then
-            echo "  Redis URL: redis://:${redis_password}@${redis_host}:${redis_port}/0"
-            echo "  连接命令: redis-cli -h ${redis_host} -p ${redis_port} -a '${redis_password}'"
-        else
-            echo "  Redis URL: redis://${redis_host}:${redis_port}/0"
-            echo "  连接命令: redis-cli -h ${redis_host} -p ${redis_port}"
-        fi
+    if [ -n "$REDIS_PASSWORD" ]; then
+        echo "  Redis URL: redis://:${REDIS_PASSWORD}@127.0.0.1:${REDIS_PORT}/0"
+        echo "  连接命令: redis-cli -h 127.0.0.1 -p ${REDIS_PORT} -a '${REDIS_PASSWORD}'"
     else
-        if [ -n "$REDIS_PASSWORD" ]; then
-            echo "  Redis URL: redis://:${REDIS_PASSWORD}@127.0.0.1:${REDIS_PORT}/0"
-            echo "  连接命令: redis-cli -h 127.0.0.1 -p ${REDIS_PORT} -a '${REDIS_PASSWORD}'"
-        else
-            echo "  Redis URL: redis://127.0.0.1:${REDIS_PORT}/0"
-            echo "  连接命令: redis-cli -h 127.0.0.1 -p ${REDIS_PORT}"
-        fi
+        echo "  Redis URL: redis://127.0.0.1:${REDIS_PORT}/0"
+        echo "  连接命令: redis-cli -h 127.0.0.1 -p ${REDIS_PORT}"
     fi
     
     # 显示配置文件位置
@@ -1288,56 +855,34 @@ show_next_steps() {
     echo ""
     echo -e "${BLUE}后续步骤:${NC}"
     echo ""
-    
-    if [ "${EXTERNAL_REDIS_MODE:-0}" -eq 1 ]; then
-        local redis_host="${EXTERNAL_REDIS_HOST:-127.0.0.1}"
-        local redis_port="${EXTERNAL_REDIS_PORT:-6379}"
-        local redis_password="${EXTERNAL_REDIS_PASSWORD:-}"
-        
-        echo "1. 连接外部 Redis:"
-        if [ -n "$redis_password" ]; then
-            echo "   redis-cli -h ${redis_host} -p ${redis_port} -a '${redis_password}'"
-        else
-            echo "   redis-cli -h ${redis_host} -p ${redis_port}"
-        fi
-        echo ""
-        echo "2. 测试外部 Redis:"
-        if [ -n "$redis_password" ]; then
-            echo "   redis-cli -h ${redis_host} -p ${redis_port} -a '${redis_password}' ping"
-        else
-            echo "   redis-cli -h ${redis_host} -p ${redis_port} ping"
-        fi
+    echo "1. 检查 Redis 服务状态:"
+    echo "   sudo systemctl status redis"
+    echo "   或"
+    echo "   sudo systemctl status redis-server"
+    echo ""
+    echo "2. 连接 Redis:"
+    if [ -n "$REDIS_PASSWORD" ]; then
+        echo "   redis-cli -a '${REDIS_PASSWORD}'"
     else
-        echo "1. 检查 Redis 服务状态:"
-        echo "   sudo systemctl status redis"
-        echo "   或"
-        echo "   sudo systemctl status redis-server"
-        echo ""
-        echo "2. 连接 Redis:"
-        if [ -n "$REDIS_PASSWORD" ]; then
-            echo "   redis-cli -a '${REDIS_PASSWORD}'"
-        else
-            echo "   redis-cli"
-        fi
-        echo ""
-        echo "3. 测试 Redis:"
-        if [ -n "$REDIS_PASSWORD" ]; then
-            echo "   redis-cli -a '${REDIS_PASSWORD}' ping"
-        else
-            echo "   redis-cli ping"
-        fi
-        echo ""
-        echo -e "${BLUE}服务管理:${NC}"
-        echo "  启动: sudo systemctl start redis"
-        echo "  停止: sudo systemctl stop redis"
-        echo "  重启: sudo systemctl restart redis"
-        echo "  开机自启: sudo systemctl enable redis"
+        echo "   redis-cli"
     fi
-    
+    echo ""
+    echo "3. 测试 Redis:"
+    if [ -n "$REDIS_PASSWORD" ]; then
+        echo "   redis-cli -a '${REDIS_PASSWORD}' ping"
+    else
+        echo "   redis-cli ping"
+    fi
     echo ""
     echo "4. 修改 WAF 配置文件（如果使用 Redis）:"
     echo "   vim lua/config.lua"
     echo "   或使用 install.sh 自动配置"
+    echo ""
+    echo -e "${BLUE}服务管理:${NC}"
+    echo "  启动: sudo systemctl start redis"
+    echo "  停止: sudo systemctl stop redis"
+    echo "  重启: sudo systemctl restart redis"
+    echo "  开机自启: sudo systemctl enable redis"
     echo ""
 }
 
@@ -1348,201 +893,51 @@ main() {
     echo -e "${GREEN}========================================${NC}"
     echo ""
     
-    # 询问是否安装 Redis
-    echo -e "${BLUE}Redis 是 WAF 系统的必要组件，用于缓存和会话存储${NC}"
-    echo ""
-    read -p "是否安装 Redis？[Y/n]: " INSTALL_REDIS
-    INSTALL_REDIS="${INSTALL_REDIS:-Y}"
+    # 检查 root 权限
+    check_root
     
-    if [[ ! "$INSTALL_REDIS" =~ ^[Yy]$ ]]; then
-        # 不安装 Redis，询问是否使用外部 Redis
-        echo ""
-        echo -e "${BLUE}如果已有 Redis 服务器，可以选择使用外部 Redis${NC}"
-        read -p "是否使用外部 Redis？[Y/n]: " USE_EXTERNAL_REDIS
-        USE_EXTERNAL_REDIS="${USE_EXTERNAL_REDIS:-Y}"
-        
-        if [[ "$USE_EXTERNAL_REDIS" =~ ^[Yy]$ ]]; then
-            # 配置外部 Redis
-            if configure_external_redis; then
-                echo -e "${GREEN}✓ 外部 Redis 配置完成${NC}"
-                
-                # 显示安装总结
-                show_installation_summary
-                
-                # 显示后续步骤
-                show_next_steps
-                
-                # 如果设置了环境变量 TEMP_VARS_FILE，将变量写入文件供父脚本使用
-                if [ -n "$TEMP_VARS_FILE" ] && [ -f "$TEMP_VARS_FILE" ]; then
-                    {
-                        echo "EXTERNAL_REDIS_MODE=1"
-                        echo "EXTERNAL_REDIS_HOST=\"${EXTERNAL_REDIS_HOST}\""
-                        echo "EXTERNAL_REDIS_PORT=\"${EXTERNAL_REDIS_PORT}\""
-                        echo "EXTERNAL_REDIS_PASSWORD=\"${EXTERNAL_REDIS_PASSWORD}\""
-                    } >> "$TEMP_VARS_FILE"
-                fi
-                
-                return 0
-            else
-                echo -e "${RED}✗ 外部 Redis 配置失败${NC}"
-                return 1
-            fi
-        else
-            # 不使用外部 Redis，提示 Redis 是必要组件
-            echo ""
-            echo -e "${RED}========================================${NC}"
-            echo -e "${RED}⚠ Redis 是必要组件${NC}"
-            echo -e "${RED}========================================${NC}"
-            echo ""
-            echo -e "${YELLOW}WAF 系统需要 Redis 才能正常运行${NC}"
-            echo -e "${YELLOW}Redis 用于：${NC}"
-            echo "  - 缓存 WAF 规则和配置"
-            echo "  - 存储会话信息"
-            echo "  - 实现分布式锁和计数器"
-            echo ""
-            echo "请选择："
-            echo "  1. 安装 Redis（本地安装，推荐）"
-            echo "  2. 使用外部 Redis"
-            read -p "请选择 [1-2] (默认: 1): " REDIS_CHOICE
-            REDIS_CHOICE="${REDIS_CHOICE:-1}"
-            
-            case "$REDIS_CHOICE" in
-                1)
-                    # 继续执行安装流程
-                    INSTALL_REDIS="Y"
-                    ;;
-                2)
-                    # 配置外部 Redis
-                    if configure_external_redis; then
-                        echo -e "${GREEN}✓ 外部 Redis 配置完成${NC}"
-                        
-                        # 显示安装总结
-                        show_installation_summary
-                        
-                        # 显示后续步骤
-                        show_next_steps
-                        
-                        # 如果设置了环境变量 TEMP_VARS_FILE，将变量写入文件供父脚本使用
-                        if [ -n "$TEMP_VARS_FILE" ] && [ -f "$TEMP_VARS_FILE" ]; then
-                            {
-                                echo "EXTERNAL_REDIS_MODE=1"
-                                echo "EXTERNAL_REDIS_HOST=\"${EXTERNAL_REDIS_HOST}\""
-                                echo "EXTERNAL_REDIS_PORT=\"${EXTERNAL_REDIS_PORT}\""
-                                echo "EXTERNAL_REDIS_PASSWORD=\"${EXTERNAL_REDIS_PASSWORD}\""
-                            } >> "$TEMP_VARS_FILE"
-                        fi
-                        
-                        return 0
-                    else
-                        echo -e "${RED}✗ 外部 Redis 配置失败${NC}"
-                        return 1
-                    fi
-                    ;;
-                *)
-                    echo -e "${YELLOW}无效选择，将安装 Redis${NC}"
-                    INSTALL_REDIS="Y"
-                    ;;
-            esac
-        fi
+    # 检测操作系统
+    detect_os
+    
+    # 检测硬件配置
+    detect_hardware
+    
+    # 检查现有安装
+    check_existing
+    
+    # 安装依赖
+    install_dependencies
+    
+    # 安装 Redis
+    install_redis
+    
+    # 配置 Redis
+    configure_redis
+    
+    # 设置密码
+    set_redis_password
+    
+    # 启动服务
+    start_redis
+    
+    # 验证安装
+    verify_installation
+    
+    # 更新 WAF 配置文件
+    update_waf_config
+    
+    # 显示安装总结
+    show_installation_summary
+    
+    # 显示后续步骤
+    show_next_steps
+    
+    # 如果设置了环境变量 TEMP_VARS_FILE，将变量写入文件供父脚本使用
+    if [ -n "$TEMP_VARS_FILE" ] && [ -f "$TEMP_VARS_FILE" ]; then
+        {
+            echo "REDIS_PASSWORD=\"${REDIS_PASSWORD}\""
+        } >> "$TEMP_VARS_FILE"
     fi
-    
-    # 如果选择安装 Redis，继续执行安装流程
-    if [[ "$INSTALL_REDIS" =~ ^[Yy]$ ]]; then
-        # 检查 root 权限（安装 Redis 需要 root 权限）
-        check_root
-        
-        # 检测操作系统（只调用一次，确保 OS 变量已设置）
-        if [ -z "${OS:-}" ]; then
-            detect_os
-        else
-            echo -e "${BLUE}[1/7] 检测操作系统...${NC}"
-            echo -e "${GREEN}✓ 系统类型: ${OS}${NC}"
-        fi
-        
-        # 检测硬件配置
-        detect_hardware
-        
-        # 检查现有安装
-        check_existing
-        
-        # 如果选择跳过安装，只执行后续步骤
-        if [ "${SKIP_INSTALL:-0}" -eq 1 ]; then
-            echo -e "${BLUE}[跳过安装步骤] 检测到已安装 Redis，跳过安装步骤${NC}"
-            echo ""
-            
-            # 确保 Redis 服务已启动
-            echo -e "${BLUE}检查 Redis 服务状态...${NC}"
-            if command -v systemctl &> /dev/null; then
-                if ! systemctl is-active --quiet redis 2>/dev/null && ! systemctl is-active --quiet redis-server 2>/dev/null; then
-                    echo -e "${YELLOW}Redis 服务未运行，尝试启动...${NC}"
-                    systemctl start redis 2>/dev/null || systemctl start redis-server 2>/dev/null || true
-                    sleep 2
-                fi
-            fi
-            
-            # 查找配置文件
-            configure_redis
-            
-            # 设置密码（如果需要）
-            set_redis_password
-            
-            # 更新 WAF 配置文件
-            update_waf_config
-            
-            # 显示安装总结
-            show_installation_summary
-            
-            # 显示后续步骤
-            show_next_steps
-            
-            # 如果设置了环境变量 TEMP_VARS_FILE，将变量写入文件供父脚本使用
-            if [ -n "$TEMP_VARS_FILE" ] && [ -f "$TEMP_VARS_FILE" ]; then
-                {
-                    echo "REDIS_PASSWORD=\"${REDIS_PASSWORD}\""
-                    echo "EXTERNAL_REDIS_MODE=0"
-                } >> "$TEMP_VARS_FILE"
-            fi
-        else
-            # 正常安装流程
-            # 安装依赖
-            install_dependencies
-            
-            # 安装 Redis
-            install_redis
-            
-            # 配置 Redis
-            configure_redis
-            
-            # 设置密码
-            set_redis_password
-            
-            # 启动服务
-            start_redis
-            
-            # 验证安装
-            verify_installation
-            
-            # 更新 WAF 配置文件
-            update_waf_config
-            
-            # 显示安装总结
-            show_installation_summary
-            
-            # 显示后续步骤
-            show_next_steps
-            
-            # 如果设置了环境变量 TEMP_VARS_FILE，将变量写入文件供父脚本使用
-            if [ -n "$TEMP_VARS_FILE" ] && [ -f "$TEMP_VARS_FILE" ]; then
-                {
-                    echo "REDIS_PASSWORD=\"${REDIS_PASSWORD}\""
-                    echo "EXTERNAL_REDIS_MODE=0"
-                } >> "$TEMP_VARS_FILE"
-            fi
-        fi
-    fi
-    
-    # 确保函数正确返回
-    return 0
 }
 
 # 执行主函数

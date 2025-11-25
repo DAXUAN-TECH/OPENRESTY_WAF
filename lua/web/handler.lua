@@ -145,6 +145,22 @@ local function serve_html_with_layout(filename, page_title, session)
         body_content = body_content:gsub("<script>[%s%S]-</script>", "", 1)
     end
     
+    -- 如果内容包含完整的HTML结构（DOCTYPE、html、body标签），提取body标签内的内容
+    -- 这样可以避免嵌套的body标签和样式冲突
+    if body_content:match("<!DOCTYPE") or body_content:match("<html") then
+        -- 提取body标签内的内容（不包含body标签本身）
+        local body_match = body_content:match("<body[^>]*>([%s%S]-)</body>")
+        if body_match then
+            body_content = body_match
+        else
+            -- 如果没有找到body标签，尝试移除DOCTYPE、html、head标签
+            body_content = body_content:gsub("<!DOCTYPE[^>]*>", "")
+            body_content = body_content:gsub("<html[^>]*>", "")
+            body_content = body_content:gsub("</html>", "")
+            body_content = body_content:gsub("<head>.-</head>", "")
+        end
+    end
+    
     -- 替换布局模板中的占位符
     layout_content = layout_content:gsub("{{TITLE}}", escape_html(page_title))
     layout_content = layout_content:gsub("{{PAGE_TITLE}}", escape_html(page_title))

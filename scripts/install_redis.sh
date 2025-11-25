@@ -34,8 +34,16 @@ CPU_CORES=0
 TOTAL_MEM_GB=0
 TOTAL_MEM_MB=0
 
+# 安装控制变量
+SKIP_INSTALL=0
+EXTERNAL_REDIS_MODE=0
+EXTERNAL_REDIS_HOST=""
+EXTERNAL_REDIS_PORT="6379"
+EXTERNAL_REDIS_PASSWORD=""
+
 # 导出变量供父脚本使用
 export REDIS_PASSWORD
+export EXTERNAL_REDIS_MODE EXTERNAL_REDIS_HOST EXTERNAL_REDIS_PORT EXTERNAL_REDIS_PASSWORD
 
 # 检测硬件配置（使用公共函数）
 detect_hardware() {
@@ -61,19 +69,244 @@ check_root() {
     fi
 }
 
+# 检测 Redis 安装方式（包管理器 vs 源码编译）
+detect_redis_installation_method() {
+    # 检查是否通过包管理器安装
+    if command -v rpm &> /dev/null; then
+        if rpm -qa 2>/dev/null | grep -qiE "^redis"; then
+            echo "rpm"
+            return 0
+        fi
+    elif command -v dpkg &> /dev/null; then
+        if dpkg -l 2>/dev/null | grep -qiE "^ii.*redis"; then
+            echo "deb"
+            return 0
+        fi
+    fi
+    
+    # 检查是否通过源码编译安装（检查 /usr/local/bin/redis-server）
+    if [ -f "/usr/local/bin/redis-server" ]; then
+        # 如果存在但不在包管理器中，可能是源码编译
+        echo "source"
+        return 0
+    fi
+    
+    echo "unknown"
+    return 0
+}
+
+# 卸载现有 Redis 安装
+uninstall_existing_redis() {
+    local install_method="$1"
+    
+    echo -e "${BLUE}正在卸载现有 Redis 安装...${NC}"
+    
+    # 停止服务
+    if command -v systemctl &> /dev/null; then
+        systemctl stop redis-server 2>/dev/null || systemctl stop redis 2>/dev/null || true
+        systemctl disable redis-server 2>/dev/null || systemctl disable redis 2>/dev/null || true
+    elif command -v service &> /dev/null; then
+        service redis-server stop 2>/dev/null || service redis stop 2>/dev/null || true
+        chkconfig redis-server off 2>/dev/null || chkconfig redis off 2>/dev/null || true
+    else
+        pkill redis-server 2>/dev/null || true
+    fi
+    
+    # 根据安装方式卸载
+    case "$install_method" in
+        rpm)
+            echo -e "${BLUE}使用 yum/dnf 卸载 Redis...${NC}"
+            if command -v dnf &> /dev/null; then
+                dnf remove -y redis redis-server 2>/dev/null || true
+            elif command -v yum &> /dev/null; then
+                yum remove -y redis redis-server 2>/dev/null || true
+            fi
+            echo -e "${GREEN}✓ Redis 已通过包管理器卸载${NC}"
+            ;;
+        deb)
+            echo -e "${BLUE}使用 apt-get 卸载 Redis...${NC}"
+            if command -v apt-get &> /dev/null; then
+                apt-get remove -y redis redis-server redis-tools 2>/dev/null || true
+                apt-get purge -y redis redis-server redis-tools 2>/dev/null || true
+                apt-get autoremove -y 2>/dev/null || true
+            fi
+            echo -e "${GREEN}✓ Redis 已通过包管理器卸载${NC}"
+            ;;
+        source)
+            echo -e "${BLUE}删除源码编译安装的文件...${NC}"
+            # 删除可执行文件
+            rm -f /usr/local/bin/redis-server 2>/dev/null || true
+            rm -f /usr/local/bin/redis-cli 2>/dev/null || true
+            rm -f /usr/local/bin/redis-benchmark 2>/dev/null || true
+            rm -f /usr/local/bin/redis-check-aof 2>/dev/null || true
+            rm -f /usr/local/bin/redis-check-rdb 2>/dev/null || true
+            rm -f /usr/local/bin/redis-sentinel 2>/dev/null || true
+            
+            # 删除 systemd 服务文件
+            if [ -f /etc/systemd/system/redis.service ]; then
+                rm -f /etc/systemd/system/redis.service
+                systemctl daemon-reload 2>/dev/null || true
+            fi
+            
+            echo -e "${GREEN}✓ 源码编译安装的文件已删除${NC}"
+            ;;
+        *)
+            echo -e "${YELLOW}⚠ 无法确定安装方式，尝试通用卸载...${NC}"
+            # 尝试包管理器卸载
+            if command -v dnf &> /dev/null; then
+                dnf remove -y redis redis-server 2>/dev/null || true
+            elif command -v yum &> /dev/null; then
+                yum remove -y redis redis-server 2>/dev/null || true
+            elif command -v apt-get &> /dev/null; then
+                apt-get remove -y redis redis-server redis-tools 2>/dev/null || true
+                apt-get purge -y redis redis-server redis-tools 2>/dev/null || true
+            fi
+            
+            # 删除可能存在的源码编译文件
+            rm -f /usr/local/bin/redis-server 2>/dev/null || true
+            rm -f /usr/local/bin/redis-cli 2>/dev/null || true
+            
+            echo -e "${GREEN}✓ 通用卸载完成${NC}"
+            ;;
+    esac
+    
+    # 清理 systemd 服务文件（如果存在）
+    if [ -f /etc/systemd/system/redis.service ]; then
+        rm -f /etc/systemd/system/redis.service
+        systemctl daemon-reload 2>/dev/null || true
+    fi
+    if [ -f /etc/systemd/system/redis-server.service ]; then
+        rm -f /etc/systemd/system/redis-server.service
+        systemctl daemon-reload 2>/dev/null || true
+    fi
+    
+    echo -e "${GREEN}✓ Redis 卸载完成${NC}"
+}
+
+# 配置外部 Redis
+configure_external_redis() {
+    echo -e "${BLUE}配置外部 Redis 连接...${NC}"
+    
+    # 提示输入外部 Redis 地址
+    read -p "请输入外部 Redis 地址 [默认: 127.0.0.1]: " EXTERNAL_REDIS_HOST
+    EXTERNAL_REDIS_HOST="${EXTERNAL_REDIS_HOST:-127.0.0.1}"
+    
+    # 提示输入端口
+    read -p "请输入外部 Redis 端口 [默认: 6379]: " EXTERNAL_REDIS_PORT
+    EXTERNAL_REDIS_PORT="${EXTERNAL_REDIS_PORT:-6379}"
+    
+    # 提示输入密码（可以为空）
+    read -p "请输入外部 Redis 密码（如果没有密码，直接回车）: " EXTERNAL_REDIS_PASSWORD
+    EXTERNAL_REDIS_PASSWORD="${EXTERNAL_REDIS_PASSWORD:-}"
+    
+    # 测试连接
+    echo -e "${BLUE}正在测试外部 Redis 连接...${NC}"
+    if command -v redis-cli &> /dev/null; then
+        local test_cmd="redis-cli -h ${EXTERNAL_REDIS_HOST} -p ${EXTERNAL_REDIS_PORT}"
+        if [ -n "$EXTERNAL_REDIS_PASSWORD" ]; then
+            test_cmd="${test_cmd} -a ${EXTERNAL_REDIS_PASSWORD}"
+        fi
+        test_cmd="${test_cmd} ping"
+        
+        if eval "$test_cmd" 2>/dev/null | grep -q "PONG"; then
+            echo -e "${GREEN}✓ 外部 Redis 连接测试成功${NC}"
+            EXTERNAL_REDIS_MODE=1
+            export EXTERNAL_REDIS_MODE EXTERNAL_REDIS_HOST EXTERNAL_REDIS_PORT EXTERNAL_REDIS_PASSWORD
+            return 0
+        else
+            echo -e "${YELLOW}⚠ 外部 Redis 连接测试失败，但将继续配置${NC}"
+            echo -e "${YELLOW}  请确保 Redis 地址、端口和密码正确${NC}"
+            EXTERNAL_REDIS_MODE=1
+            export EXTERNAL_REDIS_MODE EXTERNAL_REDIS_HOST EXTERNAL_REDIS_PORT EXTERNAL_REDIS_PASSWORD
+            return 0
+        fi
+    else
+        echo -e "${YELLOW}⚠ redis-cli 未找到，无法测试连接${NC}"
+        echo -e "${YELLOW}  将使用您提供的信息配置外部 Redis${NC}"
+        EXTERNAL_REDIS_MODE=1
+        export EXTERNAL_REDIS_MODE EXTERNAL_REDIS_HOST EXTERNAL_REDIS_PORT EXTERNAL_REDIS_PASSWORD
+        return 0
+    fi
+}
+
 # 检查 Redis 是否已安装
 check_existing() {
     echo -e "${BLUE}[2/7] 检查是否已安装 Redis...${NC}"
     
     if command -v redis-server &> /dev/null; then
         local redis_version=$(redis-server --version 2>&1 | head -n 1)
+        local install_method="unknown"
+        
+        # 检测安装方式
+        install_method=$(detect_redis_installation_method 2>/dev/null || echo "unknown")
+        
         echo -e "${YELLOW}检测到已安装 Redis: ${redis_version}${NC}"
-        read -p "是否继续安装/更新？[Y/n]: " -n 1 -r
-        echo
-        REPLY="${REPLY:-Y}"
-        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-            echo -e "${YELLOW}安装已取消${NC}"
-            exit 0
+        case "$install_method" in
+            rpm|deb)
+                echo -e "${YELLOW}  安装方式: 包管理器安装${NC}"
+                ;;
+            source)
+                echo -e "${YELLOW}  安装方式: 源码编译安装${NC}"
+                ;;
+            *)
+                echo -e "${YELLOW}  安装方式: 未知${NC}"
+                ;;
+        esac
+        
+        echo ""
+        echo "请选择操作："
+        echo "  1. 保留现有安装，跳过安装"
+        echo "  2. 重新安装 Redis（先卸载，保留配置）"
+        echo "  3. 完全重新安装（先卸载，删除所有配置）"
+        echo "  4. 不安装，使用外部 Redis"
+        echo ""
+        read -p "请选择 [1-4，默认1]: " REINSTALL_CHOICE
+        REINSTALL_CHOICE="${REINSTALL_CHOICE:-1}"
+        
+        case "$REINSTALL_CHOICE" in
+            1)
+                echo -e "${GREEN}保留现有安装，跳过安装${NC}"
+                SKIP_INSTALL=1
+                ;;
+            2)
+                echo -e "${YELLOW}将重新安装 Redis，先卸载现有安装（保留配置）${NC}"
+                uninstall_existing_redis "$install_method"
+                SKIP_INSTALL=0
+                ;;
+            3)
+                echo -e "${RED}将完全重新安装 Redis，先卸载现有安装（删除所有配置）${NC}"
+                uninstall_existing_redis "$install_method"
+                # 删除配置文件（但保留数据目录）
+                if [ -f /etc/redis/redis.conf ]; then
+                    rm -f /etc/redis/redis.conf
+                fi
+                if [ -f /etc/redis.conf ]; then
+                    rm -f /etc/redis.conf
+                fi
+                SKIP_INSTALL=0
+                ;;
+            4)
+                echo -e "${BLUE}将使用外部 Redis${NC}"
+                SKIP_INSTALL=1
+                configure_external_redis
+                ;;
+            *)
+                echo -e "${YELLOW}无效选择，默认保留现有安装${NC}"
+                SKIP_INSTALL=1
+                ;;
+        esac
+    else
+        # 如果未安装，询问是否安装
+        echo -e "${BLUE}未检测到已安装的 Redis${NC}"
+        read -p "是否安装 Redis？[Y/n]: " INSTALL_CHOICE
+        INSTALL_CHOICE="${INSTALL_CHOICE:-Y}"
+        
+        if [[ ! "$INSTALL_CHOICE" =~ ^[Yy]$ ]]; then
+            echo -e "${BLUE}不安装本地 Redis，将使用外部 Redis${NC}"
+            SKIP_INSTALL=1
+            configure_external_redis
+        else
+            SKIP_INSTALL=0
         fi
     fi
     
@@ -929,8 +1162,22 @@ update_waf_config() {
         return 0
     fi
     
-    # 更新配置文件（使用默认的本地 Redis 配置）
-    if bash "$UPDATE_CONFIG_SCRIPT" redis "127.0.0.1" "6379" "0" "${REDIS_PASSWORD:-}"; then
+    # 确定 Redis 连接信息
+    local redis_host="127.0.0.1"
+    local redis_port="6379"
+    local redis_password="${REDIS_PASSWORD:-}"
+    
+    if [ "$EXTERNAL_REDIS_MODE" -eq 1 ]; then
+        redis_host="${EXTERNAL_REDIS_HOST:-127.0.0.1}"
+        redis_port="${EXTERNAL_REDIS_PORT:-6379}"
+        redis_password="${EXTERNAL_REDIS_PASSWORD:-}"
+        echo -e "${BLUE}使用外部 Redis: ${redis_host}:${redis_port}${NC}"
+    else
+        echo -e "${BLUE}使用本地 Redis: ${redis_host}:${redis_port}${NC}"
+    fi
+    
+    # 更新配置文件
+    if bash "$UPDATE_CONFIG_SCRIPT" redis "$redis_host" "$redis_port" "0" "$redis_password"; then
         echo -e "${GREEN}✓ WAF 配置文件已更新${NC}"
     else
         echo -e "${YELLOW}⚠ 配置文件更新失败，请手动更新 lua/config.lua${NC}"
@@ -1086,6 +1333,33 @@ main() {
     # 检查现有安装
     check_existing
     
+    # 如果选择跳过安装且使用外部 Redis，直接更新配置并退出
+    if [ "$SKIP_INSTALL" -eq 1 ] && [ "$EXTERNAL_REDIS_MODE" -eq 1 ]; then
+        echo -e "${GREEN}使用外部 Redis，跳过本地安装${NC}"
+        update_waf_config
+        echo ""
+        echo -e "${GREEN}========================================${NC}"
+        echo -e "${GREEN}外部 Redis 配置完成！${NC}"
+        echo -e "${GREEN}========================================${NC}"
+        echo ""
+        echo -e "${BLUE}外部 Redis 连接信息:${NC}"
+        echo "  地址: ${EXTERNAL_REDIS_HOST}"
+        echo "  端口: ${EXTERNAL_REDIS_PORT}"
+        if [ -n "$EXTERNAL_REDIS_PASSWORD" ]; then
+            echo "  密码: ${EXTERNAL_REDIS_PASSWORD}"
+        else
+            echo "  密码: 未设置"
+        fi
+        echo ""
+        return 0
+    fi
+    
+    # 如果选择跳过安装，直接退出
+    if [ "$SKIP_INSTALL" -eq 1 ]; then
+        echo -e "${GREEN}跳过 Redis 安装${NC}"
+        return 0
+    fi
+    
     # 安装依赖
     install_dependencies
     
@@ -1117,6 +1391,10 @@ main() {
     if [ -n "$TEMP_VARS_FILE" ] && [ -f "$TEMP_VARS_FILE" ]; then
         {
             echo "REDIS_PASSWORD=\"${REDIS_PASSWORD}\""
+            echo "EXTERNAL_REDIS_MODE=\"${EXTERNAL_REDIS_MODE}\""
+            echo "EXTERNAL_REDIS_HOST=\"${EXTERNAL_REDIS_HOST}\""
+            echo "EXTERNAL_REDIS_PORT=\"${EXTERNAL_REDIS_PORT}\""
+            echo "EXTERNAL_REDIS_PASSWORD=\"${EXTERNAL_REDIS_PASSWORD}\""
         } >> "$TEMP_VARS_FILE"
     fi
 }

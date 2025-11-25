@@ -6,26 +6,29 @@ local _M = {}
 
 -- 获取项目根目录
 function _M.get_project_root()
-    -- 检测当前阶段，在 init_worker 阶段直接跳过 ngx.var 访问
-    local current_phase = nil
+    -- 检测当前阶段，在 init_worker 阶段完全跳过 ngx.var 访问
+    -- 注意：ngx.get_phase() 在 init_worker 阶段可能也不可用，所以使用双重保护
+    local is_init_worker = false
     local ok, phase = pcall(function()
         return ngx.get_phase()
     end)
-    if ok then
-        current_phase = phase
+    if ok and phase == "init_worker" then
+        is_init_worker = true
     end
     
     -- 仅在非 init_worker 阶段尝试从 nginx 变量获取
-    if current_phase ~= "init_worker" then
-        local ok, project_root = pcall(function()
+    -- 如果阶段检测失败（ok = false），也跳过 ngx.var 访问（安全起见）
+    if not is_init_worker and ok then
+        local var_ok, project_root = pcall(function()
             return ngx.var.project_root
         end)
-        if ok and project_root and project_root ~= "" then
+        if var_ok and project_root and project_root ~= "" then
             return project_root
         end
     end
     
     -- 从lua_package_path推断（适用于所有阶段，包括 init_worker）
+    -- 这是最可靠的方法，不依赖任何 nginx API
     local first_path = package.path:match("([^;]+)")
     if first_path then
         -- 提取路径：从 lua/?.lua 推断项目根目录

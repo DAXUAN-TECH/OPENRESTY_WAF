@@ -287,6 +287,27 @@
             // 窗口大小改变时重新同步
             window.addEventListener('resize', syncBannerHeight);
         })();
+        
+        // 处理登出链接点击（确保跳转到登录页面）
+        (function() {
+            const logoutLinks = document.querySelectorAll('a[href="/api/auth/logout"]');
+            logoutLinks.forEach(link => {
+                link.addEventListener('click', function(e) {
+                    // 允许默认行为（GET请求会重定向），但也可以使用fetch确保跳转
+                    // 如果链接被阻止，使用fetch处理
+                    if (e.defaultPrevented) {
+                        e.preventDefault();
+                        fetch('/api/auth/logout', { method: 'POST' })
+                            .then(() => {
+                                window.location.href = '/login';
+                            })
+                            .catch(() => {
+                                window.location.href = '/login';
+                            });
+                    }
+                });
+            });
+        })();
     </script>
 </body>
 </html>

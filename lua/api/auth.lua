@@ -154,10 +154,19 @@ function _M.logout()
         audit_log.log_logout(username)
     end
     
-    api_utils.json_response({
-        success = true,
-        message = "登出成功"
-    }, 200)
+    -- 检查请求方法：GET请求直接重定向，POST请求返回JSON
+    local method = ngx.req.get_method()
+    if method == "GET" then
+        -- GET请求：直接重定向到登录页面
+        ngx.redirect("/login")
+        return
+    else
+        -- POST请求：返回JSON响应（供AJAX调用）
+        api_utils.json_response({
+            success = true,
+            message = "登出成功"
+        }, 200)
+    end
 end
 
 -- 检查登录状态接口（返回CSRF Token）

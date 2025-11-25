@@ -126,7 +126,19 @@ local function serve_html_with_layout(filename, page_title, session)
     
     -- 提取style标签（支持多行）
     for style_match in content:gmatch("<style>([%s%S]-)</style>") do
-        extra_styles = extra_styles .. "<style>" .. style_match .. "</style>\n"
+        -- 移除body样式定义，避免与layout.html的body样式冲突
+        -- 匹配 body { ... } 或 body{ ... } 等格式
+        local cleaned_style = style_match
+        -- 移除body选择器的样式块（包括嵌套的body样式）
+        cleaned_style = cleaned_style:gsub("body%s*%{[^}]*%}", "")
+        -- 移除body选择器带属性的样式块（如 body.class { ... }）
+        cleaned_style = cleaned_style:gsub("body[^%{]*%{[^}]*%}", "")
+        -- 移除可能的多行body样式
+        cleaned_style = cleaned_style:gsub("body%s*%{[%s%S]-%}", "")
+        
+        if cleaned_style:match("%S") then  -- 如果还有非空白内容
+            extra_styles = extra_styles .. "<style>" .. cleaned_style .. "</style>\n"
+        end
         -- 从内容中移除style标签
         body_content = body_content:gsub("<style>[%s%S]-</style>", "", 1)
     end

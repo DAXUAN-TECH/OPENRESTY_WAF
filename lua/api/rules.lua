@@ -89,30 +89,43 @@ function _M.list()
     if not result.rules then
         result.rules = {}
     elseif type(result.rules) ~= "table" then
-        ngx.log(ngx.WARN, "rules is not a table, type: ", type(result.rules))
+        ngx.log(ngx.WARN, "rules is not a table, type: ", type(result.rules), ", value: ", tostring(result.rules))
         result.rules = {}
     else
         -- 将 rules 转换为真正的数组（确保索引从 1 开始连续）
+        -- 这是为了确保 JSON 序列化时是数组而不是对象
         local rules_array = {}
-        if #result.rules > 0 then
-            -- 如果是数组，直接复制
-            for i = 1, #result.rules do
-                rules_array[i] = result.rules[i]
-            end
-        else
-            -- 如果不是数组，尝试转换为数组
-            local count = 0
+        local rules_count = 0
+        
+        -- 首先尝试使用 ipairs（适用于数组）
+        for i, rule in ipairs(result.rules) do
+            rules_count = rules_count + 1
+            rules_array[rules_count] = rule
+        end
+        
+        -- 如果 ipairs 没有遍历到任何元素，但 table 不为空，可能是非数组 table
+        if rules_count == 0 and next(result.rules) ~= nil then
+            -- 尝试从 pairs 转换（处理非数组 table）
+            local temp_array = {}
             for k, v in pairs(result.rules) do
-                if type(k) == "number" then
-                    count = count + 1
-                    rules_array[count] = v
+                if type(k) == "number" and k > 0 then
+                    table.insert(temp_array, {key = k, value = v})
                 end
             end
-            -- 如果转换后还是空的，设置为空数组
-            if count == 0 then
-                rules_array = {}
+            -- 按 key 排序
+            table.sort(temp_array, function(a, b) return a.key < b.key end)
+            -- 转换为数组
+            for _, item in ipairs(temp_array) do
+                rules_count = rules_count + 1
+                rules_array[rules_count] = item.value
             end
         end
+        
+        -- 如果转换后还是空的，确保是空数组
+        if rules_count == 0 then
+            rules_array = {}
+        end
+        
         result.rules = rules_array
     end
     

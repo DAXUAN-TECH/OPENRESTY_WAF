@@ -94,7 +94,22 @@ local function require_api_auth()
     -- CSRF防护检查（POST、PUT、DELETE等需要）
     if csrf.requires_csrf(method) then
         local token = csrf.get_token_from_request()
-        local verify_ok, err = csrf.verify_token(token, session.username)
+        -- 使用 user_id 进行验证（优先使用 user_id，如果没有则使用 username）
+        local user_id = session.user_id or session.id
+        if not user_id and session.username then
+            -- 如果 session 中没有 user_id，尝试从数据库查询
+            local mysql_pool = require "waf.mysql_pool"
+            local ok, user_res = pcall(function()
+                local sql = [[
+                    SELECT id FROM waf_users WHERE username = ? LIMIT 1
+                ]]
+                return mysql_pool.query(sql, session.username)
+            end)
+            if ok and user_res and #user_res > 0 then
+                user_id = user_res[1].id
+            end
+        end
+        local verify_ok, err = csrf.verify_token(token, user_id)
         if not verify_ok then
             api_utils.json_response({
                 error = "Forbidden",

@@ -547,17 +547,57 @@
                     // 确保 data.data 存在且包含 rules 数组
                     if (!data.data) {
                         console.error('API response missing data field:', data);
+                        console.error('Full response:', JSON.stringify(data, null, 2));
                         showAlert('响应数据格式错误：缺少 data 字段', 'error');
                         return;
                     }
                     
                     // 确保 rules 是数组
                     const rules = data.data.rules;
+                    console.log('Received rules type:', typeof rules, 'isArray:', Array.isArray(rules), 'value:', rules);
+                    
+                    if (rules === undefined || rules === null) {
+                        console.error('API response rules is undefined or null:', rules);
+                        console.error('Full data.data:', JSON.stringify(data.data, null, 2));
+                        showAlert('响应数据格式错误：rules 字段不存在', 'error');
+                        renderRulesTable([]);
+                        return;
+                    }
+                    
                     if (!Array.isArray(rules)) {
                         console.error('API response rules is not an array:', rules);
-                        showAlert('响应数据格式错误：rules 不是数组', 'error');
-                        // 尝试使用空数组作为后备
-                        renderRulesTable([]);
+                        console.error('Rules type:', typeof rules);
+                        console.error('Rules value:', JSON.stringify(rules, null, 2));
+                        console.error('Full data.data:', JSON.stringify(data.data, null, 2));
+                        
+                        // 尝试转换：如果是对象，尝试转换为数组
+                        let rulesArray = [];
+                        if (typeof rules === 'object') {
+                            // 尝试从对象转换为数组
+                            const keys = Object.keys(rules);
+                            if (keys.length > 0) {
+                                // 检查是否是数字键
+                                const numericKeys = keys.filter(k => !isNaN(parseInt(k)));
+                                if (numericKeys.length > 0) {
+                                    // 按数字键排序
+                                    numericKeys.sort((a, b) => parseInt(a) - parseInt(b));
+                                    rulesArray = numericKeys.map(k => rules[k]);
+                                    console.log('Converted object to array:', rulesArray);
+                                } else {
+                                    // 非数字键，可能是单个对象，包装成数组
+                                    rulesArray = [rules];
+                                    console.log('Wrapped object in array:', rulesArray);
+                                }
+                            }
+                        }
+                        
+                        if (rulesArray.length > 0) {
+                            renderRulesTable(rulesArray);
+                            renderPagination(data.data, 'pagination', loadRules);
+                        } else {
+                            showAlert('响应数据格式错误：rules 不是数组且无法转换', 'error');
+                            renderRulesTable([]);
+                        }
                         return;
                     }
                     

@@ -76,6 +76,7 @@ function _M.list()
     
     -- 确保 result 存在且包含 rules 数组
     if not result then
+        ngx.log(ngx.WARN, "list_rules returned nil result")
         result = {
             rules = {},
             total = 0,
@@ -87,46 +88,66 @@ function _M.list()
     
     -- 确保 rules 是数组类型（用于 JSON 序列化）
     if not result.rules then
+        ngx.log(ngx.WARN, "result.rules is nil, setting to empty array")
         result.rules = {}
     elseif type(result.rules) ~= "table" then
-        ngx.log(ngx.WARN, "rules is not a table, type: ", type(result.rules), ", value: ", tostring(result.rules))
+        ngx.log(ngx.ERR, "result.rules is not a table, type: ", type(result.rules), ", value: ", tostring(result.rules))
         result.rules = {}
     else
-        -- 将 rules 转换为真正的数组（确保索引从 1 开始连续）
-        -- 这是为了确保 JSON 序列化时是数组而不是对象
-        local rules_array = {}
-        local rules_count = 0
+        -- 检查是否是数组（使用 # 和 ipairs 判断）
+        local is_array = false
+        local array_length = 0
         
-        -- 首先尝试使用 ipairs（适用于数组）
-        for i, rule in ipairs(result.rules) do
-            rules_count = rules_count + 1
-            rules_array[rules_count] = rule
+        -- 尝试使用 ipairs 遍历
+        for i, _ in ipairs(result.rules) do
+            array_length = i
+            is_array = true
         end
         
-        -- 如果 ipairs 没有遍历到任何元素，但 table 不为空，可能是非数组 table
-        if rules_count == 0 and next(result.rules) ~= nil then
-            -- 尝试从 pairs 转换（处理非数组 table）
+        -- 如果 ipairs 没有遍历到任何元素，检查是否是空数组
+        if array_length == 0 then
+            if next(result.rules) == nil then
+                -- 空数组，保持原样
+                is_array = true
+                ngx.log(ngx.DEBUG, "result.rules is empty array")
+            else
+                -- 非空但不是数组，需要转换
+                ngx.log(ngx.WARN, "result.rules is not an array, converting...")
+                is_array = false
+            end
+        end
+        
+        -- 如果不是数组，转换为数组
+        if not is_array then
+            local rules_array = {}
             local temp_array = {}
+            
+            -- 收集所有数字键的值
             for k, v in pairs(result.rules) do
                 if type(k) == "number" and k > 0 then
                     table.insert(temp_array, {key = k, value = v})
                 end
             end
+            
             -- 按 key 排序
             table.sort(temp_array, function(a, b) return a.key < b.key end)
+            
             -- 转换为数组
             for _, item in ipairs(temp_array) do
-                rules_count = rules_count + 1
-                rules_array[rules_count] = item.value
+                table.insert(rules_array, item.value)
             end
+            
+            result.rules = rules_array
+            ngx.log(ngx.INFO, "converted rules to array, length: ", #result.rules)
+        else
+            ngx.log(ngx.DEBUG, "result.rules is already an array, length: ", array_length)
         end
-        
-        -- 如果转换后还是空的，确保是空数组
-        if rules_count == 0 then
-            rules_array = {}
-        end
-        
-        result.rules = rules_array
+    end
+    
+    -- 最终验证：确保 rules 是数组
+    if type(result.rules) ~= "table" then
+        ngx.log(ngx.ERR, "FATAL: result.rules is still not a table after conversion!")
+        result.rules = {}
     end
     
     api_utils.json_response({

@@ -28,7 +28,7 @@ local function read_html_file(filename)
     local file_path = project_root .. "/lua/web/" .. filename
     
     -- 尝试打开文件
-    local file, open_err = io.open(file_path, "r")
+    local file = io.open(file_path, "r")
     if file then
         local content = file:read("*all")
         file:close()
@@ -40,7 +40,7 @@ local function read_html_file(filename)
         end
     else
         -- 记录详细的错误信息
-        ngx.log(ngx.ERR, "HTML file not found: ", file_path, " (project_root: ", project_root, ", open error: ", tostring(open_err), ")")
+        ngx.log(ngx.ERR, "HTML file not found: ", file_path, " (project_root: ", project_root, ")")
         
         -- 尝试备用路径（如果项目根目录检测有问题）
         -- 尝试从当前文件路径推断
@@ -58,6 +58,8 @@ local function read_html_file(filename)
                     if content then
                         return content
                     end
+                else
+                    ngx.log(ngx.ERR, "Alternative path also failed: ", alt_file_path)
                 end
             end
         end

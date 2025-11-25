@@ -194,7 +194,7 @@ function _M.verify_credentials(username, password)
     
     -- 优先从数据库查询用户
     local mysql_pool = require "waf.mysql_pool"
-    local ok, res, query_err = pcall(function()
+    local ok, query_result = pcall(function()
         local sql = [[
             SELECT id, username, password_hash, role, totp_secret, status
             FROM waf_users
@@ -202,21 +202,38 @@ function _M.verify_credentials(username, password)
             AND status = 1
             LIMIT 1
         ]]
-        local result, err = mysql_pool.query(sql, username)
-        if err then
-            return nil, err
-        end
-        return result
+        return mysql_pool.query(sql, username)
     end)
     
     -- 记录数据库查询结果
     if not ok then
-        ngx.log(ngx.ERR, "verify_credentials: database query failed (pcall error): ", tostring(res))
+        ngx.log(ngx.ERR, "verify_credentials: database query failed (pcall error): ", tostring(query_result))
         return false, nil
     end
     
+    -- mysql_pool.query 返回 (res, err)
+    local res, query_err = query_result, nil
+    if type(query_result) == "table" and query_result[1] == nil and query_result[2] ~= nil then
+        -- 如果返回的是错误，query_result[2] 是错误信息
+        res = nil
+        query_err = query_result[2]
+    elseif type(query_result) == "table" then
+        -- 正常情况：query_result 就是结果数组
+        res = query_result
+    else
+        -- 其他情况，尝试解析
+        res, query_err = query_result, nil
+    end
+    
+    -- 如果 pcall 成功但查询返回错误
     if query_err then
         ngx.log(ngx.ERR, "verify_credentials: database query error: ", tostring(query_err))
+        return false, nil
+    end
+    
+    -- 如果查询返回 nil（可能是连接失败）
+    if not res then
+        ngx.log(ngx.ERR, "verify_credentials: database query returned nil (connection failed?)")
         return false, nil
     end
     
@@ -307,7 +324,7 @@ function _M.verify_credentials(username, password)
                 if create_ok and create_result then
                     ngx.log(ngx.WARN, "verify_credentials: default admin user created successfully, insert_id: ", tostring(create_result))
                     -- 重新查询用户信息
-                    local user_ok, user_res, user_err = pcall(function()
+                    local user_ok, user_result = pcall(function()
                         local user_sql = [[
                             SELECT id, username, password_hash, role, totp_secret, status
                             FROM waf_users
@@ -315,20 +332,32 @@ function _M.verify_credentials(username, password)
                             AND status = 1
                             LIMIT 1
                         ]]
-                        local result, err = mysql_pool.query(user_sql, username)
-                        if err then
-                            return nil, err
-                        end
-                        return result
+                        return mysql_pool.query(user_sql, username)
                     end)
                     
                     if not user_ok then
-                        ngx.log(ngx.ERR, "verify_credentials: failed to query created user (pcall error): ", tostring(user_res))
+                        ngx.log(ngx.ERR, "verify_credentials: failed to query created user (pcall error): ", tostring(user_result))
                         return false, nil
+                    end
+                    
+                    -- mysql_pool.query 返回 (res, err)
+                    local user_res, user_err = user_result, nil
+                    if type(user_result) == "table" and user_result[1] == nil and user_result[2] ~= nil then
+                        user_res = nil
+                        user_err = user_result[2]
+                    elseif type(user_result) == "table" then
+                        user_res = user_result
+                    else
+                        user_res, user_err = user_result, nil
                     end
                     
                     if user_err then
                         ngx.log(ngx.ERR, "verify_credentials: failed to query created user (query error): ", tostring(user_err))
+                        return false, nil
+                    end
+                    
+                    if not user_res then
+                        ngx.log(ngx.ERR, "verify_credentials: failed to query created user (returned nil)")
                         return false, nil
                     end
                     

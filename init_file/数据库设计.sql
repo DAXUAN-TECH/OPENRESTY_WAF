@@ -116,7 +116,7 @@ CREATE TABLE IF NOT EXISTS waf_block_logs (
     KEY idx_rule_id_time (rule_id, block_time) COMMENT '规则和时间联合索引，用于查询特定规则的时间序列',
     KEY idx_block_reason_time (block_reason, block_time) COMMENT '封控原因和时间联合索引，用于按原因统计',
     -- 外键约束：规则删除时，保留日志记录但设置为NULL（SET NULL）
-    FOREIGN KEY (rule_id) REFERENCES waf_block_rules(id) ON DELETE SET NULL COMMENT '外键约束，规则删除时保留日志记录'
+    FOREIGN KEY (rule_id) REFERENCES waf_block_rules(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci 
 ROW_FORMAT=DYNAMIC COMMENT='封控日志表：记录所有被封控的IP访问记录，用于审计和统计分析';
 
@@ -491,7 +491,8 @@ CREATE TABLE IF NOT EXISTS waf_user_sessions (
     UNIQUE KEY uk_session_id (session_id) COMMENT '会话ID唯一索引，确保每个会话ID只出现一次',
     KEY idx_user_id_expires (user_id, expires_at) COMMENT '用户和过期时间联合索引，用于查询特定用户的活跃会话',
     KEY idx_expires_at (expires_at) COMMENT '过期时间索引，用于清理过期会话',
-    FOREIGN KEY (user_id) REFERENCES waf_users(id) ON DELETE CASCADE COMMENT '外键约束，用户删除时自动删除其所有会话'
+    -- 外键约束：用户删除时自动删除其所有会话
+    FOREIGN KEY (user_id) REFERENCES waf_users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci 
 ROW_FORMAT=DYNAMIC COMMENT='用户会话表：存储用户登录会话信息，用于会话管理和安全审计';
 
@@ -514,7 +515,7 @@ CREATE TABLE IF NOT EXISTS waf_auto_unblock_tasks (
     KEY idx_rule_id (rule_id) COMMENT '规则ID索引',
     KEY idx_client_ip (client_ip) COMMENT 'IP地址索引',
     -- 外键约束：规则删除时，保留任务记录但设置为NULL（SET NULL）
-    FOREIGN KEY (rule_id) REFERENCES waf_block_rules(id) ON DELETE SET NULL COMMENT '外键约束，规则删除时保留任务记录'
+    FOREIGN KEY (rule_id) REFERENCES waf_block_rules(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci 
 ROW_FORMAT=DYNAMIC COMMENT='自动解封任务表';
 
@@ -598,7 +599,8 @@ CREATE TABLE IF NOT EXISTS waf_proxy_backends (
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '记录最后更新时间',
     PRIMARY KEY (id),
     KEY idx_proxy_id_status (proxy_id, status) COMMENT '代理ID和状态联合索引，用于查询特定代理的启用后端',
-    FOREIGN KEY (proxy_id) REFERENCES waf_proxy_configs(id) ON DELETE CASCADE COMMENT '外键约束，代理配置删除时自动删除其所有后端服务器'
+    -- 外键约束：代理配置删除时自动删除其所有后端服务器
+    FOREIGN KEY (proxy_id) REFERENCES waf_proxy_configs(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci 
 ROW_FORMAT=DYNAMIC COMMENT='反向代理后端服务器表：存储upstream类型的多个后端服务器配置';
 
@@ -638,7 +640,7 @@ CREATE TABLE IF NOT EXISTS waf_audit_logs (
     KEY idx_status_time (status, created_at) COMMENT '状态和时间联合索引，用于查询失败操作',
     KEY idx_ip_address_time (ip_address, created_at) COMMENT 'IP和时间联合索引，用于安全审计',
     -- 外键约束：用户删除时，保留审计日志但设置为NULL（SET NULL）
-    FOREIGN KEY (user_id) REFERENCES waf_users(id) ON DELETE SET NULL COMMENT '外键约束，用户删除时保留审计日志记录'
+    FOREIGN KEY (user_id) REFERENCES waf_users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci 
 ROW_FORMAT=DYNAMIC COMMENT='操作审计日志表：记录所有管理操作，包括登录、规则变更、配置修改等，用于安全审计和问题排查';
 
@@ -655,7 +657,8 @@ CREATE TABLE IF NOT EXISTS waf_csrf_tokens (
     UNIQUE KEY uk_token (token) COMMENT 'Token唯一索引，确保每个Token只出现一次',
     KEY idx_user_id_expires (user_id, expires_at) COMMENT '用户和过期时间联合索引，用于查询特定用户的有效Token',
     KEY idx_expires_at (expires_at) COMMENT '过期时间索引，用于清理过期Token',
-    FOREIGN KEY (user_id) REFERENCES waf_users(id) ON DELETE CASCADE COMMENT '外键约束，用户删除时自动删除其所有Token'
+    -- 外键约束：用户删除时自动删除其所有Token
+    FOREIGN KEY (user_id) REFERENCES waf_users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci 
 ROW_FORMAT=DYNAMIC COMMENT='CSRF Token表：存储CSRF防护Token，防止跨站请求伪造攻击';
 

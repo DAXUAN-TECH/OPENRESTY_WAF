@@ -13,6 +13,7 @@ local stats_api = require "api.stats"
 local proxy_api = require "api.proxy"
 local system_api = require "api.system"
 local logs_api = require "api.logs"
+local geo_api = require "api.geo"
 local api_utils = require "api.utils"
 local auth = require "waf.auth"
 local csrf = require "waf.csrf"
@@ -163,6 +164,10 @@ function _M.route()
     -- 日志查看相关路由
     if path:match("^/api/logs") then
         return _M.route_logs(path, method)
+    end
+    
+    if path:match("^/api/geo") then
+        return _M.route_geo(path, method)
     end
     
     -- 性能监控相关路由
@@ -652,6 +657,21 @@ function _M.route_auth(path, method)
         return auth_api.generate_password()
     else
         api_utils.json_response({error = "Not Found"}, 404)
+    end
+end
+
+-- 地域数据路由分发
+function _M.route_geo(path, method)
+    if path == "/api/geo/all" then
+        return geo_api.get_all()
+    elseif path == "/api/geo/cities" then
+        return geo_api.get_cities()
+    else
+        api_utils.json_response({
+            error = "Geo API endpoint not found",
+            path = path,
+            method = method
+        }, 404)
     end
 end
 

@@ -68,26 +68,118 @@ end
 
 -- 记录登录操作
 function _M.log_login(username, success, error_message)
-    _M.log(
-        "login",
-        "user",
-        username,
-        success and "用户登录成功" or "用户登录失败",
-        success and "success" or "failed",
-        error_message
-    )
+    -- 登录时可能还没有 session，直接使用传入的 username
+    local user_id = nil
+    local username_for_log = username
+    
+    -- 尝试从 session 获取 user_id（如果 session 已创建）
+    local authenticated, session = auth.is_authenticated()
+    if authenticated and session then
+        user_id = session.user_id or session.id
+        -- 如果 session 中有 username，使用 session 中的（更可靠）
+        if session.username then
+            username_for_log = session.username
+        end
+    end
+    
+    -- 获取请求信息
+    local method = ngx.req.get_method()
+    local path = ngx.var.request_uri:match("^([^?]+)")
+    local ip_address = ngx.var.remote_addr
+    local user_agent = ngx.var.http_user_agent
+    
+    -- 获取请求参数（仅记录非敏感参数）
+    local request_params = nil
+    if method == "POST" or method == "PUT" then
+        ngx.req.read_body()
+        local args = ngx.req.get_post_args()
+        if args then
+            -- 过滤敏感字段
+            local filtered_args = {}
+            for k, v in pairs(args) do
+                if k ~= "password" and k ~= "password_hash" and k ~= "totp_secret" then
+                    filtered_args[k] = v
+                end
+            end
+            if next(filtered_args) then
+                request_params = cjson.encode(filtered_args)
+            end
+        end
+    end
+    
+    -- 异步写入数据库（不阻塞请求）
+    local ok, err = pcall(function()
+        local sql = [[
+            INSERT INTO waf_audit_logs (
+                user_id, username, action_type, resource_type, resource_id,
+                action_description, request_method, request_path, request_params,
+                ip_address, user_agent, status, error_message
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ]]
+        mysql_pool.query(sql,
+            user_id, username_for_log, "login", "user", username_for_log,
+            success and "用户登录成功" or "用户登录失败", method, path, request_params,
+            ip_address, user_agent, success and "success" or "failed", error_message
+        )
+    end)
+    
+    if not ok then
+        ngx.log(ngx.ERR, "Failed to write login audit log: ", err)
+    end
 end
 
 -- 记录登出操作
 function _M.log_logout(username)
-    _M.log(
-        "logout",
-        "user",
-        username,
-        "用户登出",
-        "success",
-        nil
-    )
+    -- 登出时 session 可能已失效，直接使用传入的 username
+    local user_id = nil
+    local username_for_log = username
+    
+    -- 尝试从 session 获取 user_id（如果 session 还存在）
+    local authenticated, session = auth.is_authenticated()
+    if authenticated and session then
+        user_id = session.user_id or session.id
+        -- 如果 session 中有 username，使用 session 中的（更可靠）
+        if session.username then
+            username_for_log = session.username
+        end
+    end
+    
+    -- 如果传入的 username 为空，尝试从 session 获取
+    if not username_for_log and authenticated and session then
+        username_for_log = session.username
+    end
+    
+    -- 如果还是没有 username，使用 "unknown"
+    if not username_for_log then
+        username_for_log = "unknown"
+        ngx.log(ngx.WARN, "log_logout: username is nil, using 'unknown'")
+    end
+    
+    -- 获取请求信息
+    local method = ngx.req.get_method()
+    local path = ngx.var.request_uri:match("^([^?]+)")
+    local ip_address = ngx.var.remote_addr
+    local user_agent = ngx.var.http_user_agent
+    
+    -- 异步写入数据库（不阻塞请求）
+    local ok, err = pcall(function()
+        local sql = [[
+            INSERT INTO waf_audit_logs (
+                user_id, username, action_type, resource_type, resource_id,
+                action_description, request_method, request_path, request_params,
+                ip_address, user_agent, status, error_message
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ]]
+        mysql_pool.query(sql,
+            user_id, username_for_log, "logout", "user", username_for_log,
+            "用户登出", method, path, nil,
+            ip_address, user_agent, "success", nil
+        )
+    end)
+    
+    if not ok then
+        ngx.log(ngx.ERR, "Failed to write logout audit log: ", err)
+    end
 end
 
 -- 记录规则操作

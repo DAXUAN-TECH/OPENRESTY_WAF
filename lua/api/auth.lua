@@ -141,6 +141,10 @@ function _M.logout()
         username = session.username
     end
     
+    -- 先记录登出审计日志（在删除 session 之前）
+    -- 即使 username 为 nil，也尝试记录（log_logout 会处理）
+    audit_log.log_logout(username)
+    
     local session_id = auth.get_session_from_cookie()
     if session_id then
         auth.delete_session(session_id)
@@ -148,11 +152,6 @@ function _M.logout()
     
     -- 清除Cookie
     auth.clear_session_cookie()
-    
-    -- 记录登出审计日志
-    if username then
-        audit_log.log_logout(username)
-    end
     
     -- 检查请求方法：GET请求直接重定向，POST请求返回JSON
     local method = ngx.req.get_method()

@@ -288,26 +288,35 @@
                 
                 // 加载时间序列数据
                 const timeseriesRes = await fetch(`/api/stats/timeseries?start_time=${encodeURIComponent(startTime)}&end_time=${encodeURIComponent(endTime)}&interval=${interval}`);
-                const timeseriesData = await timeseriesRes.json();
-                
-                if (timeseriesData.success) {
-                    updateTimeseriesChart(timeseriesData.data);
+                if (timeseriesRes.ok) {
+                    const timeseriesData = await timeseriesRes.json();
+                    if (timeseriesData.success) {
+                        updateTimeseriesChart(timeseriesData.data);
+                    }
+                } else {
+                    console.warn('Failed to load timeseries data:', timeseriesRes.status, timeseriesRes.statusText);
                 }
                 
                 // 加载规则统计
                 const rulesRes = await fetch(`/api/stats/rules?start_time=${encodeURIComponent(startTime)}&end_time=${encodeURIComponent(endTime)}&limit=10`);
-                const rulesData = await rulesRes.json();
-                
-                if (rulesData.success) {
-                    updateRulesTable(rulesData.data);
+                if (rulesRes.ok) {
+                    const rulesData = await rulesRes.json();
+                    if (rulesData.success) {
+                        updateRulesTable(rulesData.data);
+                    }
+                } else {
+                    console.warn('Failed to load rules stats:', rulesRes.status, rulesRes.statusText);
                 }
                 
                 // 加载IP统计
                 const ipsRes = await fetch(`/api/stats/ip?start_time=${encodeURIComponent(startTime)}&end_time=${encodeURIComponent(endTime)}&limit=20`);
-                const ipsData = await ipsRes.json();
-                
-                if (ipsData.success) {
-                    updateIPsTable(ipsData.data);
+                if (ipsRes.ok) {
+                    const ipsData = await ipsRes.json();
+                    if (ipsData.success) {
+                        updateIPsTable(ipsData.data);
+                    }
+                } else {
+                    console.warn('Failed to load IP stats:', ipsRes.status, ipsRes.statusText);
                 }
                 
                 document.getElementById('loading').style.display = 'none';

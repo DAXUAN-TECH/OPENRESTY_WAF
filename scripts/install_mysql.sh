@@ -791,12 +791,12 @@ check_existing() {
         
         # 检查数据目录是否已初始化（使用统一函数，检查已初始化状态）
         local data_dir
-        data_dir=$(get_mysql_data_dir 1)
+        data_dir=$(get_mysql_data_dir 1) || true  # 防止 set -e 导致退出
         local mysql_data_initialized=0
         if [ -n "$data_dir" ]; then
-                    mysql_data_initialized=1
+            mysql_data_initialized=1
             mysql_data_dir="$data_dir"
-                fi
+        fi
         
         if [ $mysql_data_initialized -eq 1 ]; then
             echo -e "${YELLOW}检测到 MySQL 数据目录已初始化: ${mysql_data_dir}${NC}"
@@ -805,7 +805,14 @@ check_existing() {
             echo "  1. 保留现有数据和配置，跳过安装"
             echo "  2. 重新安装 MySQL（先卸载，保留数据目录）"
             echo "  3. 完全重新安装（先卸载，删除所有数据和配置）"
-            read -p "请选择 [1-3] (默认: 1): " REINSTALL_CHOICE
+            # 检查是否在交互式终端中
+            if [ -t 0 ]; then
+                read -p "请选择 [1-3] (默认: 1): " REINSTALL_CHOICE
+            else
+                # 非交互模式，默认选择1
+                REINSTALL_CHOICE="1"
+                echo -e "${BLUE}[非交互模式] 自动选择: 1. 保留现有数据和配置，跳过安装${NC}"
+            fi
             REINSTALL_CHOICE="${REINSTALL_CHOICE:-1}"  # 默认选择1
             
             case "$REINSTALL_CHOICE" in
@@ -902,7 +909,14 @@ check_existing() {
             echo "  1. 保留现有安装，跳过安装"
             echo "  2. 重新安装 MySQL（先卸载，保留数据目录）"
             echo "  3. 完全重新安装（先卸载，删除所有数据和配置）"
-            read -p "请选择 [1-3] (默认: 1): " REINSTALL_CHOICE
+            # 检查是否在交互式终端中
+            if [ -t 0 ]; then
+                read -p "请选择 [1-3] (默认: 1): " REINSTALL_CHOICE
+            else
+                # 非交互模式，默认选择1
+                REINSTALL_CHOICE="1"
+                echo -e "${BLUE}[非交互模式] 自动选择: 1. 保留现有安装，跳过安装${NC}"
+            fi
             REINSTALL_CHOICE="${REINSTALL_CHOICE:-1}"  # 默认选择1
             
             case "$REINSTALL_CHOICE" in
@@ -991,6 +1005,12 @@ check_existing() {
         fi
     else
         echo -e "${GREEN}✓ MySQL 未安装，将进行全新安装${NC}"
+    fi
+    
+    # 如果设置了 SKIP_INSTALL，确保函数正确返回
+    if [ "${SKIP_INSTALL:-0}" -eq 1 ]; then
+        echo -e "${GREEN}✓ 检查完成（将跳过安装步骤）${NC}"
+        return 0
     fi
     
     # 版本设置：默认安装 MySQL 8.0 最新版本

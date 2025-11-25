@@ -131,7 +131,12 @@ local china_provinces = {
         provinces = {
             {code = "Guangdong", name = "广东", cities = {"Guangzhou", "Shaoguan", "Shenzhen", "Zhuhai", "Shantou", "Foshan", "Jiangmen", "Zhanjiang", "Maoming", "Zhaoqing", "Huizhou", "Meizhou", "Shanwei", "Heyuan", "Yangjiang", "Qingyuan", "Dongguan", "Zhongshan", "Chaozhou", "Jieyang", "Yunfu"}},
             {code = "Guangxi", name = "广西", cities = {"Nanning", "Liuzhou", "Guilin", "Wuzhou", "Beihai", "Fangchenggang", "Qinzhou", "Guigang", "Yulin", "Baise", "Hezhou", "Hechi", "Laibin", "Chongzuo"}},
-            {code = "Hainan", name = "海南", cities = {"Haikou", "Sanya", "Sansha", "Danzhou", "Wuzhishan", "Wenchang", "Qionghai", "Wanning", "Dongfang", "Ding'an", "Tunchang", "Chengmai", "Lingao", "Baisha", "Changjiang", "Ledong", "Lingshui", "Baoting", "Qiongzhong"}},
+            {code = "Hainan", name = "海南", cities = {"Haikou", "Sanya", "Sansha", "Danzhou", "Wuzhishan", "Wenchang", "Qionghai", "Wanning", "Dongfang", "Ding'an", "Tunchang", "Chengmai", "Lingao", "Baisha", "Changjiang", "Ledong", "Lingshui", "Baoting", "Qiongzhong"}}
+        }
+    },
+    {
+        region = "特别行政区",
+        provinces = {
             {code = "Taiwan", name = "台湾", cities = {"Taipei", "New Taipei", "Taoyuan", "Taichung", "Tainan", "Kaohsiung", "Keelung", "Hsinchu", "Chiayi", "Hsinchu County", "Miaoli", "Changhua", "Nantou", "Yunlin", "Chiayi County", "Pingtung", "Yilan", "Hualien", "Taitung", "Penghu", "Kinmen", "Lienchiang"}},
             {code = "Hong Kong", name = "香港", cities = {"Hong Kong", "Central and Western", "Wan Chai", "Eastern", "Southern", "Yau Tsim Mong", "Sham Shui Po", "Kowloon City", "Wong Tai Sin", "Kwun Tong", "Kwai Tsing", "Tsuen Wan", "Tuen Mun", "Yuen Long", "North", "Tai Po", "Sha Tin", "Sai Kung", "Islands"}},
             {code = "Macau", name = "澳门", cities = {"Macau", "Macao Peninsula", "Taipa", "Coloane", "Cotai"}}

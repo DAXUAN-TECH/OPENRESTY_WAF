@@ -600,36 +600,12 @@
                 
                 <div class="form-group">
                     <label>生效开始时间 *</label>
-                    <div style="position: relative; display: inline-block; width: 100%;">
-                        <input type="text" id="create-start-time" required readonly style="cursor: pointer; background: white;">
-                        <button type="button" class="datetime-confirm-btn" onclick="openDateTimePicker('create-start-time')" style="position: absolute; right: 5px; top: 50%; transform: translateY(-50%); padding: 5px 10px; background: #4CAF50; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 12px;">选择</button>
-                    </div>
+                    <input type="datetime-local" id="create-start-time" required>
                 </div>
                 
                 <div class="form-group">
                     <label>生效结束时间 *</label>
-                    <div style="position: relative; display: inline-block; width: 100%;">
-                        <input type="text" id="create-end-time" required readonly style="cursor: pointer; background: white;">
-                        <button type="button" class="datetime-confirm-btn" onclick="openDateTimePicker('create-end-time')" style="position: absolute; right: 5px; top: 50%; transform: translateY(-50%); padding: 5px 10px; background: #4CAF50; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 12px;">选择</button>
-                    </div>
-                </div>
-                
-                <!-- 自定义日期时间选择器 -->
-                <div id="datetime-picker-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 10000;">
-                    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.3); min-width: 300px;">
-                        <div style="margin-bottom: 15px;">
-                            <label style="display: block; margin-bottom: 5px; font-weight: bold;">选择日期</label>
-                            <input type="date" id="picker-date" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
-                        </div>
-                        <div style="margin-bottom: 15px;">
-                            <label style="display: block; margin-bottom: 5px; font-weight: bold;">选择时间</label>
-                            <input type="time" id="picker-time" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
-                        </div>
-                        <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;">
-                            <button type="button" onclick="closeDateTimePicker()" style="padding: 8px 16px; background: #f5f5f5; border: 1px solid #ddd; border-radius: 4px; cursor: pointer;">取消</button>
-                            <button type="button" onclick="confirmDateTimePicker()" style="padding: 8px 16px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer;">确认</button>
-                        </div>
-                    </div>
+                    <input type="datetime-local" id="create-end-time" required>
                 </div>
                 
                 <div class="form-actions">
@@ -1026,9 +1002,8 @@
                 priority: parseInt(document.getElementById('create-priority').value) || 0
             };
             
-            // 日期格式转换：YYYY-MM-DD HH:mm -> YYYY-MM-DD HH:mm:ss
-            ruleData.start_time = startTime ? (startTime.includes(':') && !startTime.endsWith(':00') ? startTime + ':00' : startTime) : '';
-            ruleData.end_time = endTime ? (endTime.includes(':') && !endTime.endsWith(':00') ? endTime + ':00' : endTime) : '';
+            if (startTime) ruleData.start_time = startTime.replace('T', ' ') + ':00';
+            if (endTime) ruleData.end_time = endTime.replace('T', ' ') + ':00';
             
             try {
                 const response = await fetch('/api/rules', {
@@ -1667,67 +1642,6 @@
             }
         }
         
-        // 日期时间选择器相关变量
-        let currentDateTimeInput = null;
-        
-        // 打开日期时间选择器
-        function openDateTimePicker(inputId) {
-            currentDateTimeInput = inputId;
-            const input = document.getElementById(inputId);
-            const modal = document.getElementById('datetime-picker-modal');
-            
-            // 如果输入框已有值，解析并设置到选择器
-            if (input.value) {
-                const dateTime = input.value;
-                const [date, time] = dateTime.split(' ');
-                if (date) document.getElementById('picker-date').value = date;
-                if (time) document.getElementById('picker-time').value = time.substring(0, 5);
-            } else {
-                // 设置默认值为当前日期时间
-                const now = new Date();
-                const year = now.getFullYear();
-                const month = String(now.getMonth() + 1).padStart(2, '0');
-                const day = String(now.getDate()).padStart(2, '0');
-                const hours = String(now.getHours()).padStart(2, '0');
-                const minutes = String(now.getMinutes()).padStart(2, '0');
-                
-                document.getElementById('picker-date').value = `${year}-${month}-${day}`;
-                document.getElementById('picker-time').value = `${hours}:${minutes}`;
-            }
-            
-            modal.style.display = 'block';
-        }
-        
-        // 关闭日期时间选择器
-        function closeDateTimePicker() {
-            document.getElementById('datetime-picker-modal').style.display = 'none';
-            currentDateTimeInput = null;
-        }
-        
-        // 确认日期时间选择
-        function confirmDateTimePicker() {
-            if (!currentDateTimeInput) return;
-            
-            const date = document.getElementById('picker-date').value;
-            const time = document.getElementById('picker-time').value;
-            
-            if (!date) {
-                showAlert('请选择日期', 'error');
-                return;
-            }
-            
-            if (!time) {
-                showAlert('请选择时间', 'error');
-                return;
-            }
-            
-            // 格式：YYYY-MM-DD HH:mm
-            const dateTime = `${date} ${time}`;
-            document.getElementById(currentDateTimeInput).value = dateTime;
-            
-            closeDateTimePicker();
-        }
-        
         // 设置日期默认值为当日
         function setDefaultDates() {
             const now = new Date();
@@ -1737,8 +1651,8 @@
             const hours = String(now.getHours()).padStart(2, '0');
             const minutes = String(now.getMinutes()).padStart(2, '0');
             
-            // 格式：YYYY-MM-DD HH:mm
-            const defaultDateTime = `${year}-${month}-${day} ${hours}:${minutes}`;
+            // 格式：YYYY-MM-DDTHH:mm (datetime-local格式)
+            const defaultDateTime = `${year}-${month}-${day}T${hours}:${minutes}`;
             
             const startTimeInput = document.getElementById('create-start-time');
             const endTimeInput = document.getElementById('create-end-time');
@@ -1748,7 +1662,7 @@
             }
             if (endTimeInput && !endTimeInput.value) {
                 // 结束时间默认为当日23:59
-                endTimeInput.value = `${year}-${month}-${day} 23:59`;
+                endTimeInput.value = `${year}-${month}-${day}T23:59`;
             }
         }
         
@@ -1793,11 +1707,6 @@
                 const modal = document.getElementById('edit-modal');
                 if (event.target == modal) {
                     closeEditModal();
-                }
-                
-                const datetimeModal = document.getElementById('datetime-picker-modal');
-                if (event.target == datetimeModal) {
-                    closeDateTimePicker();
                 }
                 
                 const successModal = document.getElementById('create-success-modal');

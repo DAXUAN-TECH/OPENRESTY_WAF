@@ -217,28 +217,49 @@ function _M.route()
         local filename = path:match("([^/]+)$")
         if filename then
             local project_root = path_utils.get_project_root()
+            local file_path = nil
+            local file = nil
+            
+            -- 尝试主路径
             if project_root then
-                local file_path = project_root .. "/lua/web/" .. filename
-                local file = io.open(file_path, "r")
-                if file then
-                    local content = file:read("*all")
-                    file:close()
-                    if content then
-                        if path:match("%.js$") then
-                            ngx.header.content_type = "application/javascript; charset=utf-8"
-                        elseif path:match("%.css$") then
-                            ngx.header.content_type = "text/css; charset=utf-8"
+                file_path = project_root .. "/lua/web/" .. filename
+                file = io.open(file_path, "r")
+            end
+            
+            -- 如果主路径失败，尝试备用路径
+            if not file then
+                local current_file = debug.getinfo(1, "S").source
+                if current_file then
+                    current_file = current_file:gsub("^@", "")
+                    local alt_project_root = current_file:match("(.+)/lua/web/handler%.lua")
+                    if alt_project_root and alt_project_root ~= project_root then
+                        local alt_file_path = alt_project_root .. "/lua/web/" .. filename
+                        local alt_file = io.open(alt_file_path, "r")
+                        if alt_file then
+                            ngx.log(ngx.WARN, "Using alternative path for static file: ", alt_file_path)
+                            file = alt_file
+                            file_path = alt_file_path
                         end
-                        ngx.say(content)
-                        return
-                    else
-                        ngx.log(ngx.ERR, "Failed to read content from static file: ", file_path)
                     end
+                end
+            end
+            
+            if file then
+                local content = file:read("*all")
+                file:close()
+                if content then
+                    if path:match("%.js$") then
+                        ngx.header.content_type = "application/javascript; charset=utf-8"
+                    elseif path:match("%.css$") then
+                        ngx.header.content_type = "text/css; charset=utf-8"
+                    end
+                    ngx.say(content)
+                    return
                 else
-                    ngx.log(ngx.ERR, "Static file not found: ", file_path, " (project_root: ", project_root, ")")
+                    ngx.log(ngx.ERR, "Failed to read content from static file: ", file_path)
                 end
             else
-                ngx.log(ngx.ERR, "Failed to determine project root for serving static file: ", filename)
+                ngx.log(ngx.ERR, "Static file not found: ", file_path or filename, " (project_root: ", project_root or "nil", ")")
             end
         end
         ngx.status = 404

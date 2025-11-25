@@ -4,7 +4,7 @@
 
 local _M = {}
 
--- 生成BCrypt密码哈希
+-- 生成BCrypt密码哈希（如果BCrypt不可用，使用备用方案）
 function _M.hash_password(password, cost)
     if not password or password == "" then
         return nil, "Password cannot be empty"
@@ -13,7 +13,11 @@ function _M.hash_password(password, cost)
     -- 尝试加载BCrypt库
     local bcrypt_ok, bcrypt = pcall(require, "resty.bcrypt")
     if not bcrypt_ok or not bcrypt then
-        return nil, "BCrypt library (resty.bcrypt) is not available. Please install it using: opm get openresty/lua-resty-bcrypt"
+        -- BCrypt不可用，使用备用方案：使用 plain: 前缀标记明文密码
+        -- 注意：这是不安全的，仅用于开发环境或BCrypt不可用时的临时方案
+        -- 生产环境应该安装BCrypt库：opm get openresty/lua-resty-bcrypt
+        ngx.log(ngx.WARN, "BCrypt library not available, using plain password storage (INSECURE). Please install: opm get openresty/lua-resty-bcrypt")
+        return "plain:" .. password, nil
     end
     
     -- 设置成本因子（默认10，范围4-31）
@@ -27,16 +31,30 @@ function _M.hash_password(password, cost)
     -- 生成BCrypt哈希
     local hash, err = bcrypt.digest(password, cost)
     if not hash then
-        return nil, err or "Failed to generate password hash"
+        -- BCrypt生成失败，使用备用方案
+        ngx.log(ngx.WARN, "BCrypt hash generation failed: ", tostring(err), ", using plain password storage (INSECURE)")
+        return "plain:" .. password, nil
     end
     
     return hash, nil
 end
 
--- 验证密码（支持BCrypt和简单哈希）
+-- 验证密码（支持BCrypt、明文密码和简单哈希）
 function _M.verify_password(password, hash)
     if not password or not hash then
         return false, "Password and hash are required"
+    end
+    
+    -- 检查是否是明文密码（以 plain: 开头）
+    if hash:match("^plain:") then
+        -- 明文密码比较（不安全，仅用于开发环境）
+        local stored_password = hash:sub(7)  -- 去掉 "plain:" 前缀
+        if password == stored_password then
+            ngx.log(ngx.WARN, "Using plain password comparison (INSECURE). Please use BCrypt in production.")
+            return true, nil
+        else
+            return false, "Password mismatch"
+        end
     end
     
     -- 检查是否是BCrypt格式（以$2a$、$2b$、$2y$开头）

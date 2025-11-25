@@ -186,12 +186,15 @@ end
 -- 验证用户名和密码（优先从数据库读取，回退到配置文件）
 function _M.verify_credentials(username, password)
     if not username or not password then
+        ngx.log(ngx.WARN, "verify_credentials: username or password is empty")
         return false, nil
     end
     
+    ngx.log(ngx.INFO, "verify_credentials: attempting to verify user: ", username)
+    
     -- 优先从数据库查询用户
     local mysql_pool = require "waf.mysql_pool"
-    local ok, res = pcall(function()
+    local ok, res, query_err = pcall(function()
         local sql = [[
             SELECT id, username, password_hash, role, totp_secret, status
             FROM waf_users
@@ -199,15 +202,32 @@ function _M.verify_credentials(username, password)
             AND status = 1
             LIMIT 1
         ]]
-        return mysql_pool.query(sql, username)
+        local result, err = mysql_pool.query(sql, username)
+        if err then
+            return nil, err
+        end
+        return result
     end)
     
-    if ok and res and #res > 0 then
+    -- 记录数据库查询结果
+    if not ok then
+        ngx.log(ngx.ERR, "verify_credentials: database query failed (pcall error): ", tostring(res))
+        return false, nil
+    end
+    
+    if query_err then
+        ngx.log(ngx.ERR, "verify_credentials: database query error: ", tostring(query_err))
+        return false, nil
+    end
+    
+    if res and #res > 0 then
         local user = res[1]
+        ngx.log(ngx.INFO, "verify_credentials: user found in database: ", username, ", role: ", user.role or "unknown")
         
         -- 使用密码工具模块验证密码（支持BCrypt和简单哈希）
-        local verify_ok, err = password_utils.verify_password(password, user.password_hash)
+        local verify_ok, verify_err = password_utils.verify_password(password, user.password_hash)
         if verify_ok then
+            ngx.log(ngx.INFO, "verify_credentials: password verification successful for user: ", username)
             return true, {
                 id = user.id,
                 username = user.username,
@@ -216,44 +236,78 @@ function _M.verify_credentials(username, password)
             }
         else
             -- 验证失败，记录日志（但不泄露具体原因）
-            ngx.log(ngx.INFO, "Password verification failed for user: ", username)
+            ngx.log(ngx.WARN, "verify_credentials: password verification failed for user: ", username, ", error: ", tostring(verify_err))
             return false, nil
         end
+    else
+        ngx.log(ngx.INFO, "verify_credentials: user not found in database: ", username)
     end
     
     -- 如果数据库中没有用户，且尝试登录的是默认管理员账号，自动创建初始管理员用户
     if ok and (not res or #res == 0) then
+        ngx.log(ngx.INFO, "verify_credentials: checking if database is empty...")
         -- 检查数据库中是否有任何用户
-        local check_ok, check_res = pcall(function()
+        local check_ok, check_res, check_err = pcall(function()
             local check_sql = "SELECT COUNT(*) as user_count FROM waf_users LIMIT 1"
-            return mysql_pool.query(check_sql)
+            local result, err = mysql_pool.query(check_sql)
+            if err then
+                return nil, err
+            end
+            return result
         end)
+        
+        if not check_ok then
+            ngx.log(ngx.ERR, "verify_credentials: failed to check user count (pcall error): ", tostring(check_res))
+            return false, nil
+        end
+        
+        if check_err then
+            ngx.log(ngx.ERR, "verify_credentials: failed to check user count (query error): ", tostring(check_err))
+            return false, nil
+        end
         
         -- 如果数据库中没有用户，且尝试登录的是 admin/admin123，自动创建默认管理员用户
         if check_ok and check_res and #check_res > 0 and check_res[1].user_count == 0 then
+            ngx.log(ngx.INFO, "verify_credentials: database is empty (user_count: 0)")
             if username == "admin" and password == "admin123" then
-                ngx.log(ngx.WARN, "Database is empty, creating default admin user (username: admin, password: admin123)")
+                ngx.log(ngx.WARN, "verify_credentials: database is empty, creating default admin user (username: admin, password: admin123)")
                 
                 -- 生成密码哈希
                 local password_hash, hash_err = password_utils.hash_password(password, 10)
                 if not password_hash then
-                    ngx.log(ngx.ERR, "Failed to hash password for default admin user: ", hash_err or "unknown error")
+                    ngx.log(ngx.ERR, "verify_credentials: failed to hash password for default admin user: ", tostring(hash_err))
                     return false, nil
                 end
                 
+                ngx.log(ngx.INFO, "verify_credentials: password hash generated successfully")
+                
                 -- 创建默认管理员用户
-                local create_ok, create_err = pcall(function()
+                local create_ok, create_result, create_err = pcall(function()
                     local create_sql = [[
                         INSERT INTO waf_users (username, password_hash, role, status, password_must_change)
                         VALUES (?, ?, 'admin', 1, 1)
                     ]]
-                    return mysql_pool.insert(create_sql, username, password_hash)
+                    local insert_id, err = mysql_pool.insert(create_sql, username, password_hash)
+                    if err then
+                        return nil, err
+                    end
+                    return insert_id
                 end)
                 
-                if create_ok and not create_err then
-                    ngx.log(ngx.INFO, "Default admin user created successfully")
+                if not create_ok then
+                    ngx.log(ngx.ERR, "verify_credentials: failed to create default admin user (pcall error): ", tostring(create_result))
+                    return false, nil
+                end
+                
+                if create_err then
+                    ngx.log(ngx.ERR, "verify_credentials: failed to create default admin user (insert error): ", tostring(create_err))
+                    return false, nil
+                end
+                
+                if create_ok and create_result then
+                    ngx.log(ngx.WARN, "verify_credentials: default admin user created successfully, insert_id: ", tostring(create_result))
                     -- 重新查询用户信息
-                    local user_ok, user_res = pcall(function()
+                    local user_ok, user_res, user_err = pcall(function()
                         local user_sql = [[
                             SELECT id, username, password_hash, role, totp_secret, status
                             FROM waf_users
@@ -261,27 +315,53 @@ function _M.verify_credentials(username, password)
                             AND status = 1
                             LIMIT 1
                         ]]
-                        return mysql_pool.query(user_sql, username)
+                        local result, err = mysql_pool.query(user_sql, username)
+                        if err then
+                            return nil, err
+                        end
+                        return result
                     end)
+                    
+                    if not user_ok then
+                        ngx.log(ngx.ERR, "verify_credentials: failed to query created user (pcall error): ", tostring(user_res))
+                        return false, nil
+                    end
+                    
+                    if user_err then
+                        ngx.log(ngx.ERR, "verify_credentials: failed to query created user (query error): ", tostring(user_err))
+                        return false, nil
+                    end
                     
                     if user_ok and user_res and #user_res > 0 then
                         local user = user_res[1]
+                        ngx.log(ngx.INFO, "verify_credentials: created user verified successfully, user_id: ", tostring(user.id))
                         return true, {
                             id = user.id,
                             username = user.username,
                             role = user.role,
                             totp_secret = user.totp_secret
                         }
+                    else
+                        ngx.log(ngx.ERR, "verify_credentials: created user not found after creation")
                     end
                 else
-                    ngx.log(ngx.ERR, "Failed to create default admin user: ", create_err or "unknown error")
+                    ngx.log(ngx.ERR, "verify_credentials: failed to create default admin user: create_ok=", tostring(create_ok), ", create_result=", tostring(create_result))
                 end
+            else
+                ngx.log(ngx.INFO, "verify_credentials: database is empty but credentials are not admin/admin123")
+            end
+        else
+            if check_res and #check_res > 0 then
+                ngx.log(ngx.INFO, "verify_credentials: database is not empty (user_count: ", tostring(check_res[1].user_count), ")")
+            else
+                ngx.log(ngx.WARN, "verify_credentials: failed to get user count from database")
             end
         end
     end
     
     -- 不再使用硬编码的默认用户，所有用户必须从数据库读取
     -- 如果数据库中没有用户，需要通过安装脚本或API创建初始管理员用户
+    ngx.log(ngx.WARN, "verify_credentials: authentication failed for user: ", username)
     return false, nil
 end
 

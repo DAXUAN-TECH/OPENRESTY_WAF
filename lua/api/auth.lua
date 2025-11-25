@@ -27,7 +27,10 @@ function _M.login()
     local password = args.password
     local totp_code = args.totp_code  -- TOTP 验证码（可选）
     
+    ngx.log(ngx.INFO, "auth.login: login attempt for user: ", username or "nil")
+    
     if not username or not password then
+        ngx.log(ngx.WARN, "auth.login: username or password is empty")
         api_utils.json_response({
             error = "Bad Request",
             message = "用户名和密码不能为空"
@@ -36,8 +39,9 @@ function _M.login()
     end
     
     -- 验证用户名和密码
-    local ok, user = auth.verify_credentials(username, password)
+    local ok, user, verify_err = auth.verify_credentials(username, password)
     if not ok then
+        ngx.log(ngx.WARN, "auth.login: authentication failed for user: ", username, ", error: ", tostring(verify_err))
         -- 记录登录失败审计日志
         audit_log.log_login(username, false, "用户名或密码错误")
         api_utils.json_response({
@@ -46,6 +50,8 @@ function _M.login()
         }, 401)
         return
     end
+    
+    ngx.log(ngx.INFO, "auth.login: authentication successful for user: ", username, ", role: ", user.role or "unknown")
     
     -- 检查用户是否启用了 TOTP
     local has_totp = auth.user_has_totp(username)

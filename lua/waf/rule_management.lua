@@ -168,8 +168,20 @@ function _M.list_rules(params)
         return nil, err
     end
     
+    -- 确保 rules 是数组类型
+    if not rules then
+        rules = {}
+    elseif type(rules) ~= "table" then
+        ngx.log(ngx.WARN, "list rules: rules is not a table, type: ", type(rules))
+        rules = {}
+    elseif #rules == 0 and next(rules) ~= nil then
+        -- 如果是非数组的table（比如 {key = value}），转换为数组
+        ngx.log(ngx.WARN, "list rules: rules is not an array table")
+        rules = {}
+    end
+    
     return {
-        rules = rules or {},
+        rules = rules,
         total = total,
         page = page,
         page_size = page_size,

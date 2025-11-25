@@ -805,7 +805,8 @@ check_existing() {
             echo "  1. 保留现有数据和配置，跳过安装"
             echo "  2. 重新安装 MySQL（先卸载，保留数据目录）"
             echo "  3. 完全重新安装（先卸载，删除所有数据和配置）"
-            read -p "请选择 [1-3]: " REINSTALL_CHOICE
+            read -p "请选择 [1-3] (默认: 1): " REINSTALL_CHOICE
+            REINSTALL_CHOICE="${REINSTALL_CHOICE:-1}"  # 默认选择1
             
             case "$REINSTALL_CHOICE" in
                 1)
@@ -901,7 +902,8 @@ check_existing() {
             echo "  1. 保留现有安装，跳过安装"
             echo "  2. 重新安装 MySQL（先卸载，保留数据目录）"
             echo "  3. 完全重新安装（先卸载，删除所有数据和配置）"
-            read -p "请选择 [1-3]: " REINSTALL_CHOICE
+            read -p "请选择 [1-3] (默认: 1): " REINSTALL_CHOICE
+            REINSTALL_CHOICE="${REINSTALL_CHOICE:-1}"  # 默认选择1
             
             case "$REINSTALL_CHOICE" in
                 1)
@@ -4233,6 +4235,9 @@ main() {
     # 检查现有安装
     check_existing
     
+    # 检查 check_existing 的返回状态
+    local check_existing_result=$?
+    
     # 如果选择跳过安装，只执行后续步骤
     if [ "${SKIP_INSTALL:-0}" -eq 1 ]; then
         echo -e "${BLUE}[跳过安装步骤] 检测到已安装 MySQL，跳过安装步骤${NC}"
@@ -4266,6 +4271,14 @@ main() {
         echo ""
     else
         # 正常安装流程
+        # 检查是否真的需要安装（防止 check_existing 没有正确设置 SKIP_INSTALL）
+        if command -v mysql &> /dev/null || command -v mysqld &> /dev/null; then
+            echo -e "${YELLOW}⚠ 检测到 MySQL 已安装，但未选择跳过安装${NC}"
+            echo -e "${YELLOW}⚠ 如果不想重新安装，请重新运行脚本并选择跳过安装${NC}"
+            echo -e "${YELLOW}⚠ 继续执行安装流程...${NC}"
+            echo ""
+        fi
+        
         # 安装 MySQL
         install_mysql
         

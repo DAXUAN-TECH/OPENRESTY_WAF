@@ -593,11 +593,12 @@ show_installed_configs() {
             local mysql_block_end=$(grep -n "^}" "$CONFIG_FILE" | awk -v start="$mysql_block_start" '$1 > start {print $1; exit}')
             
             if [ -n "$mysql_block_start" ] && [ -n "$mysql_block_end" ]; then
-                local mysql_host=$(sed -n "${mysql_block_start},${mysql_block_end}p" "$CONFIG_FILE" | grep -E "^\s*host\s*=" | sed -E "s/.*host\s*=\s*[\"']([^\"']+)[\"'].*/\1/" | head -n 1 | tr -d ' ')
-                local mysql_port=$(sed -n "${mysql_block_start},${mysql_block_end}p" "$CONFIG_FILE" | grep -E "^\s*port\s*=" | sed -E "s/.*port\s*=\s*([0-9]+).*/\1/" | head -n 1 | tr -d ' ')
-                local mysql_database=$(sed -n "${mysql_block_start},${mysql_block_end}p" "$CONFIG_FILE" | grep -E "^\s*database\s*=" | sed -E "s/.*database\s*=\s*[\"']([^\"']+)[\"'].*/\1/" | head -n 1 | tr -d ' ')
-                local mysql_user=$(sed -n "${mysql_block_start},${mysql_block_end}p" "$CONFIG_FILE" | grep -E "^\s*user\s*=" | sed -E "s/.*user\s*=\s*[\"']([^\"']+)[\"'].*/\1/" | head -n 1 | tr -d ' ')
-                local mysql_password=$(sed -n "${mysql_block_start},${mysql_block_end}p" "$CONFIG_FILE" | grep -E "^\s*password\s*=" | sed -E "s/.*password\s*=\s*[\"']([^\"']+)[\"'].*/\1/" | head -n 1 | tr -d ' ')
+                # 使用兼容性更好的基本 sed 语法，避免 -E/-r 选项在某些系统上的问题
+                local mysql_host=$(sed -n "${mysql_block_start},${mysql_block_end}p" "$CONFIG_FILE" | grep -E "^\s*host\s*=" | sed "s/.*host[[:space:]]*=[[:space:]]*[\"']\([^\"']*\)[\"'].*/\1/" | head -n 1 | tr -d ' ')
+                local mysql_port=$(sed -n "${mysql_block_start},${mysql_block_end}p" "$CONFIG_FILE" | grep -E "^\s*port\s*=" | sed "s/.*port[[:space:]]*=[[:space:]]*\([0-9]*\).*/\1/" | head -n 1 | tr -d ' ')
+                local mysql_database=$(sed -n "${mysql_block_start},${mysql_block_end}p" "$CONFIG_FILE" | grep -E "^\s*database\s*=" | sed "s/.*database[[:space:]]*=[[:space:]]*[\"']\([^\"']*\)[\"'].*/\1/" | head -n 1 | tr -d ' ')
+                local mysql_user=$(sed -n "${mysql_block_start},${mysql_block_end}p" "$CONFIG_FILE" | grep -E "^\s*user\s*=" | sed "s/.*user[[:space:]]*=[[:space:]]*[\"']\([^\"']*\)[\"'].*/\1/" | head -n 1 | tr -d ' ')
+                local mysql_password=$(sed -n "${mysql_block_start},${mysql_block_end}p" "$CONFIG_FILE" | grep -E "^\s*password\s*=" | sed "s/.*password[[:space:]]*=[[:space:]]*[\"']\([^\"']*\)[\"'].*/\1/" | head -n 1 | tr -d ' ')
                 
                 mysql_host="${mysql_host:-127.0.0.1}"
                 mysql_port="${mysql_port:-3306}"
@@ -661,10 +662,11 @@ show_installed_configs() {
             local redis_block_end=$(grep -n "^}" "$CONFIG_FILE" | awk -v start="$redis_block_start" '$1 > start {print $1; exit}')
             
             if [ -n "$redis_block_start" ] && [ -n "$redis_block_end" ]; then
-                local redis_host=$(sed -n "${redis_block_start},${redis_block_end}p" "$CONFIG_FILE" | grep -E "^\s*host\s*=" | sed -E "s/.*host\s*=\s*[\"']([^\"']+)[\"'].*/\1/" | head -n 1 | tr -d ' ')
-                local redis_port=$(sed -n "${redis_block_start},${redis_block_end}p" "$CONFIG_FILE" | grep -E "^\s*port\s*=" | sed -E "s/.*port\s*=\s*([0-9]+).*/\1/" | head -n 1 | tr -d ' ')
-                local redis_password=$(sed -n "${redis_block_start},${redis_block_end}p" "$CONFIG_FILE" | grep -E "^\s*password\s*=" | sed -E "s/.*password\s*=\s*[\"']([^\"']+)[\"'].*/\1/" | head -n 1 | tr -d ' ')
-                local redis_db=$(sed -n "${redis_block_start},${redis_block_end}p" "$CONFIG_FILE" | grep -E "^\s*db\s*=" | sed -E "s/.*db\s*=\s*([0-9]+).*/\1/" | head -n 1 | tr -d ' ')
+                # 使用兼容性更好的基本 sed 语法，避免 -E/-r 选项在某些系统上的问题
+                local redis_host=$(sed -n "${redis_block_start},${redis_block_end}p" "$CONFIG_FILE" | grep -E "^\s*host\s*=" | sed "s/.*host[[:space:]]*=[[:space:]]*[\"']\([^\"']*\)[\"'].*/\1/" | head -n 1 | tr -d ' ')
+                local redis_port=$(sed -n "${redis_block_start},${redis_block_end}p" "$CONFIG_FILE" | grep -E "^\s*port\s*=" | sed "s/.*port[[:space:]]*=[[:space:]]*\([0-9]*\).*/\1/" | head -n 1 | tr -d ' ')
+                local redis_password=$(sed -n "${redis_block_start},${redis_block_end}p" "$CONFIG_FILE" | grep -E "^\s*password\s*=" | sed "s/.*password[[:space:]]*=[[:space:]]*[\"']\([^\"']*\)[\"'].*/\1/" | head -n 1 | tr -d ' ')
+                local redis_db=$(sed -n "${redis_block_start},${redis_block_end}p" "$CONFIG_FILE" | grep -E "^\s*db\s*=" | sed "s/.*db[[:space:]]*=[[:space:]]*\([0-9]*\).*/\1/" | head -n 1 | tr -d ' ')
                 
                 # 检查 password 是否为 nil
                 if [ -z "$redis_password" ]; then

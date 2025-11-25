@@ -6,14 +6,12 @@ local _M = {}
 
 -- 获取项目根目录
 function _M.get_project_root()
-    -- 优先从nginx变量获取（仅在可用时）
-    local ok, phase = pcall(ngx.get_phase)
-    if ok and phase ~= "init" and phase ~= "init_worker" then
-        -- 在非 init 和 init_worker 阶段，可以安全访问 ngx.var
-        local project_root = ngx.var.project_root
-        if project_root and project_root ~= "" then
-            return project_root
-        end
+    -- 优先从nginx变量获取（使用 pcall 安全访问，避免在 init_worker 阶段出错）
+    local ok, project_root = pcall(function()
+        return ngx.var.project_root
+    end)
+    if ok and project_root and project_root ~= "" then
+        return project_root
     end
     
     -- 从lua_package_path推断
@@ -59,12 +57,18 @@ function _M.get_backup_path()
     -- 如果无法获取项目根目录，尝试从环境变量获取
     local backup_path = os.getenv("WAF_BACKUP_PATH")
     if backup_path and backup_path ~= "" then
-        ngx.log(ngx.INFO, "Using backup path from environment variable: ", backup_path)
+        -- 使用 pcall 安全调用 ngx.log（在 init_worker 阶段可能不可用）
+        pcall(function()
+            ngx.log(ngx.INFO, "Using backup path from environment variable: ", backup_path)
+        end)
         return backup_path
     end
     
     -- 最后的后备方案：使用当前工作目录下的backup（相对路径）
-    ngx.log(ngx.WARN, "Cannot determine project root, using relative path 'backup' as fallback")
+    -- 使用 pcall 安全调用 ngx.log（在 init_worker 阶段可能不可用）
+    pcall(function()
+        ngx.log(ngx.WARN, "Cannot determine project root, using relative path 'backup' as fallback")
+    end)
     return "backup"
 end
 

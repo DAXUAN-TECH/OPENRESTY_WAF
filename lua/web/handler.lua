@@ -127,14 +127,27 @@ local function serve_html_with_layout(filename, page_title, session)
     -- 提取style标签（支持多行）
     for style_match in content:gmatch("<style>([%s%S]-)</style>") do
         -- 移除body样式定义，避免与layout.html的body样式冲突
-        -- 匹配 body { ... } 或 body{ ... } 等格式
+        -- 匹配 body { ... } 或 body{ ... } 等格式（支持多行）
         local cleaned_style = style_match
-        -- 移除body选择器的样式块（包括嵌套的body样式）
-        cleaned_style = cleaned_style:gsub("body%s*%{[^}]*%}", "")
-        -- 移除body选择器带属性的样式块（如 body.class { ... }）
-        cleaned_style = cleaned_style:gsub("body[^%{]*%{[^}]*%}", "")
-        -- 移除可能的多行body样式
-        cleaned_style = cleaned_style:gsub("body%s*%{[%s%S]-%}", "")
+        -- 移除body选择器的样式块（支持多行，匹配嵌套的大括号）
+        -- 使用平衡匹配来正确处理嵌套的大括号
+        local function remove_body_style(style_text)
+            local result = style_text
+            -- 匹配 body 后跟可选的选择器，然后是 { ... }
+            -- 使用平衡匹配处理嵌套大括号
+            local pattern = "body[^%{]*%b{}"
+            local changed = true
+            while changed do
+                local old_result = result
+                result = result:gsub(pattern, "")
+                changed = (result ~= old_result)
+            end
+            return result
+        end
+        cleaned_style = remove_body_style(cleaned_style)
+        
+        -- 清理多余的空白行
+        cleaned_style = cleaned_style:gsub("\n%s*\n%s*\n+", "\n\n")
         
         if cleaned_style:match("%S") then  -- 如果还有非空白内容
             extra_styles = extra_styles .. "<style>" .. cleaned_style .. "</style>\n"

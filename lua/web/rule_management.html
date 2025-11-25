@@ -598,13 +598,37 @@
                 </div>
                 
                 <div class="form-group">
-                    <label>生效开始时间</label>
-                    <input type="datetime-local" id="create-start-time">
+                    <label>生效开始时间 *</label>
+                    <div style="position: relative; display: inline-block; width: 100%;">
+                        <input type="text" id="create-start-time" required readonly style="cursor: pointer; background: white;">
+                        <button type="button" class="datetime-confirm-btn" onclick="openDateTimePicker('create-start-time')" style="position: absolute; right: 5px; top: 50%; transform: translateY(-50%); padding: 5px 10px; background: #4CAF50; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 12px;">选择</button>
+                    </div>
                 </div>
                 
                 <div class="form-group">
-                    <label>生效结束时间</label>
-                    <input type="datetime-local" id="create-end-time">
+                    <label>生效结束时间 *</label>
+                    <div style="position: relative; display: inline-block; width: 100%;">
+                        <input type="text" id="create-end-time" required readonly style="cursor: pointer; background: white;">
+                        <button type="button" class="datetime-confirm-btn" onclick="openDateTimePicker('create-end-time')" style="position: absolute; right: 5px; top: 50%; transform: translateY(-50%); padding: 5px 10px; background: #4CAF50; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 12px;">选择</button>
+                    </div>
+                </div>
+                
+                <!-- 自定义日期时间选择器 -->
+                <div id="datetime-picker-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 10000;">
+                    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.3); min-width: 300px;">
+                        <div style="margin-bottom: 15px;">
+                            <label style="display: block; margin-bottom: 5px; font-weight: bold;">选择日期</label>
+                            <input type="date" id="picker-date" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                        </div>
+                        <div style="margin-bottom: 15px;">
+                            <label style="display: block; margin-bottom: 5px; font-weight: bold;">选择时间</label>
+                            <input type="time" id="picker-time" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                        </div>
+                        <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;">
+                            <button type="button" onclick="closeDateTimePicker()" style="padding: 8px 16px; background: #f5f5f5; border: 1px solid #ddd; border-radius: 4px; cursor: pointer;">取消</button>
+                            <button type="button" onclick="confirmDateTimePicker()" style="padding: 8px 16px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer;">确认</button>
+                        </div>
+                    </div>
                 </div>
                 
                 <div class="form-actions">
@@ -954,6 +978,29 @@
         async function createRule(event) {
             event.preventDefault();
             
+            // 验证日期字段
+            const startTime = document.getElementById('create-start-time').value;
+            const endTime = document.getElementById('create-end-time').value;
+            
+            if (!startTime) {
+                showAlert('请选择开始日期', 'error');
+                document.getElementById('create-start-time').focus();
+                return;
+            }
+            
+            if (!endTime) {
+                showAlert('请选择结束日期', 'error');
+                document.getElementById('create-end-time').focus();
+                return;
+            }
+            
+            // 验证结束日期不能早于开始日期
+            if (new Date(endTime) < new Date(startTime)) {
+                showAlert('结束日期不能早于开始日期', 'error');
+                document.getElementById('create-end-time').focus();
+                return;
+            }
+            
             const ruleData = {
                 rule_type: document.getElementById('create-rule-type').value,
                 rule_value: document.getElementById('create-rule-value').value,
@@ -963,11 +1010,8 @@
                 priority: parseInt(document.getElementById('create-priority').value) || 0
             };
             
-            const startTime = document.getElementById('create-start-time').value;
-            const endTime = document.getElementById('create-end-time').value;
-            
-            if (startTime) ruleData.start_time = startTime.replace('T', ' ') + ':00';
-            if (endTime) ruleData.end_time = endTime.replace('T', ' ') + ':00';
+            ruleData.start_time = startTime.replace('T', ' ') + ':00';
+            ruleData.end_time = endTime.replace('T', ' ') + ':00';
             
             try {
                 const response = await fetch('/api/rules', {
@@ -1518,6 +1562,8 @@
             ruleValueHint.style.display = 'block';
             ruleValueInput.placeholder = '例如: 192.168.1.100 或 192.168.1.0/24 或 192.168.1.1-192.168.1.100';
             ruleValueHint.textContent = '支持单个IP（如：192.168.1.100）或IP段（如：192.168.1.0/24 或 192.168.1.1-192.168.1.100）';
+            // 重置日期为默认值
+            setDefaultDates();
             // 清空地域选择
             selectedCountries = [];
             selectedProvinces = [];

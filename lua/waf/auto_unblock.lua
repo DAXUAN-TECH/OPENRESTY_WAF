@@ -202,10 +202,10 @@ end
 
 -- 初始化工作进程定时器（在init_worker阶段调用）
 function _M.init_worker()
-    -- 检查自动封控功能是否启用（优先从数据库读取）
-    local auto_block_enabled = feature_switches.is_enabled("auto_block")
-    if not auto_block_enabled or not config.auto_block.enable then
-        ngx.log(ngx.INFO, "auto unblock disabled, skipping timer initialization")
+    -- 在init_worker阶段不能使用TCP连接，只检查配置文件
+    -- 数据库检查将在定时器回调中进行
+    if not config.auto_block or not config.auto_block.enable then
+        ngx.log(ngx.INFO, "auto unblock disabled in config, skipping timer initialization")
         return
     end
     
@@ -216,10 +216,29 @@ function _M.init_worker()
             return
         end
         
-        -- 再次检查功能是否启用（支持动态关闭）
-        local auto_block_enabled = feature_switches.is_enabled("auto_block")
-        if not auto_block_enabled or not config.auto_block.enable then
-            ngx.log(ngx.INFO, "auto unblock disabled, stopping timer")
+        -- 在定时器回调中，可以安全地检查数据库
+        -- 先检查配置文件
+        if not config.auto_block or not config.auto_block.enable then
+            ngx.log(ngx.INFO, "auto unblock disabled in config, stopping timer")
+            return
+        end
+        
+        -- 再检查数据库中的功能开关（使用pcall避免错误传播）
+        local auto_block_enabled = true
+        local ok, result = pcall(function()
+            return feature_switches.is_enabled("auto_block")
+        end)
+        
+        if ok then
+            auto_block_enabled = result
+        else
+            -- 如果检查失败（可能是数据库不可用），使用配置文件的值
+            ngx.log(ngx.WARN, "failed to check feature switch from database, using config value")
+            auto_block_enabled = config.auto_block.enable
+        end
+        
+        if not auto_block_enabled then
+            ngx.log(ngx.INFO, "auto unblock disabled in database, stopping timer")
             return
         end
 

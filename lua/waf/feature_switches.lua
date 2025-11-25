@@ -158,9 +158,10 @@ function _M.get(feature_key)
     
     local results, err = mysql_pool.query(sql, feature_key)
     if err then
-        -- 检查是否是 TCP API 被禁用的错误
-        if err:match("API disabled") or err:match("log_by_lua") then
-            -- 在 log_by_lua 阶段，只能使用缓存或配置文件
+        -- 检查是否是 TCP API 被禁用的错误（init_worker_by_lua 或 log_by_lua 阶段）
+        if err:match("API disabled") or err:match("log_by_lua") or err:match("init_worker") then
+            -- 在这些阶段，只能使用缓存或配置文件
+            ngx.log(ngx.WARN, "cannot use TCP in current context, using cache or config for feature: ", feature_key)
             if config.features and config.features[feature_key] then
                 local enable = config.features[feature_key].enable == true
                 return enable, nil

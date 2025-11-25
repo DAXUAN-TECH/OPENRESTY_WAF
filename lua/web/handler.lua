@@ -119,31 +119,37 @@ local function serve_html_with_layout(filename, page_title, session)
         return
     end
     
+    -- 提取额外的样式和脚本（在替换CONTENT之前）
+    local extra_styles = ""
+    local extra_scripts = ""
+    local body_content = content
+    
+    -- 提取style标签（支持多行）
+    for style_match in content:gmatch("<style>([%s%S]-)</style>") do
+        extra_styles = extra_styles .. "<style>" .. style_match .. "</style>\n"
+        -- 从内容中移除style标签
+        body_content = body_content:gsub("<style>[%s%S]-</style>", "", 1)
+    end
+    
+    -- 提取外部script标签（带src属性）
+    for script_tag in content:gmatch('<script[^>]*src="[^"]+"[^>]*></script>') do
+        extra_scripts = extra_scripts .. script_tag .. "\n"
+        -- 从内容中移除script标签
+        body_content = body_content:gsub('<script[^>]*src="[^"]+"[^>]*></script>', "", 1)
+    end
+    
+    -- 提取内联script标签（支持多行）
+    for script_match in content:gmatch("<script>([%s%S]-)</script>") do
+        extra_scripts = extra_scripts .. "<script>" .. script_match .. "</script>\n"
+        -- 从内容中移除script标签
+        body_content = body_content:gsub("<script>[%s%S]-</script>", "", 1)
+    end
+    
     -- 替换布局模板中的占位符
     layout_content = layout_content:gsub("{{TITLE}}", escape_html(page_title))
     layout_content = layout_content:gsub("{{PAGE_TITLE}}", escape_html(page_title))
     layout_content = layout_content:gsub("{{USERNAME}}", escape_html(username))
-    layout_content = layout_content:gsub("{{CONTENT}}", content)
-    
-    -- 提取额外的样式和脚本
-    local extra_styles = ""
-    local extra_scripts = ""
-    
-    -- 提取style标签
-    for style in content:gmatch("<style>([^<]+)</style>") do
-        extra_styles = extra_styles .. "<style>" .. style .. "</style>"
-    end
-    
-    -- 提取script标签（排除layout.html中的script）
-    for script in content:gmatch("<script>([^<]+)</script>") do
-        extra_scripts = extra_scripts .. "<script>" .. script .. "</script>"
-    end
-    
-    -- 提取外部script标签
-    for script_src in content:gmatch('<script[^>]*src="([^"]+)"[^>]*></script>') do
-        extra_scripts = extra_scripts .. '<script src="' .. script_src .. '"></script>'
-    end
-    
+    layout_content = layout_content:gsub("{{CONTENT}}", body_content)
     layout_content = layout_content:gsub("{{EXTRA_STYLES}}", extra_styles)
     layout_content = layout_content:gsub("{{EXTRA_SCRIPTS}}", extra_scripts)
     

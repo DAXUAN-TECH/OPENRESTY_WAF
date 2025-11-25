@@ -29,9 +29,35 @@ local function validate_rule_value(rule_type, rule_value)
             end
         end
     elseif rule_type == "geo" then
-        -- 验证地域代码格式（国家代码或国家:省份或国家:省份:城市）
-        if not rule_value:match("^[A-Z]{2}(:[A-Za-z]+(:[A-Za-z]+)?)?$") then
-            return false, "无效的地域代码格式（应为国家代码如CN、US或国家:省份如CN:Beijing）"
+        -- 验证地域代码格式（支持多选，用逗号分隔）
+        -- 格式：国家代码（如CN、US）或 国家:省份代码（如CN:Beijing）或 国家:省份代码:城市名称（如CN:Beijing:北京）
+        -- 支持多个值用逗号分隔，城市名称可以是中文
+        local geo_values = {}
+        for value in rule_value:gmatch("([^,]+)") do
+            value = value:match("^%s*(.-)%s*$")  -- 去除首尾空格
+            if value and value ~= "" then
+                table.insert(geo_values, value)
+            end
+        end
+        
+        if #geo_values == 0 then
+            return false, "地域代码不能为空"
+        end
+        
+        -- 验证每个地域代码格式
+        for _, geo_value in ipairs(geo_values) do
+            -- 支持格式：
+            -- 1. 国家代码：两个大写字母，如 CN, US, JP
+            -- 2. 国家:省份代码：CN:Beijing, CN:Shanghai（省份代码可以是字母）
+            -- 3. 国家:省份代码:城市名称：CN:Beijing:北京（城市名称可以是中文、字母、数字等）
+            local pattern = "^[A-Z]{2}(:[A-Za-z0-9_%-]+(:[%w%u%l%p]+)?)?$"
+            if not geo_value:match(pattern) then
+                -- 更宽松的验证：支持中文字符
+                local pattern2 = "^[A-Z]{2}(:[%w%u%l%p]+(:[%w%u%l%p]+)?)?$"
+                if not geo_value:match(pattern2) then
+                    return false, "无效的地域代码格式: " .. geo_value .. "（应为国家代码如CN、US或国家:省份如CN:Beijing或国家:省份:城市如CN:Beijing:北京）"
+                end
+            end
         end
     else
         return false, "无效的规则类型"

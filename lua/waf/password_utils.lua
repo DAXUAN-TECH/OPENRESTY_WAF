@@ -1,8 +1,46 @@
 -- 密码工具模块
 -- 路径：项目目录下的 lua/waf/password_utils.lua（保持在项目目录，不复制到系统目录）
--- 功能：提供密码哈希和验证功能，支持BCrypt
+-- 功能：提供密码哈希和验证功能，支持BCrypt和SHA256+salt备用方案
 
 local _M = {}
+
+-- 生成随机盐值
+local function generate_salt(length)
+    length = length or 16
+    local charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+    local salt = ""
+    
+    -- 使用OpenResty的随机数生成器
+    math.randomseed(ngx.time() * 1000 + ngx.worker.pid() + (ngx.now() * 1000000) % 1000000)
+    
+    for i = 1, length do
+        local random_index = math.random(1, #charset)
+        salt = salt .. charset:sub(random_index, random_index)
+    end
+    
+    return salt
+end
+
+-- 使用SHA256生成密码哈希（备用方案）
+local function hash_with_sha256(password, salt)
+    -- 尝试使用 OpenResty 的 resty.string 库（如果可用）
+    local string_ok, resty_string = pcall(require, "resty.string")
+    if string_ok and resty_string and resty_string.to_hex then
+        -- 使用 resty.string 的 SHA256
+        local sha256_ok, sha256 = pcall(require, "resty.sha256")
+        if sha256_ok and sha256 then
+            local sha = sha256:new()
+            sha:update(salt .. password)
+            local digest = sha:final()
+            return resty_string.to_hex(digest)
+        end
+    end
+    
+    -- 如果 resty.string 不可用，使用 ngx.md5 作为备用（虽然不如 SHA256 安全，但比明文好）
+    -- 格式：sha256:salt:hash 或 md5:salt:hash
+    local hash = ngx.md5(salt .. password)
+    return "md5:" .. salt .. ":" .. hash
+end
 
 -- 生成BCrypt密码哈希（如果BCrypt不可用，使用备用方案）
 function _M.hash_password(password, cost)
@@ -13,11 +51,13 @@ function _M.hash_password(password, cost)
     -- 尝试加载BCrypt库
     local bcrypt_ok, bcrypt = pcall(require, "resty.bcrypt")
     if not bcrypt_ok or not bcrypt then
-        -- BCrypt不可用，使用备用方案：使用 plain: 前缀标记明文密码
-        -- 注意：这是不安全的，仅用于开发环境或BCrypt不可用时的临时方案
-        -- 生产环境应该安装BCrypt库：opm get openresty/lua-resty-bcrypt
-        ngx.log(ngx.WARN, "BCrypt library not available, using plain password storage (INSECURE). Please install: opm get openresty/lua-resty-bcrypt")
-        return "plain:" .. password, nil
+        -- BCrypt不可用，使用备用方案：SHA256+salt 或 MD5+salt
+        -- 注意：这不如BCrypt安全，但比明文密码好
+        -- 生产环境建议通过 LuaRocks 安装 BCrypt：luarocks install lua-resty-bcrypt
+        ngx.log(ngx.WARN, "BCrypt library not available, using SHA256/MD5+salt as fallback. For better security, install: luarocks install lua-resty-bcrypt")
+        local salt = generate_salt(16)
+        local hash = hash_with_sha256(password, salt)
+        return hash, nil
     end
     
     -- 设置成本因子（默认10，范围4-31）
@@ -31,9 +71,11 @@ function _M.hash_password(password, cost)
     -- 生成BCrypt哈希
     local hash, err = bcrypt.digest(password, cost)
     if not hash then
-        -- BCrypt生成失败，使用备用方案
-        ngx.log(ngx.WARN, "BCrypt hash generation failed: ", tostring(err), ", using plain password storage (INSECURE)")
-        return "plain:" .. password, nil
+        -- BCrypt生成失败，使用备用方案：SHA256+salt 或 MD5+salt
+        ngx.log(ngx.WARN, "BCrypt hash generation failed: ", tostring(err), ", using SHA256/MD5+salt as fallback")
+        local salt = generate_salt(16)
+        local fallback_hash = hash_with_sha256(password, salt)
+        return fallback_hash, nil
     end
     
     return hash, nil
@@ -45,7 +87,20 @@ function _M.verify_password(password, hash)
         return false, "Password and hash are required"
     end
     
-    -- 检查是否是明文密码（以 plain: 开头）
+    -- 检查是否是 SHA256/MD5+salt 格式（以 sha256: 或 md5: 开头）
+    local hash_type, salt, stored_hash = hash:match("^(sha256|md5):([^:]+):(.+)$")
+    if hash_type then
+        -- 使用相同的哈希算法和盐值验证密码
+        local computed_hash = hash_with_sha256(password, salt)
+        if computed_hash == hash then
+            ngx.log(ngx.WARN, "Using ", hash_type, "+salt password verification. For better security, use BCrypt.")
+            return true, nil
+        else
+            return false, "Password mismatch"
+        end
+    end
+    
+    -- 检查是否是明文密码（以 plain: 开头，向后兼容）
     if hash:match("^plain:") then
         -- 明文密码比较（不安全，仅用于开发环境）
         local stored_password = hash:sub(7)  -- 去掉 "plain:" 前缀

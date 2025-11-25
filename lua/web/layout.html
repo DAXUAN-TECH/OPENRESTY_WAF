@@ -336,12 +336,22 @@
             
             // 从服务器获取 CSRF Token
             function fetchCsrfToken() {
+                // 先检查 sessionStorage（从登录页面存储的）
+                const storedToken = sessionStorage.getItem('csrf_token');
+                if (storedToken) {
+                    csrfToken = storedToken;
+                    sessionStorage.removeItem('csrf_token'); // 使用后清除
+                    console.log('CSRF token loaded from sessionStorage');
+                    return;
+                }
+                
+                // 从服务器获取
                 fetch('/api/auth/check')
                     .then(response => response.json())
                     .then(data => {
                         if (data && data.authenticated && data.csrf_token) {
                             csrfToken = data.csrf_token;
-                            console.log('CSRF token loaded');
+                            console.log('CSRF token loaded from server');
                         }
                     })
                     .catch(err => {

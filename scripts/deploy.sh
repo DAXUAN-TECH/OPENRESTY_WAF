@@ -94,7 +94,7 @@ sed -i "s|/path/to/project/conf.d/vhost_conf|$PROJECT_ROOT_ABS/conf.d/vhost_conf
 sed -i 's|set $project_root "/path/to/project"|set $project_root "'"$PROJECT_ROOT_ABS"'"|g' "$NGINX_CONF_DIR/nginx.conf"
 
 # 步骤3.5: 立即验证并清理重复内容（在替换后立即执行）
-# 找到 http 块结束位置
+# 找到 http 块结束位置并强制截取
 http_start_line=$(grep -n "^http {" "$NGINX_CONF_DIR/nginx.conf" | cut -d: -f1 | head -1)
 if [ -n "$http_start_line" ]; then
     http_end_line=$(awk -v start="$http_start_line" '
@@ -117,8 +117,16 @@ if [ -n "$http_start_line" ]; then
     
     if [ -n "$http_end_line" ]; then
         # 强制截取到 http 块结束位置（确保没有多余内容）
-        head -n "$http_end_line" "$NGINX_CONF_DIR/nginx.conf" > "$NGINX_CONF_DIR/nginx.conf.tmp" && \
+        head -n "$http_end_line" "$NGINX_CONF_DIR/nginx.conf" > "$NGINX_CONF_DIR/nginx.conf.tmp"
+        if [ $? -eq 0 ]; then
             mv "$NGINX_CONF_DIR/nginx.conf.tmp" "$NGINX_CONF_DIR/nginx.conf"
+            echo -e "${GREEN}✓ 已清理到 http 块结束位置（第 $http_end_line 行）${NC}"
+        else
+            echo -e "${YELLOW}⚠ 清理失败，但继续执行...${NC}"
+            rm -f "$NGINX_CONF_DIR/nginx.conf.tmp"
+        fi
+    else
+        echo -e "${YELLOW}⚠ 无法确定 http 块结束位置${NC}"
     fi
 fi
 
@@ -212,6 +220,38 @@ echo -e "${YELLOW}  注意: conf.d、lua、logs、cert 目录保持在项目目�
 
 # 验证配置文件
 echo -e "${GREEN}[3/4] 验证配置...${NC}"
+
+# 最终清理：在验证前再次确保文件正确（最后一道防线）
+template_lines=$(wc -l < "${PROJECT_ROOT}/init_file/nginx.conf" 2>/dev/null | tr -d ' ')
+if [ -n "$template_lines" ]; then
+    # 找到 http 块结束位置
+    http_start_line=$(grep -n "^http {" "$NGINX_CONF_DIR/nginx.conf" 2>/dev/null | cut -d: -f1 | head -1)
+    if [ -n "$http_start_line" ]; then
+        http_end_line=$(awk -v start="$http_start_line" '
+            BEGIN { brace_count = 0; found_start = 0 }
+            NR >= start {
+                if (!found_start) found_start = 1
+                for (i = 1; i <= length($0); i++) {
+                    char = substr($0, i, 1)
+                    if (char == "{") brace_count++
+                    if (char == "}") {
+                        brace_count--
+                        if (brace_count == 0 && found_start) {
+                            print NR
+                            exit
+                        }
+                    }
+                }
+            }
+        ' "$NGINX_CONF_DIR/nginx.conf" 2>/dev/null)
+        
+        if [ -n "$http_end_line" ]; then
+            # 强制截取到 http 块结束位置
+            head -n "$http_end_line" "$NGINX_CONF_DIR/nginx.conf" > "$NGINX_CONF_DIR/nginx.conf.final" && \
+                mv "$NGINX_CONF_DIR/nginx.conf.final" "$NGINX_CONF_DIR/nginx.conf"
+        fi
+    fi
+fi
 
 # 验证 nginx.conf 语法
 if [ -f "${OPENRESTY_PREFIX}/bin/openresty" ]; then

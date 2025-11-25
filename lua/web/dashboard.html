@@ -1,4 +1,5 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+<script src="/common.js"></script>
 <style>
     .metrics-grid {
         display: grid;
@@ -250,24 +251,7 @@
         }
     }
     
-    // 解析Prometheus格式的指标
-    function parsePrometheusMetrics(text) {
-        const metrics = {};
-        const lines = text.split('\n');
-        
-        for (const line of lines) {
-            if (line.startsWith('#') || !line.trim()) continue;
-            
-            // 匹配指标名称和值
-            const match = line.match(/^(\w+)\s+([\d.]+)$/);
-            if (match) {
-                const [, name, value] = match;
-                metrics[name] = parseFloat(value);
-            }
-        }
-        
-        return metrics;
-    }
+    // 使用公共函数 parsePrometheusMetrics（已在 common.js 中定义）
     
     // 更新指标卡片
     function updateMetrics(metrics) {

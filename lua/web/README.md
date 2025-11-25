@@ -12,7 +12,8 @@ lua/web/
 ├── rule_management.html     # 规则管理界面
 ├── proxy_management.html    # 反向代理管理界面
 ├── stats.html               # 统计报表界面
-├── monitor.html             # 监控面板界面
+├── dashboard.html           # Dashboard界面（监控面板）
+├── common.js                # 前端公共JavaScript函数
 └── README.md                # 本文件
 ```
 

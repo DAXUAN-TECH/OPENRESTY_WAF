@@ -7,74 +7,18 @@ local metrics = require "waf.metrics"
 local config = require "config"
 local auth = require "waf.auth"
 local path_utils = require "waf.path_utils"
+local web_utils = require "web.web_utils"
 
 local _M = {}
 
--- HTML 转义函数（OpenResty 没有内置的 ngx.escape_html）
+-- HTML 转义函数（使用公共模块）
 local function escape_html(text)
-    if not text then
-        return ""
-    end
-    text = tostring(text)
-    -- 转义 HTML 特殊字符
-    text = text:gsub("&", "&amp;")
-    text = text:gsub("<", "&lt;")
-    text = text:gsub(">", "&gt;")
-    text = text:gsub('"', "&quot;")
-    text = text:gsub("'", "&#39;")
-    return text
-end
-
--- 获取项目根目录
-local function get_project_root()
-    local project_root = nil
-    
-    -- 优先从当前文件路径推断（最可靠的方法）
-    local current_file = debug.getinfo(1, "S").source
-    if current_file then
-        current_file = current_file:gsub("^@", "")
-        -- 从 lua/web/handler.lua 推断项目根目录
-        project_root = current_file:match("(.+)/lua/web/handler%.lua")
-    end
-    
-    -- 如果无法从当前文件推断，尝试使用 path_utils
-    if not project_root then
-        project_root = path_utils.get_project_root()
-    end
-    
-    -- 如果仍然无法获取，尝试从 package.path 中查找包含项目特定目录的路径
-    if not project_root then
-        -- 遍历所有 package.path 路径，查找包含 "waf" 目录的路径（项目特定）
-        for path in package.path:gmatch("([^;]+)") do
-            -- 查找包含 waf 目录的路径（项目特定标识）
-            if path:match("/waf/") then
-                project_root = path:match("(.+)/lua/waf/%?%.lua")
-                if project_root and project_root ~= "" then
-                    break
-                end
-            end
-        end
-        
-        -- 如果仍然找不到，尝试从第一个包含 lua 的路径推断（排除系统路径）
-        if not project_root then
-            for path in package.path:gmatch("([^;]+)") do
-                -- 排除系统默认路径（/usr/local/share, /usr/share 等）
-                if not path:match("^/usr/") and path:match("/lua/") then
-                    project_root = path:match("(.+)/lua/%?%.lua")
-                    if project_root and project_root ~= "" then
-                        break
-                    end
-                end
-            end
-        end
-    end
-    
-    return project_root
+    return web_utils.escape_html(text)
 end
 
 -- 读取HTML文件内容
 local function read_html_file(filename)
-    local project_root = get_project_root()
+    local project_root = path_utils.get_project_root()
     
     if not project_root then
         ngx.log(ngx.ERR, "Failed to determine project root for serving HTML file: ", filename)
@@ -318,6 +262,31 @@ function _M.route()
     -- 日志查看页面
     if path == "/admin/logs" then
         return serve_html_with_layout("logs.html", "日志查看", session)
+    end
+    
+    -- 静态文件服务（JavaScript、CSS等）
+    if path:match("%.js$") or path:match("%.css$") then
+        local filename = path:match("([^/]+)$")
+        if filename then
+            local project_root = path_utils.get_project_root()
+            if project_root then
+                local file_path = project_root .. "/lua/web/" .. filename
+                local file = io.open(file_path, "r")
+                if file then
+                    local content = file:read("*all")
+                    file:close()
+                    if path:match("%.js$") then
+                        ngx.header.content_type = "application/javascript; charset=utf-8"
+                    elseif path:match("%.css$") then
+                        ngx.header.content_type = "text/css; charset=utf-8"
+                    end
+                    ngx.say(content)
+                    return
+                end
+            end
+        end
+        ngx.status = 404
+        return
     end
     
     -- 默认首页（根路径和管理首页）- 重定向到Dashboard

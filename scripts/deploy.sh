@@ -90,8 +90,27 @@ sed -i "s|/path/to/project/logs/error.log|$PROJECT_ROOT_ABS/logs/error.log|g" "$
 sed -i "s|/path/to/project/conf.d/set_conf|$PROJECT_ROOT_ABS/conf.d/set_conf|g" "$NGINX_CONF_DIR/nginx.conf"
 # 替换 conf.d/vhost_conf 路径
 sed -i "s|/path/to/project/conf.d/vhost_conf|$PROJECT_ROOT_ABS/conf.d/vhost_conf|g" "$NGINX_CONF_DIR/nginx.conf"
-# 替换 set $project_root 变量中的占位符
-sed -i 's|set $project_root "/path/to/project"|set $project_root "'"$PROJECT_ROOT_ABS"'"|g' "$NGINX_CONF_DIR/nginx.conf"
+
+# 删除 set $project_root 指令（某些 OpenResty 版本不支持在 http 块中使用 set）
+# 我们会在子配置文件中直接替换 $project_root 为实际路径
+sed -i '/set \$project_root/d' "$NGINX_CONF_DIR/nginx.conf"
+# 删除相关的注释行（如果存在）
+sed -i '/项目根目录变量/d' "$NGINX_CONF_DIR/nginx.conf"
+sed -i '/此变量必须在 http 块的最开始设置/d' "$NGINX_CONF_DIR/nginx.conf"
+
+# 替换子配置文件中的 $project_root 变量为实际路径
+# 注意：由于某些 OpenResty 版本不支持在 http 块中使用 set 指令
+# 我们直接在子配置文件中替换 $project_root 为实际路径
+echo -e "${YELLOW}  替换子配置文件中的 \$project_root 变量...${NC}"
+if [ -f "$PROJECT_ROOT_ABS/conf.d/set_conf/lua.conf" ]; then
+    sed -i "s|\$project_root|$PROJECT_ROOT_ABS|g" "$PROJECT_ROOT_ABS/conf.d/set_conf/lua.conf"
+fi
+if [ -f "$PROJECT_ROOT_ABS/conf.d/set_conf/log.conf" ]; then
+    sed -i "s|\$project_root|$PROJECT_ROOT_ABS|g" "$PROJECT_ROOT_ABS/conf.d/set_conf/log.conf"
+fi
+# 替换其他可能使用 $project_root 的配置文件
+find "$PROJECT_ROOT_ABS/conf.d" -name "*.conf" -type f -exec sed -i "s|\$project_root|$PROJECT_ROOT_ABS|g" {} \;
+echo -e "${GREEN}✓ 已替换子配置文件中的变量${NC}"
 
 # 步骤3.5: 立即验证并清理重复内容（在替换后立即执行）
 # 找到 http 块结束位置并强制截取

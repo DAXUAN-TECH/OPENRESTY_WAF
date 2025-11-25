@@ -207,15 +207,26 @@
         
         // 检查是否已登录
         function checkAuth() {
+            // 如果 URL 中有 redirect 参数，说明是从其他页面重定向来的，不应该自动跳转
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.has('redirect')) {
+                // 有 redirect 参数，说明是重定向来的，不自动跳转
+                return;
+            }
+            
             fetch('/api/auth/check')
-                .then(response => {
-                    if (response.ok) {
-                        // 已登录，跳转到管理首页
-                        window.location.href = '/admin';
+                .then(response => response.json())
+                .then(data => {
+                    // 检查响应中的 authenticated 字段，而不是只检查 response.ok
+                    if (data && data.authenticated === true) {
+                        // 已登录，跳转到管理首页或 redirect 参数指定的页面
+                        const redirect = urlParams.get('redirect') || '/admin';
+                        window.location.href = redirect;
                     }
+                    // 未登录，继续显示登录页面
                 })
                 .catch(() => {
-                    // 未登录，继续显示登录页面
+                    // 网络错误，继续显示登录页面
                 });
         }
         

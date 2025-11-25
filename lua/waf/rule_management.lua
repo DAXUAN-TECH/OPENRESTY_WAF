@@ -120,29 +120,40 @@ function _M.create_rule(rule_data)
     
     -- 处理空字符串：将空字符串转换为 nil（NULL）
     -- 同时确保类型正确（转换为字符串）
-    if description then
+    -- 注意：如果值是 nil 或 cjson.null，直接保持为 nil，不转换
+    local cjson = require "cjson"
+    
+    if description ~= nil and description ~= cjson.null then
         description = tostring(description)
-        if description == "" then
+        if description == "" or description == "null" or description == "nil" then
             description = nil
         end
+    else
+        description = nil
     end
-    if rule_group then
+    if rule_group ~= nil and rule_group ~= cjson.null then
         rule_group = tostring(rule_group)
-        if rule_group == "" then
+        if rule_group == "" or rule_group == "null" or rule_group == "nil" then
             rule_group = nil
         end
+    else
+        rule_group = nil
     end
-    if start_time then
+    if start_time ~= nil and start_time ~= cjson.null then
         start_time = tostring(start_time)
-        if start_time == "" then
+        if start_time == "" or start_time == "null" or start_time == "nil" then
             start_time = nil
         end
+    else
+        start_time = nil
     end
-    if end_time then
+    if end_time ~= nil and end_time ~= cjson.null then
         end_time = tostring(end_time)
-        if end_time == "" then
+        if end_time == "" or end_time == "null" or end_time == "nil" then
             end_time = nil
         end
+    else
+        end_time = nil
     end
     
     -- 验证分组名称（防止SQL注入，只允许字母、数字、下划线、中文字符和常见分隔符）

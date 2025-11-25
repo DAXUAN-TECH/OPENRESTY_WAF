@@ -169,14 +169,34 @@ function _M.get(feature_key)
             return false, nil
         end
         
-        ngx.log(ngx.ERR, "failed to get feature switch: ", err)
+        -- 检查是否是认证错误（1045）或连接错误
+        local is_auth_error = err:match("Access denied") or err:match("1045") or err:match("28000")
+        local is_connection_error = err:match("Connection refused") or err:match("Can't connect")
+        
+        -- 对于认证错误和连接错误，使用缓存机制避免重复日志
+        local error_cache_key = "db_error:" .. feature_key
+        local last_error_time = cache:get(error_cache_key)
+        local current_time = ngx.time()
+        
+        -- 如果距离上次错误超过60秒，才记录错误日志（避免日志刷屏）
+        if not last_error_time or (current_time - last_error_time) > 60 then
+            if is_auth_error then
+                ngx.log(ngx.WARN, "database authentication failed for feature switch: ", feature_key, ", using config fallback")
+            elseif is_connection_error then
+                ngx.log(ngx.WARN, "database connection failed for feature switch: ", feature_key, ", using config fallback")
+            else
+                ngx.log(ngx.ERR, "failed to get feature switch: ", feature_key, ", error: ", err)
+            end
+            cache:set(error_cache_key, current_time, 300)  -- 缓存5分钟
+        end
+        
         -- 如果数据库查询失败，尝试从配置文件获取
         if config.features and config.features[feature_key] then
             local enable = config.features[feature_key].enable == true
             cache:set(cache_key, enable and "1" or "0", CACHE_TTL)
             return enable, nil
         end
-        return nil, err
+        return false, nil  -- 认证错误时返回false而不是nil，避免上层继续报错
     end
     
     local enable = false

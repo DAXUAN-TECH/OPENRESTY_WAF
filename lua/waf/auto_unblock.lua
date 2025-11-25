@@ -233,7 +233,15 @@ function _M.init_worker()
             auto_block_enabled = result
         else
             -- 如果检查失败（可能是数据库不可用），使用配置文件的值
-            ngx.log(ngx.WARN, "failed to check feature switch from database, using config value")
+            -- 使用错误缓存，避免重复记录错误日志
+            local error_cache_key = "auto_unblock_db_error"
+            local last_error_time = cache:get(error_cache_key)
+            local current_time = ngx.time()
+            
+            if not last_error_time or (current_time - last_error_time) > 300 then
+                ngx.log(ngx.WARN, "failed to check feature switch from database, using config value")
+                cache:set(error_cache_key, current_time, 600)  -- 缓存10分钟
+            end
             auto_block_enabled = config.auto_block.enable
         end
         

@@ -168,7 +168,41 @@ local function flush_logs(premature, retry_count)
 
     local res, err = mysql_pool.batch_insert("waf_access_logs", fields, values_list)
     if err then
-        ngx.log(ngx.ERR, "batch log insert error: ", err, " (retry: ", retry_count, "/", MAX_RETRY, ")")
+        -- 检查是否是认证错误（Access denied, 1045, 28000）
+        local is_auth_error = err:match("Access denied") or err:match("1045") or err:match("28000")
+        local is_connection_error = err:match("Connection refused") or err:match("Can't connect")
+        
+        -- 对于认证错误，不要重试（重试也没用），直接丢弃日志
+        if is_auth_error then
+            -- 使用错误缓存，避免重复记录错误日志（每5分钟记录一次）
+            local error_cache_key = "log_auth_error"
+            local cache = ngx.shared.waf_cache
+            local last_error_time = cache:get(error_cache_key)
+            local current_time = ngx.time()
+            
+            if not last_error_time or (current_time - last_error_time) > 300 then
+                ngx.log(ngx.WARN, "database authentication failed, dropping ", #logs, " logs. Please check database credentials.")
+                cache:set(error_cache_key, current_time, 600)  -- 缓存10分钟
+            end
+            -- 直接返回，不重试
+            return
+        end
+        
+        -- 对于连接错误，也减少重试次数和日志频率
+        if is_connection_error then
+            local error_cache_key = "log_conn_error"
+            local cache = ngx.shared.waf_cache
+            local last_error_time = cache:get(error_cache_key)
+            local current_time = ngx.time()
+            
+            if not last_error_time or (current_time - last_error_time) > 60 then
+                ngx.log(ngx.WARN, "database connection failed, retry: ", retry_count, "/", MAX_RETRY)
+                cache:set(error_cache_key, current_time, 300)  -- 缓存5分钟
+            end
+        else
+            -- 其他错误正常记录
+            ngx.log(ngx.ERR, "batch log insert error: ", err, " (retry: ", retry_count, "/", MAX_RETRY, ")")
+        end
         
         -- 重试机制：如果未达到最大重试次数，延迟后重试
         if retry_count < MAX_RETRY then
@@ -187,7 +221,9 @@ local function flush_logs(premature, retry_count)
             end
         else
             -- 达到最大重试次数，记录错误但不再重试（避免无限循环）
-            ngx.log(ngx.ERR, "batch log insert failed after ", MAX_RETRY, " retries, dropping ", #logs, " logs")
+            if not is_auth_error then
+                ngx.log(ngx.ERR, "batch log insert failed after ", MAX_RETRY, " retries, dropping ", #logs, " logs")
+            end
         end
     else
         ngx.log(ngx.DEBUG, "batch inserted ", #logs, " logs")

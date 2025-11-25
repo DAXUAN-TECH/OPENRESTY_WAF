@@ -9,7 +9,19 @@ local cjson = require "cjson"
 -- 注意：使用标准 Lua io 库进行文件操作，不需要 resty.file 模块
 
 local _M = {}
-local cache = ngx.shared.waf_log_buffer
+
+-- 获取共享内存缓存（延迟初始化，避免在 init_worker 阶段访问 ngx.shared）
+local function get_cache()
+    -- 使用 pcall 安全访问 ngx.shared（在 init_worker 阶段可能不可用）
+    local ok, shared = pcall(function()
+        return ngx.shared.waf_log_buffer
+    end)
+    if ok and shared then
+        return shared
+    end
+    -- 如果无法访问，返回 nil（调用者需要处理这种情况）
+    return nil
+end
 
 -- 配置
 local MAX_RETRY = config.log.max_retry or 3
@@ -71,6 +83,13 @@ end
 function _M.enqueue(log_data, log_type)
     log_type = log_type or "access"
     
+    local cache = get_cache()
+    if not cache then
+        -- 如果无法访问缓存，直接写入本地备份
+        write_local_log(log_data, log_type)
+        return false
+    end
+    
     -- 检查队列大小
     local queue_size = cache:get(QUEUE_SIZE_KEY) or 0
     if queue_size >= QUEUE_MAX_SIZE then
@@ -103,6 +122,11 @@ end
 -- 从队列获取日志
 function _M.dequeue(count)
     count = count or 1
+    
+    local cache = get_cache()
+    if not cache then
+        return {}
+    end
     
     local queue_data = cache:get(QUEUE_KEY)
     if not queue_data then
@@ -207,14 +231,17 @@ function _M.retry_write(log_entry)
     
     if not ok then
         -- 写入失败，添加到重试队列
-        local retry_queue_data = cache:get(RETRY_QUEUE_KEY)
-        local retry_queue = {}
-        if retry_queue_data then
-            retry_queue = cjson.decode(retry_queue_data)
+        local cache = get_cache()
+        if cache then
+            local retry_queue_data = cache:get(RETRY_QUEUE_KEY)
+            local retry_queue = {}
+            if retry_queue_data then
+                retry_queue = cjson.decode(retry_queue_data)
+            end
+            
+            table.insert(retry_queue, log_entry)
+            cache:set(RETRY_QUEUE_KEY, cjson.encode(retry_queue), 3600)
         end
-        
-        table.insert(retry_queue, log_entry)
-        cache:set(RETRY_QUEUE_KEY, cjson.encode(retry_queue), 3600)
         
         return false, err
     end
@@ -224,6 +251,11 @@ end
 
 -- 处理重试队列
 function _M.process_retry_queue()
+    local cache = get_cache()
+    if not cache then
+        return 0
+    end
+    
     local retry_queue_data = cache:get(RETRY_QUEUE_KEY)
     if not retry_queue_data then
         return 0
@@ -262,11 +294,19 @@ end
 
 -- 获取队列大小
 function _M.get_queue_size()
+    local cache = get_cache()
+    if not cache then
+        return 0
+    end
     return cache:get(QUEUE_SIZE_KEY) or 0
 end
 
 -- 获取重试队列大小
 function _M.get_retry_queue_size()
+    local cache = get_cache()
+    if not cache then
+        return 0
+    end
     local retry_queue_data = cache:get(RETRY_QUEUE_KEY)
     if retry_queue_data then
         local retry_queue = cjson.decode(retry_queue_data)

@@ -179,7 +179,13 @@ function _M.init_worker()
     
     -- 初始化日志队列处理定时器
     if config.log and config.log.enable_async then
-        local log_queue = require "waf.log_queue"
+        -- 使用 pcall 安全加载 log_queue（在 init_worker 阶段可能有问题）
+        local ok, log_queue = pcall(require, "waf.log_queue")
+        if not ok or not log_queue then
+            ngx.log(ngx.ERR, "failed to load log_queue module: ", log_queue or "unknown error")
+            -- 如果加载失败，跳过日志队列初始化，但不影响其他功能
+            return
+        end
         local queue_process_interval = 5  -- 每5秒处理一次队列
         
         local function periodic_queue_process(premature)

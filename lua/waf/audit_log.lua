@@ -45,8 +45,8 @@ function _M.log(action_type, resource_type, resource_id, action_description, sta
         end
     end
     
-    -- 异步写入数据库（不阻塞请求）
-    local ok, err = pcall(function()
+    -- 写入数据库（不阻塞请求，但需要检查返回值）
+    local ok, result = pcall(function()
         local sql = [[
             INSERT INTO waf_audit_logs (
                 user_id, username, action_type, resource_type, resource_id,
@@ -54,15 +54,23 @@ function _M.log(action_type, resource_type, resource_id, action_description, sta
                 ip_address, user_agent, status, error_message
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ]]
-        mysql_pool.query(sql,
+        local res, err = mysql_pool.query(sql,
             user_id, username, action_type, resource_type, resource_id,
             action_description, method, path, request_params,
             ip_address, user_agent, status or "success", error_message
         )
+        -- 检查查询结果
+        if not res then
+            -- 查询失败，抛出错误以便 pcall 捕获
+            error("MySQL query failed: " .. (err or "unknown error"))
+        end
+        return res
     end)
     
     if not ok then
-        ngx.log(ngx.ERR, "Failed to write audit log: ", err)
+        ngx.log(ngx.ERR, "Failed to write audit log (pcall error): ", tostring(result), ", action_type: ", action_type, ", username: ", tostring(username))
+    elseif not result then
+        ngx.log(ngx.ERR, "Failed to write audit log (query returned nil), action_type: ", action_type, ", username: ", tostring(username))
     end
 end
 

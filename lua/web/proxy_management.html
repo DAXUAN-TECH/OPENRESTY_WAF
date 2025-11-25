@@ -742,6 +742,14 @@
             if (status) url += `&status=${status}`;
             
             const tbody = document.getElementById('proxies-tbody');
+            // 防御性检查：确保 escapeHtml 函数可用
+            const escapeHtmlFn = window.escapeHtml || function(text) {
+                if (!text) return '';
+                const div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
+            };
+            
             try {
                 // 显示加载状态
                 tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 20px;">加载中...</td></tr>';
@@ -771,12 +779,12 @@
                 } else {
                     const errorMsg = data.error || data.message || '加载失败';
                     showAlert(errorMsg, 'error');
-                    tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 20px; color: #e74c3c;">' + escapeHtml(errorMsg) + '</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 20px; color: #e74c3c;">' + escapeHtmlFn(errorMsg) + '</td></tr>';
                 }
             } catch (error) {
                 console.error('loadProxies error:', error);
                 showAlert('网络错误: ' + error.message, 'error');
-                tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 20px; color: #e74c3c;">加载失败: ' + escapeHtml(error.message) + '</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 20px; color: #e74c3c;">加载失败: ' + escapeHtmlFn(error.message) + '</td></tr>';
             }
         }
         

@@ -286,7 +286,11 @@ function _M.verify_credentials(username, password)
         end
         
         -- 如果数据库中没有用户，且尝试登录的是 admin/admin123，自动创建默认管理员用户
-        if check_ok and check_res and #check_res > 0 and check_res[1].user_count == 0 then
+        -- 注意：MySQL COUNT(*) 返回的是数字，但可能被转换为字符串，需要转换为数字比较
+        local user_count = check_res and #check_res > 0 and (tonumber(check_res[1].user_count) or 0) or 0
+        ngx.log(ngx.WARN, "verify_credentials: user_count (converted): ", tostring(user_count), ", type: ", type(user_count))
+        
+        if check_ok and check_res and #check_res > 0 and user_count == 0 then
             ngx.log(ngx.WARN, "verify_credentials: database is empty (user_count: 0), username: ", username, ", password match: ", tostring(password == "admin123"))
             if username == "admin" and password == "admin123" then
                 ngx.log(ngx.WARN, "verify_credentials: database is empty, creating default admin user (username: admin, password: admin123)")

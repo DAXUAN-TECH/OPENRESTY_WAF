@@ -164,14 +164,37 @@
             
             <div class="form-group">
                 <label for="password">密码</label>
-                <input 
-                    type="password" 
-                    id="password" 
-                    name="password" 
-                    placeholder="请输入密码" 
-                    required 
-                    autocomplete="current-password"
-                >
+                <div style="position: relative;">
+                    <input 
+                        type="password" 
+                        id="password" 
+                        name="password" 
+                        placeholder="请输入密码" 
+                        required 
+                        autocomplete="current-password"
+                        style="padding-right: 40px;"
+                    >
+                    <button 
+                        type="button" 
+                        id="togglePassword" 
+                        style="
+                            position: absolute;
+                            right: 10px;
+                            top: 50%;
+                            transform: translateY(-50%);
+                            background: none;
+                            border: none;
+                            cursor: pointer;
+                            padding: 5px;
+                            color: #666;
+                            font-size: 18px;
+                            outline: none;
+                        "
+                        title="显示/隐藏密码"
+                    >
+                        👁️
+                    </button>
+                </div>
             </div>
             
             <div class="form-group" id="totpGroup" style="display: none;">
@@ -310,6 +333,24 @@
                 showError('网络错误，请稍后重试');
                 loginButton.disabled = false;
                 loginButton.innerHTML = '登录';
+            }
+        });
+        
+        // 密码显示/隐藏功能
+        const togglePassword = document.getElementById('togglePassword');
+        const passwordInput = document.getElementById('password');
+        
+        togglePassword.addEventListener('click', function() {
+            const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
+            passwordInput.setAttribute('type', type);
+            
+            // 切换图标（使用简单的文本图标，也可以使用 SVG）
+            if (type === 'password') {
+                togglePassword.textContent = '👁️';
+                togglePassword.title = '显示密码';
+            } else {
+                togglePassword.textContent = '🙈';
+                togglePassword.title = '隐藏密码';
             }
         });
         

@@ -465,6 +465,7 @@ function _M.create_session(username, user_info)
     
     local session_data = {
         username = username,
+        user_id = user_info.id,  -- 添加 user_id 到 session 数据
         role = user_info.role or "user",
         created_at = ngx.time(),
         last_access = ngx.time()

@@ -150,6 +150,29 @@ function _M.list()
         result.rules = {}
     end
     
+    -- 强制转换为标准数组（确保 JSON 序列化时是数组）
+    -- 创建一个新的数组，只包含数字索引的元素
+    local final_rules = {}
+    if #result.rules > 0 then
+        -- 使用 ipairs 确保只复制数组部分
+        for i = 1, #result.rules do
+            final_rules[i] = result.rules[i]
+        end
+    end
+    result.rules = final_rules
+    
+    -- 测试 JSON 序列化，确保 rules 是数组格式
+    local cjson = require "cjson"
+    local test_json = cjson.encode(result.rules)
+    ngx.log(ngx.INFO, "Rules JSON serialization test: ", test_json:sub(1, 200))
+    
+    -- 检查 JSON 字符串是否以 [ 开头（数组）而不是 { 开头（对象）
+    if not test_json:match("^%[") then
+        ngx.log(ngx.ERR, "WARNING: rules JSON does not start with [, it starts with: ", test_json:sub(1, 1))
+        -- 强制设置为空数组
+        result.rules = {}
+    end
+    
     api_utils.json_response({
         success = true,
         data = result

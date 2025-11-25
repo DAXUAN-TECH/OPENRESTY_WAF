@@ -554,52 +554,75 @@
                     
                     // 确保 rules 是数组
                     const rules = data.data.rules;
-                    console.log('Received rules type:', typeof rules, 'isArray:', Array.isArray(rules), 'value:', rules);
+                    console.log('=== Rules Data Debug ===');
+                    console.log('Received rules type:', typeof rules);
+                    console.log('Is Array:', Array.isArray(rules));
+                    console.log('Rules value:', rules);
+                    console.log('Rules JSON:', JSON.stringify(rules, null, 2));
+                    console.log('Full data.data:', JSON.stringify(data.data, null, 2));
+                    console.log('Full response:', JSON.stringify(data, null, 2));
+                    console.log('========================');
                     
                     if (rules === undefined || rules === null) {
-                        console.error('API response rules is undefined or null:', rules);
-                        console.error('Full data.data:', JSON.stringify(data.data, null, 2));
+                        console.error('API response rules is undefined or null');
                         showAlert('响应数据格式错误：rules 字段不存在', 'error');
                         renderRulesTable([]);
                         return;
                     }
                     
-                    if (!Array.isArray(rules)) {
-                        console.error('API response rules is not an array:', rules);
-                        console.error('Rules type:', typeof rules);
-                        console.error('Rules value:', JSON.stringify(rules, null, 2));
-                        console.error('Full data.data:', JSON.stringify(data.data, null, 2));
+                    // 处理各种可能的格式
+                    let rulesArray = [];
+                    
+                    if (Array.isArray(rules)) {
+                        // 已经是数组，直接使用
+                        rulesArray = rules;
+                    } else if (typeof rules === 'object') {
+                        // 是对象，尝试转换
+                        const keys = Object.keys(rules);
+                        console.log('Object keys:', keys);
                         
-                        // 尝试转换：如果是对象，尝试转换为数组
-                        let rulesArray = [];
-                        if (typeof rules === 'object') {
-                            // 尝试从对象转换为数组
-                            const keys = Object.keys(rules);
-                            if (keys.length > 0) {
-                                // 检查是否是数字键
-                                const numericKeys = keys.filter(k => !isNaN(parseInt(k)));
-                                if (numericKeys.length > 0) {
-                                    // 按数字键排序
-                                    numericKeys.sort((a, b) => parseInt(a) - parseInt(b));
-                                    rulesArray = numericKeys.map(k => rules[k]);
-                                    console.log('Converted object to array:', rulesArray);
-                                } else {
-                                    // 非数字键，可能是单个对象，包装成数组
-                                    rulesArray = [rules];
-                                    console.log('Wrapped object in array:', rulesArray);
-                                }
+                        if (keys.length === 0) {
+                            // 空对象，转换为空数组
+                            rulesArray = [];
+                        } else {
+                            // 检查是否是数字键（可能是序列化的数组对象）
+                            const numericKeys = keys.filter(k => {
+                                const num = parseInt(k);
+                                return !isNaN(num) && num.toString() === k && num >= 0;
+                            });
+                            
+                            if (numericKeys.length > 0) {
+                                // 有数字键，按数字排序后转换为数组
+                                numericKeys.sort((a, b) => parseInt(a) - parseInt(b));
+                                rulesArray = numericKeys.map(k => rules[k]);
+                                console.log('Converted object with numeric keys to array:', rulesArray);
+                            } else if (keys.length === 1 && keys[0] === '0') {
+                                // 特殊情况：只有 '0' 键
+                                rulesArray = [rules['0']];
+                                console.log('Converted object with single "0" key to array:', rulesArray);
+                            } else {
+                                // 非数字键，可能是单个规则对象，包装成数组
+                                rulesArray = [rules];
+                                console.log('Wrapped single object in array:', rulesArray);
                             }
                         }
-                        
-                        if (rulesArray.length > 0) {
-                            renderRulesTable(rulesArray);
-                            renderPagination(data.data, 'pagination', loadRules);
-                        } else {
-                            showAlert('响应数据格式错误：rules 不是数组且无法转换', 'error');
-                            renderRulesTable([]);
-                        }
+                    } else {
+                        // 既不是数组也不是对象
+                        console.error('Rules is neither array nor object, type:', typeof rules);
+                        showAlert('响应数据格式错误：rules 类型不正确 (' + typeof rules + ')', 'error');
+                        renderRulesTable([]);
                         return;
                     }
+                    
+                    // 验证转换后的数组
+                    if (!Array.isArray(rulesArray)) {
+                        console.error('Failed to convert rules to array, final type:', typeof rulesArray);
+                        showAlert('响应数据格式错误：无法将 rules 转换为数组', 'error');
+                        renderRulesTable([]);
+                        return;
+                    }
+                    
+                    console.log('Final rules array length:', rulesArray.length);
                     
                     renderRulesTable(rules);
                     renderPagination(data.data, 'pagination', loadRules);

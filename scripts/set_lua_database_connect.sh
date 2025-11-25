@@ -102,21 +102,33 @@ try:
     mysql_block = content[start_pos:end_pos]
     
     # 在配置块内进行替换（使用多行模式，确保 ^ 和 $ 匹配行首行尾）
+    # 使用函数形式的替换，避免变量值中的数字被误解析为反向引用
+    
     # 更新 host
-    mysql_block = re.sub(r'^(\s*host\s*=\s*")[^"]+(".*)$', r'\1' + mysql_host + r'\2', mysql_block, flags=re.MULTILINE)
+    def replace_host(match):
+        return match.group(1) + mysql_host + match.group(2)
+    mysql_block = re.sub(r'^(\s*host\s*=\s*")[^"]+(".*)$', replace_host, mysql_block, flags=re.MULTILINE)
     
     # 更新 port（匹配数字，保留逗号）
-    mysql_block = re.sub(r'^(\s*port\s*=\s*)\d+', r'\1' + mysql_port, mysql_block, flags=re.MULTILINE)
+    def replace_port(match):
+        return match.group(1) + mysql_port
+    mysql_block = re.sub(r'^(\s*port\s*=\s*)\d+', replace_port, mysql_block, flags=re.MULTILINE)
     
     # 更新 database
-    mysql_block = re.sub(r'^(\s*database\s*=\s*")[^"]+(".*)$', r'\1' + mysql_database + r'\2', mysql_block, flags=re.MULTILINE)
+    def replace_database(match):
+        return match.group(1) + mysql_database + match.group(2)
+    mysql_block = re.sub(r'^(\s*database\s*=\s*")[^"]+(".*)$', replace_database, mysql_block, flags=re.MULTILINE)
     
     # 更新 user
-    mysql_block = re.sub(r'^(\s*user\s*=\s*")[^"]+(".*)$', r'\1' + mysql_user + r'\2', mysql_block, flags=re.MULTILINE)
+    def replace_user(match):
+        return match.group(1) + mysql_user + match.group(2)
+    mysql_block = re.sub(r'^(\s*user\s*=\s*")[^"]+(".*)$', replace_user, mysql_block, flags=re.MULTILINE)
     
     # 更新密码（需要转义引号和反斜杠）
     escaped_password = mysql_password.replace('\\\\', '\\\\\\\\').replace('"', '\\\\"')
-    mysql_block = re.sub(r'^(\s*password\s*=\s*")[^"]+(".*)$', r'\1' + escaped_password + r'\2', mysql_block, flags=re.MULTILINE)
+    def replace_password(match):
+        return match.group(1) + escaped_password + match.group(2)
+    mysql_block = re.sub(r'^(\s*password\s*=\s*")[^"]+(".*)$', replace_password, mysql_block, flags=re.MULTILINE)
     
     # 替换原配置块
     content = content[:start_pos] + mysql_block + content[end_pos:]
@@ -223,23 +235,35 @@ try:
     redis_block = content[start_pos:end_pos]
     
     # 在配置块内进行替换（使用多行模式，确保 ^ 和 $ 匹配行首行尾）
+    # 使用函数形式的替换，避免变量值中的数字被误解析为反向引用
+    
     # 更新 host
-    redis_block = re.sub(r'^(\s*host\s*=\s*")[^"]+(".*)$', r'\1' + redis_host + r'\2', redis_block, flags=re.MULTILINE)
+    def replace_host(match):
+        return match.group(1) + redis_host + match.group(2)
+    redis_block = re.sub(r'^(\s*host\s*=\s*")[^"]+(".*)$', replace_host, redis_block, flags=re.MULTILINE)
     
     # 更新 port（匹配数字，保留逗号）
-    redis_block = re.sub(r'^(\s*port\s*=\s*)\d+', r'\1' + redis_port, redis_block, flags=re.MULTILINE)
+    def replace_port(match):
+        return match.group(1) + redis_port
+    redis_block = re.sub(r'^(\s*port\s*=\s*)\d+', replace_port, redis_block, flags=re.MULTILINE)
     
     # 更新 db（匹配数字，保留逗号）
-    redis_block = re.sub(r'^(\s*db\s*=\s*)\d+', r'\1' + redis_db, redis_block, flags=re.MULTILINE)
+    def replace_db(match):
+        return match.group(1) + redis_db
+    redis_block = re.sub(r'^(\s*db\s*=\s*)\d+', replace_db, redis_block, flags=re.MULTILINE)
     
     # 更新密码
     if redis_password:
         escaped_password = redis_password.replace('\\\\', '\\\\\\\\').replace('"', '\\\\"')
+        def replace_password(match):
+            return match.group(1) + '"' + escaped_password + '"' + match.group(3)
         # 匹配 password = nil 或 password = "xxx"
-        redis_block = re.sub(r'^(\s*password\s*=\s*)(nil|"[^"]*")(.*)$', r'\1"' + escaped_password + r'"\3', redis_block, flags=re.MULTILINE)
+        redis_block = re.sub(r'^(\s*password\s*=\s*)(nil|"[^"]*")(.*)$', replace_password, redis_block, flags=re.MULTILINE)
     else:
         # 如果没有密码，设置为 nil
-        redis_block = re.sub(r'^(\s*password\s*=\s*)(nil|"[^"]*")(.*)$', r'\1nil\3', redis_block, flags=re.MULTILINE)
+        def replace_password_nil(match):
+            return match.group(1) + 'nil' + match.group(3)
+        redis_block = re.sub(r'^(\s*password\s*=\s*)(nil|"[^"]*")(.*)$', replace_password_nil, redis_block, flags=re.MULTILINE)
     
     # 替换原配置块
     content = content[:start_pos] + redis_block + content[end_pos:]

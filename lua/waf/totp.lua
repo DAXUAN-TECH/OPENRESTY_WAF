@@ -3,6 +3,84 @@
 -- 功能：实现 Google Authenticator 兼容的 TOTP 双因素认证
 -- 参考：RFC 6238 (TOTP)
 
+-- 加载 bit 库（用于位运算）
+local bit = bit
+if not bit then
+    local ok, bit_module = pcall(require, "bit")
+    if ok and bit_module then
+        bit = bit_module
+    else
+        -- 如果 bit 库不可用，使用数学运算替代
+        bit = {
+            lshift = function(x, n) return x * (2^n) end,
+            rshift = function(x, n) return math.floor(x / (2^n)) end,
+            band = function(x, y)
+                -- 位与操作：使用数学运算实现
+                local result = 0
+                local power = 1
+                local x_val = x
+                local y_val = y
+                for i = 1, 32 do
+                    local x_bit = x_val % 2
+                    local y_bit = y_val % 2
+                    if x_bit == 1 and y_bit == 1 then
+                        result = result + power
+                    end
+                    x_val = math.floor(x_val / 2)
+                    y_val = math.floor(y_val / 2)
+                    power = power * 2
+                    if x_val == 0 and y_val == 0 then
+                        break
+                    end
+                end
+                return result
+            end,
+            bor = function(x, y)
+                -- 位或操作：使用数学运算实现
+                local result = 0
+                local power = 1
+                local x_val = x
+                local y_val = y
+                for i = 1, 32 do
+                    local x_bit = x_val % 2
+                    local y_bit = y_val % 2
+                    if x_bit == 1 or y_bit == 1 then
+                        result = result + power
+                    end
+                    x_val = math.floor(x_val / 2)
+                    y_val = math.floor(y_val / 2)
+                    power = power * 2
+                    if x_val == 0 and y_val == 0 then
+                        break
+                    end
+                end
+                return result
+            end,
+            bxor = function(x, y)
+                -- 异或操作：使用数学运算实现
+                local result = 0
+                local power = 1
+                local x_val = x
+                local y_val = y
+                for i = 1, 32 do
+                    local x_bit = x_val % 2
+                    local y_bit = y_val % 2
+                    if (x_bit == 1 and y_bit == 0) or (x_bit == 0 and y_bit == 1) then
+                        result = result + power
+                    end
+                    x_val = math.floor(x_val / 2)
+                    y_val = math.floor(y_val / 2)
+                    power = power * 2
+                    if x_val == 0 and y_val == 0 then
+                        break
+                    end
+                end
+                return result
+            end
+        }
+    end
+end
+
 local _M = {}
 
 -- Base32 编码表
@@ -25,18 +103,18 @@ local function base32_encode(data)
     local value = 0
     
     for i = 1, #data do
-        value = (value << 8) | string.byte(data, i)
+        value = bit.bor(bit.lshift(value, 8), string.byte(data, i))
         bits = bits + 8
         
         while bits >= 5 do
-            local index = (value >> (bits - 5)) & 0x1F
+            local index = bit.band(bit.rshift(value, bits - 5), 0x1F)
             table.insert(result, string.sub(BASE32_ALPHABET, index + 1, index + 1))
             bits = bits - 5
         end
     end
     
     if bits > 0 then
-        local index = (value << (5 - bits)) & 0x1F
+        local index = bit.band(bit.lshift(value, 5 - bits), 0x1F)
         table.insert(result, string.sub(BASE32_ALPHABET, index + 1, index + 1))
     end
     
@@ -64,11 +142,11 @@ local function base32_decode(encoded)
                 return nil, "Invalid Base32 character: " .. char
             end
         else
-            value = (value << 5) | index
+            value = bit.bor(bit.lshift(value, 5), index)
             bits = bits + 5
             
             if bits >= 8 then
-                local byte = (value >> (bits - 8)) & 0xFF
+                local byte = bit.band(bit.rshift(value, bits - 8), 0xFF)
                 table.insert(result, string.char(byte))
                 bits = bits - 8
             end
@@ -108,8 +186,8 @@ local function hmac_sha1(key, message)
     -- 创建 ipad 和 opad
     for i = 1, block_size do
         local byte = string.byte(padded_key, i) or 0
-        table.insert(ipad, string.char(byte ~ 0x36))
-        table.insert(opad, string.char(byte ~ 0x5C))
+        table.insert(ipad, string.char(bit.bxor(byte, 0x36)))
+        table.insert(opad, string.char(bit.bxor(byte, 0x5C)))
     end
     
     local ipad_str = table.concat(ipad)
@@ -147,7 +225,7 @@ function _M.generate_totp(secret_base32, time_step, digits)
     -- 将时间计数器转换为 8 字节大端序
     local time_bytes = {}
     for i = 7, 0, -1 do
-        table.insert(time_bytes, string.char((time_counter >> (i * 8)) & 0xFF))
+        table.insert(time_bytes, string.char(bit.band(bit.rshift(time_counter, i * 8), 0xFF)))
     end
     local time_str = table.concat(time_bytes)
     
@@ -158,11 +236,12 @@ function _M.generate_totp(secret_base32, time_step, digits)
     end
     
     -- 动态截取（RFC 6238）
-    local offset = (string.byte(hmac, #hmac) & 0x0F) + 1
-    local binary = ((string.byte(hmac, offset) & 0x7F) << 24) |
-                   ((string.byte(hmac, offset + 1) & 0xFF) << 16) |
-                   ((string.byte(hmac, offset + 2) & 0xFF) << 8) |
-                   (string.byte(hmac, offset + 3) & 0xFF)
+    local offset = bit.band(string.byte(hmac, #hmac), 0x0F) + 1
+    local binary = bit.bor(
+                   bit.lshift(bit.band(string.byte(hmac, offset), 0x7F), 24),
+                   bit.lshift(bit.band(string.byte(hmac, offset + 1), 0xFF), 16),
+                   bit.lshift(bit.band(string.byte(hmac, offset + 2), 0xFF), 8),
+                   bit.band(string.byte(hmac, offset + 3), 0xFF))
     
     local otp = binary % (10 ^ digits)
     
@@ -201,18 +280,19 @@ function _M.verify_totp(secret_base32, code, time_step, window)
             -- 计算时间步数
             local time_bytes = {}
             for j = 7, 0, -1 do
-                table.insert(time_bytes, string.char((test_counter >> (j * 8)) & 0xFF))
+                table.insert(time_bytes, string.char(bit.band(bit.rshift(test_counter, j * 8), 0xFF)))
             end
             local time_str = table.concat(time_bytes)
             
             -- 计算 HMAC
             local hmac, err = hmac_sha1(secret, time_str)
             if hmac then
-                local offset = (string.byte(hmac, #hmac) & 0x0F) + 1
-                local binary = ((string.byte(hmac, offset) & 0x7F) << 24) |
-                               ((string.byte(hmac, offset + 1) & 0xFF) << 16) |
-                               ((string.byte(hmac, offset + 2) & 0xFF) << 8) |
-                               (string.byte(hmac, offset + 3) & 0xFF)
+                local offset = bit.band(string.byte(hmac, #hmac), 0x0F) + 1
+                local binary = bit.bor(
+                               bit.lshift(bit.band(string.byte(hmac, offset), 0x7F), 24),
+                               bit.lshift(bit.band(string.byte(hmac, offset + 1), 0xFF), 16),
+                               bit.lshift(bit.band(string.byte(hmac, offset + 2), 0xFF), 8),
+                               bit.band(string.byte(hmac, offset + 3), 0xFF))
                 
                 local test_code = string.format("%06d", binary % 1000000)
                 if test_code == code then

@@ -14,8 +14,38 @@ if not bit then
     else
         -- 如果 bit 库不可用，使用数学运算替代
         bit = {
-            rshift = function(x, n) return math.floor(x / (2^n)) end,
-            band = function(x, y) return x % (2^32) & y % (2^32) end
+            rshift = function(x, n) 
+                return math.floor(x / (2^n)) 
+            end,
+            band = function(x, y) 
+                -- 位与操作：使用数学运算实现（只处理32位）
+                -- 对于 byte & 0xF 这种简单情况，直接使用取模即可
+                -- 0xF = 15，byte % 16 等价于 byte & 0xF（对于小于256的值）
+                if x < 256 and y < 256 then
+                    -- 简单情况：直接使用取模
+                    return x % (y + 1)
+                else
+                    -- 复杂情况：使用逐位计算
+                    local result = 0
+                    local power = 1
+                    local x_val = x
+                    local y_val = y
+                    for i = 1, 32 do
+                        local x_bit = x_val % 2
+                        local y_bit = y_val % 2
+                        if x_bit == 1 and y_bit == 1 then
+                            result = result + power
+                        end
+                        x_val = math.floor(x_val / 2)
+                        y_val = math.floor(y_val / 2)
+                        power = power * 2
+                        if x_val == 0 and y_val == 0 then
+                            break
+                        end
+                    end
+                    return result
+                end
+            end
         }
     end
 end

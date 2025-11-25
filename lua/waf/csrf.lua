@@ -39,10 +39,16 @@ function _M.generate_token(user_id)
     if not user_id then
         local authenticated, session = auth.is_authenticated()
         if not authenticated then
+            ngx.log(ngx.DEBUG, "csrf.generate_token: user not authenticated")
             return nil
         end
         -- 从会话中获取用户ID（优先使用 user_id，如果没有则使用 username）
         user_id = session.user_id or session.username
+        
+        if not user_id then
+            ngx.log(ngx.ERR, "csrf.generate_token: session has no user_id or username, session: ", cjson.encode(session))
+            return nil
+        end
         
         -- 如果 user_id 是字符串（可能是 username），需要转换为用户ID
         if type(user_id) == "string" then

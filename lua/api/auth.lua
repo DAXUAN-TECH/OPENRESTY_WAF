@@ -173,8 +173,8 @@ end
 function _M.check()
     local authenticated, session = auth.is_authenticated()
     if authenticated then
-        -- 生成新的CSRF Token
-        local csrf_token = csrf.generate_token(session.username)
+        -- 生成新的CSRF Token（优先使用 user_id，如果没有则使用 username）
+        local csrf_token = csrf.generate_token(session.user_id or session.username)
         api_utils.json_response({
             authenticated = true,
             username = session.username,

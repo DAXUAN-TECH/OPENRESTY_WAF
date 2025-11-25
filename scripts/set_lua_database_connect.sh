@@ -58,24 +58,68 @@ try:
     with open(config_file, 'r', encoding='utf-8') as f:
         content = f.read()
     
-    # 更新 MySQL 配置（只更新 MySQL 部分，不更新 Redis 部分）
-    # 使用更灵活的正则表达式，匹配任何当前值（不仅仅是默认值）
+    # 找到 MySQL 配置块的开始和结束位置
+    mysql_start_pattern = r'_M\.mysql\s*=\s*\{'
+    mysql_start_match = re.search(mysql_start_pattern, content)
     
-    # 更新 host（匹配任何引号内的值）
-    content = re.sub(r'(_M\.mysql = \{[\s\S]*?)(host\s*=\s*")[^"]+(")', r'\1' + mysql_host + r'\2', content)
+    if not mysql_start_match:
+        print("错误: 未找到 MySQL 配置块")
+        sys.exit(1)
     
-    # 更新 port（匹配任何数字，包括逗号）
-    content = re.sub(r'(_M\.mysql = \{[\s\S]*?)(port\s*=\s*)\d+', r'\1' + mysql_port, content)
+    start_pos = mysql_start_match.start()
     
-    # 更新 database（匹配任何引号内的值）
-    content = re.sub(r'(_M\.mysql = \{[\s\S]*?)(database\s*=\s*")[^"]+(")', r'\1' + mysql_database + r'\2', content)
+    # 找到配置块结束位置（匹配对应的 }）
+    brace_count = 0
+    end_pos = start_pos
+    in_string = False
+    string_char = None
     
-    # 更新 user（匹配任何引号内的值）
-    content = re.sub(r'(_M\.mysql = \{[\s\S]*?)(user\s*=\s*")[^"]+(")', r'\1' + mysql_user + r'\2', content)
+    for i in range(start_pos, len(content)):
+        char = content[i]
+        
+        # 处理字符串内的字符（忽略字符串内的大括号）
+        if not in_string:
+            if char == '"' or char == "'":
+                in_string = True
+                string_char = char
+            elif char == '{':
+                brace_count += 1
+            elif char == '}':
+                brace_count -= 1
+                if brace_count == 0:
+                    end_pos = i + 1
+                    break
+        else:
+            if char == string_char and (i == 0 or content[i-1] != '\\\\'):
+                in_string = False
+                string_char = None
     
-    # 更新密码（需要转义引号和反斜杠，匹配任何引号内的值）
+    if brace_count != 0:
+        print("错误: MySQL 配置块格式不正确")
+        sys.exit(1)
+    
+    # 提取 MySQL 配置块
+    mysql_block = content[start_pos:end_pos]
+    
+    # 在配置块内进行替换（使用多行模式，确保 ^ 和 $ 匹配行首行尾）
+    # 更新 host
+    mysql_block = re.sub(r'^(\s*host\s*=\s*")[^"]+(".*)$', r'\1' + mysql_host + r'\2', mysql_block, flags=re.MULTILINE)
+    
+    # 更新 port（匹配数字，保留逗号）
+    mysql_block = re.sub(r'^(\s*port\s*=\s*)\d+', r'\1' + mysql_port, mysql_block, flags=re.MULTILINE)
+    
+    # 更新 database
+    mysql_block = re.sub(r'^(\s*database\s*=\s*")[^"]+(".*)$', r'\1' + mysql_database + r'\2', mysql_block, flags=re.MULTILINE)
+    
+    # 更新 user
+    mysql_block = re.sub(r'^(\s*user\s*=\s*")[^"]+(".*)$', r'\1' + mysql_user + r'\2', mysql_block, flags=re.MULTILINE)
+    
+    # 更新密码（需要转义引号和反斜杠）
     escaped_password = mysql_password.replace('\\\\', '\\\\\\\\').replace('"', '\\\\"')
-    content = re.sub(r'(_M\.mysql = \{[\s\S]*?)(password\s*=\s*")[^"]+(")', r'\1' + escaped_password + r'\2', content)
+    mysql_block = re.sub(r'^(\s*password\s*=\s*")[^"]+(".*)$', r'\1' + escaped_password + r'\2', mysql_block, flags=re.MULTILINE)
+    
+    # 替换原配置块
+    content = content[:start_pos] + mysql_block + content[end_pos:]
     
     with open(config_file, 'w', encoding='utf-8') as f:
         f.write(content)
@@ -83,6 +127,8 @@ try:
     print("✓ MySQL 配置已更新")
 except Exception as e:
     print(f"错误: {e}")
+    import traceback
+    traceback.print_exc()
     sys.exit(1)
 PYTHON_EOF
         return $?
@@ -133,26 +179,70 @@ try:
     with open(config_file, 'r', encoding='utf-8') as f:
         content = f.read()
     
-    # 更新 Redis 配置（只更新 Redis 部分）
-    # 使用更灵活的正则表达式，匹配任何当前值（不仅仅是默认值）
+    # 找到 Redis 配置块的开始和结束位置
+    redis_start_pattern = r'_M\.redis\s*=\s*\{'
+    redis_start_match = re.search(redis_start_pattern, content)
     
-    # 更新 host（匹配任何引号内的值）
-    content = re.sub(r'(_M\.redis = \{[\s\S]*?)(host\s*=\s*")[^"]+(")', r'\1' + redis_host + r'\2', content)
+    if not redis_start_match:
+        print("错误: 未找到 Redis 配置块")
+        sys.exit(1)
     
-    # 更新 port（匹配任何数字，包括逗号）
-    content = re.sub(r'(_M\.redis = \{[\s\S]*?)(port\s*=\s*)\d+', r'\1' + redis_port, content)
+    start_pos = redis_start_match.start()
     
-    # 更新 db（匹配任何数字，包括逗号）
-    content = re.sub(r'(_M\.redis = \{[\s\S]*?)(db\s*=\s*)\d+', r'\1' + redis_db, content)
+    # 找到配置块结束位置（匹配对应的 }）
+    brace_count = 0
+    end_pos = start_pos
+    in_string = False
+    string_char = None
+    
+    for i in range(start_pos, len(content)):
+        char = content[i]
+        
+        # 处理字符串内的字符（忽略字符串内的大括号）
+        if not in_string:
+            if char == '"' or char == "'":
+                in_string = True
+                string_char = char
+            elif char == '{':
+                brace_count += 1
+            elif char == '}':
+                brace_count -= 1
+                if brace_count == 0:
+                    end_pos = i + 1
+                    break
+        else:
+            if char == string_char and (i == 0 or content[i-1] != '\\\\'):
+                in_string = False
+                string_char = None
+    
+    if brace_count != 0:
+        print("错误: Redis 配置块格式不正确")
+        sys.exit(1)
+    
+    # 提取 Redis 配置块
+    redis_block = content[start_pos:end_pos]
+    
+    # 在配置块内进行替换（使用多行模式，确保 ^ 和 $ 匹配行首行尾）
+    # 更新 host
+    redis_block = re.sub(r'^(\s*host\s*=\s*")[^"]+(".*)$', r'\1' + redis_host + r'\2', redis_block, flags=re.MULTILINE)
+    
+    # 更新 port（匹配数字，保留逗号）
+    redis_block = re.sub(r'^(\s*port\s*=\s*)\d+', r'\1' + redis_port, redis_block, flags=re.MULTILINE)
+    
+    # 更新 db（匹配数字，保留逗号）
+    redis_block = re.sub(r'^(\s*db\s*=\s*)\d+', r'\1' + redis_db, redis_block, flags=re.MULTILINE)
     
     # 更新密码
     if redis_password:
         escaped_password = redis_password.replace('\\\\', '\\\\\\\\').replace('"', '\\\\"')
-        # 匹配 password = nil 或 password = "xxx" 两种情况
-        content = re.sub(r'(_M\.redis = \{[\s\S]*?)(password\s*=\s*)(nil|"[^"]*")', r'\1password = "' + escaped_password + '"', content)
+        # 匹配 password = nil 或 password = "xxx"
+        redis_block = re.sub(r'^(\s*password\s*=\s*)(nil|"[^"]*")(.*)$', r'\1"' + escaped_password + r'"\3', redis_block, flags=re.MULTILINE)
     else:
         # 如果没有密码，设置为 nil
-        content = re.sub(r'(_M\.redis = \{[\s\S]*?)(password\s*=\s*)(nil|"[^"]*")', r'\1password = nil', content)
+        redis_block = re.sub(r'^(\s*password\s*=\s*)(nil|"[^"]*")(.*)$', r'\1nil\3', redis_block, flags=re.MULTILINE)
+    
+    # 替换原配置块
+    content = content[:start_pos] + redis_block + content[end_pos:]
     
     with open(config_file, 'w', encoding='utf-8') as f:
         f.write(content)
@@ -160,6 +250,8 @@ try:
     print("✓ Redis 配置已更新")
 except Exception as e:
     print(f"错误: {e}")
+    import traceback
+    traceback.print_exc()
     sys.exit(1)
 PYTHON_EOF
         return $?

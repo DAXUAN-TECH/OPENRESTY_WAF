@@ -530,24 +530,67 @@
             
             try {
                 const response = await fetch(url);
+                
+                // 检查响应状态
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
                 const data = await response.json();
                 
+                // 防御性检查：确保数据结构正确
+                if (!data || typeof data !== 'object') {
+                    throw new Error('响应数据格式错误');
+                }
+                
                 if (data.success) {
-                    renderRulesTable(data.data.rules);
+                    // 确保 data.data 存在且包含 rules 数组
+                    if (!data.data) {
+                        console.error('API response missing data field:', data);
+                        showAlert('响应数据格式错误：缺少 data 字段', 'error');
+                        return;
+                    }
+                    
+                    // 确保 rules 是数组
+                    const rules = data.data.rules;
+                    if (!Array.isArray(rules)) {
+                        console.error('API response rules is not an array:', rules);
+                        showAlert('响应数据格式错误：rules 不是数组', 'error');
+                        // 尝试使用空数组作为后备
+                        renderRulesTable([]);
+                        return;
+                    }
+                    
+                    renderRulesTable(rules);
                     renderPagination(data.data, 'pagination', loadRules);
                 } else {
                     showAlert(data.error || '加载失败', 'error');
+                    // 显示空表格
+                    const tbody = document.getElementById('rules-tbody');
+                    tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 20px;">加载失败</td></tr>';
                 }
             } catch (error) {
+                console.error('loadRules error:', error);
                 showAlert('网络错误: ' + error.message, 'error');
+                // 显示错误信息
+                const tbody = document.getElementById('rules-tbody');
+                tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 20px; color: #e74c3c;">加载失败: ' + escapeHtml(error.message) + '</td></tr>';
             }
         }
         
         // 渲染规则表格
         function renderRulesTable(rules) {
             const tbody = document.getElementById('rules-tbody');
+            
+            // 防御性检查：确保 rules 是数组
+            if (!rules || !Array.isArray(rules)) {
+                tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 20px; color: #e74c3c;">数据格式错误：规则列表不是数组</td></tr>';
+                console.error('renderRulesTable: rules is not an array', rules);
+                return;
+            }
+            
             if (rules.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 20px;">暂无数据</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 20px;">暂无数据</td></tr>';
                 return;
             }
             
@@ -765,6 +808,13 @@
         }
         
         // 工具函数
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
         function getRuleTypeName(type) {
             const names = {
                 'single_ip': '单个IP',

@@ -63,28 +63,80 @@ check_root() {
 install_deps_redhat() {
     echo -e "${BLUE}[2/8] 安装依赖包（RedHat 系列）...${NC}"
     
+    # 检查 EPEL 仓库是否可用，如果不可用则临时禁用
+    local epel_available=1
     if command -v dnf &> /dev/null; then
-        # Fedora
-        if ! dnf install -y gcc gcc-c++ pcre-devel pcre2-devel pcre2 zlib-devel openssl-devel perl perl-ExtUtils-Embed readline-devel wget curl; then
-            echo -e "${RED}✗ 依赖包安装失败${NC}"
-            echo -e "${YELLOW}提示: 请检查网络连接和软件源配置${NC}"
-            return 1
+        if ! dnf repolist enabled 2>/dev/null | grep -q "epel"; then
+            epel_available=0
+        elif ! dnf makecache --quiet 2>&1 | grep -q "epel"; then
+            # 检查 EPEL 仓库是否有连接问题
+            if dnf repolist epel 2>&1 | grep -qiE "错误|error|failed|无法连接"; then
+                echo -e "${YELLOW}⚠ 检测到 EPEL 仓库连接问题，将临时禁用 EPEL 仓库${NC}"
+                epel_available=0
+            fi
         fi
     elif command -v yum &> /dev/null; then
-        # CentOS/RHEL
-        # 安装开发包和运行时库
-        if ! yum install -y gcc gcc-c++ pcre-devel pcre2-devel pcre2 zlib-devel openssl-devel perl perl-ExtUtils-Embed readline-devel wget curl; then
-            echo -e "${RED}✗ 依赖包安装失败${NC}"
-            echo -e "${YELLOW}提示: 请检查网络连接和软件源配置${NC}"
-            return 1
+        if ! yum repolist enabled 2>/dev/null | grep -q "epel"; then
+            epel_available=0
+        fi
+    fi
+    
+    # 如果 EPEL 不可用，临时禁用它
+    local epel_disabled=0
+    if [ $epel_available -eq 0 ] && [ -f /etc/yum.repos.d/epel.repo ]; then
+        echo -e "${YELLOW}⚠ 临时禁用 EPEL 仓库以避免连接错误${NC}"
+        sed -i 's/^enabled=1/enabled=0/' /etc/yum.repos.d/epel.repo 2>/dev/null || true
+        epel_disabled=1
+    fi
+    
+    local install_success=0
+    if command -v dnf &> /dev/null; then
+        # 使用 --skip-unavailable 跳过不可用的仓库
+        if dnf install -y --skip-unavailable gcc gcc-c++ pcre-devel pcre2-devel pcre2 zlib-devel openssl-devel perl perl-ExtUtils-Embed readline-devel wget curl 2>&1; then
+            install_success=1
+        else
+            # 如果仍然失败，尝试不使用 EPEL
+            echo -e "${YELLOW}⚠ 安装失败，尝试禁用 EPEL 后重新安装...${NC}"
+            if [ -f /etc/yum.repos.d/epel.repo ]; then
+                sed -i 's/^enabled=1/enabled=0/' /etc/yum.repos.d/epel.repo 2>/dev/null || true
+            fi
+            if dnf install -y gcc gcc-c++ pcre-devel pcre2-devel pcre2 zlib-devel openssl-devel perl perl-ExtUtils-Embed readline-devel wget curl 2>&1; then
+                install_success=1
+            fi
+        fi
+    elif command -v yum &> /dev/null; then
+        # 使用 --skip-unavailable 跳过不可用的仓库
+        if yum install -y --skip-unavailable gcc gcc-c++ pcre-devel pcre2-devel pcre2 zlib-devel openssl-devel perl perl-ExtUtils-Embed readline-devel wget curl 2>&1; then
+            install_success=1
+        else
+            # 如果仍然失败，尝试不使用 EPEL
+            echo -e "${YELLOW}⚠ 安装失败，尝试禁用 EPEL 后重新安装...${NC}"
+            if [ -f /etc/yum.repos.d/epel.repo ]; then
+                sed -i 's/^enabled=1/enabled=0/' /etc/yum.repos.d/epel.repo 2>/dev/null || true
+            fi
+            if yum install -y gcc gcc-c++ pcre-devel pcre2-devel pcre2 zlib-devel openssl-devel perl perl-ExtUtils-Embed readline-devel wget curl 2>&1; then
+                install_success=1
+            fi
         fi
     else
         echo -e "${RED}错误: 未找到包管理器（yum/dnf）${NC}"
         return 1
     fi
     
-    echo -e "${GREEN}✓ 依赖包安装完成${NC}"
-    return 0
+    # 恢复 EPEL 仓库（如果之前禁用了）
+    if [ $epel_disabled -eq 1 ] && [ -f /etc/yum.repos.d/epel.repo ]; then
+        sed -i 's/^enabled=0/enabled=1/' /etc/yum.repos.d/epel.repo 2>/dev/null || true
+    fi
+    
+    if [ $install_success -eq 1 ]; then
+        echo -e "${GREEN}✓ 依赖包安装完成${NC}"
+        return 0
+    else
+        echo -e "${RED}✗ 依赖包安装失败${NC}"
+        echo -e "${YELLOW}提示: 请检查网络连接和软件源配置${NC}"
+        echo -e "${YELLOW}提示: 如果 EPEL 仓库连接失败，可以手动禁用: sed -i 's/^enabled=1/enabled=0/' /etc/yum.repos.d/epel.repo${NC}"
+        return 1
+    fi
 }
 
 # 安装依赖（Ubuntu/Debian）

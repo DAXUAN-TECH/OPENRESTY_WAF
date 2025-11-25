@@ -144,22 +144,20 @@ local function generate_session_id()
         -- 使用 bit 库进行异或操作（如果可用），否则使用数学运算
         if bit and bit.bxor then
             hash = bit.bxor(hash, byte)
+            hash = hash * 16777619
+            -- 使用 bit 库进行位与操作（如果可用），否则使用取模
+            if bit and bit.band then
+                hash = bit.band(hash, 0xFFFFFFFF)
+            else
+                -- 0xFFFFFFFF = 4294967295，对于32位整数，使用取模
+                hash = hash % 4294967296  -- 2^32
+            end
         else
             -- 如果 bit 库不可用，使用简化的哈希算法（避免复杂的异或实现）
             hash = hash + byte
             hash = hash * 16777619
             hash = hash % 4294967296  -- 2^32，限制为32位
-            goto continue
         end
-        hash = hash * 16777619
-        -- 使用 bit 库进行位与操作（如果可用），否则使用取模
-        if bit and bit.band then
-            hash = bit.band(hash, 0xFFFFFFFF)
-        else
-            -- 0xFFFFFFFF = 4294967295，对于32位整数，使用取模
-            hash = hash % 4294967296  -- 2^32
-        end
-        ::continue::
     end
     
     local hex_chars = "0123456789abcdef"

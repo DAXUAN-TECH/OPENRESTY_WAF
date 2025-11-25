@@ -1970,13 +1970,13 @@ setup_mysql_config() {
     
     # 检查 MySQL 数据目录是否已初始化（使用统一函数，检查已初始化状态）
     local data_dir
-    data_dir=$(get_mysql_data_dir 1)
+    data_dir=$(get_mysql_data_dir 1) || true  # 防止 set -e 导致退出，新安装时数据目录未初始化是正常的
     local mysql_initialized=0
     local mysql_data_dir=""
     if [ -n "$data_dir" ]; then
-                mysql_initialized=1
+        mysql_initialized=1
         mysql_data_dir="$data_dir"
-            fi
+    fi
     
     if [ $mysql_initialized -eq 1 ]; then
         echo -e "${YELLOW}⚠ 检测到 MySQL 数据目录已初始化: ${mysql_data_dir}${NC}"
@@ -2351,6 +2351,8 @@ setup_mysql_config() {
     else
         echo -e "${YELLOW}⚠ 未找到 MySQL 配置文件，跳过配置${NC}"
     fi
+    
+    return 0
 }
 
 # 配置 MySQL（启动服务）

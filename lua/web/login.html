@@ -321,6 +321,17 @@
                         return;
                     }
                     
+                    // 存储 CSRF Token（如果返回了）
+                    if (data.csrf_token) {
+                        // 如果页面中有 setCsrfToken 函数，调用它
+                        if (typeof window.setCsrfToken === 'function') {
+                            window.setCsrfToken(data.csrf_token);
+                        } else {
+                            // 否则存储到 sessionStorage，供其他页面使用
+                            sessionStorage.setItem('csrf_token', data.csrf_token);
+                        }
+                    }
+                    
                     // 登录成功，跳转到管理首页
                     window.location.href = '/admin';
                 } else {

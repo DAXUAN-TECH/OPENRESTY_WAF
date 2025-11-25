@@ -38,12 +38,18 @@ function _M.get_log_path()
     -- 如果无法获取项目根目录，尝试从环境变量获取
     local log_path = os.getenv("WAF_LOG_PATH")
     if log_path and log_path ~= "" then
-        ngx.log(ngx.INFO, "Using log path from environment variable: ", log_path)
+        -- 使用 pcall 安全调用 ngx.log（在 init_worker 阶段可能不可用）
+        pcall(function()
+            ngx.log(ngx.INFO, "Using log path from environment variable: ", log_path)
+        end)
         return log_path
     end
     
     -- 最后的后备方案：使用当前工作目录下的logs（相对路径）
-    ngx.log(ngx.WARN, "Cannot determine project root, using relative path 'logs' as fallback")
+    -- 使用 pcall 安全调用 ngx.log（在 init_worker 阶段可能不可用）
+    pcall(function()
+        ngx.log(ngx.WARN, "Cannot determine project root, using relative path 'logs' as fallback")
+    end)
     return "logs"
 end
 

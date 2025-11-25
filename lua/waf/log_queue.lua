@@ -16,7 +16,15 @@ local MAX_RETRY = config.log.max_retry or 3
 local RETRY_DELAY = config.log.retry_delay or 0.1
 local QUEUE_MAX_SIZE = config.log.queue_max_size or 10000  -- 队列最大大小
 -- 本地日志文件路径（优先使用配置，否则使用项目根目录下的logs目录）
-local LOCAL_LOG_PATH = config.log.local_log_path or path_utils.get_log_path()
+-- 注意：在模块加载时（init_worker阶段），path_utils.get_log_path() 可能无法访问 ngx.var
+-- 使用延迟初始化，在第一次使用时再获取路径
+local LOCAL_LOG_PATH = nil
+local function get_local_log_path()
+    if not LOCAL_LOG_PATH then
+        LOCAL_LOG_PATH = config.log.local_log_path or path_utils.get_log_path() or "logs"
+    end
+    return LOCAL_LOG_PATH
+end
 local ENABLE_LOCAL_BACKUP = config.log.enable_local_backup or true  -- 是否启用本地备份
 
 -- 队列键
@@ -31,7 +39,7 @@ local function ensure_log_dir()
     end
     
     -- 使用path_utils确保目录存在
-    return path_utils.ensure_dir(LOCAL_LOG_PATH)
+    return path_utils.ensure_dir(get_local_log_path())
 end
 
 -- 写入本地日志文件

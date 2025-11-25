@@ -6,17 +6,21 @@ local _M = {}
 
 -- 获取项目根目录
 function _M.get_project_root()
-    -- 优先从nginx变量获取
-    local project_root = ngx.var.project_root
-    if project_root and project_root ~= "" then
-        return project_root
+    -- 优先从nginx变量获取（仅在可用时）
+    local ok, phase = pcall(ngx.get_phase)
+    if ok and phase ~= "init" and phase ~= "init_worker" then
+        -- 在非 init 和 init_worker 阶段，可以安全访问 ngx.var
+        local project_root = ngx.var.project_root
+        if project_root and project_root ~= "" then
+            return project_root
+        end
     end
     
     -- 从lua_package_path推断
     local first_path = package.path:match("([^;]+)")
     if first_path then
         -- 提取路径：从 lua/?.lua 推断项目根目录
-        project_root = first_path:match("(.+)/lua/%?%.lua")
+        local project_root = first_path:match("(.+)/lua/%?%.lua")
         if project_root and project_root ~= "" then
             return project_root
         end

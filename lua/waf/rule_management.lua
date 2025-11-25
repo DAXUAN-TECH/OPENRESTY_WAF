@@ -48,15 +48,50 @@ local function validate_rule_value(rule_type, rule_value)
         for _, geo_value in ipairs(geo_values) do
             -- 支持格式：
             -- 1. 国家代码：两个大写字母，如 CN, US, JP
-            -- 2. 国家:省份代码：CN:Beijing, CN:Shanghai（省份代码可以是字母）
-            -- 3. 国家:省份代码:城市名称：CN:Beijing:北京（城市名称可以是中文、字母、数字等）
-            local pattern = "^[A-Z]{2}(:[A-Za-z0-9_%-]+(:[%w%u%l%p]+)?)?$"
-            if not geo_value:match(pattern) then
-                -- 更宽松的验证：支持中文字符
-                local pattern2 = "^[A-Z]{2}(:[%w%u%l%p]+(:[%w%u%l%p]+)?)?$"
-                if not geo_value:match(pattern2) then
+            -- 2. 国家:省份代码：CN:Beijing, CN:Shanghai（省份代码可以是字母、数字、下划线、连字符）
+            -- 3. 国家:省份代码:城市名称：CN:Beijing:北京（城市名称可以是中文、字母、数字等任意字符，但不能包含逗号）
+            
+            -- 首先检查基本格式：必须以两个大写字母开头
+            if not geo_value:match("^[A-Z]{2}") then
+                return false, "无效的地域代码格式: " .. geo_value .. "（必须以两个大写字母的国家代码开头，如CN、US）"
+            end
+            
+            -- 检查是否包含冒号（省份或城市）
+            if geo_value:match(":") then
+                -- 包含冒号，检查格式：CN:xxx 或 CN:xxx:yyy
+                local parts = {}
+                for part in geo_value:gmatch("([^:]+)") do
+                    table.insert(parts, part)
+                end
+                
+                if #parts < 2 or #parts > 3 then
                     return false, "无效的地域代码格式: " .. geo_value .. "（应为国家代码如CN、US或国家:省份如CN:Beijing或国家:省份:城市如CN:Beijing:北京）"
                 end
+                
+                -- 第一部分必须是两个大写字母（国家代码）
+                if not parts[1]:match("^[A-Z]{2}$") then
+                    return false, "无效的地域代码格式: " .. geo_value .. "（国家代码必须是两个大写字母）"
+                end
+                
+                -- 第二部分（省份代码）不能为空
+                if parts[2] == "" then
+                    return false, "无效的地域代码格式: " .. geo_value .. "（省份代码不能为空）"
+                end
+                
+                -- 第三部分（城市名称，如果存在）不能为空
+                if #parts == 3 and parts[3] == "" then
+                    return false, "无效的地域代码格式: " .. geo_value .. "（城市名称不能为空）"
+                end
+            else
+                -- 不包含冒号，应该是纯国家代码（两个大写字母）
+                if not geo_value:match("^[A-Z]{2}$") then
+                    return false, "无效的地域代码格式: " .. geo_value .. "（国家代码必须是两个大写字母，如CN、US）"
+                end
+            end
+            
+            -- 检查是否包含逗号（不应该在单个值中出现）
+            if geo_value:match(",") then
+                return false, "无效的地域代码格式: " .. geo_value .. "（单个地域代码不能包含逗号，多个值请用逗号分隔）"
             end
         end
     else

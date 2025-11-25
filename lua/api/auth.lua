@@ -54,30 +54,43 @@ function _M.login()
     ngx.log(ngx.INFO, "auth.login: authentication successful for user: ", username, ", role: ", user.role or "unknown")
     
     -- 检查用户是否启用了 TOTP
+    -- 注意：只有用户明确启用后（通过 enable_totp），登录时才要求验证码
+    -- 如果只是生成了 secret 但没有验证启用，允许登录
     local has_totp = auth.user_has_totp(username)
     
     if has_totp then
-        -- 如果启用了 TOTP，需要验证 TOTP 代码
-        if not totp_code or totp_code == "" then
-            api_utils.json_response({
-                error = "TOTP Required",
-                message = "请输入双因素认证代码",
-                requires_totp = true
-            }, 200)  -- 返回 200，但要求提供 TOTP
-            return
-        end
-        
-        -- 验证 TOTP 代码
+        -- 验证 TOTP secret 是否有效（能够生成有效的 TOTP 代码）
+        -- 如果 secret 无效，说明可能是未完成的设置，允许登录
         local user_info = auth.get_user(username)
-        local totp_ok, err = totp.verify_totp(user_info.totp_secret, totp_code)
-        if not totp_ok then
-            -- 记录登录失败审计日志
-            audit_log.log_login(username, false, "双因素认证代码错误")
-            api_utils.json_response({
-                error = "Unauthorized",
-                message = "双因素认证代码错误"
-            }, 401)
-            return
+        if user_info and user_info.totp_secret and user_info.totp_secret ~= "" then
+            -- 尝试生成一个 TOTP 代码来验证 secret 是否有效
+            local test_code, test_err = totp.generate_totp(user_info.totp_secret)
+            if not test_code or test_err then
+                -- secret 无效，可能是未完成的设置，允许登录但记录警告
+                ngx.log(ngx.WARN, "auth.login: user has invalid TOTP secret, allowing login without TOTP verification")
+            else
+                -- secret 有效，要求验证码
+                if not totp_code or totp_code == "" then
+                    api_utils.json_response({
+                        error = "TOTP Required",
+                        message = "请输入双因素认证代码",
+                        requires_totp = true
+                    }, 200)  -- 返回 200，但要求提供 TOTP
+                    return
+                end
+                
+                -- 验证 TOTP 代码
+                local totp_ok, err = totp.verify_totp(user_info.totp_secret, totp_code)
+                if not totp_ok then
+                    -- 记录登录失败审计日志
+                    audit_log.log_login(username, false, "双因素认证代码错误")
+                    api_utils.json_response({
+                        error = "Unauthorized",
+                        message = "双因素认证代码错误"
+                    }, 401)
+                    return
+                end
+            end
         end
     end
     

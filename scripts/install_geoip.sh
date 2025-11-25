@@ -32,6 +32,9 @@ TEMP_DIR="/tmp/geoip_install"
 # 或者使用通用的下载端点（需要 Account ID 和 License Key）
 DOWNLOAD_URL="https://download.maxmind.com/geoip/databases/GeoLite2-City/download"
 
+# 安装控制变量
+SKIP_INSTALL=0
+
 # 检查是否为 root 用户
 check_root() {
     if [ "$EUID" -ne 0 ]; then 
@@ -39,6 +42,61 @@ check_root() {
         echo "请使用: sudo $0 [LICENSE_KEY]"
         exit 1
     fi
+}
+
+# 检查是否已安装 GeoIP 数据库
+check_existing() {
+    echo -e "${BLUE}[0/6] 检查是否已安装 GeoIP 数据库...${NC}"
+    
+    local target_file="$GEOIP_DIR/GeoLite2-City.mmdb"
+    
+    if [ -f "$target_file" ]; then
+        local file_size=$(stat -f%z "$target_file" 2>/dev/null || stat -c%s "$target_file" 2>/dev/null || echo "0")
+        local file_size_human=$(du -h "$target_file" | cut -f1)
+        local file_date=$(stat -f "%Sm" "$target_file" 2>/dev/null || stat -c "%y" "$target_file" 2>/dev/null | cut -d' ' -f1 || echo "未知")
+        
+        echo -e "${YELLOW}检测到已安装 GeoIP 数据库:${NC}"
+        echo -e "${YELLOW}  文件路径: ${target_file}${NC}"
+        echo -e "${YELLOW}  文件大小: ${file_size_human}${NC}"
+        echo -e "${YELLOW}  安装日期: ${file_date}${NC}"
+        echo ""
+        echo "请选择操作："
+        echo "  1. 保留现有安装，跳过安装"
+        echo "  2. 重新安装（覆盖现有数据库）"
+        echo ""
+        read -p "请选择 [1-2，默认1]: " REINSTALL_CHOICE
+        REINSTALL_CHOICE="${REINSTALL_CHOICE:-1}"
+        
+        case "$REINSTALL_CHOICE" in
+            1)
+                echo -e "${GREEN}保留现有安装，跳过安装${NC}"
+                SKIP_INSTALL=1
+                ;;
+            2)
+                echo -e "${YELLOW}将重新安装 GeoIP 数据库，覆盖现有文件${NC}"
+                SKIP_INSTALL=0
+                ;;
+            *)
+                echo -e "${YELLOW}无效选择，默认保留现有安装${NC}"
+                SKIP_INSTALL=1
+                ;;
+        esac
+    else
+        # 如果未安装，询问是否安装
+        echo -e "${BLUE}未检测到已安装的 GeoIP 数据库${NC}"
+        read -p "是否安装 GeoIP 数据库？[Y/n]: " INSTALL_CHOICE
+        INSTALL_CHOICE="${INSTALL_CHOICE:-Y}"
+        
+        if [[ ! "$INSTALL_CHOICE" =~ ^[Yy]$ ]]; then
+            echo -e "${YELLOW}安装已取消${NC}"
+            SKIP_INSTALL=1
+        else
+            SKIP_INSTALL=0
+        fi
+    fi
+    
+    echo -e "${GREEN}✓ 检查完成${NC}"
+    echo ""
 }
 
 # 显示使用说明
@@ -547,6 +605,20 @@ main() {
     
     # 检查 root 权限
     check_root
+    
+    # 检查是否已安装
+    check_existing
+    
+    # 如果选择跳过安装，直接退出
+    if [ "$SKIP_INSTALL" -eq 1 ]; then
+        echo -e "${GREEN}跳过 GeoIP 数据库安装${NC}"
+        echo ""
+        if [ -f "$GEOIP_DIR/GeoLite2-City.mmdb" ]; then
+            local abs_path=$(cd "$(dirname "$GEOIP_DIR/GeoLite2-City.mmdb")" && pwd)/$(basename "$GEOIP_DIR/GeoLite2-City.mmdb")
+            echo -e "${BLUE}当前数据库文件路径: $abs_path${NC}"
+        fi
+        exit 0
+    fi
     
     # 获取凭证（Account ID 和 License Key 或 Permalink URL）
     get_credentials

@@ -1143,6 +1143,9 @@
                 } else if (type === 'ip_range') {
                     ruleValueInput.placeholder = '例如: 192.168.1.0/24 或 192.168.1.1-192.168.1.100';
                     ruleValueHint.textContent = 'IP段: 192.168.1.0/24 或 192.168.1.1-192.168.1.100';
+                } else {
+                    ruleValueInput.placeholder = '请输入规则值';
+                    ruleValueHint.textContent = '';
                 }
             }
             
@@ -1360,8 +1363,12 @@
             document.getElementById('create-rule-type').value = '';
             // 隐藏地域选择器
             document.getElementById('geo-selector').classList.remove('active');
-            document.getElementById('rule-value-group').querySelector('input').style.display = 'block';
-            document.getElementById('rule-value-hint').style.display = 'block';
+            const ruleValueInput = document.getElementById('create-rule-value');
+            const ruleValueHint = document.getElementById('rule-value-hint');
+            ruleValueInput.style.display = 'block';
+            ruleValueHint.style.display = 'block';
+            ruleValueInput.placeholder = '例如: 192.168.1.100 或 192.168.1.0/24 或 CN:Beijing';
+            ruleValueHint.textContent = '单个IP: 192.168.1.100 | IP段: 192.168.1.0/24 或 192.168.1.1-192.168.1.100 | 地域: CN 或 CN:Beijing';
             // 清空地域选择
             selectedCountry = null;
             selectedProvince = null;
@@ -1372,6 +1379,8 @@
             document.querySelectorAll('.country-btn, .province-btn, .city-btn').forEach(btn => {
                 btn.classList.remove('active');
             });
+            // 重置地域标签
+            switchGeoTab('foreign');
         }
         
         // 工具函数（使用公共函数，已在 common.js 中定义）

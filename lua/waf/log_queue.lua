@@ -51,7 +51,7 @@ local function write_local_log(log_data, log_type)
     ensure_log_dir()
     
     local timestamp = os.date("%Y%m%d")
-    local filename = LOCAL_LOG_PATH .. "/" .. log_type .. "_" .. timestamp .. ".log"
+    local filename = get_local_log_path() .. "/" .. log_type .. "_" .. timestamp .. ".log"
     
     -- 将日志数据转换为JSON字符串
     local log_line = cjson.encode(log_data) .. "\n"

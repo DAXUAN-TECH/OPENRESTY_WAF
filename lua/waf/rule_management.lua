@@ -54,8 +54,10 @@ local function validate_rule_value(rule_type, rule_value)
             
             -- 首先检查基本格式：必须以两个大写字母开头
             -- 使用更严格的检查：确保前两个字符都是大写字母
-            local country_code = geo_value:match("^([A-Z]{2})")
+            local country_code = geo_value:match("^([A-Z][A-Z])")
             if not country_code then
+                -- 添加调试信息
+                ngx.log(ngx.ERR, "geo validation failed for: [", geo_value, "], length: ", #geo_value, ", first char: ", string.byte(geo_value, 1) or "nil")
                 return false, "无效的地域代码格式: " .. geo_value .. "（必须以两个大写字母的国家代码开头，如CN、US、VN）"
             end
             

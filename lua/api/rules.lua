@@ -74,6 +74,48 @@ function _M.list()
         return
     end
     
+    -- 确保 result 存在且包含 rules 数组
+    if not result then
+        result = {
+            rules = {},
+            total = 0,
+            page = params.page,
+            page_size = params.page_size,
+            total_pages = 0
+        }
+    end
+    
+    -- 确保 rules 是数组类型（用于 JSON 序列化）
+    if not result.rules then
+        result.rules = {}
+    elseif type(result.rules) ~= "table" then
+        ngx.log(ngx.WARN, "rules is not a table, type: ", type(result.rules))
+        result.rules = {}
+    else
+        -- 将 rules 转换为真正的数组（确保索引从 1 开始连续）
+        local rules_array = {}
+        if #result.rules > 0 then
+            -- 如果是数组，直接复制
+            for i = 1, #result.rules do
+                rules_array[i] = result.rules[i]
+            end
+        else
+            -- 如果不是数组，尝试转换为数组
+            local count = 0
+            for k, v in pairs(result.rules) do
+                if type(k) == "number" then
+                    count = count + 1
+                    rules_array[count] = v
+                end
+            end
+            -- 如果转换后还是空的，设置为空数组
+            if count == 0 then
+                rules_array = {}
+            end
+        end
+        result.rules = rules_array
+    end
+    
     api_utils.json_response({
         success = true,
         data = result

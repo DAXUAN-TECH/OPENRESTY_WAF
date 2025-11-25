@@ -2,7 +2,8 @@
 -- 路径：项目目录下的 lua/waf/cache_invalidation.lua（保持在项目目录，不复制到系统目录）
 
 local mysql_pool = require "waf.mysql_pool"
-local rule_notification = require "waf.rule_notification"
+-- 注意：rule_notification 使用延迟加载，避免循环依赖
+-- local rule_notification = require "waf.rule_notification"  -- 移到函数内部
 local redis_cache = require "waf.redis_cache"
 local config = require "config"
 
@@ -26,10 +27,16 @@ function _M.increment_rule_version()
     -- 清除版本号缓存
     cache:delete("rule_version:current")
     
-    -- 发送规则更新通知
-    rule_notification.notify_rule_update("rule_version_incremented", {
-        timestamp = ngx.time()
-    })
+    -- 发送规则更新通知（延迟加载，避免循环依赖）
+    local ok, rule_notification = pcall(require, "waf.rule_notification")
+    if ok and rule_notification then
+        rule_notification.notify_rule_update("rule_version_incremented", {
+            timestamp = ngx.time()
+        })
+    else
+        -- 如果 rule_notification 加载失败（可能是循环依赖），只记录日志
+        ngx.log(ngx.WARN, "rule_notification not available, skipping notification")
+    end
     
     ngx.log(ngx.INFO, "rule version incremented")
     return true, nil

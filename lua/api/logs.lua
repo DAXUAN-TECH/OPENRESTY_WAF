@@ -186,14 +186,14 @@ function _M.get_block_logs()
         total = tonumber(count_res[1].total) or 0
     end
     
-    -- 查询日志列表
+    -- 查询日志列表（按时间倒序，最新的在最前面）
     local sql = string.format([[
         SELECT 
             id, client_ip, rule_id, rule_name, block_reason,
             block_time, request_path, user_agent, created_at
         FROM waf_block_logs
         %s
-        ORDER BY block_time DESC
+        ORDER BY block_time DESC, id DESC
         LIMIT ? OFFSET ?
     ]], where_sql)
     
@@ -323,7 +323,7 @@ function _M.get_audit_logs()
         total = tonumber(count_res[1].total) or 0
     end
     
-    -- 查询日志列表
+    -- 查询日志列表（按时间倒序，最新的在最前面）
     local sql = string.format([[
         SELECT 
             id, user_id, username, action_type, resource_type, resource_id,
@@ -331,7 +331,7 @@ function _M.get_audit_logs()
             ip_address, user_agent, status, error_message, created_at
         FROM waf_audit_logs
         %s
-        ORDER BY created_at DESC
+        ORDER BY created_at DESC, id DESC
         LIMIT ? OFFSET ?
     ]], where_sql)
     

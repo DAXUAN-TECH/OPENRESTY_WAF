@@ -63,11 +63,17 @@ function _M.login()
         if user_info and user_info.totp_secret and user_info.totp_secret ~= "" then
             -- 验证 TOTP secret 是否有效（能够生成有效的 TOTP 代码）
             -- 如果 secret 无效，说明可能是未完成的设置或损坏的数据，清除它并允许登录
+            local secret_valid = false
             local test_code, test_err = pcall(function()
-                return totp.generate_totp(user_info.totp_secret)
+                local code = totp.generate_totp(user_info.totp_secret)
+                return code ~= nil and code ~= ""
             end)
             
-            if not test_code or test_err then
+            if test_code and test_err then
+                secret_valid = true
+            end
+            
+            if not secret_valid then
                 -- secret 无效，清除它并允许登录（可能是未完成的设置或损坏的数据）
                 ngx.log(ngx.WARN, "auth.login: user has invalid TOTP secret, clearing it and allowing login")
                 auth.set_user_totp_secret(username, nil)

@@ -320,6 +320,71 @@
             }
         })();
         
+        // CSRF Token 管理
+        (function() {
+            let csrfToken = null;
+            
+            // 获取 CSRF Token
+            window.getCsrfToken = function() {
+                return csrfToken;
+            };
+            
+            // 设置 CSRF Token
+            window.setCsrfToken = function(token) {
+                csrfToken = token;
+            };
+            
+            // 从服务器获取 CSRF Token
+            function fetchCsrfToken() {
+                fetch('/api/auth/check')
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data && data.authenticated && data.csrf_token) {
+                            csrfToken = data.csrf_token;
+                            console.log('CSRF token loaded');
+                        }
+                    })
+                    .catch(err => {
+                        console.warn('Failed to fetch CSRF token:', err);
+                    });
+            }
+            
+            // 页面加载时获取 CSRF Token
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', fetchCsrfToken);
+            } else {
+                fetchCsrfToken();
+            }
+            
+            // 重写 fetch 函数，自动添加 CSRF Token
+            const originalFetch = window.fetch;
+            window.fetch = function(url, options = {}) {
+                // 检查是否需要 CSRF Token（POST、PUT、DELETE、PATCH）
+                const method = (options.method || 'GET').toUpperCase();
+                if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(method)) {
+                    // 确保 headers 存在
+                    if (!options.headers) {
+                        options.headers = {};
+                    }
+                    
+                    // 如果还没有设置 X-CSRF-Token，添加它
+                    if (!options.headers['X-CSRF-Token'] && !options.headers['x-csrf-token']) {
+                        const token = getCsrfToken();
+                        if (token) {
+                            // 处理 Headers 对象或普通对象
+                            if (options.headers instanceof Headers) {
+                                options.headers.set('X-CSRF-Token', token);
+                            } else {
+                                options.headers['X-CSRF-Token'] = token;
+                            }
+                        }
+                    }
+                }
+                
+                return originalFetch.call(this, url, options);
+            };
+        })();
+        
         // 处理登出链接点击（确保跳转到登录页面）
         (function() {
             const logoutLinks = document.querySelectorAll('a[href="/api/auth/logout"]');

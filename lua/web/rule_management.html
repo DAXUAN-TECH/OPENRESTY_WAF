@@ -538,18 +538,29 @@
             if (ruleGroup) url += `&rule_group=${encodeURIComponent(ruleGroup)}`;
             
             try {
+                // 显示加载状态
+                const tbody = document.getElementById('rules-tbody');
+                tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 20px;">加载中...</td></tr>';
+                
                 const response = await fetch(url);
                 
                 // 检查响应状态
                 if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    const errorText = await response.text();
+                    let errorData;
+                    try {
+                        errorData = JSON.parse(errorText);
+                    } catch (e) {
+                        errorData = { error: errorText || `HTTP ${response.status}: ${response.statusText}` };
+                    }
+                    throw new Error(errorData.error || errorData.message || `HTTP ${response.status}: ${response.statusText}`);
                 }
                 
                 const data = await response.json();
                 
                 // 防御性检查：确保数据结构正确
                 if (!data || typeof data !== 'object') {
-                    throw new Error('响应数据格式错误');
+                    throw new Error('响应数据格式错误：不是有效的JSON对象');
                 }
                 
                 if (data.success) {
@@ -558,6 +569,7 @@
                         console.error('API response missing data field:', data);
                         console.error('Full response:', JSON.stringify(data, null, 2));
                         showAlert('响应数据格式错误：缺少 data 字段', 'error');
+                        renderRulesTable([]);  // 确保更新表格，隐藏"加载中"
                         return;
                     }
                     
@@ -575,7 +587,7 @@
                     if (rules === undefined || rules === null) {
                         console.error('API response rules is undefined or null');
                         showAlert('响应数据格式错误：rules 字段不存在', 'error');
-                        renderRulesTable([]);
+                        renderRulesTable([]);  // 确保更新表格，隐藏"加载中"
                         return;
                     }
                     
@@ -619,7 +631,7 @@
                         // 既不是数组也不是对象
                         console.error('Rules is neither array nor object, type:', typeof rules);
                         showAlert('响应数据格式错误：rules 类型不正确 (' + typeof rules + ')', 'error');
-                        renderRulesTable([]);
+                        renderRulesTable([]);  // 确保更新表格，隐藏"加载中"
                         return;
                     }
                     
@@ -627,7 +639,7 @@
                     if (!Array.isArray(rulesArray)) {
                         console.error('Failed to convert rules to array, final type:', typeof rulesArray);
                         showAlert('响应数据格式错误：无法将 rules 转换为数组', 'error');
-                        renderRulesTable([]);
+                        renderRulesTable([]);  // 确保更新表格，隐藏"加载中"
                         return;
                     }
                     
@@ -637,10 +649,13 @@
                     renderRulesTable(rulesArray);
                     renderPagination(data.data, 'pagination', loadRules);
                 } else {
-                    showAlert(data.error || '加载失败', 'error');
-                    // 显示空表格
+                    // API 返回失败，显示错误并更新表格
+                    const errorMsg = data.error || data.message || '加载失败';
+                    console.error('API returned error:', errorMsg, data);
+                    showAlert(errorMsg, 'error');
+                    // 确保更新表格，隐藏"加载中"
                     const tbody = document.getElementById('rules-tbody');
-                    tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 20px;">加载失败</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 20px; color: #e74c3c;">' + escapeHtml(errorMsg) + '</td></tr>';
                 }
             } catch (error) {
                 console.error('loadRules error:', error);

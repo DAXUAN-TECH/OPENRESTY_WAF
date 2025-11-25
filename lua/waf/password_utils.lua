@@ -21,23 +21,10 @@ local function generate_salt(length)
     return salt
 end
 
--- 使用SHA256生成密码哈希（备用方案）
-local function hash_with_sha256(password, salt)
-    -- 尝试使用 OpenResty 的 resty.string 库（如果可用）
-    local string_ok, resty_string = pcall(require, "resty.string")
-    if string_ok and resty_string and resty_string.to_hex then
-        -- 使用 resty.string 的 SHA256
-        local sha256_ok, sha256 = pcall(require, "resty.sha256")
-        if sha256_ok and sha256 then
-            local sha = sha256:new()
-            sha:update(salt .. password)
-            local digest = sha:final()
-            return resty_string.to_hex(digest)
-        end
-    end
-    
-    -- 如果 resty.string 不可用，使用 ngx.md5 作为备用（虽然不如 SHA256 安全，但比明文好）
-    -- 格式：sha256:salt:hash 或 md5:salt:hash
+-- 使用MD5生成密码哈希（备用方案，OpenResty内置支持）
+local function hash_with_md5(password, salt)
+    -- 使用 OpenResty 内置的 ngx.md5（虽然不如 SHA256/BCrypt 安全，但比明文好）
+    -- 格式：md5:salt:hash
     local hash = ngx.md5(salt .. password)
     return "md5:" .. salt .. ":" .. hash
 end
@@ -51,12 +38,12 @@ function _M.hash_password(password, cost)
     -- 尝试加载BCrypt库
     local bcrypt_ok, bcrypt = pcall(require, "resty.bcrypt")
     if not bcrypt_ok or not bcrypt then
-        -- BCrypt不可用，使用备用方案：SHA256+salt 或 MD5+salt
+        -- BCrypt不可用，使用备用方案：MD5+salt
         -- 注意：这不如BCrypt安全，但比明文密码好
         -- 生产环境建议通过 LuaRocks 安装 BCrypt：luarocks install lua-resty-bcrypt
-        ngx.log(ngx.WARN, "BCrypt library not available, using SHA256/MD5+salt as fallback. For better security, install: luarocks install lua-resty-bcrypt")
+        ngx.log(ngx.WARN, "BCrypt library not available, using MD5+salt as fallback. For better security, install: luarocks install lua-resty-bcrypt")
         local salt = generate_salt(16)
-        local hash = hash_with_sha256(password, salt)
+        local hash = hash_with_md5(password, salt)
         return hash, nil
     end
     
@@ -71,10 +58,10 @@ function _M.hash_password(password, cost)
     -- 生成BCrypt哈希
     local hash, err = bcrypt.digest(password, cost)
     if not hash then
-        -- BCrypt生成失败，使用备用方案：SHA256+salt 或 MD5+salt
-        ngx.log(ngx.WARN, "BCrypt hash generation failed: ", tostring(err), ", using SHA256/MD5+salt as fallback")
+        -- BCrypt生成失败，使用备用方案：MD5+salt
+        ngx.log(ngx.WARN, "BCrypt hash generation failed: ", tostring(err), ", using MD5+salt as fallback")
         local salt = generate_salt(16)
-        local fallback_hash = hash_with_sha256(password, salt)
+        local fallback_hash = hash_with_md5(password, salt)
         return fallback_hash, nil
     end
     
@@ -87,11 +74,11 @@ function _M.verify_password(password, hash)
         return false, "Password and hash are required"
     end
     
-    -- 检查是否是 SHA256/MD5+salt 格式（以 sha256: 或 md5: 开头）
-    local hash_type, salt, stored_hash = hash:match("^(sha256|md5):([^:]+):(.+)$")
+    -- 检查是否是 MD5+salt 格式（以 md5: 开头）
+    local hash_type, salt, stored_hash = hash:match("^(md5):([^:]+):(.+)$")
     if hash_type then
         -- 使用相同的哈希算法和盐值验证密码
-        local computed_hash = hash_with_sha256(password, salt)
+        local computed_hash = hash_with_md5(password, salt)
         if computed_hash == hash then
             ngx.log(ngx.WARN, "Using ", hash_type, "+salt password verification. For better security, use BCrypt.")
             return true, nil

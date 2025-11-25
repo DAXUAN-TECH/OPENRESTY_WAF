@@ -34,9 +34,9 @@ local BUFFER_SIZE_KEY = "log_buffer_size"  -- 用于监控缓冲区大小
 
 -- 直接写入日志（同步方式）
 local function write_log_direct(log_data)
-    -- 将Unix时间戳转换为MySQL DATETIME格式（与 batch_insert 保持一致）
+    -- 将Unix时间戳转换为MySQL DATETIME格式（使用本地时间，不是UTC）
     local request_time = log_data.request_time or ngx.time()
-    local datetime_str = os.date("!%Y-%m-%d %H:%M:%S", request_time)
+    local datetime_str = os.date("%Y-%m-%d %H:%M:%S", request_time)
     
     local sql = [[
         INSERT INTO waf_access_logs 
@@ -150,8 +150,8 @@ local function flush_logs(premature, retry_count)
     local values_list = {}
     for _, log_data in ipairs(logs) do
         local request_time = log_data.request_time or ngx.time()
-        -- 将Unix时间戳转换为MySQL DATETIME格式
-        local datetime_str = os.date("!%Y-%m-%d %H:%M:%S", request_time)
+        -- 将Unix时间戳转换为MySQL DATETIME格式（使用本地时间，不是UTC）
+        local datetime_str = os.date("%Y-%m-%d %H:%M:%S", request_time)
         
         table.insert(values_list, {
             log_data.client_ip or "",

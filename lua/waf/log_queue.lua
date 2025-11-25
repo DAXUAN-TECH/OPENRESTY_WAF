@@ -159,7 +159,7 @@ function _M.write_access_log(log_data)
     ]]
     
     local request_time = log_data.request_time or ngx.time()
-    local datetime_str = os.date("!%Y-%m-%d %H:%M:%S", request_time)
+    local datetime_str = os.date("%Y-%m-%d %H:%M:%S", request_time)  -- 使用本地时间，不是UTC
     
     local ok, err = mysql_pool.insert(
         sql,

@@ -55,10 +55,24 @@ function _M.create_rule(rule_data)
     
     local status = rule_data.status or 1
     local priority = rule_data.priority or 0
-    local description = rule_data.description or nil
-    local rule_group = rule_data.rule_group or nil
-    local start_time = rule_data.start_time or nil
-    local end_time = rule_data.end_time or nil
+    local description = rule_data.description
+    local rule_group = rule_data.rule_group
+    local start_time = rule_data.start_time
+    local end_time = rule_data.end_time
+    
+    -- 处理空字符串：将空字符串转换为 nil（NULL）
+    if description == "" then
+        description = nil
+    end
+    if rule_group == "" then
+        rule_group = nil
+    end
+    if start_time == "" then
+        start_time = nil
+    end
+    if end_time == "" then
+        end_time = nil
+    end
     
     -- 验证分组名称（防止SQL注入，只允许字母、数字、下划线、中文字符和常见分隔符）
     if rule_group and rule_group ~= "" then
@@ -78,6 +92,13 @@ function _M.create_rule(rule_data)
         (rule_type, rule_value, rule_name, description, rule_group, status, priority, start_time, end_time, rule_version)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
     ]]
+    
+    -- 记录参数信息用于调试
+    ngx.log(ngx.DEBUG, "create_rule SQL params: type=", rule_data.rule_type, 
+        ", value=", rule_data.rule_value, ", name=", rule_data.rule_name,
+        ", desc=", tostring(description), ", group=", tostring(rule_group),
+        ", status=", status, ", priority=", priority,
+        ", start=", tostring(start_time), ", end=", tostring(end_time))
     
     local insert_id, err = mysql_pool.insert(sql,
         rule_data.rule_type,

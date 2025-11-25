@@ -273,7 +273,7 @@ cleanup_mysql_files() {
     # 删除数据目录（使用统一函数）
     if [ "$delete_data" -eq 1 ]; then
         local data_dir
-        data_dir=$(get_mysql_data_dir 0)
+        data_dir=$(get_mysql_data_dir 0) || true  # 防止 set -e 导致退出，如果数据目录不存在也没关系
         if [ -n "$data_dir" ]; then
             echo -e "${YELLOW}正在删除数据目录: ${data_dir}${NC}"
             rm -rf "$data_dir"
@@ -850,7 +850,10 @@ check_existing() {
                     # 先卸载软件包
                     completely_uninstall_mysql
                     # 卸载后清除版本选择（使用辅助函数）
-                    reset_mysql_version
+                    reset_mysql_version || true  # 防止 set -e 导致退出
+                    
+                    # 保留数据重新安装模式，清除 SKIP_INSTALL 标志，确保继续执行安装
+                    SKIP_INSTALL=0
                     ;;
                 3)
                     echo -e "${RED}警告: 将删除所有 MySQL 数据和配置！${NC}"
@@ -883,17 +886,23 @@ check_existing() {
                         fi
                         
                         # 清理 MySQL 文件（使用辅助函数）
-                        cleanup_mysql_files 1
+                        cleanup_mysql_files 1 || true  # 防止 set -e 导致退出
                         
                         # 卸载后清除版本选择（使用辅助函数）
-                        reset_mysql_version
+                        reset_mysql_version || true  # 防止 set -e 导致退出
+                        
+                        # 完全重新安装模式，清除 SKIP_INSTALL 标志，确保继续执行安装
+                        SKIP_INSTALL=0
                     else
                         echo -e "${GREEN}取消删除，将保留数据重新安装${NC}"
                         REINSTALL_MODE="keep_data"
                         # 仍然需要卸载软件包
                         completely_uninstall_mysql
                         # 卸载后清除版本选择（使用辅助函数）
-                        reset_mysql_version
+                        reset_mysql_version || true  # 防止 set -e 导致退出
+                        
+                        # 保留数据重新安装模式，清除 SKIP_INSTALL 标志，确保继续执行安装
+                        SKIP_INSTALL=0
                     fi
                     ;;
                 *)
@@ -947,6 +956,9 @@ check_existing() {
                     else
                         MYSQL_VERSION="${MYSQL_VERSION_FROM_ENV}"
                     fi
+                    
+                    # 保留数据重新安装模式，清除 SKIP_INSTALL 标志，确保继续执行安装
+                    SKIP_INSTALL=0
                     ;;
                 3)
                     echo -e "${RED}警告: 将删除所有 MySQL 数据和配置！${NC}"
@@ -979,10 +991,13 @@ check_existing() {
                         fi
                         
                         # 清理 MySQL 文件（使用辅助函数）
-                        cleanup_mysql_files 1
+                        cleanup_mysql_files 1 || true  # 防止 set -e 导致退出
                         
                         # 卸载后清除版本选择（使用辅助函数）
-                        reset_mysql_version
+                        reset_mysql_version || true  # 防止 set -e 导致退出
+                        
+                        # 完全重新安装模式，清除 SKIP_INSTALL 标志，确保继续执行安装
+                        SKIP_INSTALL=0
                     else
                         echo -e "${GREEN}取消删除，将保留数据重新安装${NC}"
                         REINSTALL_MODE="keep_data"
@@ -994,6 +1009,9 @@ check_existing() {
                         else
                             MYSQL_VERSION="${MYSQL_VERSION_FROM_ENV}"
                         fi
+                        
+                        # 保留数据重新安装模式，清除 SKIP_INSTALL 标志，确保继续执行安装
+                        SKIP_INSTALL=0
                     fi
                     ;;
                 *)

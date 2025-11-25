@@ -30,16 +30,23 @@
             padding: 20px;
             background: #1a252f;
             border-bottom: 1px solid #34495e;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            box-sizing: border-box;
         }
         .sidebar-header h1 {
             font-size: 20px;
             font-weight: 600;
             color: #fff;
+            line-height: 1.2;
+            margin: 0;
         }
         .sidebar-header .subtitle {
             font-size: 12px;
             color: #95a5a6;
-            margin-top: 5px;
+            margin-top: 4px;
+            line-height: 1.2;
         }
         .sidebar-menu {
             padding: 10px 0;
@@ -83,9 +90,8 @@
         }
         /* 顶部Banner栏 */
         .top-banner {
-            height: 60px;
-            background: #fff;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            background: #1a252f;
+            border-bottom: 1px solid #34495e;
             display: flex;
             align-items: center;
             justify-content: space-between;
@@ -93,11 +99,12 @@
             position: sticky;
             top: 0;
             z-index: 100;
+            box-sizing: border-box;
         }
         .banner-title {
             font-size: 20px;
             font-weight: 600;
-            color: #2c3e50;
+            color: #fff;
         }
         .banner-actions {
             display: flex;
@@ -108,11 +115,12 @@
             display: flex;
             align-items: center;
             gap: 10px;
-            color: #555;
+            color: #ecf0f1;
             font-size: 14px;
         }
         .user-info .username {
             font-weight: 500;
+            color: #ecf0f1;
         }
         .logout-btn {
             padding: 6px 15px;
@@ -220,6 +228,28 @@
                     item.classList.add('active');
                 }
             });
+        })();
+        
+        // 确保顶部banner高度与左侧logo栏高度一致
+        (function() {
+            function syncBannerHeight() {
+                const sidebarHeader = document.querySelector('.sidebar-header');
+                const topBanner = document.querySelector('.top-banner');
+                if (sidebarHeader && topBanner) {
+                    const headerHeight = sidebarHeader.offsetHeight;
+                    topBanner.style.height = headerHeight + 'px';
+                }
+            }
+            
+            // 页面加载时同步
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', syncBannerHeight);
+            } else {
+                syncBannerHeight();
+            }
+            
+            // 窗口大小改变时重新同步
+            window.addEventListener('resize', syncBannerHeight);
         })();
     </script>
 </body>

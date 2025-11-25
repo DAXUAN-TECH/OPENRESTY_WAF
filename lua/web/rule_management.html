@@ -1650,16 +1650,109 @@
             }
         }
         
+        // 日期时间选择器相关变量
+        let currentDateTimeInput = null;
+        
+        // 打开日期时间选择器
+        function openDateTimePicker(inputId) {
+            currentDateTimeInput = inputId;
+            const input = document.getElementById(inputId);
+            const modal = document.getElementById('datetime-picker-modal');
+            
+            // 如果输入框已有值，解析并设置到选择器
+            if (input.value) {
+                const dateTime = input.value;
+                const [date, time] = dateTime.split(' ');
+                if (date) document.getElementById('picker-date').value = date;
+                if (time) document.getElementById('picker-time').value = time.substring(0, 5);
+            } else {
+                // 设置默认值为当前日期时间
+                const now = new Date();
+                const year = now.getFullYear();
+                const month = String(now.getMonth() + 1).padStart(2, '0');
+                const day = String(now.getDate()).padStart(2, '0');
+                const hours = String(now.getHours()).padStart(2, '0');
+                const minutes = String(now.getMinutes()).padStart(2, '0');
+                
+                document.getElementById('picker-date').value = `${year}-${month}-${day}`;
+                document.getElementById('picker-time').value = `${hours}:${minutes}`;
+            }
+            
+            modal.style.display = 'block';
+        }
+        
+        // 关闭日期时间选择器
+        function closeDateTimePicker() {
+            document.getElementById('datetime-picker-modal').style.display = 'none';
+            currentDateTimeInput = null;
+        }
+        
+        // 确认日期时间选择
+        function confirmDateTimePicker() {
+            if (!currentDateTimeInput) return;
+            
+            const date = document.getElementById('picker-date').value;
+            const time = document.getElementById('picker-time').value;
+            
+            if (!date) {
+                showAlert('请选择日期', 'error');
+                return;
+            }
+            
+            if (!time) {
+                showAlert('请选择时间', 'error');
+                return;
+            }
+            
+            // 格式：YYYY-MM-DD HH:mm
+            const dateTime = `${date} ${time}`;
+            document.getElementById(currentDateTimeInput).value = dateTime;
+            
+            closeDateTimePicker();
+        }
+        
+        // 设置日期默认值为当日
+        function setDefaultDates() {
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            const day = String(now.getDate()).padStart(2, '0');
+            const hours = String(now.getHours()).padStart(2, '0');
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+            
+            // 格式：YYYY-MM-DD HH:mm
+            const defaultDateTime = `${year}-${month}-${day} ${hours}:${minutes}`;
+            
+            const startTimeInput = document.getElementById('create-start-time');
+            const endTimeInput = document.getElementById('create-end-time');
+            
+            if (startTimeInput && !startTimeInput.value) {
+                startTimeInput.value = defaultDateTime;
+            }
+            if (endTimeInput && !endTimeInput.value) {
+                // 结束时间默认为当日23:59
+                endTimeInput.value = `${year}-${month}-${day} 23:59`;
+            }
+        }
+        
         // 初始化
         document.addEventListener('DOMContentLoaded', function() {
             loadGroups();
             loadRules();
+            
+            // 设置默认日期
+            setDefaultDates();
             
             // 点击模态框外部关闭
             window.onclick = function(event) {
                 const modal = document.getElementById('edit-modal');
                 if (event.target == modal) {
                     closeEditModal();
+                }
+                
+                const datetimeModal = document.getElementById('datetime-picker-modal');
+                if (event.target == datetimeModal) {
+                    closeDateTimePicker();
                 }
             }
         });

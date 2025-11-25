@@ -14,9 +14,44 @@ local _M = {}
 local function serve_html_file(filename)
     local project_root = path_utils.get_project_root()
     if not project_root then
-        ngx.status = 500
-        ngx.say("Failed to determine project root")
-        return
+        -- 尝试从 package.path 推断项目根目录（备用方案）
+        local first_path = package.path:match("([^;]+)")
+        if first_path then
+            project_root = first_path:match("(.+)/lua/%?%.lua")
+        end
+        
+        -- 如果仍然无法获取，尝试从当前文件路径推断
+        if not project_root then
+            local current_file = debug.getinfo(1, "S").source
+            if current_file then
+                current_file = current_file:gsub("^@", "")
+                -- 从 lua/web/handler.lua 推断项目根目录
+                project_root = current_file:match("(.+)/lua/web/handler%.lua")
+            end
+        end
+        
+        if not project_root then
+            ngx.status = 500
+            ngx.header.content_type = "text/html; charset=utf-8"
+            ngx.say([[
+<html><body>
+<h1>500 Internal Server Error</h1>
+<p>Failed to determine project root. Please check:</p>
+<ul>
+    <li>lua_package_path configuration in lua.conf</li>
+    <li>Project root path in config.lua</li>
+</ul>
+<p>Debug info:</p>
+<pre>
+package.path: ]] .. (package.path or "nil") .. [[
+
+debug.getinfo: ]] .. (debug.getinfo(1, "S").source or "nil") .. [[
+</pre>
+</body></html>
+            ]])
+            ngx.log(ngx.ERR, "Failed to determine project root for serving HTML file: ", filename)
+            return
+        end
     end
     
     local file_path = project_root .. "/lua/web/" .. filename
@@ -28,7 +63,21 @@ local function serve_html_file(filename)
         ngx.say(content)
     else
         ngx.status = 404
-        ngx.say("File not found: " .. file_path)
+        ngx.header.content_type = "text/html; charset=utf-8"
+        ngx.say([[
+<html><body>
+<h1>404 Not Found</h1>
+<p>File not found: ]] .. ngx.escape_html(file_path) .. [[</p>
+<p>Project root: ]] .. ngx.escape_html(project_root) .. [[</p>
+<p>Please check:</p>
+<ul>
+    <li>File exists: ]] .. ngx.escape_html(file_path) .. [[</li>
+    <li>File permissions</li>
+    <li>Project root path configuration</li>
+</ul>
+</body></html>
+        ]])
+        ngx.log(ngx.ERR, "HTML file not found: ", file_path, " (project_root: ", project_root, ")")
     end
 end
 

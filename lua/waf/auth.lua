@@ -194,7 +194,7 @@ function _M.verify_credentials(username, password)
     
     -- 优先从数据库查询用户
     local mysql_pool = require "waf.mysql_pool"
-    local ok, query_result = pcall(function()
+    local ok, res, query_err = pcall(function()
         local sql = [[
             SELECT id, username, password_hash, role, totp_secret, status
             FROM waf_users
@@ -202,30 +202,18 @@ function _M.verify_credentials(username, password)
             AND status = 1
             LIMIT 1
         ]]
+        -- mysql_pool.query 返回 (res, err)，pcall 会传递所有返回值
         return mysql_pool.query(sql, username)
     end)
     
     -- 记录数据库查询结果
     if not ok then
-        ngx.log(ngx.ERR, "verify_credentials: database query failed (pcall error): ", tostring(query_result))
+        -- pcall 失败，res 是错误信息
+        ngx.log(ngx.ERR, "verify_credentials: database query failed (pcall error): ", tostring(res))
         return false, nil
     end
     
-    -- mysql_pool.query 返回 (res, err)
-    local res, query_err = query_result, nil
-    if type(query_result) == "table" and query_result[1] == nil and query_result[2] ~= nil then
-        -- 如果返回的是错误，query_result[2] 是错误信息
-        res = nil
-        query_err = query_result[2]
-    elseif type(query_result) == "table" then
-        -- 正常情况：query_result 就是结果数组
-        res = query_result
-    else
-        -- 其他情况，尝试解析
-        res, query_err = query_result, nil
-    end
-    
-    -- 如果 pcall 成功但查询返回错误
+    -- pcall 成功，res 是查询结果，query_err 是错误信息（如果有）
     if query_err then
         ngx.log(ngx.ERR, "verify_credentials: database query error: ", tostring(query_err))
         return false, nil
@@ -324,7 +312,7 @@ function _M.verify_credentials(username, password)
                 if create_ok and create_result then
                     ngx.log(ngx.WARN, "verify_credentials: default admin user created successfully, insert_id: ", tostring(create_result))
                     -- 重新查询用户信息
-                    local user_ok, user_result = pcall(function()
+                    local user_ok, user_res, user_err = pcall(function()
                         local user_sql = [[
                             SELECT id, username, password_hash, role, totp_secret, status
                             FROM waf_users
@@ -336,19 +324,8 @@ function _M.verify_credentials(username, password)
                     end)
                     
                     if not user_ok then
-                        ngx.log(ngx.ERR, "verify_credentials: failed to query created user (pcall error): ", tostring(user_result))
+                        ngx.log(ngx.ERR, "verify_credentials: failed to query created user (pcall error): ", tostring(user_res))
                         return false, nil
-                    end
-                    
-                    -- mysql_pool.query 返回 (res, err)
-                    local user_res, user_err = user_result, nil
-                    if type(user_result) == "table" and user_result[1] == nil and user_result[2] ~= nil then
-                        user_res = nil
-                        user_err = user_result[2]
-                    elseif type(user_result) == "table" then
-                        user_res = user_result
-                    else
-                        user_res, user_err = user_result, nil
                     end
                     
                     if user_err then

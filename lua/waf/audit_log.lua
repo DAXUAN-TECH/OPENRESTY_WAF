@@ -107,8 +107,8 @@ function _M.log_login(username, success, error_message)
         end
     end
     
-    -- 异步写入数据库（不阻塞请求）
-    local ok, err = pcall(function()
+    -- 写入数据库（不阻塞请求，但需要检查返回值）
+    local ok, result = pcall(function()
         local sql = [[
             INSERT INTO waf_audit_logs (
                 user_id, username, action_type, resource_type, resource_id,
@@ -116,15 +116,25 @@ function _M.log_login(username, success, error_message)
                 ip_address, user_agent, status, error_message
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ]]
-        mysql_pool.query(sql,
+        local res, err = mysql_pool.query(sql,
             user_id, username_for_log, "login", "user", username_for_log,
             success and "用户登录成功" or "用户登录失败", method, path, request_params,
             ip_address, user_agent, success and "success" or "failed", error_message
         )
+        -- 检查查询结果
+        if not res then
+            -- 查询失败，抛出错误以便 pcall 捕获
+            error("MySQL query failed: " .. (err or "unknown error"))
+        end
+        return res
     end)
     
     if not ok then
-        ngx.log(ngx.ERR, "Failed to write login audit log: ", err)
+        ngx.log(ngx.ERR, "Failed to write login audit log (pcall error): ", tostring(result))
+    elseif not result then
+        ngx.log(ngx.ERR, "Failed to write login audit log (query returned nil)")
+    else
+        ngx.log(ngx.DEBUG, "Login audit log written successfully for user: ", username_for_log)
     end
 end
 
@@ -161,8 +171,8 @@ function _M.log_logout(username)
     local ip_address = ngx.var.remote_addr
     local user_agent = ngx.var.http_user_agent
     
-    -- 异步写入数据库（不阻塞请求）
-    local ok, err = pcall(function()
+    -- 写入数据库（不阻塞请求，但需要检查返回值）
+    local ok, result = pcall(function()
         local sql = [[
             INSERT INTO waf_audit_logs (
                 user_id, username, action_type, resource_type, resource_id,
@@ -170,15 +180,25 @@ function _M.log_logout(username)
                 ip_address, user_agent, status, error_message
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ]]
-        mysql_pool.query(sql,
+        local res, err = mysql_pool.query(sql,
             user_id, username_for_log, "logout", "user", username_for_log,
             "用户登出", method, path, nil,
             ip_address, user_agent, "success", nil
         )
+        -- 检查查询结果
+        if not res then
+            -- 查询失败，抛出错误以便 pcall 捕获
+            error("MySQL query failed: " .. (err or "unknown error"))
+        end
+        return res
     end)
     
     if not ok then
-        ngx.log(ngx.ERR, "Failed to write logout audit log: ", err)
+        ngx.log(ngx.ERR, "Failed to write logout audit log (pcall error): ", tostring(result))
+    elseif not result then
+        ngx.log(ngx.ERR, "Failed to write logout audit log (query returned nil)")
+    else
+        ngx.log(ngx.DEBUG, "Logout audit log written successfully for user: ", username_for_log)
     end
 end
 

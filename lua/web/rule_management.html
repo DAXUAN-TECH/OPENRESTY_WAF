@@ -459,8 +459,7 @@
                 <div class="filters">
                     <select id="filter-type">
                         <option value="">全部类型</option>
-                        <option value="single_ip">单个IP</option>
-                        <option value="ip_range">IP段</option>
+                        <option value="single_ip">按IP筛选</option>
                         <option value="geo">地域</option>
                     </select>
                     <select id="filter-status">
@@ -507,7 +506,6 @@
                     <label>规则类型 *</label>
                     <div class="rule-type-buttons">
                         <button type="button" class="rule-type-btn" data-type="single_ip" onclick="selectRuleType('single_ip')">按IP筛选</button>
-                        <button type="button" class="rule-type-btn" data-type="ip_range" onclick="selectRuleType('ip_range')">IP段筛选</button>
                         <button type="button" class="rule-type-btn" data-type="geo" onclick="selectRuleType('geo')">地域筛选</button>
                     </div>
                     <input type="hidden" id="create-rule-type" required>
@@ -515,8 +513,8 @@
                 
                 <div class="form-group" id="rule-value-group">
                     <label>规则值 *</label>
-                    <input type="text" id="create-rule-value" required placeholder="例如: 192.168.1.100 或 192.168.1.0/24 或 CN:Beijing">
-                    <small style="color: #666;" id="rule-value-hint">单个IP: 192.168.1.100 | IP段: 192.168.1.0/24 或 192.168.1.1-192.168.1.100 | 地域: CN 或 CN:Beijing</small>
+                    <input type="text" id="create-rule-value" required placeholder="例如: 192.168.1.100 或 192.168.1.0/24 或 192.168.1.1-192.168.1.100" style="width: 100%; max-width: 600px;">
+                    <small style="color: #666;" id="rule-value-hint">支持单个IP（如：192.168.1.100）或IP段（如：192.168.1.0/24 或 192.168.1.1-192.168.1.100）</small>
                 </div>
                 
                 <!-- 地域选择器 -->
@@ -1138,11 +1136,8 @@
                 
                 // 根据类型更新提示
                 if (type === 'single_ip') {
-                    ruleValueInput.placeholder = '例如: 192.168.1.100';
-                    ruleValueHint.textContent = '单个IP: 192.168.1.100';
-                } else if (type === 'ip_range') {
-                    ruleValueInput.placeholder = '例如: 192.168.1.0/24 或 192.168.1.1-192.168.1.100';
-                    ruleValueHint.textContent = 'IP段: 192.168.1.0/24 或 192.168.1.1-192.168.1.100';
+                    ruleValueInput.placeholder = '例如: 192.168.1.100 或 192.168.1.0/24 或 192.168.1.1-192.168.1.100';
+                    ruleValueHint.textContent = '支持单个IP（如：192.168.1.100）或IP段（如：192.168.1.0/24 或 192.168.1.1-192.168.1.100）';
                 } else {
                     ruleValueInput.placeholder = '请输入规则值';
                     ruleValueHint.textContent = '';
@@ -1367,8 +1362,8 @@
             const ruleValueHint = document.getElementById('rule-value-hint');
             ruleValueInput.style.display = 'block';
             ruleValueHint.style.display = 'block';
-            ruleValueInput.placeholder = '例如: 192.168.1.100 或 192.168.1.0/24 或 CN:Beijing';
-            ruleValueHint.textContent = '单个IP: 192.168.1.100 | IP段: 192.168.1.0/24 或 192.168.1.1-192.168.1.100 | 地域: CN 或 CN:Beijing';
+            ruleValueInput.placeholder = '例如: 192.168.1.100 或 192.168.1.0/24 或 192.168.1.1-192.168.1.100';
+            ruleValueHint.textContent = '支持单个IP（如：192.168.1.100）或IP段（如：192.168.1.0/24 或 192.168.1.1-192.168.1.100）';
             // 清空地域选择
             selectedCountry = null;
             selectedProvince = null;
@@ -1388,8 +1383,7 @@
         
         function getRuleTypeName(type) {
             const names = {
-                'single_ip': '单个IP',
-                'ip_range': 'IP段',
+                'single_ip': '按IP筛选',
                 'geo': '地域'
             };
             return names[type] || type;

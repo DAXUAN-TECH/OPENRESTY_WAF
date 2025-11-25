@@ -9,7 +9,20 @@ local config = require "config"
 local cjson = require "cjson"
 
 local _M = {}
-local log_buffer = ngx.shared.waf_log_buffer
+
+-- 获取共享内存缓存（延迟初始化，避免在 init_worker 阶段访问 ngx.shared）
+local function get_log_buffer()
+    -- 使用 pcall 安全访问 ngx.shared（在 init_worker 阶段可能不可用）
+    local ok, shared = pcall(function()
+        return ngx.shared.waf_log_buffer
+    end)
+    if ok and shared then
+        return shared
+    end
+    -- 如果无法访问，返回 nil（调用者需要处理这种情况）
+    return nil
+end
+
 local BATCH_SIZE = config.log.batch_size
 local BATCH_INTERVAL = config.log.batch_interval
 local MAX_RETRY = config.log.max_retry or 3
@@ -60,6 +73,12 @@ local function add_to_buffer(log_data)
     end
 
     -- 异步写入：添加到共享内存缓冲区
+    local log_buffer = get_log_buffer()
+    if not log_buffer then
+        -- 如果无法访问缓存，直接写入（降级策略）
+        return write_log_direct(log_data)
+    end
+    
     local queue_size = log_buffer:lpush(BUFFER_KEY, ngx.encode_base64(cjson.encode(log_data)))
     
     -- 更新缓冲区大小监控
@@ -89,6 +108,11 @@ local function flush_logs(premature, retry_count)
     
     retry_count = retry_count or 0
 
+    local log_buffer = get_log_buffer()
+    if not log_buffer then
+        return
+    end
+    
     local logs = {}
     local count = 0
 
@@ -111,7 +135,9 @@ local function flush_logs(premature, retry_count)
 
     if #logs == 0 then
         -- 更新缓冲区大小监控
-        log_buffer:set(BUFFER_SIZE_KEY, 0, 0)
+        if log_buffer then
+            log_buffer:set(BUFFER_SIZE_KEY, 0, 0)
+        end
         return
     end
 
@@ -148,8 +174,10 @@ local function flush_logs(premature, retry_count)
         if retry_count < MAX_RETRY then
             -- 将日志重新放回缓冲区（从前往后放，保持顺序）
             -- 使用 lpush 将日志放回队列前面，因为队列是 lpush/rpop 的 FIFO 队列
-            for i = 1, #logs do
-                log_buffer:lpush(BUFFER_KEY, ngx.encode_base64(cjson.encode(logs[i])))
+            if log_buffer then
+                for i = 1, #logs do
+                    log_buffer:lpush(BUFFER_KEY, ngx.encode_base64(cjson.encode(logs[i])))
+                end
             end
             
             -- 延迟后重试
@@ -164,8 +192,10 @@ local function flush_logs(premature, retry_count)
     else
         ngx.log(ngx.DEBUG, "batch inserted ", #logs, " logs")
         -- 更新缓冲区大小监控（使用 llen 获取实际队列长度）
-        local remaining = log_buffer:llen(BUFFER_KEY) or 0
-        log_buffer:set(BUFFER_SIZE_KEY, remaining, 0)
+        if log_buffer then
+            local remaining = log_buffer:llen(BUFFER_KEY) or 0
+            log_buffer:set(BUFFER_SIZE_KEY, remaining, 0)
+        end
     end
 end
 
@@ -199,8 +229,14 @@ function _M.collect()
     -- 注意：在 log_by_lua 阶段不能查询数据库，只能使用缓存或配置文件
     local log_collect_enabled = false
     
-    -- 先从缓存获取
-    local cache = ngx.shared.waf_cache
+    -- 先从缓存获取（使用 pcall 安全访问）
+    local cache = nil
+    local ok, shared = pcall(function()
+        return ngx.shared.waf_cache
+    end)
+    if ok and shared then
+        cache = shared
+    end
     local cache_key = "feature_switch:log_collect"
     local cached = cache:get(cache_key)
     if cached then
@@ -263,10 +299,20 @@ function _M.collect()
     -- 注意：在 log_by_lua 阶段不能查询数据库，只能使用缓存或配置文件
     local auto_block_enabled = false
     
-    -- 先从缓存获取
-    local cache = ngx.shared.waf_cache
+    -- 先从缓存获取（使用 pcall 安全访问）
+    local cache = nil
+    local ok, shared = pcall(function()
+        return ngx.shared.waf_cache
+    end)
+    if ok and shared then
+        cache = shared
+    end
+    
     local cache_key = "feature_switch:auto_block"
-    local cached = cache:get(cache_key)
+    local cached = nil
+    if cache then
+        cached = cache:get(cache_key)
+    end
     if cached then
         auto_block_enabled = cached == "1"
     else

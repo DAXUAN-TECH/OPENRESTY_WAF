@@ -484,6 +484,7 @@
         </div>
     </div>
     
+    <script src="/common.js"></script>
     <script>
         let currentPage = 1;
         const pageSize = 20;
@@ -503,18 +504,26 @@
             }
         }
         
-        // 显示提示信息
-        function showAlert(message, type = 'success') {
+        // 使用公共函数 showAlert（已在 common.js 中定义）
+        // 如果需要自定义显示位置，可以覆盖 showAlert 函数
+        function showAlertCustom(message, type = 'success') {
             const container = document.getElementById('alert-container');
-            const alert = document.createElement('div');
-            alert.className = `alert alert-${type}`;
-            alert.textContent = message;
-            container.innerHTML = '';
-            container.appendChild(alert);
-            setTimeout(() => {
-                alert.remove();
-            }, 3000);
+            if (container) {
+                const alert = document.createElement('div');
+                alert.className = `alert alert-${type}`;
+                alert.textContent = message;
+                container.innerHTML = '';
+                container.appendChild(alert);
+                setTimeout(() => {
+                    alert.remove();
+                }, 3000);
+            } else {
+                // 如果没有容器，使用全局的 showAlert
+                window.showAlert(message, type);
+            }
         }
+        // 为兼容性，保留 showAlert 作为 showAlertCustom 的别名
+        const showAlert = showAlertCustom;
         
         // 加载规则列表
         async function loadRules(page = 1) {
@@ -902,13 +911,8 @@
             document.getElementById('create-form').reset();
         }
         
-        // 工具函数
-        function escapeHtml(text) {
-            if (!text) return '';
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
-        }
+        // 工具函数（使用公共函数，已在 common.js 中定义）
+        // escapeHtml、formatDateTime 已在 common.js 中定义
         
         function getRuleTypeName(type) {
             const names = {
@@ -925,11 +929,6 @@
             } else {
                 return '<span class="status-badge status-disabled">已禁用</span>';
             }
-        }
-        
-        function formatDateTime(datetime) {
-            if (!datetime) return '-';
-            return datetime.replace('T', ' ').substring(0, 19);
         }
         
         function renderPagination(data, containerId, loadFunc) {

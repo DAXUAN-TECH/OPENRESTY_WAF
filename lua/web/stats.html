@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>封控统计报表 - WAF管理</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+    <script src="/common.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -377,17 +378,20 @@
             });
         }
         
-        function showError(message) {
+        // 使用公共函数 showError 和 escapeHtml（已在 common.js 中定义）
+        // 如果需要自定义错误显示位置，可以覆盖 showError 函数
+        function showErrorCustom(message) {
             const errorDiv = document.getElementById('error');
-            errorDiv.textContent = message;
-            errorDiv.style.display = 'block';
+            if (errorDiv) {
+                errorDiv.textContent = message;
+                errorDiv.style.display = 'block';
+            } else {
+                // 如果没有容器，使用全局的 showError
+                window.showError(message);
+            }
         }
-        
-        function escapeHtml(text) {
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
-        }
+        // 为兼容性，保留 showError 作为 showErrorCustom 的别名
+        const showError = showErrorCustom;
         
         // 页面加载时设置默认时间并加载数据
         window.onload = function() {

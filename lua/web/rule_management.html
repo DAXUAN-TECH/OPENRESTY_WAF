@@ -624,7 +624,8 @@
                     
                     console.log('Final rules array length:', rulesArray.length);
                     
-                    renderRulesTable(rules);
+                    // 使用转换后的数组
+                    renderRulesTable(rulesArray);
                     renderPagination(data.data, 'pagination', loadRules);
                 } else {
                     showAlert(data.error || '加载失败', 'error');
@@ -645,11 +646,42 @@
         function renderRulesTable(rules) {
             const tbody = document.getElementById('rules-tbody');
             
-            // 防御性检查：确保 rules 是数组
-            if (!rules || !Array.isArray(rules)) {
-                tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 20px; color: #e74c3c;">数据格式错误：规则列表不是数组</td></tr>';
-                console.error('renderRulesTable: rules is not an array', rules);
+            // 防御性检查：确保 rules 是数组，如果不是则尝试转换
+            if (!rules) {
+                tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 20px;">暂无数据</td></tr>';
                 return;
+            }
+            
+            // 如果不是数组，尝试转换
+            if (!Array.isArray(rules)) {
+                console.warn('renderRulesTable: rules is not an array, attempting conversion', rules);
+                
+                let rulesArray = [];
+                if (typeof rules === 'object') {
+                    // 尝试从对象转换为数组
+                    const keys = Object.keys(rules);
+                    const numericKeys = keys.filter(k => {
+                        const num = parseInt(k);
+                        return !isNaN(num) && num.toString() === k && num >= 0;
+                    });
+                    
+                    if (numericKeys.length > 0) {
+                        numericKeys.sort((a, b) => parseInt(a) - parseInt(b));
+                        rulesArray = numericKeys.map(k => rules[k]);
+                    } else if (keys.length > 0) {
+                        // 非数字键，可能是单个对象，包装成数组
+                        rulesArray = [rules];
+                    }
+                }
+                
+                if (Array.isArray(rulesArray) && rulesArray.length > 0) {
+                    rules = rulesArray;
+                    console.log('Successfully converted rules to array in renderRulesTable');
+                } else {
+                    tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 20px; color: #e74c3c;">数据格式错误：规则列表不是数组</td></tr>';
+                    console.error('renderRulesTable: failed to convert rules to array', rules);
+                    return;
+                }
             }
             
             if (rules.length === 0) {

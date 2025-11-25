@@ -52,15 +52,6 @@ local function validate_rule_value(rule_type, rule_value)
             -- 2. 国家:省份代码：CN:Beijing, CN:Shanghai（省份代码可以是字母、数字、下划线、连字符）
             -- 3. 国家:省份代码:城市名称：CN:Beijing:北京（城市名称可以是中文、字母、数字等任意字符，但不能包含逗号）
             
-            -- 首先检查基本格式：必须以两个大写字母开头
-            -- 使用更严格的检查：确保前两个字符都是大写字母
-            local country_code = geo_value:match("^([A-Z][A-Z])")
-            if not country_code then
-                -- 添加调试信息
-                ngx.log(ngx.ERR, "geo validation failed for: [", geo_value, "], length: ", #geo_value, ", first char: ", string.byte(geo_value, 1) or "nil")
-                return false, "无效的地域代码格式: " .. geo_value .. "（必须以两个大写字母的国家代码开头，如CN、US、VN）"
-            end
-            
             -- 检查是否包含冒号（省份或城市）
             if geo_value:match(":") then
                 -- 包含冒号，检查格式：CN:xxx 或 CN:xxx:yyy
@@ -89,8 +80,8 @@ local function validate_rule_value(rule_type, rule_value)
                 end
             else
                 -- 不包含冒号，应该是纯国家代码（两个大写字母）
-                -- 确保整个值就是两个大写字母，没有其他字符
-                if geo_value ~= country_code or #geo_value ~= 2 then
+                -- 直接验证：必须是两个大写字母
+                if not geo_value:match("^[A-Z][A-Z]$") then
                     return false, "无效的地域代码格式: " .. geo_value .. "（国家代码必须是两个大写字母，如CN、US、VN）"
                 end
             end

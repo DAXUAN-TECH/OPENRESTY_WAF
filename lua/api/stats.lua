@@ -149,7 +149,32 @@ function _M.timeseries()
     
     local timeseries = {}
     if res then
-        for _, row in ipairs(res) do
+        -- 确保 res 是数组
+        local res_array = {}
+        if type(res) == "table" then
+            -- 检查是否是数组
+            local is_array = false
+            for i, _ in ipairs(res) do
+                is_array = true
+                res_array[i] = res[i]
+            end
+            
+            -- 如果不是数组，尝试转换
+            if not is_array then
+                local temp_array = {}
+                for k, v in pairs(res) do
+                    if type(k) == "number" and k > 0 then
+                        table.insert(temp_array, {key = k, value = v})
+                    end
+                end
+                table.sort(temp_array, function(a, b) return a.key < b.key end)
+                for _, item in ipairs(temp_array) do
+                    table.insert(res_array, item.value)
+                end
+            end
+        end
+        
+        for _, row in ipairs(res_array) do
             table.insert(timeseries, {
                 time = row.time_point,
                 block_count = row.block_count,
@@ -201,7 +226,32 @@ function _M.ip_stats()
     
     local ip_stats = {}
     if res then
-        for _, row in ipairs(res) do
+        -- 确保 res 是数组
+        local res_array = {}
+        if type(res) == "table" then
+            -- 检查是否是数组
+            local is_array = false
+            for i, _ in ipairs(res) do
+                is_array = true
+                res_array[i] = res[i]
+            end
+            
+            -- 如果不是数组，尝试转换
+            if not is_array then
+                local temp_array = {}
+                for k, v in pairs(res) do
+                    if type(k) == "number" and k > 0 then
+                        table.insert(temp_array, {key = k, value = v})
+                    end
+                end
+                table.sort(temp_array, function(a, b) return a.key < b.key end)
+                for _, item in ipairs(temp_array) do
+                    table.insert(res_array, item.value)
+                end
+            end
+        end
+        
+        for _, row in ipairs(res_array) do
             table.insert(ip_stats, {
                 client_ip = row.client_ip,
                 block_count = row.block_count,
@@ -258,7 +308,32 @@ function _M.rule_stats()
     
     local rule_stats = {}
     if res then
-        for _, row in ipairs(res) do
+        -- 确保 res 是数组
+        local res_array = {}
+        if type(res) == "table" then
+            -- 检查是否是数组
+            local is_array = false
+            for i, _ in ipairs(res) do
+                is_array = true
+                res_array[i] = res[i]
+            end
+            
+            -- 如果不是数组，尝试转换
+            if not is_array then
+                local temp_array = {}
+                for k, v in pairs(res) do
+                    if type(k) == "number" and k > 0 then
+                        table.insert(temp_array, {key = k, value = v})
+                    end
+                end
+                table.sort(temp_array, function(a, b) return a.key < b.key end)
+                for _, item in ipairs(temp_array) do
+                    table.insert(res_array, item.value)
+                end
+            end
+        end
+        
+        for _, row in ipairs(res_array) do
             table.insert(rule_stats, {
                 rule_id = row.id,
                 rule_name = row.rule_name,

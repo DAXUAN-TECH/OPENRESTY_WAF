@@ -329,6 +329,35 @@
         
         // 更新时间序列图表
         function updateTimeseriesChart(data) {
+            // 防御性检查：确保 data 是数组
+            if (!data) {
+                console.warn('updateTimeseriesChart: data is null or undefined');
+                return;
+            }
+            
+            let dataArray = [];
+            if (Array.isArray(data)) {
+                dataArray = data;
+            } else if (typeof data === 'object') {
+                // 尝试转换为数组
+                const keys = Object.keys(data);
+                const numericKeys = keys.filter(k => {
+                    const num = parseInt(k);
+                    return !isNaN(num) && num.toString() === k && num >= 0;
+                });
+                
+                if (numericKeys.length > 0) {
+                    numericKeys.sort((a, b) => parseInt(a) - parseInt(b));
+                    dataArray = numericKeys.map(k => data[k]);
+                } else {
+                    console.warn('updateTimeseriesChart: data is not an array and cannot be converted');
+                    return;
+                }
+            } else {
+                console.warn('updateTimeseriesChart: data is not an array or object');
+                return;
+            }
+            
             const ctx = document.getElementById('timeseriesChart').getContext('2d');
             
             if (timeseriesChart) {
@@ -338,16 +367,16 @@
             timeseriesChart = new Chart(ctx, {
                 type: 'line',
                 data: {
-                    labels: data.map(item => item.time),
+                    labels: dataArray.map(item => item.time),
                     datasets: [{
                         label: '封控次数',
-                        data: data.map(item => item.block_count),
+                        data: dataArray.map(item => item.block_count),
                         borderColor: '#0066cc',
                         backgroundColor: 'rgba(0, 102, 204, 0.1)',
                         tension: 0.4
                     }, {
                         label: '被封控IP数',
-                        data: data.map(item => item.unique_ips),
+                        data: dataArray.map(item => item.unique_ips),
                         borderColor: '#cc6600',
                         backgroundColor: 'rgba(204, 102, 0, 0.1)',
                         tension: 0.4
@@ -369,7 +398,41 @@
             const tbody = document.querySelector('#topRulesTable tbody');
             tbody.innerHTML = '';
             
-            data.forEach(row => {
+            // 防御性检查：确保 data 是数组
+            if (!data) {
+                console.warn('updateRulesTable: data is null or undefined');
+                return;
+            }
+            
+            let dataArray = [];
+            if (Array.isArray(data)) {
+                dataArray = data;
+            } else if (typeof data === 'object') {
+                // 尝试转换为数组
+                const keys = Object.keys(data);
+                const numericKeys = keys.filter(k => {
+                    const num = parseInt(k);
+                    return !isNaN(num) && num.toString() === k && num >= 0;
+                });
+                
+                if (numericKeys.length > 0) {
+                    numericKeys.sort((a, b) => parseInt(a) - parseInt(b));
+                    dataArray = numericKeys.map(k => data[k]);
+                } else {
+                    console.warn('updateRulesTable: data is not an array and cannot be converted');
+                    return;
+                }
+            } else {
+                console.warn('updateRulesTable: data is not an array or object');
+                return;
+            }
+            
+            if (dataArray.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 20px;">暂无数据</td></tr>';
+                return;
+            }
+            
+            dataArray.forEach(row => {
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
                     <td>${escapeHtml(row.rule_name || '-')}</td>
@@ -387,7 +450,41 @@
             const tbody = document.querySelector('#topIPsTable tbody');
             tbody.innerHTML = '';
             
-            data.forEach(row => {
+            // 防御性检查：确保 data 是数组
+            if (!data) {
+                console.warn('updateIPsTable: data is null or undefined');
+                return;
+            }
+            
+            let dataArray = [];
+            if (Array.isArray(data)) {
+                dataArray = data;
+            } else if (typeof data === 'object') {
+                // 尝试转换为数组
+                const keys = Object.keys(data);
+                const numericKeys = keys.filter(k => {
+                    const num = parseInt(k);
+                    return !isNaN(num) && num.toString() === k && num >= 0;
+                });
+                
+                if (numericKeys.length > 0) {
+                    numericKeys.sort((a, b) => parseInt(a) - parseInt(b));
+                    dataArray = numericKeys.map(k => data[k]);
+                } else {
+                    console.warn('updateIPsTable: data is not an array and cannot be converted');
+                    return;
+                }
+            } else {
+                console.warn('updateIPsTable: data is not an array or object');
+                return;
+            }
+            
+            if (dataArray.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 20px;">暂无数据</td></tr>';
+                return;
+            }
+            
+            dataArray.forEach(row => {
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
                     <td>${escapeHtml(row.client_ip)}</td>

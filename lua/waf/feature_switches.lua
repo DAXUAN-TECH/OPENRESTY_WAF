@@ -128,7 +128,27 @@ function _M.get(feature_key)
         return cached == "1", nil
     end
     
-    -- 从数据库查询
+    -- 检查是否在 log_by_lua 阶段（不能使用 TCP API）
+    -- 通过尝试获取 phase 来判断（如果可用）
+    local is_log_phase = false
+    local ok, phase = pcall(ngx.get_phase)
+    if ok and phase == "log" then
+        is_log_phase = true
+    end
+    
+    if is_log_phase then
+        -- 在 log_by_lua 阶段，只能使用缓存或配置文件
+        -- 如果缓存中没有，尝试从配置文件获取
+        if config.features and config.features[feature_key] then
+            local enable = config.features[feature_key].enable == true
+            -- 不更新缓存（因为不能查询数据库确认）
+            return enable, nil
+        end
+        -- 默认返回 false（安全起见）
+        return false, nil
+    end
+    
+    -- 从数据库查询（不在 log_by_lua 阶段时）
     local sql = [[
         SELECT enable, config_source
         FROM waf_feature_switches
@@ -138,6 +158,16 @@ function _M.get(feature_key)
     
     local results, err = mysql_pool.query(sql, feature_key)
     if err then
+        -- 检查是否是 TCP API 被禁用的错误
+        if err:match("API disabled") or err:match("log_by_lua") then
+            -- 在 log_by_lua 阶段，只能使用缓存或配置文件
+            if config.features and config.features[feature_key] then
+                local enable = config.features[feature_key].enable == true
+                return enable, nil
+            end
+            return false, nil
+        end
+        
         ngx.log(ngx.ERR, "failed to get feature switch: ", err)
         -- 如果数据库查询失败，尝试从配置文件获取
         if config.features and config.features[feature_key] then

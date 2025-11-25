@@ -45,8 +45,8 @@ end
 
 -- Web界面路由分发主函数
 function _M.route()
-    local uri = ngx.var.request_uri
-    local path = uri:match("^([^?]+)")
+    local uri = ngx.var.request_uri or ""
+    local path = uri:match("^([^?]+)") or "/"
     
     -- 登录页面（不需要认证）
     if path == "/login" then

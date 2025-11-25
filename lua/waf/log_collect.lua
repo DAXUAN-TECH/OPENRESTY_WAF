@@ -195,8 +195,26 @@ end
 
 -- 采集日志（在 log_by_lua 阶段调用）
 function _M.collect()
-    -- 检查日志采集功能是否启用（优先从数据库读取）
-    local log_collect_enabled = feature_switches.is_enabled("log_collect")
+    -- 检查日志采集功能是否启用
+    -- 注意：在 log_by_lua 阶段不能查询数据库，只能使用缓存或配置文件
+    local log_collect_enabled = false
+    
+    -- 先从缓存获取
+    local cache = ngx.shared.waf_cache
+    local cache_key = "feature_switch:log_collect"
+    local cached = cache:get(cache_key)
+    if cached then
+        log_collect_enabled = cached == "1"
+    else
+        -- 如果缓存中没有，从配置文件获取
+        if config.features and config.features.log_collect then
+            log_collect_enabled = config.features.log_collect.enable == true
+        else
+            -- 默认启用日志采集
+            log_collect_enabled = true
+        end
+    end
+    
     if not log_collect_enabled then
         return
     end
@@ -241,9 +259,27 @@ function _M.collect()
     add_to_buffer(log_data)
 
     -- 更新频率统计（异步，不阻塞）
-    -- 检查自动封控功能是否启用（优先从数据库读取）
-    local auto_block_enabled = feature_switches.is_enabled("auto_block")
-    if auto_block_enabled and config.auto_block.enable then
+    -- 检查自动封控功能是否启用
+    -- 注意：在 log_by_lua 阶段不能查询数据库，只能使用缓存或配置文件
+    local auto_block_enabled = false
+    
+    -- 先从缓存获取
+    local cache = ngx.shared.waf_cache
+    local cache_key = "feature_switch:auto_block"
+    local cached = cache:get(cache_key)
+    if cached then
+        auto_block_enabled = cached == "1"
+    else
+        -- 如果缓存中没有，从配置文件获取
+        if config.features and config.features.auto_block then
+            auto_block_enabled = config.features.auto_block.enable == true
+        else
+            -- 默认从 config.auto_block.enable 获取
+            auto_block_enabled = config.auto_block and config.auto_block.enable == true
+        end
+    end
+    
+    if auto_block_enabled and config.auto_block and config.auto_block.enable then
         ngx.timer.at(0, function()
             frequency_stats.update_frequency(client_ip, status_code, request_path)
         end)

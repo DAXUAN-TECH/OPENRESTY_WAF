@@ -101,15 +101,41 @@ sed -i '/此变量必须在 http 块的最开始设置/d' "$NGINX_CONF_DIR/nginx
 # 替换子配置文件中的 $project_root 变量为实际路径
 # 注意：由于某些 OpenResty 版本不支持在 http 块中使用 set 指令
 # 我们直接在子配置文件中替换 $project_root 为实际路径
+# 注意：只替换 conf.d/set_conf 和 conf.d/vhost_conf 目录下的配置文件
 echo -e "${YELLOW}  替换子配置文件中的 \$project_root 变量...${NC}"
-if [ -f "$PROJECT_ROOT_ABS/conf.d/set_conf/lua.conf" ]; then
-    sed -i "s|\$project_root|$PROJECT_ROOT_ABS|g" "$PROJECT_ROOT_ABS/conf.d/set_conf/lua.conf"
+
+# 需要替换的文件列表（明确指定，避免误替换）
+REPLACE_FILES=(
+    "$PROJECT_ROOT_ABS/conf.d/set_conf/lua.conf"
+    "$PROJECT_ROOT_ABS/conf.d/set_conf/log.conf"
+)
+
+# 替换指定文件
+for file in "${REPLACE_FILES[@]}"; do
+    if [ -f "$file" ]; then
+        # 检查文件是否包含 $project_root 变量
+        if grep -q "\$project_root" "$file"; then
+            # 只替换 $project_root 变量，不替换其他内容
+            sed -i "s|\$project_root|$PROJECT_ROOT_ABS|g" "$file"
+            echo -e "${GREEN}  ✓ 已替换: $(basename $file)${NC}"
+        else
+            echo -e "${BLUE}  - 跳过: $(basename $file) (不包含 \$project_root)${NC}"
+        fi
+    else
+        echo -e "${YELLOW}  ⚠ 文件不存在: $(basename $file)${NC}"
+    fi
+done
+
+# 替换 conf.d/vhost_conf 目录下可能使用 $project_root 的配置文件（如果有）
+if [ -d "$PROJECT_ROOT_ABS/conf.d/vhost_conf" ]; then
+    find "$PROJECT_ROOT_ABS/conf.d/vhost_conf" -name "*.conf" -type f | while read -r file; do
+        if grep -q "\$project_root" "$file"; then
+            sed -i "s|\$project_root|$PROJECT_ROOT_ABS|g" "$file"
+            echo -e "${GREEN}  ✓ 已替换: vhost_conf/$(basename $file)${NC}"
+        fi
+    done
 fi
-if [ -f "$PROJECT_ROOT_ABS/conf.d/set_conf/log.conf" ]; then
-    sed -i "s|\$project_root|$PROJECT_ROOT_ABS|g" "$PROJECT_ROOT_ABS/conf.d/set_conf/log.conf"
-fi
-# 替换其他可能使用 $project_root 的配置文件
-find "$PROJECT_ROOT_ABS/conf.d" -name "*.conf" -type f -exec sed -i "s|\$project_root|$PROJECT_ROOT_ABS|g" {} \;
+
 echo -e "${GREEN}✓ 已替换子配置文件中的变量${NC}"
 
 # 步骤3.5: 立即验证并清理重复内容（在替换后立即执行）

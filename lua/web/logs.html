@@ -712,6 +712,46 @@
             prevBtn.disabled = pagination.page <= 1;
             prevBtn.onclick = () => loadFn(pagination.page - 1);
             
+            // 添加跳转页数输入框
+            const jumpContainer = document.createElement('span');
+            jumpContainer.style.cssText = 'display: inline-flex; align-items: center; gap: 5px; margin: 0 10px;';
+            
+            const jumpLabel = document.createElement('span');
+            jumpLabel.textContent = '跳转到';
+            jumpLabel.style.cssText = 'font-size: 14px; color: #666;';
+            
+            const jumpInput = document.createElement('input');
+            jumpInput.type = 'number';
+            jumpInput.min = 1;
+            jumpInput.max = pagination.total_pages;
+            jumpInput.value = pagination.page;
+            jumpInput.style.cssText = 'width: 60px; padding: 5px; border: 1px solid #ddd; border-radius: 4px; text-align: center;';
+            
+            const jumpBtn = document.createElement('button');
+            jumpBtn.className = 'pagination-btn';
+            jumpBtn.textContent = '跳转';
+            jumpBtn.style.cssText = 'padding: 5px 15px; font-size: 14px;';
+            jumpBtn.onclick = () => {
+                const targetPage = parseInt(jumpInput.value);
+                if (targetPage >= 1 && targetPage <= pagination.total_pages) {
+                    loadFn(targetPage);
+                } else {
+                    alert(`请输入1到${pagination.total_pages}之间的页数`);
+                    jumpInput.value = pagination.page;
+                }
+            };
+            
+            // 回车键跳转
+            jumpInput.onkeypress = (e) => {
+                if (e.key === 'Enter') {
+                    jumpBtn.onclick();
+                }
+            };
+            
+            jumpContainer.appendChild(jumpLabel);
+            jumpContainer.appendChild(jumpInput);
+            jumpContainer.appendChild(jumpBtn);
+            
             const nextBtn = document.createElement('button');
             nextBtn.className = 'pagination-btn';
             nextBtn.textContent = '下一页';
@@ -719,6 +759,7 @@
             nextBtn.onclick = () => loadFn(pagination.page + 1);
             
             controls.appendChild(prevBtn);
+            controls.appendChild(jumpContainer);
             controls.appendChild(nextBtn);
             
             container.appendChild(info);

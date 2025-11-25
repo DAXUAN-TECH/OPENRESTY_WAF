@@ -12,6 +12,7 @@ local auth_api = require "api.auth"
 local stats_api = require "api.stats"
 local proxy_api = require "api.proxy"
 local system_api = require "api.system"
+local logs_api = require "api.logs"
 local api_utils = require "api.utils"
 local auth = require "waf.auth"
 local csrf = require "waf.csrf"
@@ -157,6 +158,11 @@ function _M.route()
     -- 系统管理相关路由
     if path:match("^/api/system") then
         return _M.route_system(path, method)
+    end
+    
+    -- 日志查看相关路由
+    if path:match("^/api/logs") then
+        return _M.route_logs(path, method)
     end
     
     -- 性能监控相关路由
@@ -484,6 +490,25 @@ function _M.route_stats(path, method)
     else
         api_utils.json_response({
             error = "Stats API endpoint not found",
+            path = path,
+            method = method
+        }, 404)
+    end
+end
+
+-- 日志查看路由分发
+function _M.route_logs(path, method)
+    if path == "/api/logs/access" then
+        return logs_api.get_access_logs()
+    elseif path == "/api/logs/block" then
+        return logs_api.get_block_logs()
+    elseif path == "/api/logs/audit" then
+        return logs_api.get_audit_logs()
+    elseif path == "/api/logs/stats" then
+        return logs_api.get_log_stats()
+    else
+        api_utils.json_response({
+            error = "Logs API endpoint not found",
             path = path,
             method = method
         }, 404)

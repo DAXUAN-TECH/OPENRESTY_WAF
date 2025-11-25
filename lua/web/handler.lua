@@ -218,6 +218,11 @@ function _M.route()
         return serve_html_file("user_settings.html")
     end
     
+    -- 日志查看页面
+    if path == "/admin/logs" then
+        return serve_html_file("logs.html")
+    end
+    
     -- 默认首页（根路径和管理首页）
     if path == "/" or path == "/admin" or path == "/admin/" then
         ngx.status = 200
@@ -256,6 +261,7 @@ function _M.route()
         <li><a href="/admin/proxy">反向代理</a></li>
         <li><a href="/admin/stats">统计报表</a></li>
         <li><a href="/admin/monitor">监控面板</a></li>
+        <li><a href="/admin/logs">日志查看</a></li>
         <li><a href="/admin/settings">用户设置</a></li>
         <li><a href="/metrics">监控指标</a></li>
     </ul>

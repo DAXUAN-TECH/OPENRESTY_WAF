@@ -45,6 +45,27 @@ if not bit then
                     end
                     return result
                 end
+            end,
+            bxor = function(x, y)
+                -- 异或操作：使用数学运算实现
+                local result = 0
+                local power = 1
+                local x_val = x
+                local y_val = y
+                for i = 1, 32 do
+                    local x_bit = x_val % 2
+                    local y_bit = y_val % 2
+                    if (x_bit == 1 and y_bit == 0) or (x_bit == 0 and y_bit == 1) then
+                        result = result + power
+                    end
+                    x_val = math.floor(x_val / 2)
+                    y_val = math.floor(y_val / 2)
+                    power = power * 2
+                    if x_val == 0 and y_val == 0 then
+                        break
+                    end
+                end
+                return result
             end
         }
     end
@@ -119,18 +140,46 @@ local function generate_session_id()
     -- 最终回退：使用FNV-1a哈希
     local hash = 2166136261
     for i = 1, #raw_string do
-        hash = hash ~ string.byte(raw_string, i)
+        local byte = string.byte(raw_string, i)
+        -- 使用 bit 库进行异或操作（如果可用），否则使用数学运算
+        if bit and bit.bxor then
+            hash = bit.bxor(hash, byte)
+        else
+            -- 如果 bit 库不可用，使用简化的哈希算法（避免复杂的异或实现）
+            hash = hash + byte
+            hash = hash * 16777619
+            hash = hash % 4294967296  -- 2^32，限制为32位
+            goto continue
+        end
         hash = hash * 16777619
-        hash = hash & 0xFFFFFFFF
+        -- 使用 bit 库进行位与操作（如果可用），否则使用取模
+        if bit and bit.band then
+            hash = bit.band(hash, 0xFFFFFFFF)
+        else
+            -- 0xFFFFFFFF = 4294967295，对于32位整数，使用取模
+            hash = hash % 4294967296  -- 2^32
+        end
+        ::continue::
     end
     
     local hex_chars = "0123456789abcdef"
     local hex_string = ""
     local temp_hash = hash
     for i = 1, 8 do
-        local idx = (temp_hash & 0xF) + 1
+        -- 使用 bit 库进行位与操作（如果可用），否则使用取模
+        local idx
+        if bit and bit.band then
+            idx = bit.band(temp_hash, 0xF) + 1
+        else
+            idx = (temp_hash % 16) + 1
+        end
         hex_string = hex_chars:sub(idx, idx) .. hex_string
-        temp_hash = temp_hash >> 4
+        -- 使用 bit 库进行右移操作（如果可用），否则使用数学运算
+        if bit and bit.rshift then
+            temp_hash = bit.rshift(temp_hash, 4)
+        else
+            temp_hash = math.floor(temp_hash / 16)
+        end
     end
     
     return hex_string .. string.format("%x%x", timestamp, random_num1)

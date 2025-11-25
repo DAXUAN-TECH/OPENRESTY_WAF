@@ -119,17 +119,30 @@ function _M.create_rule(rule_data)
     local end_time = rule_data.end_time
     
     -- 处理空字符串：将空字符串转换为 nil（NULL）
-    if description == "" then
-        description = nil
+    -- 同时确保类型正确（转换为字符串）
+    if description then
+        description = tostring(description)
+        if description == "" then
+            description = nil
+        end
     end
-    if rule_group == "" then
-        rule_group = nil
+    if rule_group then
+        rule_group = tostring(rule_group)
+        if rule_group == "" then
+            rule_group = nil
+        end
     end
-    if start_time == "" then
-        start_time = nil
+    if start_time then
+        start_time = tostring(start_time)
+        if start_time == "" then
+            start_time = nil
+        end
     end
-    if end_time == "" then
-        end_time = nil
+    if end_time then
+        end_time = tostring(end_time)
+        if end_time == "" then
+            end_time = nil
+        end
     end
     
     -- 验证分组名称（防止SQL注入，只允许字母、数字、下划线、中文字符和常见分隔符）

@@ -29,11 +29,11 @@
         .sidebar-header {
             padding: 20px;
             background: #1a252f;
-            border-bottom: 1px solid #34495e;
             display: flex;
             flex-direction: column;
             justify-content: center;
             box-sizing: border-box;
+            min-height: 80px;
         }
         .sidebar-header h1 {
             font-size: 20px;
@@ -103,6 +103,8 @@
             z-index: 100;
             box-sizing: border-box;
             position: relative;
+            /* 确保与sidebar-header完美对齐 */
+            min-height: 80px;
         }
         .top-banner::before {
             content: '';
@@ -266,26 +268,47 @@
             });
         })();
         
-        // 确保顶部banner高度与左侧logo栏高度一致
+        // 确保顶部banner高度与左侧logo栏高度一致，并完美对齐
         (function() {
             function syncBannerHeight() {
                 const sidebarHeader = document.querySelector('.sidebar-header');
                 const topBanner = document.querySelector('.top-banner');
                 if (sidebarHeader && topBanner) {
-                    const headerHeight = sidebarHeader.offsetHeight;
+                    // 使用getBoundingClientRect获取精确高度（包括padding和border）
+                    const headerRect = sidebarHeader.getBoundingClientRect();
+                    const headerHeight = headerRect.height;
+                    
+                    // 设置banner高度，确保完美对齐
                     topBanner.style.height = headerHeight + 'px';
+                    topBanner.style.minHeight = headerHeight + 'px';
+                    topBanner.style.maxHeight = headerHeight + 'px';
+                    
+                    // 确保垂直居中对齐
+                    topBanner.style.display = 'flex';
+                    topBanner.style.alignItems = 'center';
                 }
             }
             
-            // 页面加载时同步
-            if (document.readyState === 'loading') {
-                document.addEventListener('DOMContentLoaded', syncBannerHeight);
-            } else {
+            // 页面加载时同步（延迟一点确保DOM完全渲染）
+            function initSync() {
                 syncBannerHeight();
+                // 再次同步，确保字体加载后高度正确
+                setTimeout(syncBannerHeight, 100);
+            }
+            
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', initSync);
+            } else {
+                initSync();
             }
             
             // 窗口大小改变时重新同步
             window.addEventListener('resize', syncBannerHeight);
+            
+            // 字体加载完成后重新同步
+            if (document.fonts && document.fonts.ready) {
+                document.fonts.ready.then(syncBannerHeight);
+            }
         })();
         
         // 处理登出链接点击（确保跳转到登录页面）
@@ -311,4 +334,5 @@
     </script>
 </body>
 </html>
+
 

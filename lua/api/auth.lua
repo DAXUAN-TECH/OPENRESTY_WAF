@@ -59,15 +59,18 @@ function _M.login()
     local has_totp = auth.user_has_totp(username)
     
     if has_totp then
-        -- 验证 TOTP secret 是否有效（能够生成有效的 TOTP 代码）
-        -- 如果 secret 无效，说明可能是未完成的设置，允许登录
         local user_info = auth.get_user(username)
         if user_info and user_info.totp_secret and user_info.totp_secret ~= "" then
-            -- 尝试生成一个 TOTP 代码来验证 secret 是否有效
-            local test_code, test_err = totp.generate_totp(user_info.totp_secret)
+            -- 验证 TOTP secret 是否有效（能够生成有效的 TOTP 代码）
+            -- 如果 secret 无效，说明可能是未完成的设置或损坏的数据，清除它并允许登录
+            local test_code, test_err = pcall(function()
+                return totp.generate_totp(user_info.totp_secret)
+            end)
+            
             if not test_code or test_err then
-                -- secret 无效，可能是未完成的设置，允许登录但记录警告
-                ngx.log(ngx.WARN, "auth.login: user has invalid TOTP secret, allowing login without TOTP verification")
+                -- secret 无效，清除它并允许登录（可能是未完成的设置或损坏的数据）
+                ngx.log(ngx.WARN, "auth.login: user has invalid TOTP secret, clearing it and allowing login")
+                auth.set_user_totp_secret(username, nil)
             else
                 -- secret 有效，要求验证码
                 if not totp_code or totp_code == "" then

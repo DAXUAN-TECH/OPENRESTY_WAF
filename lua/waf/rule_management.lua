@@ -53,13 +53,6 @@ function _M.create_rule(rule_data)
         return nil, err
     end
     
-    -- 构建SQL（支持规则分组）
-    local sql = [[
-        INSERT INTO waf_block_rules 
-        (rule_type, rule_value, rule_name, description, rule_group, status, priority, start_time, end_time, rule_version)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
-    ]]
-    
     local status = rule_data.status or 1
     local priority = rule_data.priority or 0
     local description = rule_data.description or nil
@@ -77,6 +70,14 @@ function _M.create_rule(rule_data)
             return nil, "分组名称长度不能超过50个字符"
         end
     end
+    
+    -- 构建SQL（支持规则分组和NULL值）
+    -- 注意：rule_version 字段使用默认值 1，不需要在 VALUES 中指定
+    local sql = [[
+        INSERT INTO waf_block_rules 
+        (rule_type, rule_value, rule_name, description, rule_group, status, priority, start_time, end_time, rule_version)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+    ]]
     
     local insert_id, err = mysql_pool.insert(sql,
         rule_data.rule_type,

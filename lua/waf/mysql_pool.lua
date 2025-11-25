@@ -27,17 +27,26 @@ local function build_sql(sql, ...)
     local args = {...}
     local result = sql
     local index = 1
+    local arg_count = #args
     
     -- 替换 ? 占位符
     result = string.gsub(result, "%?", function()
-        if index <= #args then
+        if index <= arg_count then
             local arg = args[index]
             index = index + 1
-            return escape_sql(arg)
+            local escaped = escape_sql(arg)
+            return escaped
         else
+            -- 参数不足，记录错误
+            ngx.log(ngx.ERR, "build_sql: not enough arguments, expected at least ", index, " but got ", arg_count)
             return "?"
         end
     end)
+    
+    -- 验证是否还有未替换的占位符
+    if result:match("%?") then
+        ngx.log(ngx.ERR, "build_sql: warning - unplaced placeholders remain in SQL: ", result)
+    end
     
     return result
 end

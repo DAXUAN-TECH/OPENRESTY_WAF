@@ -110,7 +110,7 @@
             border-radius: 34px;
         }
         
-        .slider:before {
+        .slider::before {
             position: absolute;
             content: "";
             height: 26px;
@@ -118,7 +118,7 @@
             left: 4px;
             bottom: 4px;
             background-color: white;
-            transition: .4s;
+            transition: all 0.4s ease;
             border-radius: 50%;
             display: block;
             box-sizing: border-box;
@@ -128,7 +128,7 @@
             background-color: #4CAF50;
         }
         
-        input:checked + .slider:before {
+        input:checked + .slider::before {
             transform: translateX(26px);
         }
         

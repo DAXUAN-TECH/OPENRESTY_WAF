@@ -1010,8 +1010,9 @@
                 priority: parseInt(document.getElementById('create-priority').value) || 0
             };
             
-            ruleData.start_time = startTime.replace('T', ' ') + ':00';
-            ruleData.end_time = endTime.replace('T', ' ') + ':00';
+            // 日期格式转换：YYYY-MM-DD HH:mm -> YYYY-MM-DD HH:mm:ss
+            ruleData.start_time = startTime ? (startTime.includes(':') && !startTime.endsWith(':00') ? startTime + ':00' : startTime) : '';
+            ruleData.end_time = endTime ? (endTime.includes(':') && !endTime.endsWith(':00') ? endTime + ':00' : endTime) : '';
             
             try {
                 const response = await fetch('/api/rules', {

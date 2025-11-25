@@ -222,6 +222,7 @@ echo -e "${YELLOW}  注意: conf.d、lua、logs、cert 目录保持在项目目�
 echo -e "${GREEN}[3/4] 验证配置...${NC}"
 
 # 最终清理：在验证前再次确保文件正确（最后一道防线）
+echo -e "${YELLOW}  执行最终清理检查...${NC}"
 template_lines=$(wc -l < "${PROJECT_ROOT}/init_file/nginx.conf" 2>/dev/null | tr -d ' ')
 if [ -n "$template_lines" ]; then
     # 找到 http 块结束位置
@@ -247,9 +248,26 @@ if [ -n "$template_lines" ]; then
         
         if [ -n "$http_end_line" ]; then
             # 强制截取到 http 块结束位置
-            head -n "$http_end_line" "$NGINX_CONF_DIR/nginx.conf" > "$NGINX_CONF_DIR/nginx.conf.final" && \
+            head -n "$http_end_line" "$NGINX_CONF_DIR/nginx.conf" > "$NGINX_CONF_DIR/nginx.conf.final"
+            if [ $? -eq 0 ]; then
                 mv "$NGINX_CONF_DIR/nginx.conf.final" "$NGINX_CONF_DIR/nginx.conf"
+                echo -e "${GREEN}✓ 最终清理完成（截取到第 $http_end_line 行）${NC}"
+            else
+                echo -e "${YELLOW}⚠ 最终清理失败，但继续验证...${NC}"
+                rm -f "$NGINX_CONF_DIR/nginx.conf.final"
+            fi
+        else
+            echo -e "${YELLOW}⚠ 无法确定 http 块结束位置${NC}"
         fi
+    fi
+    
+    # 额外验证：检查文件行数
+    final_lines=$(wc -l < "$NGINX_CONF_DIR/nginx.conf" 2>/dev/null | tr -d ' ')
+    if [ -n "$final_lines" ] && [ "$final_lines" -gt "$template_lines" ]; then
+        echo -e "${YELLOW}⚠ 文件行数 ($final_lines) 仍大于模板 ($template_lines)，强制截取...${NC}"
+        head -n "$template_lines" "$NGINX_CONF_DIR/nginx.conf" > "$NGINX_CONF_DIR/nginx.conf.final" && \
+            mv "$NGINX_CONF_DIR/nginx.conf.final" "$NGINX_CONF_DIR/nginx.conf"
+        echo -e "${GREEN}✓ 已强制截取到模板行数${NC}"
     fi
 fi
 
@@ -269,12 +287,48 @@ if [ -f "${OPENRESTY_PREFIX}/bin/openresty" ]; then
             # 显示 http 块和 set 指令周围的内容
             http_start=$(grep -n "^http {" "$NGINX_CONF_DIR/nginx.conf" | cut -d: -f1 | head -1)
             if [ -n "$http_start" ]; then
-                sed -n "${http_start},$((http_start + 10))p" "$NGINX_CONF_DIR/nginx.conf" || true
+                # 找到 http 块结束位置
+                http_end=$(awk -v start="$http_start" '
+                    BEGIN { brace_count = 0; found_start = 0 }
+                    NR >= start {
+                        if (!found_start) found_start = 1
+                        for (i = 1; i <= length($0); i++) {
+                            char = substr($0, i, 1)
+                            if (char == "{") brace_count++
+                            if (char == "}") {
+                                brace_count--
+                                if (brace_count == 0 && found_start) {
+                                    print NR
+                                    exit
+                                }
+                            }
+                        }
+                    }
+                ' "$NGINX_CONF_DIR/nginx.conf" 2>/dev/null)
+                
+                if [ -n "$http_end" ]; then
+                    # 只显示 http 块内的内容
+                    sed -n "${http_start},${http_end}p" "$NGINX_CONF_DIR/nginx.conf" || true
+                else
+                    # 如果无法找到结束位置，显示前15行
+                    sed -n "${http_start},$((http_start + 15))p" "$NGINX_CONF_DIR/nginx.conf" || true
+                fi
+                
+                # 检查是否有重复的 set 指令
+                set_count=$(grep -c "set \$project_root" "$NGINX_CONF_DIR/nginx.conf" 2>/dev/null || echo "0")
+                if [ "$set_count" -gt 1 ]; then
+                    echo ""
+                    echo -e "${RED}⚠ 检测到重复的 set \$project_root 指令（共 $set_count 个）${NC}"
+                    echo "所有 set \$project_root 指令位置："
+                    grep -n "set \$project_root" "$NGINX_CONF_DIR/nginx.conf" || true
+                fi
             fi
-            grep -B 2 -A 5 "set \$project_root" "$NGINX_CONF_DIR/nginx.conf" || true
             echo ""
             echo -e "${BLUE}配置文件总行数：$(wc -l < "$NGINX_CONF_DIR/nginx.conf")${NC}"
             echo -e "${BLUE}http 块开始行：${http_start}${NC}"
+            if [ -n "$http_end" ]; then
+                echo -e "${BLUE}http 块结束行：${http_end}${NC}"
+            fi
         fi
         echo ""
         echo -e "${YELLOW}⚠ 请修复配置文件后重新部署${NC}"

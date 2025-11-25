@@ -5,6 +5,8 @@
 local _M = {}
 
 -- 获取项目根目录
+-- 注意：此函数必须在所有阶段（包括 init_worker）都能正常工作
+-- 因此完全避免在 init_worker 阶段访问任何 ngx API
 function _M.get_project_root()
     -- 优先从lua_package_path推断（适用于所有阶段，包括 init_worker）
     -- 这是最可靠的方法，不依赖任何 nginx API，可以在任何阶段使用
@@ -17,13 +19,18 @@ function _M.get_project_root()
         end
     end
     
-    -- 尝试从nginx变量获取（仅在非 init_worker 阶段）
+    -- 尝试从nginx变量获取（仅在明确可以访问时）
     -- 使用多重保护：先检测阶段，再安全访问 ngx.var
+    -- 如果阶段检测失败，完全跳过 ngx.var 访问（安全策略）
     local can_access_var = false
+    local phase_check_ok = false
     local ok, phase = pcall(function()
+        phase_check_ok = true
         return ngx.get_phase()
     end)
-    if ok and phase and phase ~= "init_worker" and phase ~= "init" then
+    
+    -- 只有在阶段检测成功且不是受限阶段时，才尝试访问 ngx.var
+    if phase_check_ok and ok and phase and phase ~= "init_worker" and phase ~= "init" then
         can_access_var = true
     end
     

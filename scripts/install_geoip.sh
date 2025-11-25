@@ -274,9 +274,11 @@ download_database() {
         # 检查文件是否有效（不是错误信息）
         if [ -f "$download_file" ]; then
             local file_size=$(stat -f%z "$download_file" 2>/dev/null || stat -c%s "$download_file" 2>/dev/null || echo "0")
-            local file_content=$(head -c 50 "$download_file" 2>/dev/null || echo "")
+            # 使用 tr 删除 null 字节，避免命令替换警告
+            # 对于二进制文件（tar.gz），可能包含 null 字节，需要先过滤
+            local file_content=$(head -c 50 "$download_file" 2>/dev/null | tr -d '\0' || echo "")
             
-            # 检查是否是错误信息
+            # 检查是否是错误信息（只检查可打印字符）
             if echo "$file_content" | grep -qi "Invalid\|Error\|Unauthorized\|Forbidden\|401\|403"; then
                 echo -e "${RED}错误: 认证失败或下载失败${NC}"
                 echo "返回内容: $file_content"

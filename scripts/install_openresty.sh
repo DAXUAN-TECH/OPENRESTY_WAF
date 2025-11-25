@@ -1871,6 +1871,40 @@ install_lua_modules() {
             echo -e "${YELLOW}  ⚠ lua-resty-maxminddb 安装失败（可选，仅影响地域封控功能）${NC}"
         fi
         
+        echo "安装 lua-resty-crypto（可选模块）..."
+        local crypto_install_success=0
+        if "$opm_path" get toruneko/lua-resty-crypto 2>&1; then
+            echo -e "${GREEN}  ✓ lua-resty-crypto 安装成功${NC}"
+            crypto_install_success=1
+        else
+            echo -e "${YELLOW}  ⚠ lua-resty-crypto 安装失败（可选模块）${NC}"
+        fi
+        
+        # 验证 lua-resty-crypto 安装
+        if [ $crypto_install_success -eq 1 ]; then
+            echo "验证 lua-resty-crypto 安装..."
+            local crypto_module_path="${INSTALL_DIR}/site/lualib/resty/crypto.lua"
+            if [ -f "$crypto_module_path" ]; then
+                echo -e "${GREEN}  ✓ lua-resty-crypto 模块文件存在: ${crypto_module_path}${NC}"
+                # 检查模块是否可以正常加载（使用 LuaJIT 测试）
+                if [ -f "${INSTALL_DIR}/luajit/bin/luajit" ]; then
+                    local test_lua_code="local ok, crypto = pcall(require, 'resty.crypto'); if ok and crypto then print('OK') else print('FAIL') end"
+                    local test_result=$("${INSTALL_DIR}/luajit/bin/luajit" -e "$test_lua_code" 2>&1)
+                    if echo "$test_result" | grep -q "OK"; then
+                        echo -e "${GREEN}  ✓ lua-resty-crypto 模块可以正常加载${NC}"
+                    else
+                        echo -e "${YELLOW}  ⚠ lua-resty-crypto 模块文件存在但无法加载${NC}"
+                    fi
+                else
+                    echo -e "${BLUE}  ℹ 跳过模块加载测试（LuaJIT 未找到）${NC}"
+                fi
+            else
+                echo -e "${YELLOW}  ⚠ lua-resty-crypto 模块文件不存在: ${crypto_module_path}${NC}"
+                echo -e "${BLUE}  提示: 模块可能安装在其他位置，请检查:${NC}"
+                echo "    find ${INSTALL_DIR} -name 'crypto.lua' -o -name 'resty.crypto.lua' 2>/dev/null"
+            fi
+        fi
+        
         if [ $critical_modules_failed -eq 1 ]; then
             echo ""
             echo -e "${YELLOW}⚠ 关键模块 lua-resty-mysql 安装失败${NC}"

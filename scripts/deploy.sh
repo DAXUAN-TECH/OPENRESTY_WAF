@@ -74,6 +74,20 @@ if [ ! -d "${PROJECT_ROOT}/conf.d/upstream" ]; then
 else
     echo -e "${BLUE}✓ 已存在: conf.d/upstream/${NC}"
 fi
+
+if [ ! -d "${PROJECT_ROOT}/conf.d/upstream/HTTP_HTTPS" ]; then
+    mkdir -p "${PROJECT_ROOT}/conf.d/upstream/HTTP_HTTPS"
+    echo -e "${GREEN}✓ 已创建: conf.d/upstream/HTTP_HTTPS/${NC}"
+else
+    echo -e "${BLUE}✓ 已存在: conf.d/upstream/HTTP_HTTPS/${NC}"
+fi
+
+if [ ! -d "${PROJECT_ROOT}/conf.d/upstream/TCP_UDP" ]; then
+    mkdir -p "${PROJECT_ROOT}/conf.d/upstream/TCP_UDP"
+    echo -e "${GREEN}✓ 已创建: conf.d/upstream/TCP_UDP/${NC}"
+else
+    echo -e "${BLUE}✓ 已存在: conf.d/upstream/TCP_UDP/${NC}"
+fi
 echo -e "${GREEN}✓ 目录检查完成${NC}"
 
 # 复制 nginx.conf（只复制主配置文件）
@@ -405,6 +419,8 @@ REQUIRED_PATHS=(
     "${PROJECT_ROOT}/conf.d/set_conf"
     "${PROJECT_ROOT}/conf.d/vhost_conf"
     "${PROJECT_ROOT}/conf.d/upstream"
+    "${PROJECT_ROOT}/conf.d/upstream/HTTP_HTTPS"
+    "${PROJECT_ROOT}/conf.d/upstream/TCP_UDP"
     "${PROJECT_ROOT}/lua/waf"
 )
 
@@ -527,6 +543,8 @@ echo "  - 配置文件: ${PROJECT_ROOT}/conf.d/"
 echo "    - set_conf/: 参数配置文件"
 echo "    - vhost_conf/: 虚拟主机配置"
 echo "    - upstream/: 自动生成的upstream配置"
+echo "      - HTTP_HTTPS/: HTTP/HTTPS代理的upstream配置"
+echo "      - TCP_UDP/: TCP/UDP代理的upstream配置"
 echo "    - cert/: SSL 证书目录"
 echo "  - Lua 脚本: ${PROJECT_ROOT}/lua/"
 echo "  - GeoIP 数据库: ${PROJECT_ROOT}/lua/geoip/"

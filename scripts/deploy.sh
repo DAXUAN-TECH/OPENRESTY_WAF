@@ -171,12 +171,21 @@ for file in "${REPLACE_FILES[@]}"; do
     fi
 done
 
-# 替换 conf.d/vhost_conf 目录下可能使用 $project_root 的配置文件（如果有）
+# 替换 conf.d/vhost_conf 目录下可能使用 $project_root 的配置文件（包括子目录）
 if [ -d "$PROJECT_ROOT_ABS/conf.d/vhost_conf" ]; then
     find "$PROJECT_ROOT_ABS/conf.d/vhost_conf" -name "*.conf" -type f | while read -r file; do
         if grep -q "\$project_root" "$file"; then
+            # 获取相对路径用于显示
+            relative_path="${file#$PROJECT_ROOT_ABS/conf.d/vhost_conf/}"
+            if [ "$relative_path" = "$(basename $file)" ]; then
+                # 文件在 vhost_conf 根目录
+                display_path="vhost_conf/$(basename $file)"
+            else
+                # 文件在子目录中
+                display_path="vhost_conf/$relative_path"
+            fi
             sed -i "s|\$project_root|$PROJECT_ROOT_ABS|g" "$file"
-            echo -e "${GREEN}  ✓ 已替换: vhost_conf/$(basename $file)${NC}"
+            echo -e "${GREEN}  ✓ 已替换: $display_path${NC}"
         fi
     done
 fi

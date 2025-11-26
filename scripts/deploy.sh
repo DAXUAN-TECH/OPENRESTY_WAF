@@ -526,9 +526,26 @@ echo -e "${GREEN}设置文件权限...${NC}"
 chown -R nobody:nobody "${PROJECT_ROOT}/logs" 2>/dev/null || true
 chmod 755 "${PROJECT_ROOT}/logs"
 chmod 644 "$NGINX_CONF_DIR/nginx.conf"
+
 # conf.d 保持在项目目录，设置项目目录权限
+# 重要：确保 nginx worker 进程（nobody 用户）可以写入配置文件
+chown -R nobody:nobody "${PROJECT_ROOT}/conf.d" 2>/dev/null || true
 chmod -R 755 "${PROJECT_ROOT}/conf.d" 2>/dev/null || true
 find "${PROJECT_ROOT}/conf.d" -type f -name "*.conf" -exec chmod 644 {} \; 2>/dev/null || true
+
+# 特别确保 vhost_conf 和 upstream 目录有写入权限
+chown -R nobody:nobody "${PROJECT_ROOT}/conf.d/vhost_conf" 2>/dev/null || true
+chmod 755 "${PROJECT_ROOT}/conf.d/vhost_conf" 2>/dev/null || true
+chown -R nobody:nobody "${PROJECT_ROOT}/conf.d/upstream" 2>/dev/null || true
+chmod -R 755 "${PROJECT_ROOT}/conf.d/upstream" 2>/dev/null || true
+chown -R nobody:nobody "${PROJECT_ROOT}/conf.d/upstream/HTTP_HTTPS" 2>/dev/null || true
+chmod 755 "${PROJECT_ROOT}/conf.d/upstream/HTTP_HTTPS" 2>/dev/null || true
+chown -R nobody:nobody "${PROJECT_ROOT}/conf.d/upstream/TCP_UDP" 2>/dev/null || true
+chmod 755 "${PROJECT_ROOT}/conf.d/upstream/TCP_UDP" 2>/dev/null || true
+
+echo -e "${GREEN}✓ 权限设置完成${NC}"
+echo -e "${YELLOW}  注意: conf.d 目录及其子目录的所有者已设置为 nobody:nobody，权限为 755${NC}"
+echo -e "${YELLOW}  这确保 nginx worker 进程可以创建和修改配置文件${NC}"
 
 echo ""
 echo -e "${GREEN}========================================${NC}"

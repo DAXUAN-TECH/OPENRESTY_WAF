@@ -476,6 +476,16 @@ function _M.generate_all_configs()
                         return false, "无法创建upstream目录: " .. upstream_dir
                     end
                     
+                    -- 检查目录是否存在且有写入权限
+                    local test_file = io.open(upstream_dir .. "/.test_write", "w")
+                    if test_file then
+                        test_file:close()
+                        os.remove(upstream_dir .. "/.test_write")
+                    else
+                        ngx.log(ngx.ERR, "upstream目录无写入权限: ", upstream_dir, ", 请检查目录权限（应为 755 且所有者应为 nobody）")
+                        return false, "upstream目录无写入权限: " .. upstream_dir
+                    end
+                    
                     local upstream_fd = io.open(upstream_file, "w")
                     if upstream_fd then
                         local upstream_file_content = "# ============================================\n"
@@ -488,8 +498,18 @@ function _M.generate_all_configs()
                         upstream_fd:close()
                         ngx.log(ngx.INFO, "生成upstream配置文件: ", upstream_file)
                     else
-                        ngx.log(ngx.ERR, "无法创建upstream配置文件: ", upstream_file, ", 项目根目录: ", project_root)
-                        return false, "无法创建upstream配置文件: " .. upstream_file
+                        -- 尝试获取更详细的错误信息
+                        local err_msg = "无法创建upstream配置文件: " .. upstream_file
+                        -- 检查文件是否已存在但无法写入
+                        local test_read = io.open(upstream_file, "r")
+                        if test_read then
+                            test_read:close()
+                            err_msg = err_msg .. " (文件已存在但无写入权限，请检查文件权限)"
+                        else
+                            err_msg = err_msg .. " (可能原因：目录不存在、权限不足、磁盘空间不足或inode不足)"
+                        end
+                        ngx.log(ngx.ERR, err_msg, ", 项目根目录: ", project_root, ", upstream目录: ", upstream_dir)
+                        return false, err_msg
                     end
                 end
             end
@@ -509,10 +529,30 @@ function _M.generate_all_configs()
                 return false, "无法创建vhost_conf目录: " .. vhost_dir
             end
             
+            -- 检查目录是否有写入权限
+            local test_file = io.open(vhost_dir .. "/.test_write", "w")
+            if test_file then
+                test_file:close()
+                os.remove(vhost_dir .. "/.test_write")
+            else
+                ngx.log(ngx.ERR, "vhost_conf目录无写入权限: ", vhost_dir, ", 请检查目录权限（应为 755 且所有者应为 nobody）")
+                return false, "vhost_conf目录无写入权限: " .. vhost_dir
+            end
+            
             local fd = io.open(config_file, "w")
             if not fd then
-                ngx.log(ngx.ERR, "无法创建HTTP代理配置文件: ", config_file, ", 项目根目录: ", project_root)
-                return false, "无法创建HTTP代理配置文件: " .. config_file
+                -- 尝试获取更详细的错误信息
+                local err_msg = "无法创建HTTP代理配置文件: " .. config_file
+                -- 检查文件是否已存在但无法写入
+                local test_read = io.open(config_file, "r")
+                if test_read then
+                    test_read:close()
+                    err_msg = err_msg .. " (文件已存在但无写入权限，请检查文件权限)"
+                else
+                    err_msg = err_msg .. " (可能原因：目录不存在、权限不足、磁盘空间不足或inode不足)"
+                end
+                ngx.log(ngx.ERR, err_msg, ", 项目根目录: ", project_root, ", vhost_conf目录: ", vhost_dir)
+                return false, err_msg
             else
                 fd:write(config_content)
                 fd:close()
@@ -531,10 +571,30 @@ function _M.generate_all_configs()
                 return false, "无法创建vhost_conf目录: " .. vhost_dir
             end
             
+            -- 检查目录是否有写入权限
+            local test_file = io.open(vhost_dir .. "/.test_write", "w")
+            if test_file then
+                test_file:close()
+                os.remove(vhost_dir .. "/.test_write")
+            else
+                ngx.log(ngx.ERR, "vhost_conf目录无写入权限: ", vhost_dir, ", 请检查目录权限（应为 755 且所有者应为 nobody）")
+                return false, "vhost_conf目录无写入权限: " .. vhost_dir
+            end
+            
             local fd = io.open(config_file, "w")
             if not fd then
-                ngx.log(ngx.ERR, "无法创建Stream代理配置文件: ", config_file, ", 项目根目录: ", project_root)
-                return false, "无法创建Stream代理配置文件: " .. config_file
+                -- 尝试获取更详细的错误信息
+                local err_msg = "无法创建Stream代理配置文件: " .. config_file
+                -- 检查文件是否已存在但无法写入
+                local test_read = io.open(config_file, "r")
+                if test_read then
+                    test_read:close()
+                    err_msg = err_msg .. " (文件已存在但无写入权限，请检查文件权限)"
+                else
+                    err_msg = err_msg .. " (可能原因：目录不存在、权限不足、磁盘空间不足或inode不足)"
+                end
+                ngx.log(ngx.ERR, err_msg, ", 项目根目录: ", project_root, ", vhost_conf目录: ", vhost_dir)
+                return false, err_msg
             else
                 fd:write(config_content)
                 fd:close()

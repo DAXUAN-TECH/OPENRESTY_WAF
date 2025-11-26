@@ -138,7 +138,7 @@ local function do_reload_nginx()
     local test_cmd = openresty_binary .. " -t -e /dev/null 2>&1"
     local test_result = io.popen(test_cmd)
     if not test_result then
-        local error_msg = "无法执行nginx配置测试命令: " .. test_cmd .. " (可能在timer上下文中受限)"
+        local error_msg = "无法执行OpenResty配置测试命令: " .. test_cmd .. " (可能在timer上下文中受限)"
         ngx.log(ngx.ERR, error_msg)
         return false, error_msg
     end
@@ -236,12 +236,12 @@ local function do_reload_nginx()
     return true, reload_output
 end
 
--- 触发nginx配置重新加载（API接口）
+-- 触发OpenResty配置重新加载（API接口）
 function _M.reload_nginx()
     local ok, result = do_reload_nginx()
     if not ok then
         -- 记录审计日志（失败）
-        audit_log.log_system_action("reload_nginx", "重新加载nginx配置", false, result)
+        audit_log.log_system_action("reload_nginx", "重新加载OpenResty配置", false, result)
         api_utils.json_response({
             success = false,
             error = result
@@ -250,16 +250,16 @@ function _M.reload_nginx()
     end
     
     -- 记录审计日志（成功）
-    audit_log.log_system_action("reload_nginx", "重新加载nginx配置", true, nil)
+    audit_log.log_system_action("reload_nginx", "重新加载OpenResty配置", true, nil)
     
     api_utils.json_response({
         success = true,
-        message = "nginx配置重新加载成功",
+        message = "OpenResty配置重新加载成功",
         output = result
     })
 end
 
--- 触发nginx配置重新加载（内部调用，返回结果）
+-- 触发OpenResty配置重新加载（内部调用，返回结果）
 function _M.reload_nginx_internal()
     return do_reload_nginx()
 end

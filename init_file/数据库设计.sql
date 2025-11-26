@@ -56,7 +56,7 @@ ROW_FORMAT=DYNAMIC COMMENT='访问日志表：记录所有访问日志，包含�
 -- ============================================
 CREATE TABLE IF NOT EXISTS waf_block_rules (
     id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '主键ID，自增',
-    rule_type VARCHAR(20) NOT NULL COMMENT '规则类型：single_ip-单个IP, ip_range-IP段, geo-地域',
+    rule_type VARCHAR(20) NOT NULL COMMENT '规则类型：ip_whitelist-IP白名单, ip_blacklist-IP黑名单, geo_whitelist-地域白名单, geo_blacklist-地域黑名单',
     rule_value VARCHAR(255) NOT NULL COMMENT '规则值',
     rule_name VARCHAR(100) NOT NULL COMMENT '规则名称，用于标识规则用途',
     description TEXT DEFAULT NULL COMMENT '规则描述，详细说明规则的用途和来源',
@@ -568,10 +568,12 @@ CREATE TABLE IF NOT EXISTS waf_proxy_configs (
     ssl_cert_path VARCHAR(512) DEFAULT NULL COMMENT 'SSL证书路径（启用SSL时使用）',
     ssl_key_path VARCHAR(512) DEFAULT NULL COMMENT 'SSL密钥路径（启用SSL时使用）',
     description TEXT DEFAULT NULL COMMENT '配置说明（描述代理配置的用途和来源）',
+    ip_rule_id BIGINT UNSIGNED DEFAULT NULL COMMENT '防护规则ID（关联waf_block_rules表，只能选择一个IP相关规则：IP白名单、IP黑名单、地域白名单、地域黑名单）',
     status TINYINT NOT NULL DEFAULT 1 COMMENT '状态：1-启用（代理生效），0-禁用（代理不生效）',
     priority INT NOT NULL DEFAULT 0 COMMENT '优先级（数字越大优先级越高，用于匹配顺序）',
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '配置创建时间',
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '配置最后更新时间',
+    FOREIGN KEY (ip_rule_id) REFERENCES waf_block_rules(id) ON DELETE SET NULL COMMENT '外键约束：关联防护规则表',
     PRIMARY KEY (id),
     UNIQUE KEY uk_proxy_name (proxy_name) COMMENT '代理名称唯一索引，确保每个代理配置名称只出现一次',
     KEY idx_status_priority (status, priority) COMMENT '状态和优先级联合索引，用于排序查询',

@@ -158,23 +158,50 @@ local function check_single_ip(client_ip)
         return fallback.get_block_rule_from_cache(client_ip, "single_ip")
     end
 
-    local sql = [[
-        SELECT id, rule_name FROM waf_block_rules 
+    -- 先检查白名单（优先级高）
+    local whitelist_sql = [[
+        SELECT id, rule_name, rule_type FROM waf_block_rules 
         WHERE status = 1 
-        AND rule_type = 'single_ip' 
-        AND rule_value = ?
+        AND rule_type = 'ip_whitelist'
+        AND (rule_value = ? OR rule_value LIKE ? OR rule_value LIKE ? OR rule_value LIKE ?)
         AND (start_time IS NULL OR start_time <= NOW())
         AND (end_time IS NULL OR end_time >= NOW())
         ORDER BY priority DESC
         LIMIT 1
     ]]
+    -- 匹配单个IP、CIDR格式、IP范围格式（支持多选，用逗号分隔）
+    local ip_pattern = client_ip .. ",%"
+    local ip_pattern2 = "%," .. client_ip .. ",%"
+    local ip_pattern3 = "%," .. client_ip
 
-    local res, err = mysql_pool.query(sql, client_ip)
+    local whitelist_res, err = mysql_pool.query(whitelist_sql, client_ip, ip_pattern, ip_pattern2, ip_pattern3)
+    if err then
+        ngx.log(ngx.ERR, "ip whitelist query error: ", err)
+    end
+    
+    -- 如果在白名单中，直接允许通过
+    if whitelist_res and #whitelist_res > 0 then
+        return false, nil  -- 不在黑名单中，允许通过
+    end
+    
+    -- 检查黑名单
+    local blacklist_sql = [[
+        SELECT id, rule_name, rule_type FROM waf_block_rules 
+        WHERE status = 1 
+        AND rule_type = 'ip_blacklist'
+        AND (rule_value = ? OR rule_value LIKE ? OR rule_value LIKE ? OR rule_value LIKE ?)
+        AND (start_time IS NULL OR start_time <= NOW())
+        AND (end_time IS NULL OR end_time >= NOW())
+        ORDER BY priority DESC
+        LIMIT 1
+    ]]
+    
+    local res, err = mysql_pool.query(blacklist_sql, client_ip, ip_pattern, ip_pattern2, ip_pattern3)
     if err then
         ngx.log(ngx.ERR, "single ip query error: ", err)
         -- 降级模式：尝试从缓存获取
         if fallback.should_fallback() then
-            return fallback.get_block_rule_from_cache(client_ip, "single_ip")
+            return fallback.get_block_rule_from_cache(client_ip, "ip_blacklist")
         end
         return false, nil
     end

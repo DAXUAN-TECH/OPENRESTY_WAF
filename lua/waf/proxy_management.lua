@@ -75,6 +75,22 @@ function _M.create_proxy(proxy_data)
         return nil, "该端口已被其他启用的代理配置占用"
     end
     
+    -- 验证ip_rule_id（如果提供）
+    local ip_rule_id = proxy_data.ip_rule_id
+    if ip_rule_id then
+        -- 检查规则是否存在且为IP相关类型
+        local rule_check_sql = "SELECT id, rule_type FROM waf_block_rules WHERE id = ? AND status = 1 LIMIT 1"
+        local rule_check = mysql_pool.query(rule_check_sql, ip_rule_id)
+        if not rule_check or #rule_check == 0 then
+            return nil, "指定的防护规则不存在或已禁用"
+        end
+        local rule_type = rule_check[1].rule_type
+        if rule_type ~= "ip_whitelist" and rule_type ~= "ip_blacklist" and 
+           rule_type ~= "geo_whitelist" and rule_type ~= "geo_blacklist" then
+            return nil, "防护规则必须是IP白名单、IP黑名单、地域白名单或地域黑名单类型"
+        end
+    end
+    
     -- 构建SQL
     local sql = [[
         INSERT INTO waf_proxy_configs 
@@ -83,8 +99,8 @@ function _M.create_proxy(proxy_data)
          health_check_enable, health_check_interval, health_check_timeout,
          max_fails, fail_timeout, proxy_timeout, proxy_connect_timeout,
          proxy_send_timeout, proxy_read_timeout, ssl_enable, ssl_cert_path, ssl_key_path,
-         description, status, priority)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         description, ip_rule_id, status, priority)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ]]
     
     local listen_address = proxy_data.listen_address or "0.0.0.0"
@@ -133,6 +149,7 @@ function _M.create_proxy(proxy_data)
         ssl_cert_path,
         ssl_key_path,
         description,
+        ip_rule_id,
         status,
         priority
     )
@@ -212,7 +229,7 @@ function _M.list_proxies(params)
                health_check_enable, health_check_interval, health_check_timeout,
                max_fails, fail_timeout, proxy_timeout, proxy_connect_timeout,
                proxy_send_timeout, proxy_read_timeout, ssl_enable, ssl_cert_path, ssl_key_path,
-               description, status, priority, created_at, updated_at
+               description, ip_rule_id, status, priority, created_at, updated_at
         FROM waf_proxy_configs
         %s
         ORDER BY priority DESC, created_at DESC
@@ -261,7 +278,7 @@ function _M.get_proxy(proxy_id)
                health_check_enable, health_check_interval, health_check_timeout,
                max_fails, fail_timeout, proxy_timeout, proxy_connect_timeout,
                proxy_send_timeout, proxy_read_timeout, ssl_enable, ssl_cert_path, ssl_key_path,
-               description, status, priority, created_at, updated_at
+               description, ip_rule_id, status, priority, created_at, updated_at
         FROM waf_proxy_configs
         WHERE id = ?
         LIMIT 1
@@ -345,6 +362,24 @@ function _M.update_proxy(proxy_id, proxy_data)
         end
     end
     
+    -- 验证ip_rule_id（如果提供）
+    if proxy_data.ip_rule_id ~= nil then
+        local ip_rule_id = proxy_data.ip_rule_id
+        if ip_rule_id then
+            -- 检查规则是否存在且为IP相关类型
+            local rule_check_sql = "SELECT id, rule_type FROM waf_block_rules WHERE id = ? AND status = 1 LIMIT 1"
+            local rule_check = mysql_pool.query(rule_check_sql, ip_rule_id)
+            if not rule_check or #rule_check == 0 then
+                return nil, "指定的防护规则不存在或已禁用"
+            end
+            local rule_type = rule_check[1].rule_type
+            if rule_type ~= "ip_whitelist" and rule_type ~= "ip_blacklist" and 
+               rule_type ~= "geo_whitelist" and rule_type ~= "geo_blacklist" then
+                return nil, "防护规则必须是IP白名单、IP黑名单、地域白名单或地域黑名单类型"
+            end
+        end
+    end
+    
     -- 构建更新字段
     local update_fields = {}
     local update_params = {}
@@ -355,7 +390,7 @@ function _M.update_proxy(proxy_id, proxy_data)
         "health_check_enable", "health_check_interval", "health_check_timeout",
         "max_fails", "fail_timeout", "proxy_timeout", "proxy_connect_timeout",
         "proxy_send_timeout", "proxy_read_timeout", "ssl_enable", "ssl_cert_path", "ssl_key_path",
-        "description", "priority"
+        "description", "ip_rule_id", "priority"
     }
     
     for _, field in ipairs(fields_to_update) do

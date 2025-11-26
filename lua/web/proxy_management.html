@@ -498,6 +498,14 @@
                     <input type="number" id="create-priority" value="0" min="0">
                 </div>
                 
+                <div class="form-group">
+                    <label>防护规则</label>
+                    <select id="create-ip-rule-id">
+                        <option value="">不选择（不使用防护规则）</option>
+                    </select>
+                    <small style="color: #666;">只能选择一个IP相关规则（IP白名单、IP黑名单、地域白名单、地域黑名单）作为防护条件</small>
+                </div>
+                
                 <div class="form-actions">
                     <button type="button" class="btn btn-secondary" onclick="resetCreateForm()">重置</button>
                     <button type="submit" class="btn btn-primary">创建代理</button>
@@ -592,6 +600,13 @@
                 <div class="form-group">
                     <label>优先级</label>
                     <input type="number" id="edit-priority" min="0">
+                </div>
+                <div class="form-group">
+                    <label>防护规则</label>
+                    <select id="edit-ip-rule-id">
+                        <option value="">不选择（不使用防护规则）</option>
+                    </select>
+                    <small style="color: #666;">只能选择一个IP相关规则（IP白名单、IP黑名单、地域白名单、地域黑名单）作为防护条件</small>
                 </div>
                 <div class="form-group">
                     <label>状态</label>
@@ -892,6 +907,7 @@
         async function createProxy(event) {
             event.preventDefault();
             
+            const ipRuleId = document.getElementById('create-ip-rule-id').value;
             const proxyData = {
                 proxy_name: document.getElementById('create-proxy-name').value,
                 proxy_type: document.getElementById('create-proxy-type').value,
@@ -903,7 +919,8 @@
                 priority: parseInt(document.getElementById('create-priority').value) || 0,
                 proxy_connect_timeout: parseInt(document.getElementById('create-proxy-connect-timeout').value) || 60,
                 proxy_send_timeout: parseInt(document.getElementById('create-proxy-send-timeout').value) || 60,
-                proxy_read_timeout: parseInt(document.getElementById('create-proxy-read-timeout').value) || 60
+                proxy_read_timeout: parseInt(document.getElementById('create-proxy-read-timeout').value) || 60,
+                ip_rule_id: ipRuleId ? parseInt(ipRuleId) : null
             };
             
             if (proxyData.proxy_type === 'http') {
@@ -977,6 +994,7 @@
                     document.getElementById('edit-description').value = proxy.description || '';
                     document.getElementById('edit-priority').value = proxy.priority || 0;
                     document.getElementById('edit-status').value = proxy.status;
+                    document.getElementById('edit-ip-rule-id').value = proxy.ip_rule_id || '';
                     
                     // 显示/隐藏相关字段
                     toggleEditBackendFields();
@@ -1018,6 +1036,7 @@
             event.preventDefault();
             
             const id = document.getElementById('edit-id').value;
+            const ipRuleId = document.getElementById('edit-ip-rule-id').value;
             const proxyData = {
                 proxy_name: document.getElementById('edit-proxy-name').value,
                 listen_port: parseInt(document.getElementById('edit-listen-port').value),
@@ -1029,7 +1048,8 @@
                 status: parseInt(document.getElementById('edit-status').value),
                 proxy_connect_timeout: parseInt(document.getElementById('edit-proxy-connect-timeout').value) || 60,
                 proxy_send_timeout: parseInt(document.getElementById('edit-proxy-send-timeout').value) || 60,
-                proxy_read_timeout: parseInt(document.getElementById('edit-proxy-read-timeout').value) || 60
+                proxy_read_timeout: parseInt(document.getElementById('edit-proxy-read-timeout').value) || 60,
+                ip_rule_id: ipRuleId ? parseInt(ipRuleId) : null
             };
             
             const proxyType = document.getElementById('edit-proxy-type').value;
@@ -1187,8 +1207,62 @@
         }
         
         // 初始化
+        // 加载IP相关规则列表（用于防护规则选择）
+        async function loadIpRules() {
+            try {
+                // 获取所有IP相关的规则（ip_whitelist, ip_blacklist, geo_whitelist, geo_blacklist）
+                const response = await fetch('/api/rules?page=1&page_size=1000');
+                const data = await response.json();
+                
+                if (data.success && data.data && data.data.rules) {
+                    const rules = data.data.rules;
+                    const ipRules = rules.filter(rule => 
+                        rule.rule_type === 'ip_whitelist' || 
+                        rule.rule_type === 'ip_blacklist' || 
+                        rule.rule_type === 'geo_whitelist' || 
+                        rule.rule_type === 'geo_blacklist'
+                    );
+                    
+                    // 更新创建表单的规则选择
+                    const createSelect = document.getElementById('create-ip-rule-id');
+                    createSelect.innerHTML = '<option value="">不选择（不使用防护规则）</option>';
+                    ipRules.forEach(rule => {
+                        const option = document.createElement('option');
+                        option.value = rule.id;
+                        const typeNames = {
+                            'ip_whitelist': 'IP白名单',
+                            'ip_blacklist': 'IP黑名单',
+                            'geo_whitelist': '地域白名单',
+                            'geo_blacklist': '地域黑名单'
+                        };
+                        option.textContent = `${rule.rule_name} (${typeNames[rule.rule_type] || rule.rule_type})`;
+                        createSelect.appendChild(option);
+                    });
+                    
+                    // 更新编辑表单的规则选择
+                    const editSelect = document.getElementById('edit-ip-rule-id');
+                    editSelect.innerHTML = '<option value="">不选择（不使用防护规则）</option>';
+                    ipRules.forEach(rule => {
+                        const option = document.createElement('option');
+                        option.value = rule.id;
+                        const typeNames = {
+                            'ip_whitelist': 'IP白名单',
+                            'ip_blacklist': 'IP黑名单',
+                            'geo_whitelist': '地域白名单',
+                            'geo_blacklist': '地域黑名单'
+                        };
+                        option.textContent = `${rule.rule_name} (${typeNames[rule.rule_type] || rule.rule_type})`;
+                        editSelect.appendChild(option);
+                    });
+                }
+            } catch (error) {
+                console.error('加载规则列表失败:', error);
+            }
+        }
+        
         document.addEventListener('DOMContentLoaded', function() {
             loadProxies();
+            loadIpRules(); // 加载规则列表
             
             // 点击模态框外部关闭
             window.onclick = function(event) {

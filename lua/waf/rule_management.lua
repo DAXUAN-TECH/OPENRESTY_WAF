@@ -16,19 +16,21 @@ local function validate_rule_value(rule_type, rule_value)
         return false, "规则值不能为空"
     end
     
-    if rule_type == "single_ip" then
-        if not ip_utils.is_valid_ip(rule_value) then
-            return false, "无效的IP地址格式"
-        end
-    elseif rule_type == "ip_range" then
-        -- 检查CIDR格式或IP范围格式
-        if not ip_utils.is_valid_cidr(rule_value) then
+    -- IP白名单和IP黑名单：支持单个IP或IP段（CIDR格式或IP范围格式）
+    if rule_type == "ip_whitelist" or rule_type == "ip_blacklist" then
+        -- 先检查是否为单个IP
+        if ip_utils.is_valid_ip(rule_value) then
+            -- 单个IP，验证通过
+        elseif ip_utils.is_valid_cidr(rule_value) then
+            -- CIDR格式，验证通过
+        else
+            -- 检查是否为IP范围格式
             local start_ip, end_ip = ip_utils.parse_ip_range(rule_value)
             if not start_ip or not end_ip then
-                return false, "无效的IP段格式（应为CIDR格式如192.168.1.0/24或IP范围如192.168.1.1-192.168.1.100）"
+                return false, "无效的IP格式（应为单个IP如192.168.1.100、CIDR格式如192.168.1.0/24或IP范围如192.168.1.1-192.168.1.100）"
             end
         end
-    elseif rule_type == "geo" then
+    elseif rule_type == "geo_whitelist" or rule_type == "geo_blacklist" then
         -- 验证地域代码格式（支持多选，用逗号分隔）
         -- 格式：国家代码（如CN、US）或 国家:省份代码（如CN:Beijing）或 国家:省份代码:城市名称（如CN:Beijing:北京）
         -- 支持多个值用逗号分隔，城市名称可以是中文

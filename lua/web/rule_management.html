@@ -490,8 +490,10 @@
                 <div class="filters">
                     <select id="filter-type">
                         <option value="">全部类型</option>
-                        <option value="single_ip">按IP筛选</option>
-                        <option value="geo">地域</option>
+                        <option value="ip_whitelist">IP白名单</option>
+                        <option value="ip_blacklist">IP黑名单</option>
+                        <option value="geo_whitelist">地域白名单</option>
+                        <option value="geo_blacklist">地域黑名单</option>
                     </select>
                     <select id="filter-status">
                         <option value="">全部状态</option>
@@ -536,8 +538,10 @@
                 <div class="form-group">
                     <label>规则类型 *</label>
                     <div class="rule-type-buttons">
-                        <button type="button" class="rule-type-btn" data-type="single_ip" onclick="selectRuleType('single_ip')">按IP筛选</button>
-                        <button type="button" class="rule-type-btn" data-type="geo" onclick="selectRuleType('geo')">地域筛选</button>
+                        <button type="button" class="rule-type-btn" data-type="ip_whitelist" onclick="selectRuleType('ip_whitelist')">IP白名单</button>
+                        <button type="button" class="rule-type-btn" data-type="ip_blacklist" onclick="selectRuleType('ip_blacklist')">IP黑名单</button>
+                        <button type="button" class="rule-type-btn" data-type="geo_whitelist" onclick="selectRuleType('geo_whitelist')">地域白名单</button>
+                        <button type="button" class="rule-type-btn" data-type="geo_blacklist" onclick="selectRuleType('geo_blacklist')">地域黑名单</button>
                     </div>
                     <input type="hidden" id="create-rule-type" required>
                 </div>
@@ -1194,25 +1198,22 @@
             const ruleValueInput = document.getElementById('create-rule-value');
             const ruleValueHint = document.getElementById('rule-value-hint');
             
-            if (type === 'geo') {
+            // 判断是否为地域类型
+            if (type === 'geo_whitelist' || type === 'geo_blacklist') {
                 geoSelector.classList.add('active');
                 ruleValueInput.style.display = 'none';
                 ruleValueHint.style.display = 'none';
                 // 加载地域数据
                 loadGeoData();
             } else {
+                // IP白名单或IP黑名单
                 geoSelector.classList.remove('active');
                 ruleValueInput.style.display = 'block';
                 ruleValueHint.style.display = 'block';
                 
-                // 根据类型更新提示
-                if (type === 'single_ip') {
-                    ruleValueInput.placeholder = '例如: 192.168.1.100 或 192.168.1.0/24 或 192.168.1.1-192.168.1.100';
-                    ruleValueHint.textContent = '支持单个IP（如：192.168.1.100）或IP段（如：192.168.1.0/24 或 192.168.1.1-192.168.1.100）';
-                } else {
-                    ruleValueInput.placeholder = '请输入规则值';
-                    ruleValueHint.textContent = '';
-                }
+                // 更新提示
+                ruleValueInput.placeholder = '例如: 192.168.1.100 或 192.168.1.0/24 或 192.168.1.1-192.168.1.100';
+                ruleValueHint.textContent = '支持单个IP（如：192.168.1.100）或IP段（如：192.168.1.0/24 或 192.168.1.1-192.168.1.100）';
             }
             
             // 清空规则值
@@ -1576,8 +1577,10 @@
         
         function getRuleTypeName(type) {
             const names = {
-                'single_ip': '按IP筛选',
-                'geo': '地域'
+                'ip_whitelist': 'IP白名单',
+                'ip_blacklist': 'IP黑名单',
+                'geo_whitelist': '地域白名单',
+                'geo_blacklist': '地域黑名单'
             };
             return names[type] || type;
         }

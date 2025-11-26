@@ -197,7 +197,7 @@ function _M.check(client_ip)
             local sql = [[
                 SELECT id, rule_name, rule_value, priority FROM waf_block_rules 
                 WHERE status = 1 
-                AND rule_type = 'geo'
+                AND rule_type IN ('geo_whitelist', 'geo_blacklist')
                 AND rule_value = ?
                 AND (start_time IS NULL OR start_time <= NOW())
                 AND (end_time IS NULL OR end_time >= NOW())

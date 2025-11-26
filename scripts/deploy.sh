@@ -75,18 +75,18 @@ else
     echo -e "${BLUE}✓ 已存在: conf.d/upstream/${NC}"
 fi
 
-if [ ! -d "${PROJECT_ROOT}/conf.d/upstream/HTTP_HTTPS" ]; then
-    mkdir -p "${PROJECT_ROOT}/conf.d/upstream/HTTP_HTTPS"
-    echo -e "${GREEN}✓ 已创建: conf.d/upstream/HTTP_HTTPS/${NC}"
+if [ ! -d "${PROJECT_ROOT}/conf.d/upstream/http_https" ]; then
+    mkdir -p "${PROJECT_ROOT}/conf.d/upstream/http_https"
+    echo -e "${GREEN}✓ 已创建: conf.d/upstream/http_https/${NC}"
 else
-    echo -e "${BLUE}✓ 已存在: conf.d/upstream/HTTP_HTTPS/${NC}"
+    echo -e "${BLUE}✓ 已存在: conf.d/upstream/http_https/${NC}"
 fi
 
-if [ ! -d "${PROJECT_ROOT}/conf.d/upstream/TCP_UDP" ]; then
-    mkdir -p "${PROJECT_ROOT}/conf.d/upstream/TCP_UDP"
-    echo -e "${GREEN}✓ 已创建: conf.d/upstream/TCP_UDP/${NC}"
+if [ ! -d "${PROJECT_ROOT}/conf.d/upstream/tcp_udp" ]; then
+    mkdir -p "${PROJECT_ROOT}/conf.d/upstream/tcp_udp"
+    echo -e "${GREEN}✓ 已创建: conf.d/upstream/tcp_udp/${NC}"
 else
-    echo -e "${BLUE}✓ 已存在: conf.d/upstream/TCP_UDP/${NC}"
+    echo -e "${BLUE}✓ 已存在: conf.d/upstream/tcp_udp/${NC}"
 fi
 echo -e "${GREEN}✓ 目录检查完成${NC}"
 
@@ -419,8 +419,8 @@ REQUIRED_PATHS=(
     "${PROJECT_ROOT}/conf.d/set_conf"
     "${PROJECT_ROOT}/conf.d/vhost_conf"
     "${PROJECT_ROOT}/conf.d/upstream"
-    "${PROJECT_ROOT}/conf.d/upstream/HTTP_HTTPS"
-    "${PROJECT_ROOT}/conf.d/upstream/TCP_UDP"
+    "${PROJECT_ROOT}/conf.d/upstream/http_https"
+    "${PROJECT_ROOT}/conf.d/upstream/tcp_udp"
     "${PROJECT_ROOT}/lua/waf"
 )
 
@@ -538,10 +538,10 @@ chown -R nobody:nobody "${PROJECT_ROOT}/conf.d/vhost_conf" 2>/dev/null || true
 chmod 755 "${PROJECT_ROOT}/conf.d/vhost_conf" 2>/dev/null || true
 chown -R nobody:nobody "${PROJECT_ROOT}/conf.d/upstream" 2>/dev/null || true
 chmod -R 755 "${PROJECT_ROOT}/conf.d/upstream" 2>/dev/null || true
-chown -R nobody:nobody "${PROJECT_ROOT}/conf.d/upstream/HTTP_HTTPS" 2>/dev/null || true
-chmod 755 "${PROJECT_ROOT}/conf.d/upstream/HTTP_HTTPS" 2>/dev/null || true
-chown -R nobody:nobody "${PROJECT_ROOT}/conf.d/upstream/TCP_UDP" 2>/dev/null || true
-chmod 755 "${PROJECT_ROOT}/conf.d/upstream/TCP_UDP" 2>/dev/null || true
+chown -R nobody:nobody "${PROJECT_ROOT}/conf.d/upstream/http_https" 2>/dev/null || true
+chmod 755 "${PROJECT_ROOT}/conf.d/upstream/http_https" 2>/dev/null || true
+chown -R nobody:nobody "${PROJECT_ROOT}/conf.d/upstream/tcp_udp" 2>/dev/null || true
+chmod 755 "${PROJECT_ROOT}/conf.d/upstream/tcp_udp" 2>/dev/null || true
 
 echo -e "${GREEN}✓ 权限设置完成${NC}"
 echo -e "${YELLOW}  注意: conf.d 目录及其子目录的所有者已设置为 nobody:nobody，权限为 755${NC}"
@@ -558,10 +558,10 @@ echo ""
 echo "项目文件位置（保持在项目目录，使用相对路径）:"
 echo "  - 配置文件: ${PROJECT_ROOT}/conf.d/"
 echo "    - set_conf/: 参数配置文件"
-echo "    - vhost_conf/: 虚拟主机配置"
-echo "    - upstream/: 自动生成的upstream配置"
-echo "      - HTTP_HTTPS/: HTTP/HTTPS代理的upstream配置"
-echo "      - TCP_UDP/: TCP/UDP代理的upstream配置"
+echo "    - vhost_conf/: 虚拟主机配置（手动配置）"
+echo "    - upstream/: 自动生成的代理配置"
+echo "      - http_https/: HTTP/HTTPS代理的upstream和server配置"
+echo "      - tcp_udp/: TCP/UDP代理的upstream和server配置"
 echo "    - cert/: SSL 证书目录"
 echo "  - Lua 脚本: ${PROJECT_ROOT}/lua/"
 echo "  - GeoIP 数据库: ${PROJECT_ROOT}/lua/geoip/"

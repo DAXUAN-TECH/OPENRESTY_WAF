@@ -292,13 +292,16 @@ end
 
 -- 清理已删除代理的配置文件
 local function cleanup_orphaned_files(project_root, active_proxy_ids)
-    -- HTTP代理配置文件
-    local http_dir = project_root .. "/conf.d/vhost_conf"
-    local http_cmd = "find " .. http_dir .. " -maxdepth 1 -name 'proxy_http_*.conf' 2>/dev/null"
+    -- HTTP/HTTPS代理配置文件（包括upstream和server配置）
+    local http_dir = project_root .. "/conf.d/upstream/http_https"
+    local http_cmd = "find " .. http_dir .. " -maxdepth 1 \\( -name 'proxy_http_*.conf' -o -name 'upstream_*.conf' \\) 2>/dev/null"
     local http_files = io.popen(http_cmd)
     if http_files then
         for file in http_files:lines() do
             local proxy_id = file:match("proxy_http_(%d+)%.conf")
+            if not proxy_id then
+                proxy_id = file:match("upstream_(%d+)%.conf")
+            end
             if proxy_id then
                 proxy_id = tonumber(proxy_id)
                 if not active_proxy_ids[proxy_id] then
@@ -314,13 +317,16 @@ local function cleanup_orphaned_files(project_root, active_proxy_ids)
         http_files:close()
     end
     
-    -- Stream代理配置文件
-    local stream_dir = project_root .. "/conf.d/vhost_conf"
-    local stream_cmd = "find " .. stream_dir .. " -maxdepth 1 -name 'proxy_stream_*.conf' 2>/dev/null"
+    -- TCP/UDP代理配置文件（包括upstream和server配置）
+    local stream_dir = project_root .. "/conf.d/upstream/tcp_udp"
+    local stream_cmd = "find " .. stream_dir .. " -maxdepth 1 \\( -name 'proxy_stream_*.conf' -o -name 'stream_upstream_*.conf' \\) 2>/dev/null"
     local stream_files = io.popen(stream_cmd)
     if stream_files then
         for file in stream_files:lines() do
             local proxy_id = file:match("proxy_stream_(%d+)%.conf")
+            if not proxy_id then
+                proxy_id = file:match("stream_upstream_(%d+)%.conf")
+            end
             if proxy_id then
                 proxy_id = tonumber(proxy_id)
                 if not active_proxy_ids[proxy_id] then
@@ -334,35 +340,6 @@ local function cleanup_orphaned_files(project_root, active_proxy_ids)
             end
         end
         stream_files:close()
-    end
-    
-    -- 清理upstream配置文件（HTTP_HTTPS和TCP_UDP子目录）
-    local upstream_subdirs = {"HTTP_HTTPS", "TCP_UDP"}
-    for _, subdir in ipairs(upstream_subdirs) do
-        local upstream_dir = project_root .. "/conf.d/upstream/" .. subdir
-        local upstream_cmd = "find " .. upstream_dir .. " -maxdepth 1 -name 'upstream_*.conf' -o -name 'stream_upstream_*.conf' 2>/dev/null"
-        local upstream_files = io.popen(upstream_cmd)
-        if upstream_files then
-            for file in upstream_files:lines() do
-                -- 提取代理ID（从文件名upstream_{id}.conf或stream_upstream_{id}.conf）
-                local proxy_id = file:match("upstream_(%d+)%.conf")
-                if not proxy_id then
-                    proxy_id = file:match("stream_upstream_(%d+)%.conf")
-                end
-                if proxy_id then
-                    proxy_id = tonumber(proxy_id)
-                    if not active_proxy_ids[proxy_id] then
-                        local ok, err = os.remove(file)
-                        if ok then
-                            ngx.log(ngx.INFO, "删除已删除代理的upstream配置文件: ", file)
-                        else
-                            ngx.log(ngx.WARN, "删除upstream配置文件失败: ", file, ", 错误: ", err or "unknown")
-                        end
-                    end
-                end
-            end
-            upstream_files:close()
-        end
     end
 end
 
@@ -408,8 +385,8 @@ function _M.generate_all_configs()
         project_root .. "/conf.d/set_conf",
         project_root .. "/conf.d/vhost_conf",
         project_root .. "/conf.d/upstream",
-        project_root .. "/conf.d/upstream/HTTP_HTTPS",
-        project_root .. "/conf.d/upstream/TCP_UDP"
+        project_root .. "/conf.d/upstream/http_https",
+        project_root .. "/conf.d/upstream/tcp_udp"
     }
     
     for _, dir in ipairs(dirs) do
@@ -461,9 +438,9 @@ function _M.generate_all_configs()
                     -- 根据代理类型确定upstream配置文件目录
                     local upstream_subdir = ""
                     if proxy.proxy_type == "http" then
-                        upstream_subdir = "HTTP_HTTPS"
+                        upstream_subdir = "http_https"
                     else
-                        upstream_subdir = "TCP_UDP"
+                        upstream_subdir = "tcp_udp"
                     end
                     
                     local upstream_file = project_root .. "/conf.d/upstream/" .. upstream_subdir .. "/" .. upstream_name .. ".conf"
@@ -519,24 +496,25 @@ function _M.generate_all_configs()
         if proxy.proxy_type == "http" then
             -- 生成HTTP代理server配置文件
             local config_content = generate_http_proxy_file(proxy, upstream_name)
-            local config_file = project_root .. "/conf.d/vhost_conf/proxy_http_" .. proxy.id .. ".conf"
+            -- HTTP/HTTPS server配置放在 http_https 子目录
+            local config_file = project_root .. "/conf.d/upstream/http_https/proxy_http_" .. proxy.id .. ".conf"
             
-            -- 确保vhost_conf目录存在
-            local vhost_dir = project_root .. "/conf.d/vhost_conf"
-            local dir_ok = path_utils.ensure_dir(vhost_dir)
+            -- 确保http_https目录存在
+            local http_dir = project_root .. "/conf.d/upstream/http_https"
+            local dir_ok = path_utils.ensure_dir(http_dir)
             if not dir_ok then
-                ngx.log(ngx.ERR, "无法创建vhost_conf目录: ", vhost_dir)
-                return false, "无法创建vhost_conf目录: " .. vhost_dir
+                ngx.log(ngx.ERR, "无法创建http_https目录: ", http_dir)
+                return false, "无法创建http_https目录: " .. http_dir
             end
             
             -- 检查目录是否有写入权限
-            local test_file = io.open(vhost_dir .. "/.test_write", "w")
+            local test_file = io.open(http_dir .. "/.test_write", "w")
             if test_file then
                 test_file:close()
-                os.remove(vhost_dir .. "/.test_write")
+                os.remove(http_dir .. "/.test_write")
             else
-                ngx.log(ngx.ERR, "vhost_conf目录无写入权限: ", vhost_dir, ", 请检查目录权限（应为 755 且所有者应为 nobody）")
-                return false, "vhost_conf目录无写入权限: " .. vhost_dir
+                ngx.log(ngx.ERR, "http_https目录无写入权限: ", http_dir, ", 请检查目录权限（应为 755 且所有者应为 nobody）")
+                return false, "http_https目录无写入权限: " .. http_dir
             end
             
             local fd = io.open(config_file, "w")
@@ -551,7 +529,7 @@ function _M.generate_all_configs()
                 else
                     err_msg = err_msg .. " (可能原因：目录不存在、权限不足、磁盘空间不足或inode不足)"
                 end
-                ngx.log(ngx.ERR, err_msg, ", 项目根目录: ", project_root, ", vhost_conf目录: ", vhost_dir)
+                ngx.log(ngx.ERR, err_msg, ", 项目根目录: ", project_root, ", http_https目录: ", http_dir)
                 return false, err_msg
             else
                 fd:write(config_content)
@@ -561,24 +539,25 @@ function _M.generate_all_configs()
         else
             -- 生成Stream代理server配置文件
             local config_content = generate_stream_proxy_file(proxy, upstream_name)
-            local config_file = project_root .. "/conf.d/vhost_conf/proxy_stream_" .. proxy.id .. ".conf"
+            -- TCP/UDP server配置放在 tcp_udp 子目录
+            local config_file = project_root .. "/conf.d/upstream/tcp_udp/proxy_stream_" .. proxy.id .. ".conf"
             
-            -- 确保vhost_conf目录存在
-            local vhost_dir = project_root .. "/conf.d/vhost_conf"
-            local dir_ok = path_utils.ensure_dir(vhost_dir)
+            -- 确保tcp_udp目录存在
+            local tcp_dir = project_root .. "/conf.d/upstream/tcp_udp"
+            local dir_ok = path_utils.ensure_dir(tcp_dir)
             if not dir_ok then
-                ngx.log(ngx.ERR, "无法创建vhost_conf目录: ", vhost_dir)
-                return false, "无法创建vhost_conf目录: " .. vhost_dir
+                ngx.log(ngx.ERR, "无法创建tcp_udp目录: ", tcp_dir)
+                return false, "无法创建tcp_udp目录: " .. tcp_dir
             end
             
             -- 检查目录是否有写入权限
-            local test_file = io.open(vhost_dir .. "/.test_write", "w")
+            local test_file = io.open(tcp_dir .. "/.test_write", "w")
             if test_file then
                 test_file:close()
-                os.remove(vhost_dir .. "/.test_write")
+                os.remove(tcp_dir .. "/.test_write")
             else
-                ngx.log(ngx.ERR, "vhost_conf目录无写入权限: ", vhost_dir, ", 请检查目录权限（应为 755 且所有者应为 nobody）")
-                return false, "vhost_conf目录无写入权限: " .. vhost_dir
+                ngx.log(ngx.ERR, "tcp_udp目录无写入权限: ", tcp_dir, ", 请检查目录权限（应为 755 且所有者应为 nobody）")
+                return false, "tcp_udp目录无写入权限: " .. tcp_dir
             end
             
             local fd = io.open(config_file, "w")
@@ -593,7 +572,7 @@ function _M.generate_all_configs()
                 else
                     err_msg = err_msg .. " (可能原因：目录不存在、权限不足、磁盘空间不足或inode不足)"
                 end
-                ngx.log(ngx.ERR, err_msg, ", 项目根目录: ", project_root, ", vhost_conf目录: ", vhost_dir)
+                ngx.log(ngx.ERR, err_msg, ", 项目根目录: ", project_root, ", tcp_udp目录: ", tcp_dir)
                 return false, err_msg
             else
                 fd:write(config_content)
@@ -640,23 +619,36 @@ function _M.cleanup_configs()
         end
     end
     
-    -- 清理所有upstream配置文件（HTTP_HTTPS和TCP_UDP子目录）
-    local upstream_subdirs = {"HTTP_HTTPS", "TCP_UDP"}
-    for _, subdir in ipairs(upstream_subdirs) do
-        local upstream_dir = project_root .. "/conf.d/upstream/" .. subdir
-        local upstream_cmd = "find " .. upstream_dir .. " -maxdepth 1 -name 'upstream_*.conf' -o -name 'stream_upstream_*.conf' 2>/dev/null"
-        local upstream_files = io.popen(upstream_cmd)
-        if upstream_files then
-            for file in upstream_files:lines() do
-                local ok, err = os.remove(file)
-                if ok then
-                    ngx.log(ngx.INFO, "删除upstream配置文件: ", file)
-                else
-                    ngx.log(ngx.WARN, "删除upstream配置文件失败: ", file, ", 错误: ", err or "unknown")
-                end
+    -- 清理所有HTTP/HTTPS代理配置文件（包括upstream和server配置）
+    local http_dir = project_root .. "/conf.d/upstream/http_https"
+    local http_cmd = "find " .. http_dir .. " -maxdepth 1 \\( -name 'proxy_http_*.conf' -o -name 'upstream_*.conf' \\) 2>/dev/null"
+    local http_files = io.popen(http_cmd)
+    if http_files then
+        for file in http_files:lines() do
+            local ok, err = os.remove(file)
+            if ok then
+                ngx.log(ngx.INFO, "删除HTTP代理配置文件: ", file)
+            else
+                ngx.log(ngx.WARN, "删除HTTP代理配置文件失败: ", file, ", 错误: ", err or "unknown")
             end
-            upstream_files:close()
         end
+        http_files:close()
+    end
+    
+    -- 清理所有TCP/UDP代理配置文件（包括upstream和server配置）
+    local stream_dir = project_root .. "/conf.d/upstream/tcp_udp"
+    local stream_cmd = "find " .. stream_dir .. " -maxdepth 1 \\( -name 'proxy_stream_*.conf' -o -name 'stream_upstream_*.conf' \\) 2>/dev/null"
+    local stream_files = io.popen(stream_cmd)
+    if stream_files then
+        for file in stream_files:lines() do
+            local ok, err = os.remove(file)
+            if ok then
+                ngx.log(ngx.INFO, "删除Stream代理配置文件: ", file)
+            else
+                ngx.log(ngx.WARN, "删除Stream代理配置文件失败: ", file, ", 错误: ", err or "unknown")
+            end
+        end
+        stream_files:close()
     end
     
     return true, "清理完成"

@@ -315,16 +315,16 @@ function _M.route()
         return serve_html_with_layout("dashboard.html", "Dashboard", session)
     end
     
-    -- 反向代理管理界面
+    -- 代理设置界面
     if path == "/admin/proxy" then
         -- 检查功能开关
         if not feature_switches.is_enabled("proxy_management") then
             ngx.status = 403
             ngx.header.content_type = "text/html; charset=utf-8"
-            ngx.say("<html><body><h1>403 Forbidden</h1><p>反向代理管理功能已禁用</p></body></html>")
+            ngx.say("<html><body><h1>403 Forbidden</h1><p>代理设置功能已禁用</p></body></html>")
             return
         end
-        return serve_html_with_layout("proxy_management.html", "反向代理", session)
+        return serve_html_with_layout("proxy_management.html", "代理设置", session)
     end
     
     -- 用户设置页面

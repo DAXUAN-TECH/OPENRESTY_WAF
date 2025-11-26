@@ -24,10 +24,15 @@ end
 
 -- 构建参数化 SQL（简单实现）
 local function build_sql(sql, ...)
-    local args = {...}
+    -- 使用select("#", ...)获取参数数量，正确处理nil值
+    local arg_count = select("#", ...)
+    local args = {}
+    -- 将所有参数（包括nil）收集到数组中
+    for i = 1, arg_count do
+        args[i] = select(i, ...)
+    end
     local result = sql
     local index = 1
-    local arg_count = #args
     
     -- 替换 ? 占位符
     result = string.gsub(result, "%?", function()

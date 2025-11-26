@@ -998,6 +998,25 @@
         async function createRule(event) {
             event.preventDefault();
             
+            // 验证规则类型
+            const ruleType = document.getElementById('create-rule-type').value;
+            if (!ruleType) {
+                showAlert('请选择规则类型', 'error');
+                // 高亮规则类型按钮组
+                const ruleTypeButtons = document.querySelectorAll('.rule-type-btn');
+                ruleTypeButtons.forEach(btn => {
+                    btn.style.borderColor = '#e74c3c';
+                    btn.style.borderWidth = '3px';
+                });
+                setTimeout(() => {
+                    ruleTypeButtons.forEach(btn => {
+                        btn.style.borderColor = '';
+                        btn.style.borderWidth = '';
+                    });
+                }, 2000);
+                return;
+            }
+            
             // 验证日期字段
             const startTime = document.getElementById('create-start-time').value;
             const endTime = document.getElementById('create-end-time').value;
@@ -1022,7 +1041,7 @@
             }
             
             const ruleData = {
-                rule_type: document.getElementById('create-rule-type').value,
+                rule_type: ruleType,
                 rule_value: document.getElementById('create-rule-value').value,
                 rule_name: document.getElementById('create-rule-name').value,
                 description: document.getElementById('create-description').value,

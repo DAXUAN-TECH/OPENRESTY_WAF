@@ -222,12 +222,24 @@
             background: rgba(0,0,0,0.5);
             z-index: 10001;
             overflow: auto;
-            align-items: center;
-            justify-content: center;
         }
         
         #create-success-modal.show {
             display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+        }
+        
+        /* 提示框内容样式 */
+        #create-success-modal > div {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            min-width: 400px;
+            max-width: 90%;
+            text-align: center;
+            margin: 20px;
         }
         
         .close {
@@ -665,7 +677,7 @@
     
     <!-- 创建成功提示框 -->
     <div id="create-success-modal" class="">
-        <div style="background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.3); min-width: 400px; max-width: 90%; text-align: center; margin: 20px;">
+        <div>
             <div style="margin-bottom: 20px;">
                 <div style="font-size: 48px; color: #4CAF50; margin-bottom: 15px;">✓</div>
                 <div style="font-size: 18px; font-weight: bold; color: #333; margin-bottom: 10px;">创建规则成功</div>

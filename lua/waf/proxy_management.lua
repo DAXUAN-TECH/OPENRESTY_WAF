@@ -382,9 +382,17 @@ function _M.update_proxy(proxy_id, proxy_data)
         end
     end
     
+    -- 处理 cjson.null，转换为 nil
+    local function null_to_nil(value)
+        if value == nil or value == cjson.null then
+            return nil
+        end
+        return value
+    end
+    
     -- 验证ip_rule_id（如果提供）
     if proxy_data.ip_rule_id ~= nil then
-        local ip_rule_id = proxy_data.ip_rule_id
+        local ip_rule_id = null_to_nil(proxy_data.ip_rule_id)
         if ip_rule_id then
             -- 检查规则是否存在且为IP相关类型
             local rule_check_sql = "SELECT id, rule_type FROM waf_block_rules WHERE id = ? AND status = 1 LIMIT 1"
@@ -414,9 +422,18 @@ function _M.update_proxy(proxy_id, proxy_data)
     }
     
     for _, field in ipairs(fields_to_update) do
-        if proxy_data[field] ~= nil then
+        if proxy_data[field] ~= nil and proxy_data[field] ~= cjson.null then
             table.insert(update_fields, field .. " = ?")
-            table.insert(update_params, proxy_data[field])
+            -- 对于可能为null的字段，使用null_to_nil处理
+            if field == "server_name" or field == "backend_port" or field == "ssl_cert_path" or 
+               field == "ssl_key_path" or field == "description" or field == "ip_rule_id" then
+                table.insert(update_params, null_to_nil(proxy_data[field]))
+            else
+                table.insert(update_params, proxy_data[field])
+            end
+        elseif proxy_data[field] == cjson.null then
+            -- 如果明确设置为null，也更新字段
+            table.insert(update_fields, field .. " = NULL")
         end
     end
     

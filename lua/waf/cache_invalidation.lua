@@ -27,16 +27,10 @@ function _M.increment_rule_version()
     -- 清除版本号缓存
     cache:delete("rule_version:current")
     
-    -- 发送规则更新通知（延迟加载，避免循环依赖）
-    local ok, rule_notification = pcall(require, "waf.rule_notification")
-    if ok and rule_notification then
-        rule_notification.notify_rule_update("rule_version_incremented", {
-            timestamp = ngx.time()
-        })
-    else
-        -- 如果 rule_notification 加载失败（可能是循环依赖），只记录日志
-        ngx.log(ngx.WARN, "rule_notification not available, skipping notification")
-    end
+    -- 注意：不在这里调用 rule_notification.notify_rule_update()
+    -- 因为 rule_notification.notify_rule_update() 会调用 increment_rule_version()
+    -- 这会导致循环调用和栈溢出
+    -- 规则更新通知应该在调用 increment_rule_version() 之后由调用者处理
     
     ngx.log(ngx.INFO, "rule version incremented")
     return true, nil

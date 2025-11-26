@@ -57,13 +57,13 @@ function _M.notify_rule_update(update_type, details)
     end
     
     -- 回退到版本号机制（已实现）
-    local ok, err = cache_invalidation.increment_rule_version()
-    if ok then
-        ngx.log(ngx.INFO, "rule update notification via version increment")
-        return true, nil
-    else
-        return false, err
-    end
+    -- 注意：这里不能调用 cache_invalidation.increment_rule_version()
+    -- 因为 increment_rule_version() 会调用 notify_rule_update()，导致循环调用
+    -- 版本号应该在规则变更时由调用者直接调用 increment_rule_version()
+    -- 这里只清除缓存，不更新版本号
+    cache_invalidation.invalidate_rule_list_cache()
+    ngx.log(ngx.INFO, "rule update notification via cache invalidation")
+    return true, nil
 end
 
 -- 订阅规则更新通知（在工作进程中）

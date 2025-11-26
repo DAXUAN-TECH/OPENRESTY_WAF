@@ -90,7 +90,17 @@ function _M.generate_token(user_id)
     cache:set(cache_key, cjson.encode(token_data), CSRF_CACHE_TTL)
     
     -- 保存到数据库（持久化）
+    -- 先验证user_id是否存在，防止外键约束失败
     pcall(function()
+        -- 验证user_id是否存在
+        local check_sql = "SELECT id FROM waf_users WHERE id = ? LIMIT 1"
+        local check_res, check_err = mysql_pool.query(check_sql, user_id)
+        if not check_res or #check_res == 0 then
+            -- user_id不存在，记录警告但不保存到数据库
+            ngx.log(ngx.WARN, "csrf.generate_token: user_id ", user_id, " not found in waf_users, skipping database save")
+            return
+        end
+        
         local sql = [[
             INSERT INTO waf_csrf_tokens (user_id, token, expires_at)
             VALUES (?, ?, FROM_UNIXTIME(?))

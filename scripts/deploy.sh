@@ -45,8 +45,72 @@ if [ "$EUID" -ne 0 ]; then
     exit 1
 fi
 
+# 创建 waf 用户（如果不存在）
+WAF_USER="waf"
+WAF_GROUP="waf"
+echo -e "${GREEN}[0/5] 检查并创建 waf 用户...${NC}"
+
+# 检查 waf 组是否存在
+if ! getent group "$WAF_GROUP" > /dev/null 2>&1; then
+    echo -e "${YELLOW}  创建 waf 组...${NC}"
+    groupadd -r "$WAF_GROUP" 2>/dev/null || {
+        echo -e "${RED}✗ 无法创建 waf 组${NC}"
+        exit 1
+    }
+    echo -e "${GREEN}  ✓ 已创建 waf 组${NC}"
+else
+    echo -e "${BLUE}  ✓ waf 组已存在${NC}"
+fi
+
+# 检查 waf 用户是否存在
+if ! id "$WAF_USER" > /dev/null 2>&1; then
+    echo -e "${YELLOW}  创建 waf 用户...${NC}"
+    # 查找 nologin shell（不同系统可能在不同位置）
+    NOLOGIN_SHELL="/sbin/nologin"
+    if [ ! -f "$NOLOGIN_SHELL" ]; then
+        NOLOGIN_SHELL="/usr/sbin/nologin"
+    fi
+    if [ ! -f "$NOLOGIN_SHELL" ]; then
+        NOLOGIN_SHELL="/bin/false"
+    fi
+    
+    useradd -r -g "$WAF_GROUP" -s "$NOLOGIN_SHELL" -d /nonexistent -c "OpenResty WAF Service User" "$WAF_USER" 2>/dev/null || {
+        echo -e "${RED}✗ 无法创建 waf 用户${NC}"
+        exit 1
+    }
+    echo -e "${GREEN}  ✓ 已创建 waf 用户（shell: $NOLOGIN_SHELL，禁止登录）${NC}"
+else
+    echo -e "${BLUE}  ✓ waf 用户已存在${NC}"
+    # 确保用户属于 waf 组
+    CURRENT_GROUP=$(id -gn "$WAF_USER" 2>/dev/null)
+    if [ "$CURRENT_GROUP" != "$WAF_GROUP" ]; then
+        echo -e "${YELLOW}  更新 waf 用户的主组为 waf...${NC}"
+        usermod -g "$WAF_GROUP" "$WAF_USER" 2>/dev/null || {
+            echo -e "${YELLOW}  ⚠ 无法更新用户主组，继续执行...${NC}"
+        }
+    fi
+    # 确保用户不能登录
+    CURRENT_SHELL=$(getent passwd "$WAF_USER" | cut -d: -f7)
+    if [ "$CURRENT_SHELL" != "/sbin/nologin" ] && [ "$CURRENT_SHELL" != "/usr/sbin/nologin" ] && [ "$CURRENT_SHELL" != "/bin/false" ]; then
+        echo -e "${YELLOW}  设置 waf 用户禁止登录...${NC}"
+        NOLOGIN_SHELL="/sbin/nologin"
+        if [ ! -f "$NOLOGIN_SHELL" ]; then
+            NOLOGIN_SHELL="/usr/sbin/nologin"
+        fi
+        if [ ! -f "$NOLOGIN_SHELL" ]; then
+            NOLOGIN_SHELL="/bin/false"
+        fi
+        usermod -s "$NOLOGIN_SHELL" "$WAF_USER" 2>/dev/null || {
+            echo -e "${YELLOW}  ⚠ 无法更新用户 shell，继续执行...${NC}"
+        }
+    fi
+fi
+
+echo -e "${GREEN}✓ waf 用户检查完成${NC}"
+echo ""
+
 # 创建必要的目录（如果不存在）
-echo -e "${GREEN}[1/3] 检查并创建目录...${NC}"
+echo -e "${GREEN}[1/5] 检查并创建目录...${NC}"
 if [ ! -d "${PROJECT_ROOT}/logs" ]; then
     mkdir -p "${PROJECT_ROOT}/logs"
     echo -e "${GREEN}✓ 已创建: logs/${NC}"
@@ -105,7 +169,7 @@ fi
 echo -e "${GREEN}✓ 目录检查完成${NC}"
 
 # 复制 nginx.conf（只复制主配置文件）
-echo -e "${GREEN}[2/3] 复制并配置主配置文件...${NC}"
+echo -e "${GREEN}[2/5] 复制并配置主配置文件...${NC}"
 
 # 步骤1: 先删除旧文件，确保干净开始
 if [ -f "$NGINX_CONF_DIR/nginx.conf" ]; then
@@ -296,7 +360,7 @@ echo -e "${GREEN}✓ 主配置文件已复制并配置${NC}"
 echo -e "${YELLOW}  注意: conf.d、lua、logs、cert 目录保持在项目目录，使用相对路径引用${NC}"
 
 # 验证配置文件
-echo -e "${GREEN}[3/4] 验证配置...${NC}"
+echo -e "${GREEN}[3/5] 验证配置...${NC}"
 
 # 最终验证：检查配置文件结构（保留 stream 块）
 echo -e "${YELLOW}  执行最终验证检查...${NC}"
@@ -533,34 +597,46 @@ for config in "${CRITICAL_CONFIGS[@]}"; do
 done
 
 # 设置权限
-echo -e "${GREEN}设置文件权限...${NC}"
-chown -R nobody:nobody "${PROJECT_ROOT}/logs" 2>/dev/null || true
+echo -e "${GREEN}[5/5] 设置文件权限...${NC}"
+
+# 设置项目根目录的所有者为 waf:waf
+echo -e "${YELLOW}  设置项目目录所有者为 waf:waf...${NC}"
+chown -R "$WAF_USER:$WAF_GROUP" "${PROJECT_ROOT}" 2>/dev/null || {
+    echo -e "${YELLOW}  ⚠ 无法设置项目目录所有者，继续执行...${NC}"
+}
+
+# 设置日志目录权限
+chown -R "$WAF_USER:$WAF_GROUP" "${PROJECT_ROOT}/logs" 2>/dev/null || true
 chmod 755 "${PROJECT_ROOT}/logs"
 chmod 644 "$NGINX_CONF_DIR/nginx.conf"
 
 # conf.d 保持在项目目录，设置项目目录权限
-# 重要：确保 nginx worker 进程（nobody 用户）可以写入配置文件
-chown -R nobody:nobody "${PROJECT_ROOT}/conf.d" 2>/dev/null || true
+# 重要：确保 nginx worker 进程（waf 用户）可以写入配置文件
+chown -R "$WAF_USER:$WAF_GROUP" "${PROJECT_ROOT}/conf.d" 2>/dev/null || true
 chmod -R 755 "${PROJECT_ROOT}/conf.d" 2>/dev/null || true
 find "${PROJECT_ROOT}/conf.d" -type f -name "*.conf" -exec chmod 644 {} \; 2>/dev/null || true
 
 # 特别确保 vhost_conf 和 upstream 目录有写入权限
-chown -R nobody:nobody "${PROJECT_ROOT}/conf.d/vhost_conf" 2>/dev/null || true
+chown -R "$WAF_USER:$WAF_GROUP" "${PROJECT_ROOT}/conf.d/vhost_conf" 2>/dev/null || true
 chmod -R 755 "${PROJECT_ROOT}/conf.d/vhost_conf" 2>/dev/null || true
-chown -R nobody:nobody "${PROJECT_ROOT}/conf.d/vhost_conf/http_https" 2>/dev/null || true
+chown -R "$WAF_USER:$WAF_GROUP" "${PROJECT_ROOT}/conf.d/vhost_conf/http_https" 2>/dev/null || true
 chmod 755 "${PROJECT_ROOT}/conf.d/vhost_conf/http_https" 2>/dev/null || true
-chown -R nobody:nobody "${PROJECT_ROOT}/conf.d/vhost_conf/tcp_udp" 2>/dev/null || true
+chown -R "$WAF_USER:$WAF_GROUP" "${PROJECT_ROOT}/conf.d/vhost_conf/tcp_udp" 2>/dev/null || true
 chmod 755 "${PROJECT_ROOT}/conf.d/vhost_conf/tcp_udp" 2>/dev/null || true
-chown -R nobody:nobody "${PROJECT_ROOT}/conf.d/upstream" 2>/dev/null || true
+chown -R "$WAF_USER:$WAF_GROUP" "${PROJECT_ROOT}/conf.d/upstream" 2>/dev/null || true
 chmod -R 755 "${PROJECT_ROOT}/conf.d/upstream" 2>/dev/null || true
-chown -R nobody:nobody "${PROJECT_ROOT}/conf.d/upstream/http_https" 2>/dev/null || true
+chown -R "$WAF_USER:$WAF_GROUP" "${PROJECT_ROOT}/conf.d/upstream/http_https" 2>/dev/null || true
 chmod 755 "${PROJECT_ROOT}/conf.d/upstream/http_https" 2>/dev/null || true
-chown -R nobody:nobody "${PROJECT_ROOT}/conf.d/upstream/tcp_udp" 2>/dev/null || true
+chown -R "$WAF_USER:$WAF_GROUP" "${PROJECT_ROOT}/conf.d/upstream/tcp_udp" 2>/dev/null || true
 chmod 755 "${PROJECT_ROOT}/conf.d/upstream/tcp_udp" 2>/dev/null || true
 
+# 设置 lua 目录权限（确保 waf 用户可以读取）
+chown -R "$WAF_USER:$WAF_GROUP" "${PROJECT_ROOT}/lua" 2>/dev/null || true
+chmod -R 755 "${PROJECT_ROOT}/lua" 2>/dev/null || true
+
 echo -e "${GREEN}✓ 权限设置完成${NC}"
-echo -e "${YELLOW}  注意: conf.d 目录及其子目录的所有者已设置为 nobody:nobody，权限为 755${NC}"
-echo -e "${YELLOW}  这确保 nginx worker 进程可以创建和修改配置文件${NC}"
+echo -e "${YELLOW}  注意: 所有项目目录的所有者已设置为 waf:waf，权限为 755${NC}"
+echo -e "${YELLOW}  这确保 nginx worker 进程（waf 用户）可以创建和修改配置文件${NC}"
 
 echo ""
 echo -e "${GREEN}========================================${NC}"

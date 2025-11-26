@@ -126,7 +126,7 @@ local function do_reload_nginx()
     ngx.log(ngx.INFO, "使用nginx可执行文件: ", nginx_binary)
     
     -- 第一步：执行nginx配置测试（必须先测试，确保配置正确）
-    -- 注意：在 timer 上下文中，worker 进程以 nobody 用户运行，可能没有权限访问系统日志目录
+    -- 注意：在 timer 上下文中，worker 进程以 waf 用户运行，可能没有权限访问系统日志目录
     -- 因此使用 -e 选项指定错误日志到 /dev/null，使用 -g 选项指定临时 PID 文件
     -- 命令格式：/usr/local/openresty/bin/openresty -t -e /dev/null -g "pid /tmp/nginx_test.pid"
     ngx.log(ngx.INFO, "开始测试nginx配置，执行命令: ", nginx_binary, " -t")

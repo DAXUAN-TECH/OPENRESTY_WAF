@@ -451,12 +451,14 @@ function _M.generate_all_configs()
     for _, proxy in ipairs(proxies) do
         active_proxy_ids[proxy.id] = true
         
-        -- 查询后端服务器（如果是upstream类型）
+        -- 查询后端服务器并生成upstream配置
+        -- 注意：无论是single还是upstream类型，都生成upstream配置文件，便于统一管理和后续扩展
         local backends = nil
         local upstream_name = nil
         local upstream_config = nil
         
         if proxy.backend_type == "upstream" then
+            -- upstream类型：从数据库查询多个后端服务器
             local backends_sql = [[
                 SELECT id, backend_address, backend_port, weight, max_fails, fail_timeout,
                        backup, down, status
@@ -465,69 +467,85 @@ function _M.generate_all_configs()
                 ORDER BY weight DESC, id ASC
             ]]
             backends, _ = mysql_pool.query(backends_sql, proxy.id)
+        else
+            -- single类型：从proxy配置中构建单个后端服务器
+            if proxy.backend_address and proxy.backend_port then
+                backends = {{
+                    backend_address = proxy.backend_address,
+                    backend_port = proxy.backend_port,
+                    weight = 1,
+                    max_fails = proxy.max_fails or 3,
+                    fail_timeout = proxy.fail_timeout or 30,
+                    backup = 0,
+                    down = 0,
+                    status = 1
+                }}
+            end
+        end
+        
+        -- 生成upstream配置（如果有后端服务器）
+        if backends and #backends > 0 then
+            if proxy.proxy_type == "http" then
+                upstream_config, upstream_name = generate_upstream_config(proxy, backends)
+            else
+                upstream_config, upstream_name = generate_stream_upstream_config(proxy, backends)
+            end
             
-            if backends and #backends > 0 then
+            -- 生成独立的upstream配置文件
+            if upstream_config and upstream_name then
+                -- 根据代理类型确定upstream配置文件目录
+                local upstream_subdir = ""
                 if proxy.proxy_type == "http" then
-                    upstream_config, upstream_name = generate_upstream_config(proxy, backends)
+                    upstream_subdir = "http_https"
                 else
-                    upstream_config, upstream_name = generate_stream_upstream_config(proxy, backends)
+                    upstream_subdir = "tcp_udp"
                 end
                 
-                -- 生成独立的upstream配置文件
-                if upstream_config and upstream_name then
-                    -- 根据代理类型确定upstream配置文件目录
-                    local upstream_subdir = ""
-                    if proxy.proxy_type == "http" then
-                        upstream_subdir = "http_https"
+                local upstream_file = project_root .. "/conf.d/upstream/" .. upstream_subdir .. "/" .. upstream_name .. ".conf"
+                
+                -- 确保upstream子目录存在
+                local upstream_dir = project_root .. "/conf.d/upstream/" .. upstream_subdir
+                local dir_ok = path_utils.ensure_dir(upstream_dir)
+                if not dir_ok then
+                    ngx.log(ngx.ERR, "无法创建upstream目录: ", upstream_dir)
+                    return false, "无法创建upstream目录: " .. upstream_dir
+                end
+                
+                -- 检查目录是否存在且有写入权限
+                local test_file = io.open(upstream_dir .. "/.test_write", "w")
+                if test_file then
+                    test_file:close()
+                    os.remove(upstream_dir .. "/.test_write")
+                else
+                    ngx.log(ngx.ERR, "upstream目录无写入权限: ", upstream_dir, ", 请检查目录权限（应为 755 且所有者应为 nobody）")
+                    return false, "upstream目录无写入权限: " .. upstream_dir
+                end
+                
+                local upstream_fd = io.open(upstream_file, "w")
+                if upstream_fd then
+                    local upstream_file_content = "# ============================================\n"
+                    upstream_file_content = upstream_file_content .. "# Upstream配置: " .. escape_nginx_value(proxy.proxy_name) .. " (代理ID: " .. proxy.id .. ")\n"
+                    upstream_file_content = upstream_file_content .. "# 类型: " .. string.upper(proxy.proxy_type) .. "\n"
+                    upstream_file_content = upstream_file_content .. "# 后端类型: " .. (proxy.backend_type == "upstream" and "多个后端（负载均衡）" or "单个后端") .. "\n"
+                    upstream_file_content = upstream_file_content .. "# 自动生成，请勿手动修改\n"
+                    upstream_file_content = upstream_file_content .. "# ============================================\n\n"
+                    upstream_file_content = upstream_file_content .. upstream_config
+                    upstream_fd:write(upstream_file_content)
+                    upstream_fd:close()
+                    ngx.log(ngx.INFO, "生成upstream配置文件: ", upstream_file, " (后端类型: ", proxy.backend_type, ")")
+                else
+                    -- 尝试获取更详细的错误信息
+                    local err_msg = "无法创建upstream配置文件: " .. upstream_file
+                    -- 检查文件是否已存在但无法写入
+                    local test_read = io.open(upstream_file, "r")
+                    if test_read then
+                        test_read:close()
+                        err_msg = err_msg .. " (文件已存在但无写入权限，请检查文件权限)"
                     else
-                        upstream_subdir = "tcp_udp"
+                        err_msg = err_msg .. " (可能原因：目录不存在、权限不足、磁盘空间不足或inode不足)"
                     end
-                    
-                    local upstream_file = project_root .. "/conf.d/upstream/" .. upstream_subdir .. "/" .. upstream_name .. ".conf"
-                    
-                    -- 确保upstream子目录存在
-                    local upstream_dir = project_root .. "/conf.d/upstream/" .. upstream_subdir
-                    local dir_ok = path_utils.ensure_dir(upstream_dir)
-                    if not dir_ok then
-                        ngx.log(ngx.ERR, "无法创建upstream目录: ", upstream_dir)
-                        return false, "无法创建upstream目录: " .. upstream_dir
-                    end
-                    
-                    -- 检查目录是否存在且有写入权限
-                    local test_file = io.open(upstream_dir .. "/.test_write", "w")
-                    if test_file then
-                        test_file:close()
-                        os.remove(upstream_dir .. "/.test_write")
-                    else
-                        ngx.log(ngx.ERR, "upstream目录无写入权限: ", upstream_dir, ", 请检查目录权限（应为 755 且所有者应为 nobody）")
-                        return false, "upstream目录无写入权限: " .. upstream_dir
-                    end
-                    
-                    local upstream_fd = io.open(upstream_file, "w")
-                    if upstream_fd then
-                        local upstream_file_content = "# ============================================\n"
-                        upstream_file_content = upstream_file_content .. "# Upstream配置: " .. escape_nginx_value(proxy.proxy_name) .. " (代理ID: " .. proxy.id .. ")\n"
-                        upstream_file_content = upstream_file_content .. "# 类型: " .. string.upper(proxy.proxy_type) .. "\n"
-                        upstream_file_content = upstream_file_content .. "# 自动生成，请勿手动修改\n"
-                        upstream_file_content = upstream_file_content .. "# ============================================\n\n"
-                        upstream_file_content = upstream_file_content .. upstream_config
-                        upstream_fd:write(upstream_file_content)
-                        upstream_fd:close()
-                        ngx.log(ngx.INFO, "生成upstream配置文件: ", upstream_file)
-                    else
-                        -- 尝试获取更详细的错误信息
-                        local err_msg = "无法创建upstream配置文件: " .. upstream_file
-                        -- 检查文件是否已存在但无法写入
-                        local test_read = io.open(upstream_file, "r")
-                        if test_read then
-                            test_read:close()
-                            err_msg = err_msg .. " (文件已存在但无写入权限，请检查文件权限)"
-                        else
-                            err_msg = err_msg .. " (可能原因：目录不存在、权限不足、磁盘空间不足或inode不足)"
-                        end
-                        ngx.log(ngx.ERR, err_msg, ", 项目根目录: ", project_root, ", upstream目录: ", upstream_dir)
-                        return false, err_msg
-                    end
+                    ngx.log(ngx.ERR, err_msg, ", 项目根目录: ", project_root, ", upstream目录: ", upstream_dir)
+                    return false, err_msg
                 end
             end
         end

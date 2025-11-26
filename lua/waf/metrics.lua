@@ -5,7 +5,17 @@ local config = require "config"
 local health_check = require "waf.health_check"
 
 local _M = {}
-local cache = ngx.shared.waf_cache
+-- 安全获取共享内存（兼容Stream块）
+local function get_cache()
+    local ok, cache = pcall(function()
+        return ngx.shared.waf_cache
+    end)
+    if ok and cache then
+        return cache
+    end
+    return nil
+end
+local cache = get_cache()
 
 -- 指标键前缀
 local METRICS_PREFIX = "metrics:"
@@ -13,6 +23,10 @@ local METRICS_TTL = 300  -- 指标缓存5分钟
 
 -- 增加计数器指标
 function _M.increment_counter(name, labels)
+    if not cache then
+        return  -- 如果缓存不可用，跳过指标记录
+    end
+    
     local key = METRICS_PREFIX .. "counter:" .. name
     if labels then
         key = key .. ":" .. table.concat(labels, ":")
@@ -25,6 +39,10 @@ end
 
 -- 设置仪表盘指标
 function _M.set_gauge(name, value, labels)
+    if not cache then
+        return  -- 如果缓存不可用，跳过指标记录
+    end
+    
     local key = METRICS_PREFIX .. "gauge:" .. name
     if labels then
         key = key .. ":" .. table.concat(labels, ":")
@@ -35,6 +53,10 @@ end
 
 -- 记录直方图指标
 function _M.observe_histogram(name, value, labels)
+    if not cache then
+        return  -- 如果缓存不可用，跳过指标记录
+    end
+    
     local key = METRICS_PREFIX .. "histogram:" .. name
     if labels then
         key = key .. ":" .. table.concat(labels, ":")
@@ -73,19 +95,28 @@ end
 -- 收集封控相关指标
 function _M.collect_block_metrics(metrics)
     -- 封控总数（从缓存获取，实际应该从数据库统计）
-    local block_count = cache:get(METRICS_PREFIX .. "counter:waf_blocks_total") or 0
+    local block_count = 0
+    if cache then
+        block_count = cache:get(METRICS_PREFIX .. "counter:waf_blocks_total") or 0
+    end
     table.insert(metrics, string.format("# HELP waf_blocks_total Total number of blocked requests"))
     table.insert(metrics, string.format("# TYPE waf_blocks_total counter"))
     table.insert(metrics, string.format("waf_blocks_total %d", block_count))
     
     -- 自动封控数量
-    local auto_block_count = cache:get(METRICS_PREFIX .. "counter:waf_auto_blocks_total") or 0
+    local auto_block_count = 0
+    if cache then
+        auto_block_count = cache:get(METRICS_PREFIX .. "counter:waf_auto_blocks_total") or 0
+    end
     table.insert(metrics, string.format("# HELP waf_auto_blocks_total Total number of auto-blocked IPs"))
     table.insert(metrics, string.format("# TYPE waf_auto_blocks_total counter"))
     table.insert(metrics, string.format("waf_auto_blocks_total %d", auto_block_count))
     
     -- 当前被封控的IP数
-    local blocked_ips = cache:get(METRICS_PREFIX .. "gauge:waf_blocked_ips") or 0
+    local blocked_ips = 0
+    if cache then
+        blocked_ips = cache:get(METRICS_PREFIX .. "gauge:waf_blocked_ips") or 0
+    end
     table.insert(metrics, string.format("# HELP waf_blocked_ips Current number of blocked IPs"))
     table.insert(metrics, string.format("# TYPE waf_blocked_ips gauge"))
     table.insert(metrics, string.format("waf_blocked_ips %d", blocked_ips))
@@ -94,8 +125,12 @@ end
 -- 收集性能相关指标
 function _M.collect_performance_metrics(metrics)
     -- 缓存命中率（简化实现）
-    local cache_hits = cache:get(METRICS_PREFIX .. "counter:waf_cache_hits_total") or 0
-    local cache_misses = cache:get(METRICS_PREFIX .. "counter:waf_cache_misses_total") or 0
+    local cache_hits = 0
+    local cache_misses = 0
+    if cache then
+        cache_hits = cache:get(METRICS_PREFIX .. "counter:waf_cache_hits_total") or 0
+        cache_misses = cache:get(METRICS_PREFIX .. "counter:waf_cache_misses_total") or 0
+    end
     local cache_hit_rate = 0
     if cache_hits + cache_misses > 0 then
         cache_hit_rate = cache_hits / (cache_hits + cache_misses)
@@ -106,7 +141,10 @@ function _M.collect_performance_metrics(metrics)
     table.insert(metrics, string.format("waf_cache_hit_rate %.4f", cache_hit_rate))
     
     -- 规则匹配耗时（平均值）
-    local match_time_avg = cache:get(METRICS_PREFIX .. "histogram:waf_rule_match_duration_seconds:avg") or 0
+    local match_time_avg = 0
+    if cache then
+        match_time_avg = cache:get(METRICS_PREFIX .. "histogram:waf_rule_match_duration_seconds:avg") or 0
+    end
     table.insert(metrics, string.format("# HELP waf_rule_match_duration_seconds Average rule matching duration in seconds"))
     table.insert(metrics, string.format("# TYPE waf_rule_match_duration_seconds gauge"))
     table.insert(metrics, string.format("waf_rule_match_duration_seconds %.6f", match_time_avg))
@@ -153,6 +191,10 @@ end
 
 -- 获取计数器值
 function _M.get_counter(name, labels)
+    if not cache then
+        return 0
+    end
+    
     local key = METRICS_PREFIX .. "counter:" .. name
     if labels then
         key = key .. ":" .. table.concat(labels, ":")
@@ -162,6 +204,10 @@ end
 
 -- 获取仪表盘值
 function _M.get_gauge(name, labels)
+    if not cache then
+        return 0
+    end
+    
     local key = METRICS_PREFIX .. "gauge:" .. name
     if labels then
         key = key .. ":" .. table.concat(labels, ":")

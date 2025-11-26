@@ -8,7 +8,17 @@ local feature_switches = require "waf.feature_switches"
 local cjson = require "cjson"
 
 local _M = {}
-local cache = ngx.shared.waf_cache
+-- 安全获取共享内存（兼容Stream块）
+local function get_cache()
+    local ok, cache = pcall(function()
+        return ngx.shared.waf_cache
+    end)
+    if ok and cache then
+        return cache
+    end
+    return nil
+end
+local cache = get_cache()
 local CACHE_KEY_PREFIX = "auto_block:"
 local CACHE_TTL = config.cache.ttl
 

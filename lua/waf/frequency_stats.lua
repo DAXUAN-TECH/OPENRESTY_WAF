@@ -7,7 +7,17 @@ local feature_switches = require "waf.feature_switches"
 local cjson = require "cjson"
 
 local _M = {}
-local cache = ngx.shared.waf_cache
+-- 安全获取共享内存（兼容Stream块）
+local function get_cache()
+    local ok, cache = pcall(function()
+        return ngx.shared.waf_cache
+    end)
+    if ok and cache then
+        return cache
+    end
+    return nil
+end
+local cache = get_cache()
 local CACHE_KEY_PREFIX = "freq_stats:"
 local CACHE_TTL = 60  -- 频率统计缓存时间（秒）
 
@@ -64,8 +74,11 @@ function _M.get_frequency(client_ip)
         return nil
     end
 
-    local cache_key = CACHE_KEY_PREFIX .. client_ip
-    local cached = cache:get(cache_key)
+    local cached = nil
+    if cache then
+        local cache_key = CACHE_KEY_PREFIX .. client_ip
+        cached = cache:get(cache_key)
+    end
     if cached then
         local ok, data = pcall(function()
             return cjson.decode(cached)
@@ -149,7 +162,10 @@ function _M.get_frequency(client_ip)
     end
 
     -- 缓存结果
-    cache:set(cache_key, cjson.encode(stats), CACHE_TTL)
+    if cache then
+        local cache_key = CACHE_KEY_PREFIX .. client_ip
+        cache:set(cache_key, cjson.encode(stats), CACHE_TTL)
+    end
     return stats
 end
 

@@ -6,7 +6,17 @@ local config = require "config"
 local cjson = require "cjson"
 
 local _M = {}
-local cache = ngx.shared.waf_cache
+-- 安全获取共享内存（兼容Stream块）
+local function get_cache()
+    local ok, cache = pcall(function()
+        return ngx.shared.waf_cache
+    end)
+    if ok and cache then
+        return cache
+    end
+    return nil
+end
+local cache = get_cache()
 
 -- 配置
 local MAX_CACHE_ITEMS = config.cache.max_items or 10000
@@ -20,15 +30,24 @@ local ACCESS_COUNT_PREFIX = "access_count:"
 
 -- 获取LRU列表
 local function get_lru_list()
+    if not cache then
+        return {}
+    end
     local list_data = cache:get(LRU_LIST_KEY)
     if list_data then
-        return cjson.decode(list_data)
+        local ok, decoded = pcall(cjson.decode, list_data)
+        if ok and decoded then
+            return decoded
+        end
     end
     return {}
 end
 
 -- 保存LRU列表
 local function save_lru_list(list)
+    if not cache then
+        return
+    end
     cache:set(LRU_LIST_KEY, cjson.encode(list), 0)  -- 不过期
 end
 
@@ -48,10 +67,12 @@ local function update_lru(key)
     table.insert(list, 1, key)
     
     -- 如果超过最大数量，移除最旧的
-    while #list > MAX_CACHE_ITEMS do
-        local oldest_key = table.remove(list)
-        cache:delete(oldest_key)
-        cache:delete(ACCESS_COUNT_PREFIX .. oldest_key)
+    if cache then
+        while #list > MAX_CACHE_ITEMS do
+            local oldest_key = table.remove(list)
+            cache:delete(oldest_key)
+            cache:delete(ACCESS_COUNT_PREFIX .. oldest_key)
+        end
     end
     
     save_lru_list(list)
@@ -59,6 +80,9 @@ end
 
 -- 记录访问次数
 local function record_access(key)
+    if not cache then
+        return
+    end
     local count_key = ACCESS_COUNT_PREFIX .. key
     local count = cache:get(count_key) or 0
     cache:incr(count_key, 1)
@@ -67,6 +91,9 @@ end
 
 -- 获取访问次数
 local function get_access_count(key)
+    if not cache then
+        return 0
+    end
     local count_key = ACCESS_COUNT_PREFIX .. key
     return cache:get(count_key) or 0
 end
@@ -78,6 +105,10 @@ end
 
 -- 设置缓存值（带LRU管理）
 function _M.set(key, value, ttl)
+    if not cache then
+        return  -- 如果缓存不可用，跳过
+    end
+    
     ttl = ttl or ACTIVE_TTL
     
     -- 检查是否活跃，决定TTL
@@ -97,6 +128,10 @@ end
 
 -- 获取缓存值（带LRU管理）
 function _M.get(key)
+    if not cache then
+        return nil
+    end
+    
     local value = cache:get(key)
     
     if value then
@@ -112,6 +147,10 @@ end
 
 -- 删除缓存值
 function _M.delete(key)
+    if not cache then
+        return
+    end
+    
     cache:delete(key)
     cache:delete(ACCESS_COUNT_PREFIX .. key)
     
@@ -128,6 +167,10 @@ end
 
 -- 清理过期缓存
 function _M.cleanup()
+    if not cache then
+        return 0
+    end
+    
     local list = get_lru_list()
     local cleaned = 0
     

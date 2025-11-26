@@ -7,7 +7,17 @@ local config = require "config"
 local cjson = require "cjson"
 
 local _M = {}
-local cache = ngx.shared.waf_cache
+-- 安全获取共享内存（兼容Stream块）
+local function get_cache()
+    local ok, cache = pcall(function()
+        return ngx.shared.waf_cache
+    end)
+    if ok and cache then
+        return cache
+    end
+    return nil
+end
+local cache = get_cache()
 
 -- 降级模式配置
 local FALLBACK_MODE_KEY = "fallback_mode"
@@ -24,7 +34,10 @@ function _M.should_fallback()
     
     -- 如果数据库故障且没有缓存规则，尝试从备份加载
     if should_fallback then
-        local has_rules = cache:get("rule_list:ip_range:block")
+        local has_rules = nil
+        if cache then
+            has_rules = cache:get("rule_list:ip_range:block")
+        end
         if not has_rules and rule_backup.has_backup() then
             ngx.log(ngx.WARN, "database unavailable, loading rules from backup")
             rule_backup.load_rules_from_backup()
@@ -36,6 +49,10 @@ end
 
 -- 从缓存获取封控规则（降级模式）
 function _M.get_block_rule_from_cache(client_ip, rule_type)
+    if not cache then
+        return false, nil
+    end
+    
     if rule_type == "single_ip" then
         local cache_key = "block_rules:single:" .. client_ip
         local cached = cache:get(cache_key)
@@ -73,6 +90,10 @@ end
 
 -- 从缓存获取白名单（降级模式）
 function _M.get_whitelist_from_cache(client_ip)
+    if not cache then
+        return false
+    end
+    
     local cache_key = "whitelist:" .. client_ip
     local cached = cache:get(cache_key)
     if cached ~= nil then

@@ -85,7 +85,17 @@ if not bit then
 end
 
 local _M = {}
-local cache = ngx.shared.waf_cache
+-- 安全获取共享内存（兼容Stream块）
+local function get_cache()
+    local ok, cache = pcall(function()
+        return ngx.shared.waf_cache
+    end)
+    if ok and cache then
+        return cache
+    end
+    return nil
+end
+local cache = get_cache()
 
 -- 配置
 local EMPTY_RESULT_TTL = config.cache_protection and config.cache_protection.empty_result_ttl or 60  -- 空结果缓存时间（秒）
@@ -166,7 +176,9 @@ function _M.bloom_add(key, value)
     end
     
     -- 保存布隆过滤器
-    cache:set(bloom_key, cjson.encode(bloom_data), 3600)  -- 1小时过期
+    if cache then
+        cache:set(bloom_key, cjson.encode(bloom_data), 3600)  -- 1小时过期
+    end
 end
 
 -- 布隆过滤器：检查元素是否存在
@@ -176,7 +188,10 @@ function _M.bloom_check(key, value)
     end
     
     local bloom_key = BLOOM_FILTER_PREFIX .. key
-    local bloom_data = cache:get(bloom_key)
+    local bloom_data = nil
+    if cache then
+        bloom_data = cache:get(bloom_key)
+    end
     
     if not bloom_data then
         return false  -- 布隆过滤器不存在，可能不存在
@@ -222,12 +237,18 @@ end
 
 -- 缓存空结果
 function _M.cache_empty_result(cache_key, ttl)
+    if not cache then
+        return  -- 如果缓存不可用，跳过
+    end
     ttl = ttl or EMPTY_RESULT_TTL
     cache:set(cache_key .. ":empty", "1", ttl)
 end
 
 -- 检查是否为空结果缓存
 function _M.is_empty_result_cached(cache_key)
+    if not cache then
+        return false
+    end
     return cache:get(cache_key .. ":empty") == "1"
 end
 
@@ -235,6 +256,11 @@ end
 function _M.check_rate_limit(ip, action)
     if not config.cache_protection or not config.cache_protection.enable_rate_limit then
         return true  -- 如果未启用，允许通过
+    end
+    
+    if not cache then
+        -- 如果缓存不可用，允许通过（避免在Stream块中阻塞）
+        return true
     end
     
     local rate_key = "rate_limit:" .. action .. ":" .. ip

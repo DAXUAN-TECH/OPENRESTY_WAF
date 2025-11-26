@@ -285,7 +285,7 @@ echo -e "${BLUE}    - conf.d/stream_set/*.conf${NC}"
 echo -e "${BLUE}    - conf.d/vhost_conf/waf.conf${NC}"
 echo -e "${BLUE}    - conf.d/vhost_conf/http_https/proxy_http_*.conf${NC}"
 echo -e "${BLUE}    - conf.d/vhost_conf/tcp_udp/proxy_stream_*.conf${NC}"
-echo -e "${BLUE}    - conf.d/upstream/http_https/upstream_*.conf${NC}"
+echo -e "${BLUE}    - conf.d/upstream/http_https/http_upstream_*.conf${NC}"
 echo -e "${BLUE}    - conf.d/upstream/tcp_udp/stream_upstream_*.conf${NC}"
 
 # 删除 set $project_root 指令（某些 OpenResty 版本不支持在 http 块中使用 set）

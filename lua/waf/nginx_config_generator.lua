@@ -313,11 +313,11 @@ local function cleanup_orphaned_files(project_root, active_proxy_ids)
     
     -- HTTP/HTTPS upstream配置文件
     local http_upstream_dir = project_root .. "/conf.d/upstream/http_https"
-    local http_upstream_cmd = "find " .. http_upstream_dir .. " -maxdepth 1 -name 'upstream_*.conf' 2>/dev/null"
+    local http_upstream_cmd = "find " .. http_upstream_dir .. " -maxdepth 1 -name 'http_upstream_*.conf' 2>/dev/null"
     local http_upstream_files = io.popen(http_upstream_cmd)
     if http_upstream_files then
         for file in http_upstream_files:lines() do
-            local proxy_id = file:match("upstream_(%d+)%.conf")
+            local proxy_id = file:match("http_upstream_(%d+)%.conf")
             if proxy_id then
                 proxy_id = tonumber(proxy_id)
                 if not active_proxy_ids[proxy_id] then
@@ -531,13 +531,18 @@ function _M.generate_all_configs()
             if upstream_config and upstream_name then
                 -- 根据代理类型确定upstream配置文件目录
                 local upstream_subdir = ""
+                local upstream_filename = ""
                 if proxy.proxy_type == "http" then
                     upstream_subdir = "http_https"
+                    -- HTTP/HTTPS upstream文件名使用 http_upstream_ 前缀
+                    upstream_filename = "http_upstream_" .. proxy.id .. ".conf"
                 else
                     upstream_subdir = "tcp_udp"
+                    -- TCP/UDP upstream文件名保持 stream_upstream_ 前缀
+                    upstream_filename = upstream_name .. ".conf"
                 end
                 
-                local upstream_file = project_root .. "/conf.d/upstream/" .. upstream_subdir .. "/" .. upstream_name .. ".conf"
+                local upstream_file = project_root .. "/conf.d/upstream/" .. upstream_subdir .. "/" .. upstream_filename
                 
                 -- 确保upstream子目录存在
                 local upstream_dir = project_root .. "/conf.d/upstream/" .. upstream_subdir
@@ -699,7 +704,7 @@ function _M.cleanup_configs()
     
     -- 清理所有HTTP/HTTPS upstream配置文件
     local http_upstream_dir = project_root .. "/conf.d/upstream/http_https"
-    local http_upstream_cmd = "find " .. http_upstream_dir .. " -maxdepth 1 -name 'upstream_*.conf' 2>/dev/null"
+    local http_upstream_cmd = "find " .. http_upstream_dir .. " -maxdepth 1 -name 'http_upstream_*.conf' 2>/dev/null"
     local http_upstream_files = io.popen(http_upstream_cmd)
     if http_upstream_files then
         for file in http_upstream_files:lines() do

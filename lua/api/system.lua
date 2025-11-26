@@ -186,33 +186,28 @@ local function do_reload_nginx()
     end
     
     -- 第二步：执行OpenResty配置重新加载（测试通过后才重载）
-    -- 注意：
-    -- 1）这里运行在 worker 进程 / timer 上下文中，以 waf 用户身份执行，无法交互输入 sudo 密码
-    -- 2）因此绝不能在这里使用需要密码的 sudo 命令，也不适合调用 systemctl（通常也需要 root/sudo）
-    -- 3）正确做法是：保证 OpenResty 的 master 进程也是由 waf 用户启动，这样 waf 用户可以直接发送 reload 信号
-    -- 4）这里只执行：openresty_binary -s reload，由操作系统负责权限控制
-    ngx.log(ngx.INFO, "开始重新加载OpenResty配置，直接执行命令: ", openresty_binary, " -s reload")
+    -- 方案3：在系统层面提供 root 侧重载脚本 /usr/local/bin/waf_reload_openresty.sh
+    -- 该脚本由 deploy.sh 自动创建，并通过 sudoers 允许 waf 免密执行
+    -- 这里不再直接调用 openresty -s reload，而是调用 sudo 脚本，由 root 负责实际重载
+    local reload_cmd = "sudo /usr/local/bin/waf_reload_openresty.sh 2>&1"
+    ngx.log(ngx.INFO, "开始重新加载OpenResty配置，执行命令: ", reload_cmd)
 
-    local direct_reload_cmd = openresty_binary .. " -s reload 2>&1"
-    local direct_reload_result = io.popen(direct_reload_cmd)
-    if direct_reload_result then
-        local direct_reload_output = direct_reload_result:read("*all")
-        local direct_reload_code = direct_reload_result:close()
-        if direct_reload_code == 0 then
-            ngx.log(ngx.INFO, "OpenResty配置重新加载成功（直接执行）: ", direct_reload_output or "success")
-            return true, direct_reload_output
-        else
-            local error_msg = "OpenResty配置重新加载失败: " .. (direct_reload_output or "unknown error")
-            ngx.log(ngx.ERR, error_msg, " (命令: ", direct_reload_cmd, ")")
-            ngx.log(ngx.ERR, "请检查：")
-            ngx.log(ngx.ERR, "1. OpenResty master 进程是否由 waf 用户启动（推荐）")
-            ngx.log(ngx.ERR, "2. /usr/local/openresty/nginx/logs/nginx.pid 是否属于 waf 用户，且可读写")
-            ngx.log(ngx.ERR, "3. 如需通过 systemd 管理，请在系统层面提供一个可被 waf 调用的重载方式（例如额外的管理脚本），而不是在 Lua 中使用 sudo")
-            return false, error_msg
-        end
-    else
-        local error_msg = "无法执行OpenResty重载命令: " .. direct_reload_cmd .. " (可能在timer上下文中受限)"
+    local reload_result = io.popen(reload_cmd)
+    if not reload_result then
+        local error_msg = "无法执行OpenResty重载脚本: " .. reload_cmd .. " (可能在timer上下文中受限)"
         ngx.log(ngx.ERR, error_msg)
+        return false, error_msg
+    end
+
+    local reload_output = reload_result:read("*all")
+    local reload_code = reload_result:close()
+
+    if reload_code == 0 then
+        ngx.log(ngx.INFO, "OpenResty配置重新加载成功（通过root脚本）: ", reload_output or "success")
+        return true, reload_output
+    else
+        local error_msg = "OpenResty配置重新加载失败: " .. (reload_output or "unknown error")
+        ngx.log(ngx.ERR, error_msg, " (命令: ", reload_cmd, ")")
         return false, error_msg
     end
 end

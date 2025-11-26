@@ -119,14 +119,22 @@ cp "${PROJECT_ROOT}/init_file/nginx.conf" "$NGINX_CONF_DIR/nginx.conf"
 
 # 步骤3: 获取项目目录并修改配置（替换路径占位符）
 echo -e "${YELLOW}  替换路径占位符...${NC}"
-# 替换 error.log 路径
+# 替换 error.log 路径（必须使用绝对路径，因为 error_log 不支持变量）
 sed -i "s|/path/to/project/logs/error.log|$PROJECT_ROOT_ABS/logs/error.log|g" "$NGINX_CONF_DIR/nginx.conf"
-# 替换 conf.d/set_conf 路径
-sed -i "s|/path/to/project/conf.d/set_conf|$PROJECT_ROOT_ABS/conf.d/set_conf|g" "$NGINX_CONF_DIR/nginx.conf"
-# 替换 conf.d/vhost_conf 路径
-sed -i "s|/path/to/project/conf.d/vhost_conf|$PROJECT_ROOT_ABS/conf.d/vhost_conf|g" "$NGINX_CONF_DIR/nginx.conf"
-# 替换 conf.d/upstream 路径（包括子目录）
-sed -i "s|/path/to/project/conf.d/upstream|$PROJECT_ROOT_ABS/conf.d/upstream|g" "$NGINX_CONF_DIR/nginx.conf"
+
+# 替换所有 /path/to/project 路径占位符为实际项目路径
+# 注意：使用全局替换，确保所有路径都被替换，包括子目录路径
+sed -i "s|/path/to/project|$PROJECT_ROOT_ABS|g" "$NGINX_CONF_DIR/nginx.conf"
+
+echo -e "${GREEN}  ✓ 已替换所有路径占位符${NC}"
+echo -e "${BLUE}    替换的路径包括：${NC}"
+echo -e "${BLUE}    - logs/error.log${NC}"
+echo -e "${BLUE}    - conf.d/set_conf/*.conf${NC}"
+echo -e "${BLUE}    - conf.d/vhost_conf/waf.conf${NC}"
+echo -e "${BLUE}    - conf.d/vhost_conf/http_https/proxy_http_*.conf${NC}"
+echo -e "${BLUE}    - conf.d/vhost_conf/tcp_udp/proxy_stream_*.conf${NC}"
+echo -e "${BLUE}    - conf.d/upstream/http_https/upstream_*.conf${NC}"
+echo -e "${BLUE}    - conf.d/upstream/tcp_udp/stream_upstream_*.conf${NC}"
 
 # 删除 set $project_root 指令（某些 OpenResty 版本不支持在 http 块中使用 set）
 # 我们会在子配置文件中直接替换 $project_root 为实际路径

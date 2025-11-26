@@ -107,11 +107,12 @@ local function do_reload_nginx()
     ngx.log(ngx.INFO, "使用nginx可执行文件: ", nginx_binary)
     
     -- 第一步：执行nginx配置测试（必须先测试，确保配置正确）
-    ngx.log(ngx.INFO, "开始测试nginx配置...")
+    -- 命令格式：/usr/local/openresty/bin/openresty -t
+    ngx.log(ngx.INFO, "开始测试nginx配置，执行命令: ", nginx_binary, " -t")
     local test_cmd = nginx_binary .. " -t 2>&1"
     local test_result = io.popen(test_cmd)
     if not test_result then
-        local error_msg = "无法执行nginx配置测试命令"
+        local error_msg = "无法执行nginx配置测试命令: " .. test_cmd
         ngx.log(ngx.ERR, error_msg)
         return false, error_msg
     end
@@ -121,18 +122,19 @@ local function do_reload_nginx()
     
     if test_code ~= 0 then
         local error_msg = "nginx配置测试失败: " .. (test_output or "unknown error")
-        ngx.log(ngx.ERR, error_msg)
+        ngx.log(ngx.ERR, error_msg, " (命令: ", test_cmd, ")")
         return false, error_msg
     end
     
-    ngx.log(ngx.INFO, "nginx配置测试通过")
+    ngx.log(ngx.INFO, "nginx配置测试通过: ", test_output or "success")
     
     -- 第二步：执行nginx配置重新加载（测试通过后才重载）
-    ngx.log(ngx.INFO, "开始重新加载nginx配置...")
+    -- 命令格式：/usr/local/openresty/bin/openresty -s reload
+    ngx.log(ngx.INFO, "开始重新加载nginx配置，执行命令: ", nginx_binary, " -s reload")
     local reload_cmd = nginx_binary .. " -s reload 2>&1"
     local reload_result = io.popen(reload_cmd)
     if not reload_result then
-        local error_msg = "无法执行nginx重载命令"
+        local error_msg = "无法执行nginx重载命令: " .. reload_cmd
         ngx.log(ngx.ERR, error_msg)
         return false, error_msg
     end
@@ -142,11 +144,11 @@ local function do_reload_nginx()
     
     if reload_code ~= 0 then
         local error_msg = "nginx配置重新加载失败: " .. (reload_output or "unknown error")
-        ngx.log(ngx.ERR, error_msg)
+        ngx.log(ngx.ERR, error_msg, " (命令: ", reload_cmd, ")")
         return false, error_msg
     end
     
-    ngx.log(ngx.INFO, "nginx配置重新加载成功")
+    ngx.log(ngx.INFO, "nginx配置重新加载成功: ", reload_output or "success")
     return true, reload_output
 end
 

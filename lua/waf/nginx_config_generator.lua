@@ -246,6 +246,16 @@ local function generate_stream_server_config(proxy, upstream_name)
     end
     config = config .. ";\n"
     
+    -- WAF封控检查（如果关联了防护规则）
+    if proxy.ip_rule_id then
+        config = config .. "\n    # WAF封控检查（关联防护规则ID: " .. proxy.ip_rule_id .. "）\n"
+        config = config .. "    set $proxy_ip_rule_id " .. proxy.ip_rule_id .. ";\n"
+        config = config .. "    preread_by_lua_block {\n"
+        config = config .. "        local rule_id = ngx.var.proxy_ip_rule_id\n"
+        config = config .. "        require(\"waf.ip_block\").check_stream(rule_id)\n"
+        config = config .. "    }\n"
+    end
+    
     -- 代理到后端
     -- 注意：如果生成了upstream配置（无论是single还是upstream类型），都使用upstream
     if upstream_name then

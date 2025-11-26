@@ -629,7 +629,133 @@ local function check_specific_rule(client_ip, rule_id)
     end
 end
 
--- 主检查函数
+-- Stream专用检查函数（用于TCP/UDP代理）
+-- @param rule_id 可选的规则ID，如果提供则只检查该规则（用于反向代理关联的规则）
+-- 注意：Stream块中不能使用ngx.status和ngx.say，需要使用ngx.exit()来拒绝连接
+function _M.check_stream(rule_id)
+    -- 检查IP封控功能是否启用（优先从数据库读取）
+    local ip_block_enabled = feature_switches.is_enabled("ip_block")
+    if not ip_block_enabled or not config.block.enable then
+        return
+    end
+
+    -- 检查规则版本号（用于缓存失效）
+    check_rule_version()
+
+    -- 在Stream块中，直接使用ngx.var.remote_addr获取客户端IP（没有HTTP头）
+    local client_ip = ngx.var.remote_addr
+    if not client_ip or client_ip == "" then
+        -- 无法获取客户端IP，允许通过（安全起见，避免误封）
+        return
+    end
+
+    -- 验证IP格式
+    if not ip_utils.is_valid_ip(client_ip) then
+        ngx.log(ngx.WARN, "invalid client IP in stream: ", client_ip)
+        return
+    end
+
+    -- 如果指定了规则ID，只检查该规则
+    if rule_id then
+        local rule_id_num = tonumber(rule_id)
+        if rule_id_num then
+            local is_blocked, matched_rule = check_specific_rule(client_ip, rule_id_num)
+            if is_blocked then
+                -- 记录封控日志
+                log_block(client_ip, matched_rule, "manual")
+                
+                -- 记录监控指标
+                if config.metrics and config.metrics.enable then
+                    metrics.record_block("manual")
+                end
+                
+                -- Stream块中拒绝连接（使用ngx.exit()）
+                ngx.log(ngx.WARN, "Stream connection blocked by IP rule: ", client_ip, ", rule_id: ", rule_id_num)
+                ngx.exit(1)  -- 拒绝连接
+            end
+            -- 白名单匹配或规则不匹配，允许通过
+            return
+        end
+    end
+
+    -- 检查白名单（优先级最高）
+    if check_whitelist(client_ip) then
+        return
+    end
+
+    -- 检查封控规则（按优先级顺序）
+    local is_blocked = false
+    local matched_rule = nil
+    local block_reason = "manual"
+
+    -- 1. 检查自动封控（优先级最高）
+    local auto_blocked, auto_block_info = auto_block.check_auto_block(client_ip)
+    if auto_blocked then
+        is_blocked = true
+        matched_rule = {
+            id = auto_block_info.id,
+            rule_name = "自动封控-" .. client_ip,
+            block_reason = auto_block_info.reason
+        }
+        block_reason = auto_block_info.reason or "auto_frequency"
+        goto block
+    end
+
+    -- 2. 检查单个 IP
+    is_blocked, matched_rule = check_single_ip(client_ip)
+    if is_blocked then
+        goto block
+    end
+
+    -- 3. 检查 IP 段
+    is_blocked, matched_rule = check_ip_range(client_ip)
+    if is_blocked then
+        goto block
+    end
+
+    -- 4. 检查地域封控
+    is_blocked, matched_rule = check_geo_block(client_ip)
+    if is_blocked then
+        goto block
+    end
+
+    -- 5. 检查是否需要自动封控（基于频率统计）
+    if config.auto_block.enable then
+        local should_block, block_info = frequency_stats.should_auto_block(client_ip)
+        if should_block then
+            -- 创建自动封控规则
+            local ok, auto_rule = auto_block.create_auto_block_rule(client_ip, block_info)
+            if ok then
+                is_blocked = true
+                matched_rule = {
+                    id = auto_rule.id,
+                    rule_name = "自动封控-" .. client_ip,
+                    block_reason = block_info.reason
+                }
+                block_reason = block_info.reason or "auto_frequency"
+                goto block
+            end
+        end
+    end
+
+    -- 未匹配任何规则，允许通过
+    return
+
+    ::block::
+    -- 记录封控日志
+    log_block(client_ip, matched_rule, block_reason)
+    
+    -- 记录监控指标
+    if config.metrics and config.metrics.enable then
+        metrics.record_block(block_reason)
+    end
+    
+    -- Stream块中拒绝连接（使用ngx.exit()）
+    ngx.log(ngx.WARN, "Stream connection blocked: ", client_ip, ", reason: ", block_reason)
+    ngx.exit(1)  -- 拒绝连接
+end
+
+-- 主检查函数（用于HTTP/HTTPS代理）
 -- @param rule_id 可选的规则ID，如果提供则只检查该规则（用于反向代理关联的规则）
 function _M.check(rule_id)
     -- 检查IP封控功能是否启用（优先从数据库读取）

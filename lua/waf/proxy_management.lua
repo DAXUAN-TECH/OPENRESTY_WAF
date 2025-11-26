@@ -484,18 +484,20 @@ function _M.update_proxy(proxy_id, proxy_data)
     
     ngx.log(ngx.INFO, "proxy updated: ", proxy_id)
     
-    -- 如果代理已启用，重新生成nginx配置
+    -- 注意：如果状态发生变化，需要重新生成nginx配置
+    -- 但是，如果是从 disable_proxy() 或 enable_proxy() 调用的，它们会自己调用 generate_all_configs()
+    -- 所以这里只在直接调用 update_proxy() 时才重新生成配置
+    -- 检查状态是否发生变化
     local updated_proxy, _ = _M.get_proxy(proxy_id)
-    if updated_proxy and updated_proxy.status == 1 then
-        local ok, err = nginx_config_generator.generate_all_configs()
-        if not ok then
-            ngx.log(ngx.WARN, "生成nginx配置失败: ", err or "unknown error")
-        end
-    elseif updated_proxy and updated_proxy.status == 0 then
-        -- 如果代理被禁用，重新生成配置（会排除禁用的代理）
-        local ok, err = nginx_config_generator.generate_all_configs()
-        if not ok then
-            ngx.log(ngx.WARN, "生成nginx配置失败: ", err or "unknown error")
+    if updated_proxy then
+        -- 如果状态发生变化（启用或禁用），重新生成nginx配置
+        if proxy_data.status ~= nil then
+            local ok, err = nginx_config_generator.generate_all_configs()
+            if not ok then
+                ngx.log(ngx.WARN, "生成nginx配置失败: ", err or "unknown error")
+            else
+                ngx.log(ngx.INFO, "代理状态已更新，nginx配置已重新生成")
+            end
         end
     end
     

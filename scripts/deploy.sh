@@ -229,32 +229,40 @@ if [ -n "$http_start_line" ]; then
     if [ -n "$http_end_line" ]; then
         # 检查 http 块后的内容
         after_http_start=$((http_end_line + 1))
-        after_http_content=$(sed -n "${after_http_start},\$p" "$NGINX_CONF_DIR/nginx.conf" 2>/dev/null | head -5)
         
-        # 检查是否是 stream 块（应该保留）
-        if echo "$after_http_content" | grep -q "^stream {"; then
-            echo -e "${GREEN}✓ http 块后包含 stream 块（正确）${NC}"
-        elif [ -n "$after_http_content" ]; then
-            # 检查是否有不应该存在的内容（如重复的 set、include 指令）
-            if echo "$after_http_content" | grep -qE "^\s*(set|include)"; then
-                echo -e "${YELLOW}⚠ 检测到 http 块后有重复的配置指令，但保留 stream 块（如果存在）${NC}"
-                # 只清理重复的 set 和 include 指令，保留 stream 块
-                # 找到 stream 块开始位置
-                stream_start_line=$(grep -n "^stream {" "$NGINX_CONF_DIR/nginx.conf" | cut -d: -f1 | head -1)
-                if [ -n "$stream_start_line" ] && [ "$stream_start_line" -gt "$http_end_line" ]; then
-                    # 有 stream 块，只清理 http 块和 stream 块之间的重复内容
-                    if [ "$stream_start_line" -gt $((http_end_line + 1)) ]; then
-                        echo -e "${YELLOW}  清理 http 块和 stream 块之间的重复内容...${NC}"
-                        # 保留 http 块、空行、stream 块
-                        head -n "$http_end_line" "$NGINX_CONF_DIR/nginx.conf" > "$NGINX_CONF_DIR/nginx.conf.tmp"
-                        echo "" >> "$NGINX_CONF_DIR/nginx.conf.tmp"
-                        tail -n +$stream_start_line "$NGINX_CONF_DIR/nginx.conf" >> "$NGINX_CONF_DIR/nginx.conf.tmp"
-                        mv "$NGINX_CONF_DIR/nginx.conf.tmp" "$NGINX_CONF_DIR/nginx.conf"
-                        echo -e "${GREEN}✓ 已清理重复内容，保留 stream 块${NC}"
-                    fi
+        # 检查是否有 stream 块（应该保留）
+        stream_start_line=$(grep -n "^stream {" "$NGINX_CONF_DIR/nginx.conf" 2>/dev/null | cut -d: -f1 | head -1)
+        
+        if [ -n "$stream_start_line" ] && [ "$stream_start_line" -gt "$http_end_line" ]; then
+            # 有 stream 块，检查 http 块和 stream 块之间是否有不应该存在的内容
+            if [ "$stream_start_line" -gt $((http_end_line + 1)) ]; then
+                # http 块和 stream 块之间有内容，检查是否是注释或空行
+                between_content=$(sed -n "$((http_end_line + 1)),$((stream_start_line - 1))p" "$NGINX_CONF_DIR/nginx.conf" 2>/dev/null)
+                # 检查是否包含不应该存在的指令（set、include，但不是注释）
+                if echo "$between_content" | grep -qE "^\s*(set|include)"; then
+                    echo -e "${YELLOW}⚠ 检测到 http 块和 stream 块之间有重复的配置指令，正在清理...${NC}"
+                    # 保留 http 块、空行、stream 块及其后的所有内容
+                    head -n "$http_end_line" "$NGINX_CONF_DIR/nginx.conf" > "$NGINX_CONF_DIR/nginx.conf.tmp"
+                    echo "" >> "$NGINX_CONF_DIR/nginx.conf.tmp"
+                    tail -n +$stream_start_line "$NGINX_CONF_DIR/nginx.conf" >> "$NGINX_CONF_DIR/nginx.conf.tmp"
+                    mv "$NGINX_CONF_DIR/nginx.conf.tmp" "$NGINX_CONF_DIR/nginx.conf"
+                    echo -e "${GREEN}✓ 已清理重复内容，保留 stream 块${NC}"
                 else
-                    # 没有 stream 块，清理所有 http 块后的内容
-                    echo -e "${YELLOW}  清理 http 块后的重复内容（无 stream 块）...${NC}"
+                    # 只有注释或空行，保留
+                    echo -e "${GREEN}✓ http 块和 stream 块之间只有注释或空行（正确）${NC}"
+                fi
+            else
+                # http 块和 stream 块之间没有内容（或只有空行），这是正常的
+                echo -e "${GREEN}✓ http 块后直接是 stream 块（正确）${NC}"
+            fi
+        else
+            # 没有 stream 块，检查 http 块后是否有不应该存在的内容
+            after_http_content=$(sed -n "${after_http_start},\$p" "$NGINX_CONF_DIR/nginx.conf" 2>/dev/null | head -5)
+            if [ -n "$after_http_content" ]; then
+                # 检查是否有不应该存在的内容（如重复的 set、include 指令）
+                if echo "$after_http_content" | grep -qE "^\s*(set|include)"; then
+                    echo -e "${YELLOW}⚠ 检测到 http 块后有重复的配置指令，正在清理...${NC}"
+                    # 清理所有 http 块后的内容（因为没有 stream 块）
                     head -n "$http_end_line" "$NGINX_CONF_DIR/nginx.conf" > "$NGINX_CONF_DIR/nginx.conf.tmp"
                     mv "$NGINX_CONF_DIR/nginx.conf.tmp" "$NGINX_CONF_DIR/nginx.conf"
                     echo -e "${GREEN}✓ 已清理重复内容${NC}"

@@ -187,53 +187,76 @@ local function do_reload_nginx()
     
     -- 第二步：执行OpenResty配置重新加载（测试通过后才重载）
     -- 注意：openresty -s reload 需要向 master 进程发送信号，waf 用户可能没有权限
-    -- 优先尝试使用 sudo，如果失败则尝试直接执行（可能 master 进程是 waf 用户启动的）
-    -- 命令格式：sudo /usr/local/openresty/bin/openresty -s reload 或 /usr/local/openresty/bin/openresty -s reload
-    ngx.log(ngx.INFO, "开始重新加载OpenResty配置，执行命令: ", openresty_binary, " -s reload")
+    -- 优先使用 systemctl reload openresty（如果使用 systemd 管理服务）
+    -- 如果 systemctl 不可用，尝试使用 sudo openresty -s reload
+    -- 最后尝试直接执行（可能 master 进程是 waf 用户启动的）
+    ngx.log(ngx.INFO, "开始重新加载OpenResty配置...")
     
-    -- 优先尝试使用 sudo（因为 master 进程通常是 root 启动的）
+    -- 方法1：优先使用 systemctl reload（最可靠，如果使用 systemd）
+    local systemctl_cmd = "systemctl reload openresty 2>&1"
+    local systemctl_result = io.popen(systemctl_cmd)
+    if systemctl_result then
+        local systemctl_output = systemctl_result:read("*all")
+        local systemctl_code = systemctl_result:close()
+        if systemctl_code == 0 then
+            ngx.log(ngx.INFO, "OpenResty配置重新加载成功（使用 systemctl）: ", systemctl_output or "success")
+            return true, systemctl_output
+        else
+            -- systemctl 失败，继续尝试其他方法
+            ngx.log(ngx.DEBUG, "systemctl reload 失败，尝试其他方法: ", systemctl_output or "unknown error")
+        end
+    end
+    
+    -- 方法2：尝试使用 sudo openresty -s reload（因为 master 进程通常是 root 启动的）
+    ngx.log(ngx.INFO, "尝试使用 sudo 执行重载命令: ", openresty_binary, " -s reload")
     local reload_cmd = "sudo " .. openresty_binary .. " -s reload 2>&1"
     local reload_result = io.popen(reload_cmd)
     if not reload_result then
-        local error_msg = "无法执行nginx重载命令: " .. reload_cmd .. " (可能在timer上下文中受限)"
-        ngx.log(ngx.ERR, error_msg)
-        return false, error_msg
-    end
-    
-    local reload_output = reload_result:read("*all")
-    local reload_code = reload_result:close()
-    
-    if reload_code ~= 0 then
-        -- 如果 sudo 失败，尝试直接执行（可能 master 进程是 waf 用户启动的，或者配置了 sudoers）
-        if reload_output and (reload_output:match("Operation not permitted") or reload_output:match("Permission denied") or reload_output:match("kill.*failed")) then
-            ngx.log(ngx.WARN, "使用 sudo 重载失败，尝试直接执行重载命令...")
-            local direct_reload_cmd = openresty_binary .. " -s reload 2>&1"
-            local direct_reload_result = io.popen(direct_reload_cmd)
-            if direct_reload_result then
-                local direct_reload_output = direct_reload_result:read("*all")
-                local direct_reload_code = direct_reload_result:close()
-                if direct_reload_code == 0 then
-                    ngx.log(ngx.INFO, "OpenResty配置重新加载成功（直接执行）: ", direct_reload_output or "success")
-                    return true, direct_reload_output
-                else
-                    local error_msg = "OpenResty配置重新加载失败: " .. (direct_reload_output or "unknown error")
-                    ngx.log(ngx.ERR, error_msg, " (命令: ", direct_reload_cmd, ")")
-                    return false, error_msg
-                end
+        ngx.log(ngx.WARN, "无法执行 sudo 重载命令，尝试直接执行...")
+    else
+        local reload_output = reload_result:read("*all")
+        local reload_code = reload_result:close()
+        
+        if reload_code == 0 then
+            ngx.log(ngx.INFO, "OpenResty配置重新加载成功（使用 sudo）: ", reload_output or "success")
+            return true, reload_output
+        else
+            -- sudo 失败，检查是否是权限问题
+            if reload_output and (reload_output:match("Operation not permitted") or reload_output:match("Permission denied") or reload_output:match("kill.*failed")) then
+                ngx.log(ngx.WARN, "使用 sudo 重载失败（权限问题），尝试直接执行重载命令...")
             else
+                -- 其他错误，直接返回
                 local error_msg = "OpenResty配置重新加载失败: " .. (reload_output or "unknown error")
                 ngx.log(ngx.ERR, error_msg, " (命令: ", reload_cmd, ")")
                 return false, error_msg
             end
-        else
-            local error_msg = "OpenResty配置重新加载失败: " .. (reload_output or "unknown error")
-            ngx.log(ngx.ERR, error_msg, " (命令: ", reload_cmd, ")")
-            return false, error_msg
         end
     end
     
-    ngx.log(ngx.INFO, "OpenResty配置重新加载成功: ", reload_output or "success")
-    return true, reload_output
+    -- 方法3：尝试直接执行（可能 master 进程是 waf 用户启动的，或者配置了 sudoers）
+    ngx.log(ngx.INFO, "尝试直接执行重载命令: ", openresty_binary, " -s reload")
+    local direct_reload_cmd = openresty_binary .. " -s reload 2>&1"
+    local direct_reload_result = io.popen(direct_reload_cmd)
+    if direct_reload_result then
+        local direct_reload_output = direct_reload_result:read("*all")
+        local direct_reload_code = direct_reload_result:close()
+        if direct_reload_code == 0 then
+            ngx.log(ngx.INFO, "OpenResty配置重新加载成功（直接执行）: ", direct_reload_output or "success")
+            return true, direct_reload_output
+        else
+            local error_msg = "OpenResty配置重新加载失败: " .. (direct_reload_output or "unknown error")
+            ngx.log(ngx.ERR, error_msg, " (命令: ", direct_reload_cmd, ")")
+            ngx.log(ngx.ERR, "所有重载方法都失败了，请检查：")
+            ngx.log(ngx.ERR, "1. OpenResty 是否使用 systemd 管理（systemctl status openresty）")
+            ngx.log(ngx.ERR, "2. waf 用户是否有 sudo 权限执行 openresty -s reload")
+            ngx.log(ngx.ERR, "3. master 进程的所有者是否与 waf 用户匹配")
+            return false, error_msg
+        end
+    else
+        local error_msg = "无法执行OpenResty重载命令: " .. direct_reload_cmd .. " (可能在timer上下文中受限)"
+        ngx.log(ngx.ERR, error_msg)
+        return false, error_msg
+    end
 end
 
 -- 触发OpenResty配置重新加载（API接口）

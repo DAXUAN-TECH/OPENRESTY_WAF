@@ -88,6 +88,20 @@ if [ ! -d "${PROJECT_ROOT}/conf.d/upstream/tcp_udp" ]; then
 else
     echo -e "${BLUE}✓ 已存在: conf.d/upstream/tcp_udp/${NC}"
 fi
+
+if [ ! -d "${PROJECT_ROOT}/conf.d/vhost_conf/http_https" ]; then
+    mkdir -p "${PROJECT_ROOT}/conf.d/vhost_conf/http_https"
+    echo -e "${GREEN}✓ 已创建: conf.d/vhost_conf/http_https/${NC}"
+else
+    echo -e "${BLUE}✓ 已存在: conf.d/vhost_conf/http_https/${NC}"
+fi
+
+if [ ! -d "${PROJECT_ROOT}/conf.d/vhost_conf/tcp_udp" ]; then
+    mkdir -p "${PROJECT_ROOT}/conf.d/vhost_conf/tcp_udp"
+    echo -e "${GREEN}✓ 已创建: conf.d/vhost_conf/tcp_udp/${NC}"
+else
+    echo -e "${BLUE}✓ 已存在: conf.d/vhost_conf/tcp_udp/${NC}"
+fi
 echo -e "${GREEN}✓ 目录检查完成${NC}"
 
 # 复制 nginx.conf（只复制主配置文件）
@@ -418,6 +432,8 @@ REQUIRED_PATHS=(
     "${PROJECT_ROOT}/logs"
     "${PROJECT_ROOT}/conf.d/set_conf"
     "${PROJECT_ROOT}/conf.d/vhost_conf"
+    "${PROJECT_ROOT}/conf.d/vhost_conf/http_https"
+    "${PROJECT_ROOT}/conf.d/vhost_conf/tcp_udp"
     "${PROJECT_ROOT}/conf.d/upstream"
     "${PROJECT_ROOT}/conf.d/upstream/http_https"
     "${PROJECT_ROOT}/conf.d/upstream/tcp_udp"
@@ -535,7 +551,11 @@ find "${PROJECT_ROOT}/conf.d" -type f -name "*.conf" -exec chmod 644 {} \; 2>/de
 
 # 特别确保 vhost_conf 和 upstream 目录有写入权限
 chown -R nobody:nobody "${PROJECT_ROOT}/conf.d/vhost_conf" 2>/dev/null || true
-chmod 755 "${PROJECT_ROOT}/conf.d/vhost_conf" 2>/dev/null || true
+chmod -R 755 "${PROJECT_ROOT}/conf.d/vhost_conf" 2>/dev/null || true
+chown -R nobody:nobody "${PROJECT_ROOT}/conf.d/vhost_conf/http_https" 2>/dev/null || true
+chmod 755 "${PROJECT_ROOT}/conf.d/vhost_conf/http_https" 2>/dev/null || true
+chown -R nobody:nobody "${PROJECT_ROOT}/conf.d/vhost_conf/tcp_udp" 2>/dev/null || true
+chmod 755 "${PROJECT_ROOT}/conf.d/vhost_conf/tcp_udp" 2>/dev/null || true
 chown -R nobody:nobody "${PROJECT_ROOT}/conf.d/upstream" 2>/dev/null || true
 chmod -R 755 "${PROJECT_ROOT}/conf.d/upstream" 2>/dev/null || true
 chown -R nobody:nobody "${PROJECT_ROOT}/conf.d/upstream/http_https" 2>/dev/null || true
@@ -558,10 +578,13 @@ echo ""
 echo "项目文件位置（保持在项目目录，使用相对路径）:"
 echo "  - 配置文件: ${PROJECT_ROOT}/conf.d/"
 echo "    - set_conf/: 参数配置文件"
-echo "    - vhost_conf/: 虚拟主机配置（手动配置）"
-echo "    - upstream/: 自动生成的代理配置"
-echo "      - http_https/: HTTP/HTTPS代理的upstream和server配置"
-echo "      - tcp_udp/: TCP/UDP代理的upstream和server配置"
+echo "    - vhost_conf/: 虚拟主机配置"
+echo "      - waf.conf: WAF管理服务配置（手动配置）"
+echo "      - http_https/: HTTP/HTTPS代理的server配置（自动生成）"
+echo "      - tcp_udp/: TCP/UDP代理的server配置（自动生成）"
+echo "    - upstream/: 自动生成的upstream配置"
+echo "      - http_https/: HTTP/HTTPS代理的upstream配置"
+echo "      - tcp_udp/: TCP/UDP代理的upstream配置"
 echo "    - cert/: SSL 证书目录"
 echo "  - Lua 脚本: ${PROJECT_ROOT}/lua/"
 echo "  - GeoIP 数据库: ${PROJECT_ROOT}/lua/geoip/"

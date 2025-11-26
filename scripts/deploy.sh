@@ -111,7 +111,7 @@ sed -i "s|/path/to/project/logs/error.log|$PROJECT_ROOT_ABS/logs/error.log|g" "$
 sed -i "s|/path/to/project/conf.d/set_conf|$PROJECT_ROOT_ABS/conf.d/set_conf|g" "$NGINX_CONF_DIR/nginx.conf"
 # 替换 conf.d/vhost_conf 路径
 sed -i "s|/path/to/project/conf.d/vhost_conf|$PROJECT_ROOT_ABS/conf.d/vhost_conf|g" "$NGINX_CONF_DIR/nginx.conf"
-# 替换 conf.d/upstream 路径
+# 替换 conf.d/upstream 路径（包括子目录）
 sed -i "s|/path/to/project/conf.d/upstream|$PROJECT_ROOT_ABS/conf.d/upstream|g" "$NGINX_CONF_DIR/nginx.conf"
 
 # 删除 set $project_root 指令（某些 OpenResty 版本不支持在 http 块中使用 set）

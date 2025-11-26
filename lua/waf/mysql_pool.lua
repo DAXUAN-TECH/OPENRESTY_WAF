@@ -9,12 +9,28 @@ local pool = {}
 
 -- SQL 转义函数
 local function escape_sql(str)
+    -- 检查是否为 nil 或 cjson.null
     if str == nil then
         return "NULL"
     end
-    if type(str) == "number" then
+    
+    -- 检查是否为 cjson.null（userdata类型）
+    local cjson = require "cjson"
+    if str == cjson.null then
+        return "NULL"
+    end
+    
+    -- 检查类型
+    local str_type = type(str)
+    if str_type == "number" then
         return tostring(str)
     end
+    
+    -- 如果不是字符串类型，先转换为字符串
+    if str_type ~= "string" then
+        str = tostring(str)
+    end
+    
     -- 转义反斜杠（必须在单引号之前）
     str = string.gsub(str, "\\", "\\\\")
     -- 转义单引号

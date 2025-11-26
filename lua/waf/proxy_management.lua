@@ -76,8 +76,17 @@ function _M.create_proxy(proxy_data)
         return nil, "该端口已被其他启用的代理配置占用"
     end
     
+    -- 处理 cjson.null，转换为 nil
+    local cjson = require "cjson"
+    local function null_to_nil(value)
+        if value == nil or value == cjson.null then
+            return nil
+        end
+        return value
+    end
+    
     -- 验证ip_rule_id（如果提供）
-    local ip_rule_id = proxy_data.ip_rule_id
+    local ip_rule_id = null_to_nil(proxy_data.ip_rule_id)
     if ip_rule_id then
         -- 检查规则是否存在且为IP相关类型
         local rule_check_sql = "SELECT id, rule_type FROM waf_block_rules WHERE id = ? AND status = 1 LIMIT 1"
@@ -105,12 +114,12 @@ function _M.create_proxy(proxy_data)
     ]]
     
     local listen_address = proxy_data.listen_address or "0.0.0.0"
-    local server_name = proxy_data.server_name or nil
+    local server_name = null_to_nil(proxy_data.server_name)
     local location_path = proxy_data.location_path or "/"
     local backend_type = proxy_data.backend_type or "single"
-    local backend_port = proxy_data.backend_port or nil
+    local backend_port = null_to_nil(proxy_data.backend_port)
     local load_balance = proxy_data.load_balance or "round_robin"
-    local health_check_enable = proxy_data.health_check_enable ~= nil and proxy_data.health_check_enable or 1
+    local health_check_enable = proxy_data.health_check_enable ~= nil and proxy_data.health_check_enable ~= cjson.null and proxy_data.health_check_enable or 1
     local health_check_interval = proxy_data.health_check_interval or 10
     local health_check_timeout = proxy_data.health_check_timeout or 3
     local max_fails = proxy_data.max_fails or 3
@@ -120,11 +129,12 @@ function _M.create_proxy(proxy_data)
     local proxy_send_timeout = proxy_data.proxy_send_timeout or 60
     local proxy_read_timeout = proxy_data.proxy_read_timeout or 60
     local ssl_enable = proxy_data.ssl_enable or 0
-    local ssl_cert_path = proxy_data.ssl_cert_path or nil
-    local ssl_key_path = proxy_data.ssl_key_path or nil
-    local description = proxy_data.description or nil
+    local ssl_cert_path = null_to_nil(proxy_data.ssl_cert_path)
+    local ssl_key_path = null_to_nil(proxy_data.ssl_key_path)
+    local description = null_to_nil(proxy_data.description)
     local status = proxy_data.status or 1
     local priority = proxy_data.priority or 0
+    local ip_rule_id = null_to_nil(proxy_data.ip_rule_id)
     
     local insert_id, err = mysql_pool.insert(sql,
         proxy_data.proxy_name,

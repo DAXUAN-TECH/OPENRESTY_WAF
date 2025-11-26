@@ -456,7 +456,7 @@ function _M.generate_all_configs()
     
     -- 确保目录存在
     local dirs = {
-        project_root .. "/conf.d/set_conf",
+        project_root .. "/conf.d/http_set",
         project_root .. "/conf.d/vhost_conf",
         project_root .. "/conf.d/vhost_conf/http_https",
         project_root .. "/conf.d/vhost_conf/tcp_udp",

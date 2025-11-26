@@ -162,8 +162,8 @@ if [ -f "$NGINX_CONF_DIR/nginx.conf" ]; then
     cp "$NGINX_CONF_DIR/nginx.conf" "$BACKUP_DIR/nginx.conf.bak"
 fi
 
-if [ -f "${SCRIPT_DIR}/../conf.d/set_conf/performance.conf" ]; then
-    cp "${SCRIPT_DIR}/../conf.d/set_conf/performance.conf" "$BACKUP_DIR/performance.conf.bak"
+if [ -f "${SCRIPT_DIR}/../conf.d/http_set/performance.conf" ]; then
+    cp "${SCRIPT_DIR}/../conf.d/http_set/performance.conf" "$BACKUP_DIR/performance.conf.bak"
 fi
 
 echo -e "${GREEN}✓ 备份完成: $BACKUP_DIR${NC}"
@@ -274,41 +274,56 @@ if [ -f "$NGINX_CONF_DIR/nginx.conf" ]; then
 fi
 
 # 5.2 优化 performance.conf
-if [ -f "${SCRIPT_DIR}/../conf.d/set_conf/performance.conf" ]; then
+if [ -f "${SCRIPT_DIR}/../conf.d/http_set/performance.conf" ]; then
     echo "  优化 performance.conf..."
     
     # 更新 keepalive 连接数
-    if grep -q "keepalive " "${SCRIPT_DIR}/../conf.d/set_conf/performance.conf"; then
-        sed -i "s/keepalive [0-9]*;/keepalive $KEEPALIVE_CONNECTIONS;/" "${SCRIPT_DIR}/../conf.d/set_conf/performance.conf"
+    if grep -q "keepalive " "${SCRIPT_DIR}/../conf.d/http_set/performance.conf"; then
+        sed -i "s/keepalive [0-9]*;/keepalive $KEEPALIVE_CONNECTIONS;/" "${SCRIPT_DIR}/../conf.d/http_set/performance.conf"
     fi
     
     echo -e "    ${GREEN}✓ performance.conf 已优化${NC}"
 fi
 
 # 5.3 优化 upstream.conf
-if [ -f "${SCRIPT_DIR}/../conf.d/set_conf/upstream.conf" ]; then
+if [ -f "${SCRIPT_DIR}/../conf.d/http_set/upstream.conf" ]; then
     echo "  优化 upstream.conf..."
     
     # 更新 keepalive
-    if grep -q "keepalive " "${SCRIPT_DIR}/../conf.d/set_conf/upstream.conf"; then
-        sed -i "s/keepalive [0-9]*;/keepalive $KEEPALIVE_CONNECTIONS;/" "${SCRIPT_DIR}/../conf.d/set_conf/upstream.conf"
+    if grep -q "keepalive " "${SCRIPT_DIR}/../conf.d/http_set/upstream.conf"; then
+        sed -i "s/keepalive [0-9]*;/keepalive $KEEPALIVE_CONNECTIONS;/" "${SCRIPT_DIR}/../conf.d/http_set/upstream.conf"
     fi
     
     echo -e "    ${GREEN}✓ upstream.conf 已优化${NC}"
 fi
 
-# 5.4 优化 waf.conf 共享内存
-if [ -f "${SCRIPT_DIR}/../conf.d/set_conf/waf.conf" ]; then
-    echo "  优化 waf.conf 共享内存..."
+# 5.4 优化 waf.conf 共享内存（HTTP块）
+if [ -f "${SCRIPT_DIR}/../conf.d/http_set/waf.conf" ]; then
+    echo "  优化 http_set/waf.conf 共享内存..."
     
     # 更新 waf_cache（10MB）
-    if grep -q "lua_shared_dict waf_cache" "${SCRIPT_DIR}/../conf.d/set_conf/waf.conf"; then
-        sed -i "s/lua_shared_dict waf_cache [0-9]*m;/lua_shared_dict waf_cache 10m;/" "${SCRIPT_DIR}/../conf.d/set_conf/waf.conf"
+    if grep -q "lua_shared_dict waf_cache" "${SCRIPT_DIR}/../conf.d/http_set/waf.conf"; then
+        sed -i "s/lua_shared_dict waf_cache [0-9]*m;/lua_shared_dict waf_cache 10m;/" "${SCRIPT_DIR}/../conf.d/http_set/waf.conf"
     fi
     
     # 更新 waf_log_buffer（50MB）
-    if grep -q "lua_shared_dict waf_log_buffer" "${SCRIPT_DIR}/../conf.d/set_conf/waf.conf"; then
-        sed -i "s/lua_shared_dict waf_log_buffer [0-9]*m;/lua_shared_dict waf_log_buffer 50m;/" "${SCRIPT_DIR}/../conf.d/set_conf/waf.conf"
+    if grep -q "lua_shared_dict waf_log_buffer" "${SCRIPT_DIR}/../conf.d/http_set/waf.conf"; then
+        sed -i "s/lua_shared_dict waf_log_buffer [0-9]*m;/lua_shared_dict waf_log_buffer 50m;/" "${SCRIPT_DIR}/../conf.d/http_set/waf.conf"
+    fi
+fi
+
+# 5.5 优化 waf.conf 共享内存（Stream块）
+if [ -f "${SCRIPT_DIR}/../conf.d/stream_set/waf.conf" ]; then
+    echo "  优化 stream_set/waf.conf 共享内存..."
+    
+    # 更新 waf_cache（10MB）
+    if grep -q "lua_shared_dict waf_cache" "${SCRIPT_DIR}/../conf.d/stream_set/waf.conf"; then
+        sed -i "s/lua_shared_dict waf_cache [0-9]*m;/lua_shared_dict waf_cache 10m;/" "${SCRIPT_DIR}/../conf.d/stream_set/waf.conf"
+    fi
+    
+    # 更新 waf_log_buffer（50MB）
+    if grep -q "lua_shared_dict waf_log_buffer" "${SCRIPT_DIR}/../conf.d/stream_set/waf.conf"; then
+        sed -i "s/lua_shared_dict waf_log_buffer [0-9]*m;/lua_shared_dict waf_log_buffer 50m;/" "${SCRIPT_DIR}/../conf.d/stream_set/waf.conf"
     fi
     
     echo -e "    ${GREEN}✓ waf.conf 已优化${NC}"

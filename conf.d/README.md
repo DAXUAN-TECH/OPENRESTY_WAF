@@ -4,7 +4,7 @@
 
 ```
 conf.d/
-├── set_conf/         # 参数配置文件目录
+├── http_set/         # HTTP参数配置文件目录
 │   ├── mime.conf     # MIME 类型配置
 │   ├── log.conf      # 日志格式和访问日志配置
 │   ├── basic.conf    # 基础配置（sendfile、keepalive 等）
@@ -13,6 +13,9 @@ conf.d/
 │   ├── waf.conf      # WAF 共享内存和限流配置
 │   ├── performance.conf # 性能优化配置
 │   └── upstream.conf # 后端服务器配置
+├── stream_set/       # Stream参数配置文件目录
+│   ├── lua.conf      # Stream Lua 模块配置
+│   └── waf.conf      # Stream WAF 共享内存配置
 ├── vhost_conf/       # 虚拟主机配置目录
 │   ├── default.conf  # 默认 HTTP 服务器配置（代理到后端服务器）
 │   ├── waf.conf     # WAF 管理服务配置（API和Web管理界面）
@@ -25,7 +28,7 @@ conf.d/
 
 ## 配置文件说明
 
-### set_conf/ 目录（参数配置）
+### http_set/ 目录（HTTP参数配置）
 
 #### mime.conf
 - MIME 类型映射
@@ -56,6 +59,18 @@ conf.d/
 
 #### upstream.conf
 - 后端服务器 upstream 配置
+
+### stream_set/ 目录（Stream参数配置）
+
+此目录包含Stream块相关的配置文件，这些文件会被 `nginx.conf` 的 `stream` 块通过 `include` 指令加载。
+
+#### lua.conf
+- Stream Lua 模块配置
+- 注意：Stream块不支持 `init_by_lua_block` 和 `init_worker_by_lua_block`
+
+#### waf.conf
+- Stream WAF 共享内存配置
+- 包含 `lua_shared_dict` 定义（与HTTP块共享）
 
 ### vhost_conf/ 目录（虚拟主机配置）
 
@@ -90,14 +105,14 @@ conf.d/
 
 ### 添加新的参数配置
 
-在 `conf.d/set_conf/` 目录下创建新的 `.conf` 文件，然后在 `nginx.conf` 中添加 include：
+在 `conf.d/http_set/` 或 `conf.d/stream_set/` 目录下创建新的 `.conf` 文件，然后在 `nginx.conf` 中添加 include：
 
 ```nginx
-# 使用 $project_root 变量引用项目目录（推荐）
-include $project_root/conf.d/set_conf/your_config.conf;
+# HTTP块中使用 http_set
+include $project_root/conf.d/http_set/your_config.conf;
 
-# 或使用相对路径（如果 nginx.conf 在项目目录）
-include conf.d/set_conf/your_config.conf;
+# Stream块中使用 stream_set
+include $project_root/conf.d/stream_set/your_config.conf;
 ```
 
 **路径说明**：
@@ -173,11 +188,11 @@ sudo cp init_file/nginx.conf ${OPENRESTY_PREFIX:-/usr/local/openresty}/nginx/con
 
 # 手动更新 nginx.conf 中的 include 路径
 # 推荐：使用 $project_root 变量（部署脚本会自动设置）
-# include $project_root/conf.d/set_conf/*.conf;
+# include $project_root/conf.d/http_set/*.conf;
 # include $project_root/conf.d/vhost_conf/*.conf;
 
 # 不推荐：硬编码绝对路径
-# include /path/to/project/conf.d/set_conf/*.conf;
+# include /path/to/project/conf.d/http_set/*.conf;
 # include /path/to/project/conf.d/vhost_conf/*.conf;
 
 # 测试配置

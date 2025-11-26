@@ -280,7 +280,8 @@ sed -i "s|/path/to/project|$PROJECT_ROOT_ABS|g" "$NGINX_CONF_DIR/nginx.conf"
 echo -e "${GREEN}  ✓ 已替换所有路径占位符${NC}"
 echo -e "${BLUE}    替换的路径包括：${NC}"
 echo -e "${BLUE}    - logs/error.log${NC}"
-echo -e "${BLUE}    - conf.d/set_conf/*.conf${NC}"
+echo -e "${BLUE}    - conf.d/http_set/*.conf${NC}"
+echo -e "${BLUE}    - conf.d/stream_set/*.conf${NC}"
 echo -e "${BLUE}    - conf.d/vhost_conf/waf.conf${NC}"
 echo -e "${BLUE}    - conf.d/vhost_conf/http_https/proxy_http_*.conf${NC}"
 echo -e "${BLUE}    - conf.d/vhost_conf/tcp_udp/proxy_stream_*.conf${NC}"
@@ -297,13 +298,13 @@ sed -i '/此变量必须在 http 块的最开始设置/d' "$NGINX_CONF_DIR/nginx
 # 替换子配置文件中的 $project_root 变量为实际路径
 # 注意：由于某些 OpenResty 版本不支持在 http 块中使用 set 指令
 # 我们直接在子配置文件中替换 $project_root 为实际路径
-# 注意：只替换 conf.d/set_conf 和 conf.d/vhost_conf 目录下的配置文件
+# 注意：只替换 conf.d/http_set 和 conf.d/vhost_conf 目录下的配置文件
 echo -e "${YELLOW}  替换子配置文件中的 \$project_root 变量...${NC}"
 
 # 需要替换的文件列表（明确指定，避免误替换）
 REPLACE_FILES=(
-    "$PROJECT_ROOT_ABS/conf.d/set_conf/lua.conf"
-    "$PROJECT_ROOT_ABS/conf.d/set_conf/log.conf"
+    "$PROJECT_ROOT_ABS/conf.d/http_set/lua.conf"
+    "$PROJECT_ROOT_ABS/conf.d/http_set/log.conf"
 )
 
 # 替换指定文件
@@ -577,7 +578,8 @@ REQUIRED_PATHS=(
     "${PROJECT_ROOT}/conf.d"
     "${PROJECT_ROOT}/lua"
     "${PROJECT_ROOT}/logs"
-    "${PROJECT_ROOT}/conf.d/set_conf"
+    "${PROJECT_ROOT}/conf.d/http_set"
+    "${PROJECT_ROOT}/conf.d/stream_set"
     "${PROJECT_ROOT}/conf.d/vhost_conf"
     "${PROJECT_ROOT}/conf.d/vhost_conf/http_https"
     "${PROJECT_ROOT}/conf.d/vhost_conf/tcp_udp"
@@ -670,8 +672,10 @@ fi
 
 # 检查关键配置文件是否存在
 CRITICAL_CONFIGS=(
-    "${PROJECT_ROOT}/conf.d/set_conf/waf.conf"
-    "${PROJECT_ROOT}/conf.d/set_conf/lua.conf"
+    "${PROJECT_ROOT}/conf.d/http_set/waf.conf"
+    "${PROJECT_ROOT}/conf.d/http_set/lua.conf"
+    "${PROJECT_ROOT}/conf.d/stream_set/waf.conf"
+    "${PROJECT_ROOT}/conf.d/stream_set/lua.conf"
     "${PROJECT_ROOT}/lua/config.lua"
     "${PROJECT_ROOT}/lua/waf/init.lua"
 )
@@ -760,7 +764,8 @@ echo "  - nginx.conf: $NGINX_CONF_DIR/nginx.conf"
 echo ""
 echo "项目文件位置（保持在项目目录，使用相对路径）:"
 echo "  - 配置文件: ${PROJECT_ROOT}/conf.d/"
-echo "    - set_conf/: 参数配置文件"
+echo "    - http_set/: HTTP参数配置文件"
+echo "    - stream_set/: Stream参数配置文件"
 echo "    - vhost_conf/: 虚拟主机配置"
 echo "      - waf.conf: WAF管理服务配置（手动配置）"
 echo "      - http_https/: HTTP/HTTPS代理的server配置（自动生成）"

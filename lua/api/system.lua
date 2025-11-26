@@ -94,7 +94,7 @@ local function find_openresty_binary()
     
     -- 4. 尝试常见的默认安装路径（按优先级排序，优先 OpenResty）
     -- 注意：/usr/local/openresty/bin/openresty 是最常见的OpenResty安装路径
-    -- 在 timer 上下文中，直接尝试执行命令比检查文件更可靠
+    -- 在 timer 上下文中，test -x/-v 可能失败，但路径依然可用，因此对该路径放宽校验
     local default_paths = {
         "/usr/local/openresty/bin/openresty",  -- 最常见的OpenResty安装路径（最高优先级）
         "/usr/local/bin/openresty",
@@ -108,6 +108,11 @@ local function find_openresty_binary()
     for _, path in ipairs(default_paths) do
         if is_executable(path) then
             ngx.log(ngx.INFO, "从默认路径找到OpenResty可执行文件: ", path)
+            return path
+        elseif path == "/usr/local/openresty/bin/openresty" then
+            -- 在 timer 等受限环境中，is_executable 可能无法可靠工作，但该路径是本项目最常见安装位置
+            -- 如果前面的所有检查都失败，这里直接信任该路径，避免误报“未找到可执行文件”
+            ngx.log(ngx.INFO, "使用默认OpenResty路径（未完整验证）: ", path)
             return path
         end
     end

@@ -4,6 +4,7 @@
 
 local mysql_pool = require "waf.mysql_pool"
 local cjson = require "cjson"
+local nginx_config_generator = require "waf.nginx_config_generator"
 
 local _M = {}
 
@@ -182,6 +183,15 @@ function _M.create_proxy(proxy_data)
     end
     
     ngx.log(ngx.INFO, "proxy created: ", insert_id)
+    
+    -- 如果代理已启用，生成nginx配置
+    if status == 1 then
+        local ok, err = nginx_config_generator.generate_all_configs()
+        if not ok then
+            ngx.log(ngx.WARN, "生成nginx配置失败: ", err or "unknown error")
+        end
+    end
+    
     return {id = insert_id}, nil
 end
 
@@ -446,6 +456,22 @@ function _M.update_proxy(proxy_id, proxy_data)
     end
     
     ngx.log(ngx.INFO, "proxy updated: ", proxy_id)
+    
+    -- 如果代理已启用，重新生成nginx配置
+    local updated_proxy, _ = _M.get_proxy(proxy_id)
+    if updated_proxy and updated_proxy.status == 1 then
+        local ok, err = nginx_config_generator.generate_all_configs()
+        if not ok then
+            ngx.log(ngx.WARN, "生成nginx配置失败: ", err or "unknown error")
+        end
+    elseif updated_proxy and updated_proxy.status == 0 then
+        -- 如果代理被禁用，重新生成配置（会排除禁用的代理）
+        local ok, err = nginx_config_generator.generate_all_configs()
+        if not ok then
+            ngx.log(ngx.WARN, "生成nginx配置失败: ", err or "unknown error")
+        end
+    end
+    
     return {id = proxy_id}, nil
 end
 
@@ -470,17 +496,40 @@ function _M.delete_proxy(proxy_id)
     end
     
     ngx.log(ngx.INFO, "proxy deleted: ", proxy_id)
+    
+    -- 重新生成nginx配置（排除已删除的代理）
+    local ok, err = nginx_config_generator.generate_all_configs()
+    if not ok then
+        ngx.log(ngx.WARN, "生成nginx配置失败: ", err or "unknown error")
+    end
+    
     return {id = proxy_id}, nil
 end
 
 -- 启用代理配置
 function _M.enable_proxy(proxy_id)
-    return _M.update_proxy(proxy_id, {status = 1})
+    local result, err = _M.update_proxy(proxy_id, {status = 1})
+    if result then
+        -- 重新生成nginx配置
+        local ok, gen_err = nginx_config_generator.generate_all_configs()
+        if not ok then
+            ngx.log(ngx.WARN, "生成nginx配置失败: ", gen_err or "unknown error")
+        end
+    end
+    return result, err
 end
 
 -- 禁用代理配置
 function _M.disable_proxy(proxy_id)
-    return _M.update_proxy(proxy_id, {status = 0})
+    local result, err = _M.update_proxy(proxy_id, {status = 0})
+    if result then
+        -- 重新生成nginx配置
+        local ok, gen_err = nginx_config_generator.generate_all_configs()
+        if not ok then
+            ngx.log(ngx.WARN, "生成nginx配置失败: ", gen_err or "unknown error")
+        end
+    end
+    return result, err
 end
 
 return _M

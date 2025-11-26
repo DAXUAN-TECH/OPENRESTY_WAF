@@ -334,6 +334,34 @@ function _M.init_worker()
             ngx.log(ngx.INFO, "Cache tuning timer initialized")
         end
     end
+    
+    -- 初始化nginx代理配置生成（确保配置文件存在）
+    -- 使用定时器延迟执行，避免在init_worker阶段阻塞
+    local function init_proxy_configs(premature)
+        if premature then
+            return
+        end
+        
+        local ok, nginx_config_generator = pcall(require, "waf.nginx_config_generator")
+        if ok and nginx_config_generator and nginx_config_generator.generate_all_configs then
+            local gen_ok, gen_err = nginx_config_generator.generate_all_configs()
+            if gen_ok then
+                ngx.log(ngx.INFO, "Proxy configs initialized: ", gen_err or "success")
+            else
+                ngx.log(ngx.WARN, "Failed to initialize proxy configs: ", gen_err or "unknown error")
+            end
+        else
+            ngx.log(ngx.WARN, "nginx_config_generator module not available, skipping proxy config initialization")
+        end
+    end
+    
+    -- 延迟1秒执行，确保数据库连接已建立
+    local ok, err = ngx.timer.at(1, init_proxy_configs)
+    if not ok then
+        ngx.log(ngx.ERR, "failed to create proxy config initialization timer: ", err)
+    else
+        ngx.log(ngx.INFO, "Proxy config initialization timer created")
+    end
 end
 
 return _M

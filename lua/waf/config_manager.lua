@@ -7,14 +7,27 @@ local mysql_pool = require "waf.mysql_pool"
 local config = require "config"
 
 local _M = {}
-local cache = ngx.shared.waf_cache
+-- 安全获取共享内存（兼容Stream块）
+local function get_cache()
+    local ok, cache = pcall(function()
+        return ngx.shared.waf_cache
+    end)
+    if ok and cache then
+        return cache
+    end
+    return nil
+end
+local cache = get_cache()
 local CONFIG_CACHE_PREFIX = "config:"
 local CONFIG_CACHE_TTL = 300  -- 配置缓存时间（秒，5分钟）
 
 -- 从数据库读取配置值
 local function get_config_from_db(config_key, default_value)
     local cache_key = CONFIG_CACHE_PREFIX .. config_key
-    local cached = cache:get(cache_key)
+    local cached = nil
+    if cache then
+        cached = cache:get(cache_key)
+    end
     if cached ~= nil then
         return cached
     end
@@ -30,13 +43,17 @@ local function get_config_from_db(config_key, default_value)
     
     if ok and res and #res > 0 then
         local value = res[1].config_value
-        cache:set(cache_key, value, CONFIG_CACHE_TTL)
+        if cache then
+            cache:set(cache_key, value, CONFIG_CACHE_TTL)
+        end
         return value
     end
     
     -- 如果数据库中没有，返回默认值
     if default_value ~= nil then
-        cache:set(cache_key, tostring(default_value), CONFIG_CACHE_TTL)
+        if cache then
+            cache:set(cache_key, tostring(default_value), CONFIG_CACHE_TTL)
+        end
         return tostring(default_value)
     end
     
@@ -89,8 +106,10 @@ function _M.set_config(config_key, config_value, description)
     
     if ok and not err then
         -- 更新缓存
-        local cache_key = CONFIG_CACHE_PREFIX .. config_key
-        cache:set(cache_key, value_str, CONFIG_CACHE_TTL)
+        if cache then
+            local cache_key = CONFIG_CACHE_PREFIX .. config_key
+            cache:set(cache_key, value_str, CONFIG_CACHE_TTL)
+        end
         return true
     end
     
@@ -109,6 +128,9 @@ end
 
 -- 清除配置缓存
 function _M.clear_cache(config_key)
+    if not cache then
+        return
+    end
     if config_key then
         local cache_key = CONFIG_CACHE_PREFIX .. config_key
         cache:delete(cache_key)

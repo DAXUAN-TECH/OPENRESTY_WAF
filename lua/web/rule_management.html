@@ -422,6 +422,12 @@
             border-radius: 4px;
             resize: vertical;
             font-family: inherit;
+            line-height: 1.5;
+        }
+        
+        /* 确保规则值输入框在显示时正确应用样式 */
+        #rule-value-group .rule-value-input {
+            display: block;
         }
         
         .form-actions {
@@ -565,7 +571,7 @@
                 
                 <div class="form-group" id="rule-value-group">
                     <label>规则值 *</label>
-                    <input type="text" id="create-rule-value" required placeholder="例如: 192.168.1.100 或 192.168.1.0/24 或 192.168.1.1-192.168.1.100" class="rule-value-input">
+                    <textarea id="create-rule-value" required placeholder="例如: 192.168.1.100 或 192.168.1.0/24 或 192.168.1.1-192.168.1.100" class="rule-value-input"></textarea>
                     <small style="color: #666;" id="rule-value-hint">支持单个IP（如：192.168.1.100）或IP段（如：192.168.1.0/24 或 192.168.1.1-192.168.1.100）</small>
                 </div>
                 

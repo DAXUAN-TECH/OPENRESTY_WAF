@@ -336,30 +336,33 @@ local function cleanup_orphaned_files(project_root, active_proxy_ids)
         stream_files:close()
     end
     
-    -- 清理upstream配置文件
-    local upstream_dir = project_root .. "/conf.d/upstream"
-    local upstream_cmd = "find " .. upstream_dir .. " -maxdepth 1 -name 'upstream_*.conf' 2>/dev/null"
-    local upstream_files = io.popen(upstream_cmd)
-    if upstream_files then
-        for file in upstream_files:lines() do
-            -- 提取代理ID（从文件名upstream_{id}.conf或stream_upstream_{id}.conf）
-            local proxy_id = file:match("upstream_(%d+)%.conf")
-            if not proxy_id then
-                proxy_id = file:match("stream_upstream_(%d+)%.conf")
-            end
-            if proxy_id then
-                proxy_id = tonumber(proxy_id)
-                if not active_proxy_ids[proxy_id] then
-                    local ok, err = os.remove(file)
-                    if ok then
-                        ngx.log(ngx.INFO, "删除已删除代理的upstream配置文件: ", file)
-                    else
-                        ngx.log(ngx.WARN, "删除upstream配置文件失败: ", file, ", 错误: ", err or "unknown")
+    -- 清理upstream配置文件（HTTP_HTTPS和TCP_UDP子目录）
+    local upstream_subdirs = {"HTTP_HTTPS", "TCP_UDP"}
+    for _, subdir in ipairs(upstream_subdirs) do
+        local upstream_dir = project_root .. "/conf.d/upstream/" .. subdir
+        local upstream_cmd = "find " .. upstream_dir .. " -maxdepth 1 -name 'upstream_*.conf' -o -name 'stream_upstream_*.conf' 2>/dev/null"
+        local upstream_files = io.popen(upstream_cmd)
+        if upstream_files then
+            for file in upstream_files:lines() do
+                -- 提取代理ID（从文件名upstream_{id}.conf或stream_upstream_{id}.conf）
+                local proxy_id = file:match("upstream_(%d+)%.conf")
+                if not proxy_id then
+                    proxy_id = file:match("stream_upstream_(%d+)%.conf")
+                end
+                if proxy_id then
+                    proxy_id = tonumber(proxy_id)
+                    if not active_proxy_ids[proxy_id] then
+                        local ok, err = os.remove(file)
+                        if ok then
+                            ngx.log(ngx.INFO, "删除已删除代理的upstream配置文件: ", file)
+                        else
+                            ngx.log(ngx.WARN, "删除upstream配置文件失败: ", file, ", 错误: ", err or "unknown")
+                        end
                     end
                 end
             end
+            upstream_files:close()
         end
-        upstream_files:close()
     end
 end
 
@@ -404,7 +407,9 @@ function _M.generate_all_configs()
     local dirs = {
         project_root .. "/conf.d/set_conf",
         project_root .. "/conf.d/vhost_conf",
-        project_root .. "/conf.d/upstream"
+        project_root .. "/conf.d/upstream",
+        project_root .. "/conf.d/upstream/HTTP_HTTPS",
+        project_root .. "/conf.d/upstream/TCP_UDP"
     }
     
     for _, dir in ipairs(dirs) do
@@ -453,10 +458,18 @@ function _M.generate_all_configs()
                 
                 -- 生成独立的upstream配置文件
                 if upstream_config and upstream_name then
-                    local upstream_file = project_root .. "/conf.d/upstream/" .. upstream_name .. ".conf"
+                    -- 根据代理类型确定upstream配置文件目录
+                    local upstream_subdir = ""
+                    if proxy.proxy_type == "http" then
+                        upstream_subdir = "HTTP_HTTPS"
+                    else
+                        upstream_subdir = "TCP_UDP"
+                    end
                     
-                    -- 确保upstream目录存在
-                    local upstream_dir = project_root .. "/conf.d/upstream"
+                    local upstream_file = project_root .. "/conf.d/upstream/" .. upstream_subdir .. "/" .. upstream_name .. ".conf"
+                    
+                    -- 确保upstream子目录存在
+                    local upstream_dir = project_root .. "/conf.d/upstream/" .. upstream_subdir
                     local dir_ok = path_utils.ensure_dir(upstream_dir)
                     if not dir_ok then
                         ngx.log(ngx.ERR, "无法创建upstream目录: ", upstream_dir)
@@ -567,20 +580,23 @@ function _M.cleanup_configs()
         end
     end
     
-    -- 清理所有upstream配置文件
-    local upstream_dir = project_root .. "/conf.d/upstream"
-    local upstream_cmd = "find " .. upstream_dir .. " -maxdepth 1 -name 'upstream_*.conf' -o -name 'stream_upstream_*.conf' 2>/dev/null"
-    local upstream_files = io.popen(upstream_cmd)
-    if upstream_files then
-        for file in upstream_files:lines() do
-            local ok, err = os.remove(file)
-            if ok then
-                ngx.log(ngx.INFO, "删除upstream配置文件: ", file)
-            else
-                ngx.log(ngx.WARN, "删除upstream配置文件失败: ", file, ", 错误: ", err or "unknown")
+    -- 清理所有upstream配置文件（HTTP_HTTPS和TCP_UDP子目录）
+    local upstream_subdirs = {"HTTP_HTTPS", "TCP_UDP"}
+    for _, subdir in ipairs(upstream_subdirs) do
+        local upstream_dir = project_root .. "/conf.d/upstream/" .. subdir
+        local upstream_cmd = "find " .. upstream_dir .. " -maxdepth 1 -name 'upstream_*.conf' -o -name 'stream_upstream_*.conf' 2>/dev/null"
+        local upstream_files = io.popen(upstream_cmd)
+        if upstream_files then
+            for file in upstream_files:lines() do
+                local ok, err = os.remove(file)
+                if ok then
+                    ngx.log(ngx.INFO, "删除upstream配置文件: ", file)
+                else
+                    ngx.log(ngx.WARN, "删除upstream配置文件失败: ", file, ", 错误: ", err or "unknown")
+                end
             end
+            upstream_files:close()
         end
-        upstream_files:close()
     end
     
     return true, "清理完成"

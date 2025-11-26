@@ -186,55 +186,13 @@ local function do_reload_nginx()
     end
     
     -- 第二步：执行OpenResty配置重新加载（测试通过后才重载）
-    -- 注意：openresty -s reload 需要向 master 进程发送信号，waf 用户可能没有权限
-    -- 优先使用 systemctl reload openresty（如果使用 systemd 管理服务）
-    -- 如果 systemctl 不可用，尝试使用 sudo openresty -s reload
-    -- 最后尝试直接执行（可能 master 进程是 waf 用户启动的）
-    ngx.log(ngx.INFO, "开始重新加载OpenResty配置...")
-    
-    -- 方法1：优先使用 systemctl reload（最可靠，如果使用 systemd）
-    local systemctl_cmd = "systemctl reload openresty 2>&1"
-    local systemctl_result = io.popen(systemctl_cmd)
-    if systemctl_result then
-        local systemctl_output = systemctl_result:read("*all")
-        local systemctl_code = systemctl_result:close()
-        if systemctl_code == 0 then
-            ngx.log(ngx.INFO, "OpenResty配置重新加载成功（使用 systemctl）: ", systemctl_output or "success")
-            return true, systemctl_output
-        else
-            -- systemctl 失败，继续尝试其他方法
-            ngx.log(ngx.DEBUG, "systemctl reload 失败，尝试其他方法: ", systemctl_output or "unknown error")
-        end
-    end
-    
-    -- 方法2：尝试使用 sudo openresty -s reload（因为 master 进程通常是 root 启动的）
-    ngx.log(ngx.INFO, "尝试使用 sudo 执行重载命令: ", openresty_binary, " -s reload")
-    local reload_cmd = "sudo " .. openresty_binary .. " -s reload 2>&1"
-    local reload_result = io.popen(reload_cmd)
-    if not reload_result then
-        ngx.log(ngx.WARN, "无法执行 sudo 重载命令，尝试直接执行...")
-    else
-        local reload_output = reload_result:read("*all")
-        local reload_code = reload_result:close()
-        
-        if reload_code == 0 then
-            ngx.log(ngx.INFO, "OpenResty配置重新加载成功（使用 sudo）: ", reload_output or "success")
-            return true, reload_output
-        else
-            -- sudo 失败，检查是否是权限问题
-            if reload_output and (reload_output:match("Operation not permitted") or reload_output:match("Permission denied") or reload_output:match("kill.*failed")) then
-                ngx.log(ngx.WARN, "使用 sudo 重载失败（权限问题），尝试直接执行重载命令...")
-            else
-                -- 其他错误，直接返回
-                local error_msg = "OpenResty配置重新加载失败: " .. (reload_output or "unknown error")
-                ngx.log(ngx.ERR, error_msg, " (命令: ", reload_cmd, ")")
-                return false, error_msg
-            end
-        end
-    end
-    
-    -- 方法3：尝试直接执行（可能 master 进程是 waf 用户启动的，或者配置了 sudoers）
-    ngx.log(ngx.INFO, "尝试直接执行重载命令: ", openresty_binary, " -s reload")
+    -- 注意：
+    -- 1）这里运行在 worker 进程 / timer 上下文中，以 waf 用户身份执行，无法交互输入 sudo 密码
+    -- 2）因此绝不能在这里使用需要密码的 sudo 命令，也不适合调用 systemctl（通常也需要 root/sudo）
+    -- 3）正确做法是：保证 OpenResty 的 master 进程也是由 waf 用户启动，这样 waf 用户可以直接发送 reload 信号
+    -- 4）这里只执行：openresty_binary -s reload，由操作系统负责权限控制
+    ngx.log(ngx.INFO, "开始重新加载OpenResty配置，直接执行命令: ", openresty_binary, " -s reload")
+
     local direct_reload_cmd = openresty_binary .. " -s reload 2>&1"
     local direct_reload_result = io.popen(direct_reload_cmd)
     if direct_reload_result then
@@ -246,10 +204,10 @@ local function do_reload_nginx()
         else
             local error_msg = "OpenResty配置重新加载失败: " .. (direct_reload_output or "unknown error")
             ngx.log(ngx.ERR, error_msg, " (命令: ", direct_reload_cmd, ")")
-            ngx.log(ngx.ERR, "所有重载方法都失败了，请检查：")
-            ngx.log(ngx.ERR, "1. OpenResty 是否使用 systemd 管理（systemctl status openresty）")
-            ngx.log(ngx.ERR, "2. waf 用户是否有 sudo 权限执行 openresty -s reload")
-            ngx.log(ngx.ERR, "3. master 进程的所有者是否与 waf 用户匹配")
+            ngx.log(ngx.ERR, "请检查：")
+            ngx.log(ngx.ERR, "1. OpenResty master 进程是否由 waf 用户启动（推荐）")
+            ngx.log(ngx.ERR, "2. /usr/local/openresty/nginx/logs/nginx.pid 是否属于 waf 用户，且可读写")
+            ngx.log(ngx.ERR, "3. 如需通过 systemd 管理，请在系统层面提供一个可被 waf 调用的重载方式（例如额外的管理脚本），而不是在 Lua 中使用 sudo")
             return false, error_msg
         end
     else

@@ -664,7 +664,9 @@ function _M.generate_all_configs()
         end
     end
     
-    -- 清理已删除代理的配置文件
+    -- 清理已删除或禁用的代理的配置文件
+    -- 注意：active_proxy_ids 只包含 status = 1 的代理ID
+    -- 所以禁用的代理（status = 0）和已删除的代理的配置文件都会被清理
     cleanup_orphaned_files(project_root, active_proxy_ids)
     
     ngx.log(ngx.INFO, "nginx配置生成成功: 共生成 " .. #proxies .. " 个代理配置文件")

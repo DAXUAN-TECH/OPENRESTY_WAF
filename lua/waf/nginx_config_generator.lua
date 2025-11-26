@@ -423,6 +423,8 @@ function _M.generate_all_configs()
     ngx.log(ngx.INFO, "使用项目根目录: ", project_root)
     
     -- 获取所有启用的代理配置
+    -- 注意：只查询 status = 1 的代理，禁用的代理（status = 0）不会被查询
+    -- 禁用的代理的配置文件会在 cleanup_orphaned_files() 中被清理
     local sql = [[
         SELECT id, proxy_name, proxy_type, listen_port, listen_address, server_name, location_path,
                backend_type, backend_address, backend_port, load_balance,

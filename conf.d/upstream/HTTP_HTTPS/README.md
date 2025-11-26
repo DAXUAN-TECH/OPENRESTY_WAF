@@ -1,47 +1,16 @@
-# Upstream 配置说明
+# HTTP/HTTPS Upstream 配置说明
 
 ## 目录说明
 
-`conf.d/upstream/` 目录用于存放 Nginx upstream 配置文件，包括：
-
-1. **手动配置的 upstream**：`conf.d/set_conf/upstream.conf`（示例配置文件）
-2. **自动生成的 upstream**：`conf.d/upstream/` 目录下的配置文件（由系统自动生成）
+`conf.d/upstream/HTTP_HTTPS/` 目录用于存放 HTTP 和 HTTPS 代理的 upstream 配置文件。
 
 ## 配置文件类型
 
-### 1. 手动配置的 Upstream
+### 自动生成的 Upstream 配置
 
-**位置**：`conf.d/set_conf/upstream.conf`
+**位置**：`conf.d/upstream/HTTP_HTTPS/upstream_{proxy_id}.conf`
 
-这是手动配置的 upstream 示例文件，用于定义静态的后端服务器组。适用于：
-- 固定的后端服务器配置
-- 不需要动态管理的 upstream
-- 示例和参考配置
-
-**配置示例**：
-```nginx
-upstream backend {
-    server 127.0.0.1:8080 max_fails=3 fail_timeout=30s weight=1;
-    server 127.0.0.1:8081 max_fails=3 fail_timeout=30s weight=1;
-    
-    # Keepalive 连接池（高并发场景下非常重要）
-    keepalive 1024;
-    keepalive_requests 10000;
-    keepalive_timeout 60s;
-    
-    # 负载均衡算法（可选）
-    # least_conn;  # 最少连接数
-    # ip_hash;    # IP 哈希（会话保持）
-}
-```
-
-### 2. 自动生成的 Upstream
-
-**位置**：`conf.d/upstream/`
-
-这些文件由系统根据数据库中的代理配置自动生成，命名规则：
-- **HTTP 代理**：`upstream_{proxy_id}.conf`
-- **Stream 代理**：`stream_upstream_{proxy_id}.conf`
+这些文件由系统根据数据库中的 HTTP/HTTPS 代理配置自动生成。
 
 **特点**：
 - 自动生成，无需手动修改
@@ -50,7 +19,7 @@ upstream backend {
 - 支持动态添加/删除后端服务器
 
 **生成时机**：
-- 创建代理配置时（如果使用 upstream 类型）
+- 创建 HTTP/HTTPS 代理配置时（如果使用 upstream 类型）
 - 更新代理配置时
 - 启用/禁用代理时
 - 删除代理时（自动清理）
@@ -73,7 +42,9 @@ server <address>:<port> [parameters];
 | `backup` | 标记为备用服务器，主服务器不可用时使用 | - | `backup` |
 | `down` | 手动标记为不可用 | - | `down` |
 
-### Keepalive 配置（仅 HTTP 代理）
+### Keepalive 配置
+
+HTTP/HTTPS 代理的 upstream 配置包含 Keepalive 连接池配置，用于提高性能：
 
 ```nginx
 keepalive <connections>;              # 每个 worker 进程保持的连接数
@@ -117,6 +88,7 @@ ip_hash;
 ```nginx
 # ============================================
 # Upstream配置: 我的HTTP代理 (代理ID: 1)
+# 类型: HTTP
 # 自动生成，请勿手动修改
 # ============================================
 
@@ -136,85 +108,96 @@ upstream upstream_1 {
 }
 ```
 
-### Stream 代理 Upstream 配置
+### HTTPS 代理 Upstream 配置
 
 ```nginx
 # ============================================
-# Upstream配置: 我的TCP代理 (代理ID: 2)
-# 类型: TCP
+# Upstream配置: 我的HTTPS代理 (代理ID: 2)
+# 类型: HTTP
 # 自动生成，请勿手动修改
 # ============================================
 
-upstream stream_upstream_2 {
+upstream upstream_2 {
     # 负载均衡算法
     ip_hash;
     
     # 后端服务器
-    server 192.168.1.20:3306 weight=1 max_fails=3 fail_timeout=30s;
-    server 192.168.1.21:3306 weight=1 max_fails=3 fail_timeout=30s;
+    server 192.168.1.20:8443 weight=1 max_fails=3 fail_timeout=30s;
+    server 192.168.1.21:8443 weight=1 max_fails=3 fail_timeout=30s;
+    
+    # Keepalive 配置
+    keepalive 1024;
+    keepalive_requests 10000;
+    keepalive_timeout 60s;
 }
 ```
 
-## 使用方式
+## Server 配置引用
 
-### 手动配置 Upstream
+在 `conf.d/vhost_conf/proxy_http_{id}.conf` 文件中，server 配置通过 `proxy_pass` 指令引用 upstream：
 
-1. 编辑 `conf.d/set_conf/upstream.conf` 文件
-2. 添加或修改 upstream 配置块
-3. 重新加载 Nginx 配置：
-   ```bash
-   /usr/local/openresty/bin/openresty -s reload
-   ```
+```nginx
+server {
+    listen 80;
+    server_name example.com;
+    
+    location / {
+        # 引用 upstream（upstream配置在HTTP_HTTPS目录下）
+        proxy_pass http://upstream_1;
+    }
+}
+```
 
-### 自动生成 Upstream（推荐）
-
-1. 在 Web 管理界面创建代理配置
-2. 选择后端类型为 "upstream"（多个后端服务器）
-3. 添加后端服务器配置
-4. 系统自动生成 upstream 配置文件
-5. 自动触发 Nginx 重载（如果代理已启用）
+**重要**：
+- Upstream 配置必须在 server 配置之前加载（在 nginx.conf 中，upstream 的 include 在 server 的 include 之前）
+- Server 配置通过 upstream 名称引用，例如：`proxy_pass http://upstream_1;`
+- Upstream 名称格式：`upstream_{proxy_id}`
 
 ## 配置加载顺序
 
-在 `nginx.conf` 中，upstream 配置的加载顺序如下：
+在 `nginx.conf` 中，HTTP 块的配置加载顺序如下：
 
 ```nginx
 http {
     # 1. 参数配置
     include /path/to/project/conf.d/set_conf/*.conf;
     
-    # 2. 自动生成的 upstream 配置（在 server 配置之前）
-    include /path/to/project/conf.d/upstream/upstream_*.conf;
+    # 2. HTTP/HTTPS upstream 配置（在 server 配置之前）
+    include /path/to/project/conf.d/upstream/HTTP_HTTPS/*.conf;
     
-    # 3. 服务器配置
+    # 3. 服务器配置（可以引用 upstream）
     include /path/to/project/conf.d/vhost_conf/*.conf;
     include /path/to/project/conf.d/vhost_conf/proxy_http_*.conf;
-}
-
-stream {
-    # 1. 自动生成的 stream upstream 配置
-    include /path/to/project/conf.d/upstream/stream_upstream_*.conf;
-    
-    # 2. Stream 服务器配置
-    include /path/to/project/conf.d/vhost_conf/proxy_stream_*.conf;
 }
 ```
 
 **重要**：upstream 配置必须在 server 配置之前加载，因为 server 配置中会引用 upstream 名称。
 
+## 使用方式
+
+### 自动生成 Upstream（推荐）
+
+1. 在 Web 管理界面创建 HTTP/HTTPS 代理配置
+2. 选择后端类型为 "upstream"（多个后端服务器）
+3. 添加后端服务器配置
+4. 系统自动生成 upstream 配置文件到 `conf.d/upstream/HTTP_HTTPS/` 目录
+5. 系统自动生成 server 配置文件到 `conf.d/vhost_conf/` 目录
+6. Server 配置自动引用对应的 upstream
+7. 自动触发 Nginx 重载（如果代理已启用）
+
 ## 注意事项
 
 ### 1. 自动生成的文件
 
-- **不要手动修改** `conf.d/upstream/` 目录下自动生成的文件
+- **不要手动修改** `conf.d/upstream/HTTP_HTTPS/` 目录下自动生成的文件
 - 这些文件会在代理配置更新时自动覆盖
-- 如果需要自定义配置，请使用手动配置方式
+- 如果需要自定义配置，请使用手动配置方式（`conf.d/set_conf/upstream.conf`）
 
 ### 2. 文件命名规则
 
-- HTTP 代理：`upstream_{proxy_id}.conf`
-- Stream 代理：`stream_upstream_{proxy_id}.conf`
+- 文件命名：`upstream_{proxy_id}.conf`
 - `{proxy_id}` 是代理配置在数据库中的 ID
+- Upstream 名称：`upstream_{proxy_id}`（在 server 配置中引用）
 
 ### 3. 配置验证
 
@@ -241,35 +224,39 @@ stream {
 ### Q1: 为什么我的 upstream 配置没有生效？
 
 **A**: 检查以下几点：
-1. 配置文件是否在正确的目录（`conf.d/upstream/` 或 `conf.d/set_conf/`）
+1. 配置文件是否在正确的目录（`conf.d/upstream/HTTP_HTTPS/`）
 2. 配置文件是否被 nginx.conf 正确包含
 3. Nginx 配置是否已重新加载
 4. 配置文件语法是否正确
+5. Upstream 配置是否在 server 配置之前加载
 
 ### Q2: 如何查看当前生效的 upstream 配置？
 
 **A**: 可以通过以下方式查看：
-1. 查看配置文件：`cat conf.d/upstream/upstream_*.conf`
+1. 查看配置文件：`cat conf.d/upstream/HTTP_HTTPS/upstream_*.conf`
 2. 查看 Nginx 配置：`/usr/local/openresty/bin/openresty -T`
 3. 在 Web 管理界面查看代理配置详情
 
-### Q3: 自动生成的配置文件可以手动修改吗？
+### Q3: Server 配置如何引用 upstream？
 
-**A**: 不建议手动修改，因为：
-- 配置会在代理更新时自动覆盖
-- 可能导致配置不一致
-- 如果需要自定义配置，请使用手动配置方式
+**A**: Server 配置通过 `proxy_pass` 指令引用 upstream：
+```nginx
+proxy_pass http://upstream_{proxy_id};
+```
+Upstream 名称必须与 upstream 配置块中的名称一致。
 
 ### Q4: 如何删除自动生成的 upstream 配置？
 
 **A**: 删除对应的代理配置即可，系统会自动清理：
 1. 在 Web 管理界面删除代理配置
 2. 系统自动删除对应的 upstream 配置文件
-3. 自动触发 Nginx 重载
+3. 系统自动删除对应的 server 配置文件
+4. 自动触发 Nginx 重载
 
 ## 相关文档
 
-- [代理管理说明](../vhost_conf/README.md)
-- [Nginx 配置说明](../../init_file/nginx.conf)
-- [部署脚本说明](../../scripts/deploy_README.md)
+- [TCP/UDP Upstream 配置说明](../TCP_UDP/README.md)
+- [Server 配置说明](../../vhost_conf/README.md)
+- [Nginx 配置说明](../../../init_file/nginx.conf)
+- [部署脚本说明](../../../scripts/deploy_README.md)
 

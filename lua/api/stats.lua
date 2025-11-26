@@ -319,12 +319,20 @@ function _M.rule_stats()
     
     local res, err = mysql_pool.query(sql, start_time, end_time, limit)
     if err then
+        ngx.log(ngx.ERR, "rule_stats query error: ", err, ", start_time: ", start_time, ", end_time: ", end_time)
         api_utils.json_response({
             error = "查询失败",
             message = err
         }, 500)
         return
     end
+    
+    -- 调试日志：记录查询结果
+    ngx.log(ngx.INFO, "rule_stats query result: ", cjson.encode({
+        start_time = start_time,
+        end_time = end_time,
+        result_count = res and #res or 0
+    }))
     
     local rule_stats = {}
     if res then

@@ -548,14 +548,27 @@ end
 
 -- 禁用代理配置
 function _M.disable_proxy(proxy_id)
-    local result, err = _M.update_proxy(proxy_id, {status = 0})
-    if result then
-        -- 重新生成nginx配置
-        local ok, gen_err = nginx_config_generator.generate_all_configs()
-        if not ok then
-            ngx.log(ngx.WARN, "生成nginx配置失败: ", gen_err or "unknown error")
-        end
+    -- 先获取代理信息，用于后续清理配置文件
+    local proxy, err = _M.get_proxy(proxy_id)
+    if err then
+        return nil, err
     end
+    
+    -- 更新数据库状态为禁用
+    local result, err = _M.update_proxy(proxy_id, {status = 0})
+    if not result then
+        return nil, err
+    end
+    
+    -- 重新生成nginx配置（会排除禁用的代理，并清理其配置文件）
+    local ok, gen_err = nginx_config_generator.generate_all_configs()
+    if not ok then
+        ngx.log(ngx.WARN, "生成nginx配置失败: ", gen_err or "unknown error")
+        -- 即使配置生成失败，也继续执行，因为数据库状态已更新
+    else
+        ngx.log(ngx.INFO, "代理已禁用，nginx配置已重新生成，配置文件已清理")
+    end
+    
     return result, err
 end
 

@@ -294,8 +294,11 @@ local function generate_stream_proxy_file(proxy, upstream_name)
     return config
 end
 
--- 清理已删除代理的配置文件
+-- 清理已删除或禁用的代理的配置文件
 local function cleanup_orphaned_files(project_root, active_proxy_ids)
+    local deleted_count = 0
+    local failed_count = 0
+    
     -- HTTP/HTTPS upstream配置文件
     local http_upstream_dir = project_root .. "/conf.d/upstream/http_https"
     local http_upstream_cmd = "find " .. http_upstream_dir .. " -maxdepth 1 -name 'upstream_*.conf' 2>/dev/null"
@@ -308,9 +311,11 @@ local function cleanup_orphaned_files(project_root, active_proxy_ids)
                 if not active_proxy_ids[proxy_id] then
                     local ok, err = os.remove(file)
                     if ok then
-                        ngx.log(ngx.INFO, "删除已删除代理的HTTP upstream配置文件: ", file)
+                        ngx.log(ngx.INFO, "删除已删除或禁用的代理的HTTP upstream配置文件: ", file, " (代理ID: ", proxy_id, ")")
+                        deleted_count = deleted_count + 1
                     else
                         ngx.log(ngx.WARN, "删除upstream配置文件失败: ", file, ", 错误: ", err or "unknown")
+                        failed_count = failed_count + 1
                     end
                 end
             end
@@ -330,9 +335,11 @@ local function cleanup_orphaned_files(project_root, active_proxy_ids)
                 if not active_proxy_ids[proxy_id] then
                     local ok, err = os.remove(file)
                     if ok then
-                        ngx.log(ngx.INFO, "删除已删除代理的HTTP server配置文件: ", file)
+                        ngx.log(ngx.INFO, "删除已删除或禁用的代理的HTTP server配置文件: ", file, " (代理ID: ", proxy_id, ")")
+                        deleted_count = deleted_count + 1
                     else
                         ngx.log(ngx.WARN, "删除server配置文件失败: ", file, ", 错误: ", err or "unknown")
+                        failed_count = failed_count + 1
                     end
                 end
             end
@@ -352,9 +359,11 @@ local function cleanup_orphaned_files(project_root, active_proxy_ids)
                 if not active_proxy_ids[proxy_id] then
                     local ok, err = os.remove(file)
                     if ok then
-                        ngx.log(ngx.INFO, "删除已删除代理的Stream upstream配置文件: ", file)
+                        ngx.log(ngx.INFO, "删除已删除或禁用的代理的Stream upstream配置文件: ", file, " (代理ID: ", proxy_id, ")")
+                        deleted_count = deleted_count + 1
                     else
                         ngx.log(ngx.WARN, "删除upstream配置文件失败: ", file, ", 错误: ", err or "unknown")
+                        failed_count = failed_count + 1
                     end
                 end
             end
@@ -374,14 +383,23 @@ local function cleanup_orphaned_files(project_root, active_proxy_ids)
                 if not active_proxy_ids[proxy_id] then
                     local ok, err = os.remove(file)
                     if ok then
-                        ngx.log(ngx.INFO, "删除已删除代理的Stream server配置文件: ", file)
+                        ngx.log(ngx.INFO, "删除已删除或禁用的代理的Stream server配置文件: ", file, " (代理ID: ", proxy_id, ")")
+                        deleted_count = deleted_count + 1
                     else
                         ngx.log(ngx.WARN, "删除server配置文件失败: ", file, ", 错误: ", err or "unknown")
+                        failed_count = failed_count + 1
                     end
                 end
             end
         end
         stream_server_files:close()
+    end
+    
+    if deleted_count > 0 then
+        ngx.log(ngx.INFO, "清理完成: 删除了 ", deleted_count, " 个配置文件")
+    end
+    if failed_count > 0 then
+        ngx.log(ngx.WARN, "清理完成: ", failed_count, " 个配置文件删除失败")
     end
 end
 

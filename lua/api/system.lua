@@ -194,20 +194,40 @@ local function do_reload_nginx()
 
     local direct_reload_cmd = openresty_binary .. " -s reload 2>&1"
     local direct_reload_result = io.popen(direct_reload_cmd)
-    if direct_reload_result then
-        local direct_reload_output = direct_reload_result:read("*all")
-        local direct_reload_code = direct_reload_result:close()
-        if direct_reload_code == 0 then
-            ngx.log(ngx.INFO, "OpenResty配置重新加载成功（直接执行）: ", direct_reload_output or "success")
-            return true, direct_reload_output
-        else
-            local error_msg = "OpenResty配置重新加载失败: " .. (direct_reload_output or "unknown error")
-            ngx.log(ngx.ERR, error_msg, " (命令: ", direct_reload_cmd, ")")
-            return false, error_msg
-        end
-    else
+    if not direct_reload_result then
         local error_msg = "无法执行OpenResty重载命令: " .. direct_reload_cmd .. " (可能在timer上下文中受限)"
         ngx.log(ngx.ERR, error_msg)
+        return false, error_msg
+    end
+
+    local direct_reload_output = direct_reload_result:read("*all")
+    -- LuaJIT / Lua 5.1 的 io.popen():close() 可能返回多值：ok, reason, code
+    local ok1, reason, code = direct_reload_result:close()
+
+    -- 统一判断退出是否成功：
+    -- 1）如果 ok1 是 boolean，则 true 视为成功
+    -- 2）如果 ok1 是 number，则 0 视为成功
+    -- 3）如果 ok1 为 nil 但 reason/code 为空，一般也可以视为成功（兼容性处理）
+    local success = false
+    if type(ok1) == "boolean" then
+        success = ok1
+    elseif type(ok1) == "number" then
+        success = (ok1 == 0)
+    else
+        -- 某些实现可能只返回 nil，reason="exit", code=0
+        if type(code) == "number" then
+            success = (code == 0)
+        else
+            success = true
+        end
+    end
+
+    if success then
+        ngx.log(ngx.INFO, "OpenResty配置重新加载成功（直接执行）: ", direct_reload_output or "success")
+        return true, direct_reload_output
+    else
+        local error_msg = "OpenResty配置重新加载失败: " .. (direct_reload_output or "unknown error")
+        ngx.log(ngx.ERR, error_msg, " (命令: ", direct_reload_cmd, ", close 返回: ", tostring(ok1), ", ", tostring(reason), ", ", tostring(code), ")")
         return false, error_msg
     end
 end

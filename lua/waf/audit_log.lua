@@ -18,6 +18,17 @@ function _M.log(action_type, resource_type, resource_id, action_description, sta
     if authenticated and session then
         username = session.username
         user_id = session.user_id or session.id
+        
+        -- 验证user_id是否存在（防止外键约束失败）
+        if user_id then
+            local check_sql = "SELECT id FROM waf_users WHERE id = ? LIMIT 1"
+            local check_res, check_err = mysql_pool.query(check_sql, user_id)
+            if not check_res or #check_res == 0 then
+                -- user_id不存在，设置为nil（外键约束允许NULL）
+                ngx.log(ngx.WARN, "audit_log: user_id ", user_id, " not found in waf_users, setting to NULL")
+                user_id = nil
+            end
+        end
     end
     
     -- 获取请求信息

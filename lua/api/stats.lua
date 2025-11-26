@@ -299,21 +299,29 @@ function _M.rule_stats()
     local end_time = normalize_time(args.end_time) or os.date("!%Y-%m-%d %H:%M:%S", ngx.time())
     local limit = tonumber(args.limit) or 20
     
+    -- 修复SQL查询：使用子查询来统计命中次数，确保时间过滤正确
     local sql = [[
         SELECT 
             br.id,
             br.rule_name,
             br.rule_type,
             br.rule_value,
-            COUNT(bl.id) as hit_count,
-            COUNT(DISTINCT bl.client_ip) as blocked_ips,
-            MAX(bl.block_time) as last_hit_time
+            COALESCE(bl_stats.hit_count, 0) as hit_count,
+            COALESCE(bl_stats.blocked_ips, 0) as blocked_ips,
+            bl_stats.last_hit_time
         FROM waf_block_rules br
-        LEFT JOIN waf_block_logs bl ON br.id = bl.rule_id 
-            AND bl.block_time >= ? AND bl.block_time <= ?
+        LEFT JOIN (
+            SELECT 
+                rule_id,
+                COUNT(*) as hit_count,
+                COUNT(DISTINCT client_ip) as blocked_ips,
+                MAX(block_time) as last_hit_time
+            FROM waf_block_logs
+            WHERE block_time >= ? AND block_time <= ?
+            GROUP BY rule_id
+        ) bl_stats ON br.id = bl_stats.rule_id
         WHERE br.status = 1
-        GROUP BY br.id, br.rule_name, br.rule_type, br.rule_value
-        ORDER BY hit_count DESC
+        ORDER BY hit_count DESC, br.id DESC
         LIMIT ?
     ]]
     
@@ -331,7 +339,8 @@ function _M.rule_stats()
     ngx.log(ngx.INFO, "rule_stats query result: ", cjson.encode({
         start_time = start_time,
         end_time = end_time,
-        result_count = res and #res or 0
+        result_count = res and #res or 0,
+        sample_result = res and res[1] or nil
     }))
     
     local rule_stats = {}

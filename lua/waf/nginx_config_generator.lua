@@ -263,38 +263,28 @@ local function generate_stream_server_config(proxy, upstream_name)
     return config
 end
 
--- 生成单个HTTP代理的完整配置（包含upstream和server）
-local function generate_http_proxy_file(proxy, upstream_name, upstream_config)
+-- 生成单个HTTP代理的server配置（不包含upstream）
+local function generate_http_proxy_file(proxy, upstream_name)
     local config = "# ============================================\n"
     config = config .. "# 代理配置: " .. escape_nginx_value(proxy.proxy_name) .. " (ID: " .. proxy.id .. ")\n"
     config = config .. "# 自动生成，请勿手动修改\n"
     config = config .. "# ============================================\n\n"
     
-    -- 如果有upstream配置，先写入upstream
-    if upstream_config and upstream_name then
-        config = config .. upstream_config
-    end
-    
-    -- 写入server配置
+    -- 写入server配置（upstream配置已单独生成）
     config = config .. generate_http_server_config(proxy, upstream_name)
     
     return config
 end
 
--- 生成单个Stream代理的完整配置（包含upstream和server）
-local function generate_stream_proxy_file(proxy, upstream_name, upstream_config)
+-- 生成单个Stream代理的server配置（不包含upstream）
+local function generate_stream_proxy_file(proxy, upstream_name)
     local config = "# ============================================\n"
     config = config .. "# 代理配置: " .. escape_nginx_value(proxy.proxy_name) .. " (ID: " .. proxy.id .. ")\n"
     config = config .. "# 类型: " .. string.upper(proxy.proxy_type) .. "\n"
     config = config .. "# 自动生成，请勿手动修改\n"
     config = config .. "# ============================================\n\n"
     
-    -- 如果有upstream配置，先写入upstream
-    if upstream_config and upstream_name then
-        config = config .. upstream_config
-    end
-    
-    -- 写入server配置
+    -- 写入server配置（upstream配置已单独生成）
     config = config .. generate_stream_server_config(proxy, upstream_name)
     
     return config
@@ -304,18 +294,14 @@ end
 local function cleanup_orphaned_files(project_root, active_proxy_ids)
     -- HTTP代理配置文件
     local http_dir = project_root .. "/conf.d/vhost_conf"
-    local http_pattern = http_dir .. "/proxy_http_*.conf"
-    -- 使用find命令更安全地查找文件
     local http_cmd = "find " .. http_dir .. " -maxdepth 1 -name 'proxy_http_*.conf' 2>/dev/null"
     local http_files = io.popen(http_cmd)
     if http_files then
         for file in http_files:lines() do
-            -- 提取代理ID
             local proxy_id = file:match("proxy_http_(%d+)%.conf")
             if proxy_id then
                 proxy_id = tonumber(proxy_id)
                 if not active_proxy_ids[proxy_id] then
-                    -- 文件对应的代理已不存在，删除文件
                     local ok, err = os.remove(file)
                     if ok then
                         ngx.log(ngx.INFO, "删除已删除代理的HTTP配置文件: ", file)
@@ -334,12 +320,10 @@ local function cleanup_orphaned_files(project_root, active_proxy_ids)
     local stream_files = io.popen(stream_cmd)
     if stream_files then
         for file in stream_files:lines() do
-            -- 提取代理ID
             local proxy_id = file:match("proxy_stream_(%d+)%.conf")
             if proxy_id then
                 proxy_id = tonumber(proxy_id)
                 if not active_proxy_ids[proxy_id] then
-                    -- 文件对应的代理已不存在，删除文件
                     local ok, err = os.remove(file)
                     if ok then
                         ngx.log(ngx.INFO, "删除已删除代理的Stream配置文件: ", file)
@@ -350,6 +334,32 @@ local function cleanup_orphaned_files(project_root, active_proxy_ids)
             end
         end
         stream_files:close()
+    end
+    
+    -- 清理upstream配置文件
+    local upstream_dir = project_root .. "/conf.d/upstream"
+    local upstream_cmd = "find " .. upstream_dir .. " -maxdepth 1 -name 'upstream_*.conf' 2>/dev/null"
+    local upstream_files = io.popen(upstream_cmd)
+    if upstream_files then
+        for file in upstream_files:lines() do
+            -- 提取代理ID（从文件名upstream_{id}.conf或stream_upstream_{id}.conf）
+            local proxy_id = file:match("upstream_(%d+)%.conf")
+            if not proxy_id then
+                proxy_id = file:match("stream_upstream_(%d+)%.conf")
+            end
+            if proxy_id then
+                proxy_id = tonumber(proxy_id)
+                if not active_proxy_ids[proxy_id] then
+                    local ok, err = os.remove(file)
+                    if ok then
+                        ngx.log(ngx.INFO, "删除已删除代理的upstream配置文件: ", file)
+                    else
+                        ngx.log(ngx.WARN, "删除upstream配置文件失败: ", file, ", 错误: ", err or "unknown")
+                    end
+                end
+            end
+        end
+        upstream_files:close()
     end
 end
 
@@ -381,6 +391,7 @@ function _M.generate_all_configs()
     -- 确保目录存在
     path_utils.ensure_dir(project_root .. "/conf.d/set_conf")
     path_utils.ensure_dir(project_root .. "/conf.d/vhost_conf")
+    path_utils.ensure_dir(project_root .. "/conf.d/upstream")
     
     -- 构建活跃代理ID映射（用于清理已删除的配置文件）
     local active_proxy_ids = {}
@@ -416,13 +427,31 @@ function _M.generate_all_configs()
                 else
                     upstream_config, upstream_name = generate_stream_upstream_config(proxy, backends)
                 end
+                
+                -- 生成独立的upstream配置文件
+                if upstream_config and upstream_name then
+                    local upstream_file = project_root .. "/conf.d/upstream/" .. upstream_name .. ".conf"
+                    local upstream_fd = io.open(upstream_file, "w")
+                    if upstream_fd then
+                        local upstream_file_content = "# ============================================\n"
+                        upstream_file_content = upstream_file_content .. "# Upstream配置: " .. escape_nginx_value(proxy.proxy_name) .. " (代理ID: " .. proxy.id .. ")\n"
+                        upstream_file_content = upstream_file_content .. "# 自动生成，请勿手动修改\n"
+                        upstream_file_content = upstream_file_content .. "# ============================================\n\n"
+                        upstream_file_content = upstream_file_content .. upstream_config
+                        upstream_fd:write(upstream_file_content)
+                        upstream_fd:close()
+                        ngx.log(ngx.INFO, "生成upstream配置文件: ", upstream_file)
+                    else
+                        ngx.log(ngx.ERR, "无法创建upstream配置文件: ", upstream_file)
+                    end
+                end
             end
         end
         
-        -- 根据代理类型生成对应的配置文件
+        -- 根据代理类型生成对应的server配置文件
         if proxy.proxy_type == "http" then
-            -- 生成HTTP代理配置文件
-            local config_content = generate_http_proxy_file(proxy, upstream_name, upstream_config)
+            -- 生成HTTP代理server配置文件
+            local config_content = generate_http_proxy_file(proxy, upstream_name)
             local config_file = project_root .. "/conf.d/vhost_conf/proxy_http_" .. proxy.id .. ".conf"
             
             local fd = io.open(config_file, "w")
@@ -434,8 +463,8 @@ function _M.generate_all_configs()
                 ngx.log(ngx.INFO, "生成HTTP代理配置文件: ", config_file)
             end
         else
-            -- 生成Stream代理配置文件
-            local config_content = generate_stream_proxy_file(proxy, upstream_name, upstream_config)
+            -- 生成Stream代理server配置文件
+            local config_content = generate_stream_proxy_file(proxy, upstream_name)
             local config_file = project_root .. "/conf.d/vhost_conf/proxy_stream_" .. proxy.id .. ".conf"
             
             local fd = io.open(config_file, "w")
@@ -484,6 +513,22 @@ function _M.cleanup_configs()
             end
             files:close()
         end
+    end
+    
+    -- 清理所有upstream配置文件
+    local upstream_dir = project_root .. "/conf.d/upstream"
+    local upstream_cmd = "find " .. upstream_dir .. " -maxdepth 1 -name 'upstream_*.conf' -o -name 'stream_upstream_*.conf' 2>/dev/null"
+    local upstream_files = io.popen(upstream_cmd)
+    if upstream_files then
+        for file in upstream_files:lines() do
+            local ok, err = os.remove(file)
+            if ok then
+                ngx.log(ngx.INFO, "删除upstream配置文件: ", file)
+            else
+                ngx.log(ngx.WARN, "删除upstream配置文件失败: ", file, ", 错误: ", err or "unknown")
+            end
+        end
+        upstream_files:close()
     end
     
     return true, "清理完成"

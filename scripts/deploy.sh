@@ -67,6 +67,13 @@ if [ ! -d "${PROJECT_ROOT}/conf.d/cert" ]; then
 else
     echo -e "${BLUE}✓ 已存在: conf.d/cert/${NC}"
 fi
+
+if [ ! -d "${PROJECT_ROOT}/conf.d/upstream" ]; then
+    mkdir -p "${PROJECT_ROOT}/conf.d/upstream"
+    echo -e "${GREEN}✓ 已创建: conf.d/upstream/${NC}"
+else
+    echo -e "${BLUE}✓ 已存在: conf.d/upstream/${NC}"
+fi
 echo -e "${GREEN}✓ 目录检查完成${NC}"
 
 # 复制 nginx.conf（只复制主配置文件）
@@ -90,6 +97,8 @@ sed -i "s|/path/to/project/logs/error.log|$PROJECT_ROOT_ABS/logs/error.log|g" "$
 sed -i "s|/path/to/project/conf.d/set_conf|$PROJECT_ROOT_ABS/conf.d/set_conf|g" "$NGINX_CONF_DIR/nginx.conf"
 # 替换 conf.d/vhost_conf 路径
 sed -i "s|/path/to/project/conf.d/vhost_conf|$PROJECT_ROOT_ABS/conf.d/vhost_conf|g" "$NGINX_CONF_DIR/nginx.conf"
+# 替换 conf.d/upstream 路径
+sed -i "s|/path/to/project/conf.d/upstream|$PROJECT_ROOT_ABS/conf.d/upstream|g" "$NGINX_CONF_DIR/nginx.conf"
 
 # 删除 set $project_root 指令（某些 OpenResty 版本不支持在 http 块中使用 set）
 # 我们会在子配置文件中直接替换 $project_root 为实际路径
@@ -395,6 +404,7 @@ REQUIRED_PATHS=(
     "${PROJECT_ROOT}/logs"
     "${PROJECT_ROOT}/conf.d/set_conf"
     "${PROJECT_ROOT}/conf.d/vhost_conf"
+    "${PROJECT_ROOT}/conf.d/upstream"
     "${PROJECT_ROOT}/lua/waf"
 )
 
@@ -516,6 +526,7 @@ echo "项目文件位置（保持在项目目录，使用相对路径）:"
 echo "  - 配置文件: ${PROJECT_ROOT}/conf.d/"
 echo "    - set_conf/: 参数配置文件"
 echo "    - vhost_conf/: 虚拟主机配置"
+echo "    - upstream/: 自动生成的upstream配置"
 echo "    - cert/: SSL 证书目录"
 echo "  - Lua 脚本: ${PROJECT_ROOT}/lua/"
 echo "  - GeoIP 数据库: ${PROJECT_ROOT}/lua/geoip/"

@@ -127,12 +127,14 @@ local function do_reload_nginx()
     
     -- 第一步：执行nginx配置测试（必须先测试，确保配置正确）
     -- 注意：在 timer 上下文中，worker 进程以 waf 用户运行，可能没有权限访问系统日志目录
-    -- 因此使用 -e 选项指定错误日志到 /dev/null，使用 -g 选项指定临时 PID 文件
-    -- 命令格式：/usr/local/openresty/bin/openresty -t -e /dev/null -g "pid /tmp/nginx_test.pid"
+    -- 使用 -e 选项指定错误日志到 /dev/null，避免权限问题
+    -- 注意：-t 测试时不需要 PID 文件，所以不需要使用 -g 选项
+    -- 命令格式：/usr/local/openresty/bin/openresty -t -e /dev/null
     ngx.log(ngx.INFO, "开始测试nginx配置，执行命令: ", nginx_binary, " -t")
     
-    -- 使用临时错误日志和 PID 文件，避免权限问题
-    local test_cmd = nginx_binary .. " -t -e /dev/null -g \"pid /tmp/nginx_test.pid\" 2>&1"
+    -- 使用临时错误日志，避免权限问题
+    -- 注意：即使有权限错误（如无法写入日志文件），只要配置语法正确，-t 测试仍然可以通过
+    local test_cmd = nginx_binary .. " -t -e /dev/null 2>&1"
     local test_result = io.popen(test_cmd)
     if not test_result then
         local error_msg = "无法执行nginx配置测试命令: " .. test_cmd .. " (可能在timer上下文中受限)"
@@ -143,20 +145,22 @@ local function do_reload_nginx()
     local test_output = test_result:read("*all")
     local test_code = test_result:close()
     
-    -- 清理临时 PID 文件（如果存在）
-    os.execute("rm -f /tmp/nginx_test.pid 2>/dev/null")
-    
     if test_code ~= 0 then
-        -- 检查是否是权限问题导致的失败
-        if test_output and (test_output:match("Permission denied") or test_output:match("13:")) then
-            -- 如果是权限问题，尝试不使用临时文件，直接测试（可能仍然失败，但至少尝试了）
+        -- 检查输出中是否包含 "syntax is ok"（即使有权限错误，语法正确也算通过）
+        if test_output and test_output:match("syntax is ok") then
+            -- 配置语法正确，即使有权限警告也可以继续
+            ngx.log(ngx.WARN, "nginx配置语法正确，但可能存在权限警告: ", test_output)
+            -- 继续执行重载，因为 reload 命令本身也会测试配置
+        elseif test_output and (test_output:match("Permission denied") or test_output:match("13:")) then
+            -- 如果是权限问题，尝试不使用临时文件，直接测试
             ngx.log(ngx.WARN, "配置测试因权限问题失败，尝试直接测试配置语法...")
             local simple_test_cmd = nginx_binary .. " -t -q 2>&1"
             local simple_test_result = io.popen(simple_test_cmd)
             if simple_test_result then
                 local simple_test_output = simple_test_result:read("*all")
                 local simple_test_code = simple_test_result:close()
-                if simple_test_code == 0 then
+                -- 检查输出中是否包含 "syntax is ok"
+                if simple_test_code == 0 or (simple_test_output and simple_test_output:match("syntax is ok")) then
                     -- 语法测试通过，但可能因为权限问题无法完全测试
                     ngx.log(ngx.WARN, "配置语法测试通过，但可能存在权限问题，将尝试直接重载")
                     -- 继续执行重载，因为 reload 命令本身也会测试配置
@@ -171,6 +175,7 @@ local function do_reload_nginx()
                 return false, error_msg
             end
         else
+            -- 真正的配置错误
             local error_msg = "nginx配置测试失败: " .. (test_output or "unknown error")
             ngx.log(ngx.ERR, error_msg, " (命令: ", test_cmd, ")")
             return false, error_msg

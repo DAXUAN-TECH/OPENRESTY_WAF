@@ -112,12 +112,15 @@ end
 -- 内部函数：执行nginx重载（返回结果，不发送HTTP响应）
 local function do_reload_nginx()
     -- 查找nginx可执行文件
+    -- 注意：在 timer 上下文中，可能需要多次尝试或使用不同的方法
     local nginx_binary = find_nginx_binary()
     
     if not nginx_binary then
-        local error_msg = "未找到nginx可执行文件，请设置NGINX_BINARY或OPENRESTY_PREFIX环境变量"
-        ngx.log(ngx.ERR, error_msg)
-        return false, error_msg
+        -- 如果找不到，尝试直接使用最常见的路径（即使 is_executable 失败）
+        -- 因为在实际执行命令时可能可以工作
+        local fallback_path = "/usr/local/openresty/bin/openresty"
+        ngx.log(ngx.WARN, "无法通过检查找到nginx可执行文件，尝试使用默认路径: ", fallback_path)
+        nginx_binary = fallback_path
     end
     
     ngx.log(ngx.INFO, "使用nginx可执行文件: ", nginx_binary)
@@ -128,7 +131,7 @@ local function do_reload_nginx()
     local test_cmd = nginx_binary .. " -t 2>&1"
     local test_result = io.popen(test_cmd)
     if not test_result then
-        local error_msg = "无法执行nginx配置测试命令: " .. test_cmd
+        local error_msg = "无法执行nginx配置测试命令: " .. test_cmd .. " (可能在timer上下文中受限)"
         ngx.log(ngx.ERR, error_msg)
         return false, error_msg
     end
@@ -150,7 +153,7 @@ local function do_reload_nginx()
     local reload_cmd = nginx_binary .. " -s reload 2>&1"
     local reload_result = io.popen(reload_cmd)
     if not reload_result then
-        local error_msg = "无法执行nginx重载命令: " .. reload_cmd
+        local error_msg = "无法执行nginx重载命令: " .. reload_cmd .. " (可能在timer上下文中受限)"
         ngx.log(ngx.ERR, error_msg)
         return false, error_msg
     end

@@ -599,11 +599,25 @@ done
 # 5. 设置权限
 echo -e "${GREEN}[5/6] 设置文件权限...${NC}"
 
-# 设置项目根目录的所有者为 waf:waf
-echo -e "${YELLOW}  设置项目目录所有者为 waf:waf...${NC}"
+# 设置项目根目录的所有者为 waf:waf（但排除 .git 目录）
+# 注意：.git 目录应该保持为 root 所有，避免 Git 安全警告
+echo -e "${YELLOW}  设置项目目录所有者为 waf:waf（排除 .git 目录）...${NC}"
+
+# 先设置整个项目目录为 waf:waf
 chown -R "$WAF_USER:$WAF_GROUP" "${PROJECT_ROOT}" 2>/dev/null || {
     echo -e "${YELLOW}  ⚠ 无法设置项目目录所有者，继续执行...${NC}"
 }
+
+# 然后将 .git 目录改回 root，避免 Git 安全警告
+# Git 2.35.2+ 版本会检查仓库所有者，如果所有者与当前用户不匹配会拒绝操作
+if [ -d "${PROJECT_ROOT}/.git" ]; then
+    echo -e "${YELLOW}  将 .git 目录所有者改回 root，避免 Git 安全警告...${NC}"
+    chown -R root:root "${PROJECT_ROOT}/.git" 2>/dev/null || {
+        echo -e "${YELLOW}  ⚠ 无法设置 .git 目录所有者，继续执行...${NC}"
+    }
+    echo -e "${GREEN}  ✓ .git 目录所有者已设置为 root:root${NC}"
+    echo -e "${BLUE}    说明: .git 目录保持为 root 所有，项目文件为 waf:waf 所有${NC}"
+fi
 
 # 设置日志目录权限
 chown -R "$WAF_USER:$WAF_GROUP" "${PROJECT_ROOT}/logs" 2>/dev/null || true

@@ -18,7 +18,17 @@ local config = require "config"
 local cjson = require "cjson"
 
 local _M = {}
-local cache = ngx.shared.waf_cache
+-- 安全获取共享内存（兼容Stream块）
+local function get_cache()
+    local ok, cache = pcall(function()
+        return ngx.shared.waf_cache
+    end)
+    if ok and cache then
+        return cache
+    end
+    return nil
+end
+local cache = get_cache()
 local CACHE_KEY_PREFIX = "block_rules:"
 local CACHE_TTL = config.cache.ttl
 local RULE_LIST_TTL = config.cache.rule_list_ttl or 300  -- 规则列表缓存时间（默认5分钟）
@@ -34,8 +44,11 @@ local function check_whitelist(client_ip)
     end
 
     -- 从缓存获取白名单
+    local cached = nil
+    if cache then
     local cache_key = "whitelist:" .. client_ip
-    local cached = cache:get(cache_key)
+        cached = cache:get(cache_key)
+    end
     if cached ~= nil then
         metrics.record_cache_hit()
         return cached == "1"
@@ -68,12 +81,18 @@ local function check_whitelist(client_ip)
     end
 
     if res and #res > 0 then
+        if cache then
+            local cache_key = "whitelist:" .. client_ip
         cache:set(cache_key, "1", CACHE_TTL)
+        end
         return true
     end
 
     -- 查询 IP 段（使用缓存的规则列表）
-    local rule_list_data = cache:get(RULE_LIST_KEY_WHITELIST)
+    local rule_list_data = nil
+    if cache then
+        rule_list_data = cache:get(RULE_LIST_KEY_WHITELIST)
+    end
     local rules = nil
     
     if rule_list_data then
@@ -100,7 +119,9 @@ local function check_whitelist(client_ip)
 
         rules = res or {}
         -- 缓存规则列表（使用较长的 TTL）
+        if cache then
         cache:set(RULE_LIST_KEY_WHITELIST, cjson.encode(rules), RULE_LIST_TTL)
+        end
     end
 
     if rules and #rules > 0 then
@@ -110,7 +131,10 @@ local function check_whitelist(client_ip)
             
             -- 检查 CIDR 格式
             if ip_utils.match_cidr(client_ip, ip_value) then
+                if cache then
+                    local cache_key = "whitelist:" .. client_ip
                 cache:set(cache_key, "1", CACHE_TTL)
+                end
                 return true
             end
             
@@ -118,7 +142,10 @@ local function check_whitelist(client_ip)
             local start_ip, end_ip = ip_utils.parse_ip_range(ip_value)
             if start_ip and end_ip then
                 if ip_utils.match_ip_range(client_ip, start_ip, end_ip) then
+                    if cache then
+                        local cache_key = "whitelist:" .. client_ip
                     cache:set(cache_key, "1", CACHE_TTL)
+                    end
                     return true
                 end
             end
@@ -126,20 +153,29 @@ local function check_whitelist(client_ip)
     end
 
     -- 未匹配到白名单
-    cache:set(cache_key, "0", CACHE_TTL)
+    if cache then
+        local cache_key = "whitelist:" .. client_ip
+        cache:set(cache_key, "0", CACHE_TTL)
+    end
     return false
 end
 
 -- 检查单个 IP 封控
 local function check_single_ip(client_ip)
     local cache_key = CACHE_KEY_PREFIX .. "single:" .. client_ip
-    local cached = cache:get(cache_key)
+    local cached = nil
+    if cache then
+        cached = cache:get(cache_key)
+    end
     if cached ~= nil then
         metrics.record_cache_hit()
         if cached == "1" then
             -- 从另一个缓存获取规则信息
+            local rule_data = nil
+            if cache then
             local rule_cache_key = cache_key .. ":rule"
-            local rule_data = cache:get(rule_cache_key)
+                rule_data = cache:get(rule_cache_key)
+            end
             if rule_data then
                 return true, cjson.decode(rule_data)
             end
@@ -195,7 +231,7 @@ local function check_single_ip(client_ip)
         ORDER BY priority DESC
         LIMIT 1
     ]]
-    
+
     local res, err = mysql_pool.query(blacklist_sql, client_ip, ip_pattern, ip_pattern2, ip_pattern3)
     if err then
         ngx.log(ngx.ERR, "single ip query error: ", err)
@@ -207,13 +243,17 @@ local function check_single_ip(client_ip)
     end
 
     local is_blocked = res and #res > 0
+    if cache then
     cache:set(cache_key, is_blocked and "1" or "0", CACHE_TTL)
+    end
     
     if is_blocked then
         local rule = res[1]
         -- 缓存规则信息
+        if cache then
         local rule_data = {id = rule.id, rule_name = rule.rule_name}
         cache:set(cache_key .. ":rule", cjson.encode(rule_data), CACHE_TTL)
+        end
         return true, rule
     end
     
@@ -223,12 +263,18 @@ end
 -- 检查 IP 段封控
 local function check_ip_range(client_ip)
     local cache_key = CACHE_KEY_PREFIX .. "range:" .. client_ip
-    local cached = cache:get(cache_key)
+    local cached = nil
+    if cache then
+        cached = cache:get(cache_key)
+    end
     if cached ~= nil then
         if cached == "1" then
             -- 需要从另一个缓存获取规则信息
+            local rule_data = nil
+            if cache then
             local rule_cache_key = cache_key .. ":rule"
-            local rule_data = cache:get(rule_cache_key)
+                rule_data = cache:get(rule_cache_key)
+            end
             if rule_data then
                 return true, cjson.decode(rule_data)
             end
@@ -248,7 +294,10 @@ local function check_ip_range(client_ip)
     
     -- 如果Redis中没有，从本地缓存获取
     if not rules then
-        local rule_list_data = cache:get(RULE_LIST_KEY_BLOCK)
+        local rule_list_data = nil
+        if cache then
+            rule_list_data = cache:get(RULE_LIST_KEY_BLOCK)
+        end
         if rule_list_data then
             -- 从缓存获取规则列表（支持JSON和MessagePack）
             local ok, decoded = pcall(function()
@@ -273,7 +322,9 @@ local function check_ip_range(client_ip)
         if not allow_query then
             -- 被防护机制拦截，返回空结果
             if reason == "empty_result_cached" then
+                if cache then
                 cache:set(cache_key, "0", CACHE_TTL)
+                end
                 return false, nil
             end
         end
@@ -303,7 +354,9 @@ local function check_ip_range(client_ip)
         -- 缓存规则列表（使用序列化器，支持JSON和MessagePack）
         local serialized, format = serializer.encode(rules)
         if serialized then
-            cache:set(RULE_LIST_KEY_BLOCK, serialized, RULE_LIST_TTL)
+            if cache then
+                cache:set(RULE_LIST_KEY_BLOCK, serialized, RULE_LIST_TTL)
+            end
             -- 同步到Redis
             if redis_cache.is_available() then
                 redis_cache.set(RULE_LIST_KEY_BLOCK, rules, RULE_LIST_TTL)
@@ -315,7 +368,7 @@ local function check_ip_range(client_ip)
             local trie_manager = ip_trie.build_trie(rules)
             local trie_data = ip_trie.serialize_trie(trie_manager)
             local trie_serialized, _ = serializer.encode(trie_data)
-            if trie_serialized then
+            if trie_serialized and cache then
                 cache:set(RULE_LIST_KEY_BLOCK .. ":trie", trie_serialized, RULE_LIST_TTL)
             end
         end
@@ -327,7 +380,10 @@ local function check_ip_range(client_ip)
     end
 
     -- 尝试使用Trie树匹配（优先）
-    local trie_data = cache:get(RULE_LIST_KEY_BLOCK .. ":trie")
+    local trie_data = nil
+    if cache then
+        trie_data = cache:get(RULE_LIST_KEY_BLOCK .. ":trie")
+    end
     if trie_data then
         local ok, trie_serialized = pcall(cjson.decode, trie_data)
         if ok and trie_serialized then
@@ -401,6 +457,11 @@ end
 -- 检查规则版本号（用于缓存失效）
 local function check_rule_version()
     if not config.cache_invalidation.enable_version_check then
+        return
+    end
+
+    if not cache then
+        -- 如果缓存不可用（如Stream块中），跳过版本检查
         return
     end
 
@@ -819,17 +880,17 @@ function _M.check(rule_id)
 
     -- 2. 检查单个 IP
     if not is_blocked then
-        is_blocked, matched_rule = check_single_ip(client_ip)
+    is_blocked, matched_rule = check_single_ip(client_ip)
     end
 
     -- 3. 检查 IP 段
     if not is_blocked then
-        is_blocked, matched_rule = check_ip_range(client_ip)
+    is_blocked, matched_rule = check_ip_range(client_ip)
     end
 
     -- 4. 检查地域封控
     if not is_blocked then
-        is_blocked, matched_rule = check_geo_block(client_ip)
+    is_blocked, matched_rule = check_geo_block(client_ip)
     end
 
     -- 5. 检查是否需要自动封控（基于频率统计）
@@ -852,19 +913,19 @@ function _M.check(rule_id)
 
     -- 如果被封控，执行封控逻辑
     if is_blocked then
-        -- 记录封控日志
-        log_block(client_ip, matched_rule, block_reason)
-        
-        -- 记录监控指标
-        if config.metrics and config.metrics.enable then
-            metrics.record_block(block_reason)
-        end
-        
-        -- 返回 403
-        ngx.status = 403
-        ngx.header.content_type = "text/html; charset=utf-8"
-        ngx.say(config.block.block_page)
-        ngx.exit(403)
+    -- 记录封控日志
+    log_block(client_ip, matched_rule, block_reason)
+    
+    -- 记录监控指标
+    if config.metrics and config.metrics.enable then
+        metrics.record_block(block_reason)
+    end
+    
+    -- 返回 403
+    ngx.status = 403
+    ngx.header.content_type = "text/html; charset=utf-8"
+    ngx.say(config.block.block_page)
+    ngx.exit(403)
     end
     
     -- 未匹配任何规则，允许通过

@@ -135,9 +135,11 @@ local function generate_http_server_config(proxy, upstream_name)
     config = config .. "\n    location " .. escape_nginx_value(proxy.location_path or "/") .. " {\n"
     
     -- 代理到后端
-    if proxy.backend_type == "upstream" and upstream_name then
+    -- 注意：如果生成了upstream配置（无论是single还是upstream类型），都使用upstream
+    if upstream_name then
         config = config .. "        proxy_pass http://" .. upstream_name .. ";\n"
     else
+        -- 如果没有upstream配置（理论上不应该发生），使用直接地址
         local backend_url = "http://" .. escape_nginx_value(proxy.backend_address)
         if proxy.backend_port then
             backend_url = backend_url .. ":" .. proxy.backend_port
@@ -243,9 +245,11 @@ local function generate_stream_server_config(proxy, upstream_name)
     config = config .. ";\n"
     
     -- 代理到后端
-    if proxy.backend_type == "upstream" and upstream_name then
+    -- 注意：如果生成了upstream配置（无论是single还是upstream类型），都使用upstream
+    if upstream_name then
         config = config .. "    proxy_pass " .. upstream_name .. ";\n"
     else
+        -- 如果没有upstream配置（理论上不应该发生），使用直接地址
         local backend_address = escape_nginx_value(proxy.backend_address)
         local backend_port = proxy.backend_port or 8080
         config = config .. "    proxy_pass " .. backend_address .. ":" .. backend_port .. ";\n"

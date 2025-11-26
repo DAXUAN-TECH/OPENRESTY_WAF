@@ -22,6 +22,25 @@ local function check_feature_enabled()
     return true
 end
 
+-- 转换时间格式（从ISO格式转换为MySQL格式）
+local function normalize_time(time_str)
+    if not time_str or time_str == "" then
+        return nil
+    end
+    -- 将 ISO 格式 (YYYY-MM-DDTHH:MM) 转换为 MySQL 格式 (YYYY-MM-DD HH:MM:SS)
+    -- 如果已经是 MySQL 格式，直接返回
+    if time_str:match("^%d%d%d%d%-%d%d%-%d%d %d%d:%d%d:%d%d$") then
+        return time_str
+    end
+    -- 处理 ISO 格式 (YYYY-MM-DDTHH:MM 或 YYYY-MM-DDTHH:MM:SS)
+    local normalized = time_str:gsub("T", " "):gsub("Z", "")
+    -- 如果没有秒数，添加 :00
+    if not normalized:match(":%d%d$") then
+        normalized = normalized .. ":00"
+    end
+    return normalized
+end
+
 -- 获取封控统计概览
 function _M.overview()
     if not check_feature_enabled() then
@@ -29,8 +48,8 @@ function _M.overview()
     end
     
     local args = api_utils.get_args()
-    local start_time = args.start_time or os.date("!%Y-%m-%d 00:00:00", ngx.time() - 86400)  -- 默认最近24小时
-    local end_time = args.end_time or os.date("!%Y-%m-%d %H:%M:%S", ngx.time())
+    local start_time = normalize_time(args.start_time) or os.date("!%Y-%m-%d 00:00:00", ngx.time() - 86400)  -- 默认最近24小时
+    local end_time = normalize_time(args.end_time) or os.date("!%Y-%m-%d %H:%M:%S", ngx.time())
     
     -- 总封控次数
     local sql_total = [[
@@ -121,8 +140,8 @@ function _M.timeseries()
     end
     
     local args = api_utils.get_args()
-    local start_time = args.start_time or os.date("!%Y-%m-%d 00:00:00", ngx.time() - 86400)
-    local end_time = args.end_time or os.date("!%Y-%m-%d %H:%M:%S", ngx.time())
+    local start_time = normalize_time(args.start_time) or os.date("!%Y-%m-%d 00:00:00", ngx.time() - 86400)
+    local end_time = normalize_time(args.end_time) or os.date("!%Y-%m-%d %H:%M:%S", ngx.time())
     local interval = args.interval or "hour"  -- hour, day
     
     local time_format = interval == "hour" and "%Y-%m-%d %H:00:00" or "%Y-%m-%d 00:00:00"
@@ -198,8 +217,8 @@ function _M.ip_stats()
     end
     
     local args = api_utils.get_args()
-    local start_time = args.start_time or os.date("!%Y-%m-%d 00:00:00", ngx.time() - 86400)
-    local end_time = args.end_time or os.date("!%Y-%m-%d %H:%M:%S", ngx.time())
+    local start_time = normalize_time(args.start_time) or os.date("!%Y-%m-%d 00:00:00", ngx.time() - 86400)
+    local end_time = normalize_time(args.end_time) or os.date("!%Y-%m-%d %H:%M:%S", ngx.time())
     local limit = tonumber(args.limit) or 20
     
     local sql = [[
@@ -276,8 +295,8 @@ function _M.rule_stats()
     end
     
     local args = api_utils.get_args()
-    local start_time = args.start_time or os.date("!%Y-%m-%d 00:00:00", ngx.time() - 86400)
-    local end_time = args.end_time or os.date("!%Y-%m-%d %H:%M:%S", ngx.time())
+    local start_time = normalize_time(args.start_time) or os.date("!%Y-%m-%d 00:00:00", ngx.time() - 86400)
+    local end_time = normalize_time(args.end_time) or os.date("!%Y-%m-%d %H:%M:%S", ngx.time())
     local limit = tonumber(args.limit) or 20
     
     local sql = [[

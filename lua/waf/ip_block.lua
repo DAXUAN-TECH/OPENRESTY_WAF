@@ -83,7 +83,7 @@ local function check_whitelist(client_ip)
     if res and #res > 0 then
         if cache then
             local cache_key = "whitelist:" .. client_ip
-        cache:set(cache_key, "1", CACHE_TTL)
+            cache:set(cache_key, "1", CACHE_TTL)
         end
         return true
     end
@@ -120,7 +120,7 @@ local function check_whitelist(client_ip)
         rules = res or {}
         -- 缓存规则列表（使用较长的 TTL）
         if cache then
-        cache:set(RULE_LIST_KEY_WHITELIST, cjson.encode(rules), RULE_LIST_TTL)
+            cache:set(RULE_LIST_KEY_WHITELIST, cjson.encode(rules), RULE_LIST_TTL)
         end
     end
 
@@ -244,15 +244,15 @@ local function check_single_ip(client_ip)
 
     local is_blocked = res and #res > 0
     if cache then
-    cache:set(cache_key, is_blocked and "1" or "0", CACHE_TTL)
+        cache:set(cache_key, is_blocked and "1" or "0", CACHE_TTL)
     end
     
     if is_blocked then
         local rule = res[1]
         -- 缓存规则信息
         if cache then
-        local rule_data = {id = rule.id, rule_name = rule.rule_name}
-        cache:set(cache_key .. ":rule", cjson.encode(rule_data), CACHE_TTL)
+            local rule_data = {id = rule.id, rule_name = rule.rule_name}
+            cache:set(cache_key .. ":rule", cjson.encode(rule_data), CACHE_TTL)
         end
         return true, rule
     end

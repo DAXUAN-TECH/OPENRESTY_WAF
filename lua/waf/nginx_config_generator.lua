@@ -263,6 +263,96 @@ local function generate_stream_server_config(proxy, upstream_name)
     return config
 end
 
+-- 生成单个HTTP代理的完整配置（包含upstream和server）
+local function generate_http_proxy_file(proxy, upstream_name, upstream_config)
+    local config = "# ============================================\n"
+    config = config .. "# 代理配置: " .. escape_nginx_value(proxy.proxy_name) .. " (ID: " .. proxy.id .. ")\n"
+    config = config .. "# 自动生成，请勿手动修改\n"
+    config = config .. "# ============================================\n\n"
+    
+    -- 如果有upstream配置，先写入upstream
+    if upstream_config and upstream_name then
+        config = config .. upstream_config
+    end
+    
+    -- 写入server配置
+    config = config .. generate_http_server_config(proxy, upstream_name)
+    
+    return config
+end
+
+-- 生成单个Stream代理的完整配置（包含upstream和server）
+local function generate_stream_proxy_file(proxy, upstream_name, upstream_config)
+    local config = "# ============================================\n"
+    config = config .. "# 代理配置: " .. escape_nginx_value(proxy.proxy_name) .. " (ID: " .. proxy.id .. ")\n"
+    config = config .. "# 类型: " .. string.upper(proxy.proxy_type) .. "\n"
+    config = config .. "# 自动生成，请勿手动修改\n"
+    config = config .. "# ============================================\n\n"
+    
+    -- 如果有upstream配置，先写入upstream
+    if upstream_config and upstream_name then
+        config = config .. upstream_config
+    end
+    
+    -- 写入server配置
+    config = config .. generate_stream_server_config(proxy, upstream_name)
+    
+    return config
+end
+
+-- 清理已删除代理的配置文件
+local function cleanup_orphaned_files(project_root, active_proxy_ids)
+    -- HTTP代理配置文件
+    local http_dir = project_root .. "/conf.d/vhost_conf"
+    local http_pattern = http_dir .. "/proxy_http_*.conf"
+    -- 使用find命令更安全地查找文件
+    local http_cmd = "find " .. http_dir .. " -maxdepth 1 -name 'proxy_http_*.conf' 2>/dev/null"
+    local http_files = io.popen(http_cmd)
+    if http_files then
+        for file in http_files:lines() do
+            -- 提取代理ID
+            local proxy_id = file:match("proxy_http_(%d+)%.conf")
+            if proxy_id then
+                proxy_id = tonumber(proxy_id)
+                if not active_proxy_ids[proxy_id] then
+                    -- 文件对应的代理已不存在，删除文件
+                    local ok, err = os.remove(file)
+                    if ok then
+                        ngx.log(ngx.INFO, "删除已删除代理的HTTP配置文件: ", file)
+                    else
+                        ngx.log(ngx.WARN, "删除配置文件失败: ", file, ", 错误: ", err or "unknown")
+                    end
+                end
+            end
+        end
+        http_files:close()
+    end
+    
+    -- Stream代理配置文件
+    local stream_dir = project_root .. "/conf.d/vhost_conf"
+    local stream_cmd = "find " .. stream_dir .. " -maxdepth 1 -name 'proxy_stream_*.conf' 2>/dev/null"
+    local stream_files = io.popen(stream_cmd)
+    if stream_files then
+        for file in stream_files:lines() do
+            -- 提取代理ID
+            local proxy_id = file:match("proxy_stream_(%d+)%.conf")
+            if proxy_id then
+                proxy_id = tonumber(proxy_id)
+                if not active_proxy_ids[proxy_id] then
+                    -- 文件对应的代理已不存在，删除文件
+                    local ok, err = os.remove(file)
+                    if ok then
+                        ngx.log(ngx.INFO, "删除已删除代理的Stream配置文件: ", file)
+                    else
+                        ngx.log(ngx.WARN, "删除配置文件失败: ", file, ", 错误: ", err or "unknown")
+                    end
+                end
+            end
+        end
+        stream_files:close()
+    end
+end
+
 -- 生成所有代理配置
 function _M.generate_all_configs()
     local project_root = path_utils.get_project_root()
@@ -292,40 +382,23 @@ function _M.generate_all_configs()
     path_utils.ensure_dir(project_root .. "/conf.d/set_conf")
     path_utils.ensure_dir(project_root .. "/conf.d/vhost_conf")
     
+    -- 构建活跃代理ID映射（用于清理已删除的配置文件）
+    local active_proxy_ids = {}
+    
     if not proxies or #proxies == 0 then
-        -- 如果没有启用的代理，生成空配置文件（避免nginx include报错）
-        local empty_content = "# ============================================\n"
-        empty_content = empty_content .. "# 代理配置（自动生成）\n"
-        empty_content = empty_content .. "# 当前没有启用的代理配置\n"
-        empty_content = empty_content .. "# ============================================\n\n"
-        
-        local files = {
-            {path = project_root .. "/conf.d/set_conf/proxy_upstreams.conf", content = empty_content},
-            {path = project_root .. "/conf.d/vhost_conf/proxy_http.conf", content = empty_content},
-            {path = project_root .. "/conf.d/vhost_conf/proxy_stream.conf", content = empty_content}
-        }
-        
-        for _, file_info in ipairs(files) do
-            local fd = io.open(file_info.path, "w")
-            if fd then
-                fd:write(file_info.content)
-                fd:close()
-            end
-        end
-        
-        return true, "没有启用的代理配置，已生成空配置文件"
+        -- 如果没有启用的代理，清理所有代理配置文件
+        cleanup_orphaned_files(project_root, active_proxy_ids)
+        return true, "没有启用的代理配置，已清理所有配置文件"
     end
     
-    -- 分离HTTP和TCP/UDP代理
-    local http_proxies = {}
-    local stream_proxies = {}
-    local http_upstream_configs = {}
-    local stream_upstream_configs = {}
-    
+    -- 为每个代理生成独立的配置文件
     for _, proxy in ipairs(proxies) do
+        active_proxy_ids[proxy.id] = true
+        
         -- 查询后端服务器（如果是upstream类型）
         local backends = nil
         local upstream_name = nil
+        local upstream_config = nil
         
         if proxy.backend_type == "upstream" then
             local backends_sql = [[
@@ -339,111 +412,48 @@ function _M.generate_all_configs()
             
             if backends and #backends > 0 then
                 if proxy.proxy_type == "http" then
-                    local upstream_config, name = generate_upstream_config(proxy, backends)
-                    http_upstream_configs[proxy.id] = upstream_config
-                    upstream_name = name
+                    upstream_config, upstream_name = generate_upstream_config(proxy, backends)
                 else
-                    local upstream_config, name = generate_stream_upstream_config(proxy, backends)
-                    stream_upstream_configs[proxy.id] = upstream_config
-                    upstream_name = name
+                    upstream_config, upstream_name = generate_stream_upstream_config(proxy, backends)
                 end
             end
         end
         
+        -- 根据代理类型生成对应的配置文件
         if proxy.proxy_type == "http" then
-            table.insert(http_proxies, {
-                proxy = proxy,
-                upstream_name = upstream_name
-            })
+            -- 生成HTTP代理配置文件
+            local config_content = generate_http_proxy_file(proxy, upstream_name, upstream_config)
+            local config_file = project_root .. "/conf.d/vhost_conf/proxy_http_" .. proxy.id .. ".conf"
+            
+            local fd = io.open(config_file, "w")
+            if not fd then
+                ngx.log(ngx.ERR, "无法创建HTTP代理配置文件: ", config_file)
+            else
+                fd:write(config_content)
+                fd:close()
+                ngx.log(ngx.INFO, "生成HTTP代理配置文件: ", config_file)
+            end
         else
-            table.insert(stream_proxies, {
-                proxy = proxy,
-                upstream_name = upstream_name
-            })
+            -- 生成Stream代理配置文件
+            local config_content = generate_stream_proxy_file(proxy, upstream_name, upstream_config)
+            local config_file = project_root .. "/conf.d/vhost_conf/proxy_stream_" .. proxy.id .. ".conf"
+            
+            local fd = io.open(config_file, "w")
+            if not fd then
+                ngx.log(ngx.ERR, "无法创建Stream代理配置文件: ", config_file)
+            else
+                fd:write(config_content)
+                fd:close()
+                ngx.log(ngx.INFO, "生成Stream代理配置文件: ", config_file)
+            end
         end
     end
     
-    -- 生成HTTP upstream配置文件
-    local upstream_file = project_root .. "/conf.d/set_conf/proxy_upstreams.conf"
-    local upstream_content = "# ============================================\n"
-    upstream_content = upstream_content .. "# HTTP代理Upstream配置（自动生成）\n"
-    upstream_content = upstream_content .. "# 请勿手动修改此文件\n"
-    upstream_content = upstream_content .. "# ============================================\n\n"
+    -- 清理已删除代理的配置文件
+    cleanup_orphaned_files(project_root, active_proxy_ids)
     
-    for _, data in ipairs(http_proxies) do
-        if data.upstream_name and http_upstream_configs[data.proxy.id] then
-            upstream_content = upstream_content .. http_upstream_configs[data.proxy.id]
-        end
-    end
-    
-    -- 确保目录存在
-    path_utils.ensure_dir(project_root .. "/conf.d/set_conf")
-    
-    -- 写入upstream配置文件
-    local upstream_fd = io.open(upstream_file, "w")
-    if not upstream_fd then
-        return false, "无法创建upstream配置文件: " .. upstream_file
-    end
-    upstream_fd:write(upstream_content)
-    upstream_fd:close()
-    
-    -- 生成Stream upstream配置（在stream块中）
-    local stream_upstream_content = ""
-    for _, data in ipairs(stream_proxies) do
-        if data.upstream_name and stream_upstream_configs[data.proxy.id] then
-            stream_upstream_content = stream_upstream_content .. stream_upstream_configs[data.proxy.id]
-        end
-    end
-    
-    -- 生成HTTP server配置文件
-    local http_file = project_root .. "/conf.d/vhost_conf/proxy_http.conf"
-    local http_content = "# ============================================\n"
-    http_content = http_content .. "# HTTP代理配置（自动生成）\n"
-    http_content = http_content .. "# 请勿手动修改此文件\n"
-    http_content = http_content .. "# ============================================\n\n"
-    
-    for _, data in ipairs(http_proxies) do
-        http_content = http_content .. generate_http_server_config(data.proxy, data.upstream_name)
-    end
-    
-    -- 确保目录存在
-    path_utils.ensure_dir(project_root .. "/conf.d/vhost_conf")
-    
-    -- 写入HTTP配置文件
-    local http_fd = io.open(http_file, "w")
-    if not http_fd then
-        return false, "无法创建HTTP配置文件: " .. http_file
-    end
-    http_fd:write(http_content)
-    http_fd:close()
-    
-    -- 生成TCP/UDP stream配置文件
-    local stream_file = project_root .. "/conf.d/vhost_conf/proxy_stream.conf"
-    local stream_content = "# ============================================\n"
-    stream_content = stream_content .. "# TCP/UDP代理配置（自动生成）\n"
-    stream_content = stream_content .. "# 请勿手动修改此文件\n"
-    stream_content = stream_content .. "# ============================================\n\n"
-    
-    -- 先写入stream upstream配置
-    if stream_upstream_content ~= "" then
-        stream_content = stream_content .. stream_upstream_content
-    end
-    
-    -- 再写入stream server配置
-    for _, data in ipairs(stream_proxies) do
-        stream_content = stream_content .. generate_stream_server_config(data.proxy, data.upstream_name)
-    end
-    
-    -- 写入stream配置文件
-    local stream_fd = io.open(stream_file, "w")
-    if not stream_fd then
-        return false, "无法创建stream配置文件: " .. stream_file
-    end
-    stream_fd:write(stream_content)
-    stream_fd:close()
-    
-    ngx.log(ngx.INFO, "nginx配置生成成功: HTTP=" .. #http_proxies .. ", Stream=" .. #stream_proxies)
-    return true, "配置生成成功"
+    ngx.log(ngx.INFO, "nginx配置生成成功: 共生成 " .. #proxies .. " 个代理配置文件")
+    return true, "配置生成成功，共生成 " .. #proxies .. " 个代理配置文件"
 end
 
 -- 清理生成的配置文件
@@ -453,17 +463,26 @@ function _M.cleanup_configs()
         return false, "无法获取项目根目录"
     end
     
-    local files = {
-        project_root .. "/conf.d/set_conf/proxy_upstreams.conf",
-        project_root .. "/conf.d/vhost_conf/proxy_http.conf",
-        project_root .. "/conf.d/vhost_conf/proxy_stream.conf"
+    -- 清理所有代理配置文件
+    local vhost_dir = project_root .. "/conf.d/vhost_conf"
+    local patterns = {
+        "proxy_http_*.conf",
+        "proxy_stream_*.conf"
     }
     
-    for _, file in ipairs(files) do
-        local fd = io.open(file, "r")
-        if fd then
-            fd:close()
-            os.remove(file)
+    for _, pattern in ipairs(patterns) do
+        local cmd = "find " .. vhost_dir .. " -maxdepth 1 -name '" .. pattern .. "' 2>/dev/null"
+        local files = io.popen(cmd)
+        if files then
+            for file in files:lines() do
+                local ok, err = os.remove(file)
+                if ok then
+                    ngx.log(ngx.INFO, "删除代理配置文件: ", file)
+                else
+                    ngx.log(ngx.WARN, "删除配置文件失败: ", file, ", 错误: ", err or "unknown")
+                end
+            end
+            files:close()
         end
     end
     
@@ -471,4 +490,5 @@ function _M.cleanup_configs()
 end
 
 return _M
+
 

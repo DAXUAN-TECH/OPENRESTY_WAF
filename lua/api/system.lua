@@ -69,9 +69,10 @@ local function find_nginx_binary()
         end
     end
     
-    -- 4. 尝试常见的默认安装路径
+    -- 4. 尝试常见的默认安装路径（按优先级排序）
+    -- 注意：/usr/local/openresty/bin/openresty 是最常见的OpenResty安装路径
     local default_paths = {
-        "/usr/local/openresty/bin/openresty",
+        "/usr/local/openresty/bin/openresty",  -- 最常见的OpenResty安装路径
         "/usr/local/bin/openresty",
         "/usr/bin/openresty",
         "/opt/openresty/bin/openresty",

@@ -54,13 +54,16 @@ function _M.create()
     audit_log.log_proxy_action("create", result.id, proxy_data.proxy_name, true, nil)
     
     -- 如果代理配置已启用，尝试触发nginx重载（异步，不阻塞响应）
+    -- 注意：create_proxy() 已经同步生成了nginx配置文件，这里只需要重载nginx
+    -- 使用 ngx.timer.at(0, ...) 确保在当前请求处理完成后立即执行，但不会阻塞响应
     if proxy_data.status ~= 0 then
         ngx.timer.at(0, function()
+            -- 先测试配置，再重载（由 reload_nginx_internal() 内部处理）
             local ok, result = system_api.reload_nginx_internal()
             if not ok then
-                ngx.log(ngx.WARN, "自动触发nginx重载失败: ", result or "unknown error")
+                ngx.log(ngx.WARN, "创建代理后自动触发nginx重载失败: ", result or "unknown error")
             else
-                ngx.log(ngx.INFO, "自动触发nginx重载成功")
+                ngx.log(ngx.INFO, "创建代理后自动触发nginx重载成功，配置已生效")
             end
         end)
     end
@@ -385,12 +388,15 @@ function _M.disable()
     audit_log.log_proxy_action("disable", proxy_id, proxy_name, true, nil)
     
     -- 禁用代理后，尝试触发nginx重载（异步，不阻塞响应）
+    -- 注意：disable_proxy() 已经同步生成了nginx配置文件（清理了禁用的代理配置），这里只需要重载nginx
+    -- 使用 ngx.timer.at(0, ...) 确保在当前请求处理完成后立即执行，但不会阻塞响应
     ngx.timer.at(0, function()
+        -- 先测试配置，再重载（由 reload_nginx_internal() 内部处理）
         local ok, result = system_api.reload_nginx_internal()
         if not ok then
-            ngx.log(ngx.WARN, "自动触发nginx重载失败: ", result or "unknown error")
+            ngx.log(ngx.WARN, "停用代理后自动触发nginx重载失败: ", result or "unknown error")
         else
-            ngx.log(ngx.INFO, "自动触发nginx重载成功")
+            ngx.log(ngx.INFO, "停用代理后自动触发nginx重载成功，端口已停止监听")
         end
     end)
     

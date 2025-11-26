@@ -432,14 +432,28 @@
                 return;
             }
             
+            // 过滤掉命中次数为0的规则（可选，如果需要显示所有规则，可以注释掉这行）
+            // dataArray = dataArray.filter(row => (row.hit_count || 0) > 0);
+            
+            // 如果过滤后没有数据，显示提示
+            if (dataArray.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 20px;">在选定时间范围内没有规则命中数据</td></tr>';
+                return;
+            }
+            
             dataArray.forEach(row => {
                 const tr = document.createElement('tr');
+                // 确保数值字段正确显示
+                const hitCount = parseInt(row.hit_count) || 0;
+                const blockedIPs = parseInt(row.blocked_ips) || 0;
+                const lastHitTime = row.last_hit_time || '-';
+                
                 tr.innerHTML = `
                     <td>${escapeHtml(row.rule_name || '-')}</td>
                     <td>${escapeHtml(row.rule_type || '-')}</td>
-                    <td>${row.hit_count || 0}</td>
-                    <td>${row.blocked_ips || 0}</td>
-                    <td>${row.last_hit_time || '-'}</td>
+                    <td>${hitCount}</td>
+                    <td>${blockedIPs}</td>
+                    <td>${lastHitTime}</td>
                 `;
                 tbody.appendChild(tr);
             });

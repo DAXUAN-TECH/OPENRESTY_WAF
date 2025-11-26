@@ -10,31 +10,42 @@ local audit_log = require "waf.audit_log"
 local _M = {}
 
 -- 检查文件是否存在且可执行
+-- 注意：在 timer 上下文中，io.open() 和 os.execute() 可能受限
+-- 因此采用直接尝试执行命令的方式，如果命令执行成功就认为文件存在且可执行
 local function is_executable(path)
     if not path or path == "" then
         return false
     end
-    -- 尝试打开文件（检查是否存在）
-    local file = io.open(path, "r")
-    if not file then
-        return false
-    end
-    file:close()
     
-    -- 检查文件是否可执行（使用 test 命令）
+    -- 方法1：尝试使用 test 命令检查（在 timer 上下文中可能失败）
     local test_cmd = "test -x " .. path .. " 2>/dev/null"
     local test_result = os.execute(test_cmd)
-    return (test_result == 0)
+    if test_result == 0 then
+        return true
+    end
+    
+    -- 方法2：如果 test 命令失败，尝试直接执行命令的 --version 选项（更可靠）
+    -- 这样可以避免文件系统访问问题
+    local version_cmd = path .. " -v 2>&1 >/dev/null"
+    local version_result = os.execute(version_cmd)
+    if version_result == 0 then
+        return true
+    end
+    
+    return false
 end
 
 -- 查找nginx可执行文件（可移植性实现）
+-- 注意：在 timer 上下文中，io.popen() 可能受限，因此优先使用直接执行命令的方式
 local function find_nginx_binary()
     -- 1. 优先从环境变量获取（最高优先级）
     local nginx_binary_env = os.getenv("NGINX_BINARY")
     if nginx_binary_env and nginx_binary_env ~= "" then
         if is_executable(nginx_binary_env) then
-            ngx.log(ngx.DEBUG, "从NGINX_BINARY环境变量找到nginx可执行文件: ", nginx_binary_env)
+            ngx.log(ngx.INFO, "从NGINX_BINARY环境变量找到nginx可执行文件: ", nginx_binary_env)
             return nginx_binary_env
+        else
+            ngx.log(ngx.DEBUG, "NGINX_BINARY环境变量指定的路径不可执行: ", nginx_binary_env)
         end
     end
     
@@ -47,13 +58,14 @@ local function find_nginx_binary()
         }
         for _, path in ipairs(possible_paths) do
             if is_executable(path) then
-                ngx.log(ngx.DEBUG, "从OPENRESTY_PREFIX环境变量找到nginx可执行文件: ", path)
+                ngx.log(ngx.INFO, "从OPENRESTY_PREFIX环境变量找到nginx可执行文件: ", path)
                 return path
             end
         end
     end
     
     -- 3. 尝试使用 which 命令查找（跨平台兼容）
+    -- 注意：在 timer 上下文中，io.popen() 可能受限，如果失败就跳过
     local which_cmd = "which openresty 2>/dev/null || which nginx 2>/dev/null"
     local which_result = io.popen(which_cmd)
     if which_result then
@@ -63,14 +75,17 @@ local function find_nginx_binary()
             -- 清理路径（去除换行符和空格）
             which_path = which_path:gsub("^%s+", ""):gsub("%s+$", "")
             if is_executable(which_path) then
-                ngx.log(ngx.DEBUG, "通过which命令找到nginx可执行文件: ", which_path)
+                ngx.log(ngx.INFO, "通过which命令找到nginx可执行文件: ", which_path)
                 return which_path
             end
         end
+    else
+        ngx.log(ngx.DEBUG, "无法使用which命令查找nginx可执行文件（可能在timer上下文中受限）")
     end
     
     -- 4. 尝试常见的默认安装路径（按优先级排序）
     -- 注意：/usr/local/openresty/bin/openresty 是最常见的OpenResty安装路径
+    -- 在 timer 上下文中，直接尝试执行命令比检查文件更可靠
     local default_paths = {
         "/usr/local/openresty/bin/openresty",  -- 最常见的OpenResty安装路径
         "/usr/local/bin/openresty",
@@ -83,13 +98,14 @@ local function find_nginx_binary()
     }
     for _, path in ipairs(default_paths) do
         if is_executable(path) then
-            ngx.log(ngx.DEBUG, "从默认路径找到nginx可执行文件: ", path)
+            ngx.log(ngx.INFO, "从默认路径找到nginx可执行文件: ", path)
             return path
         end
     end
     
     -- 5. 如果都找不到，返回nil（由调用者处理错误）
     ngx.log(ngx.WARN, "无法找到nginx可执行文件，已尝试所有可能的路径")
+    ngx.log(ngx.WARN, "请设置NGINX_BINARY环境变量或确保openresty安装在默认路径")
     return nil
 end
 

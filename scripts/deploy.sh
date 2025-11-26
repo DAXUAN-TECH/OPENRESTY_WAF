@@ -192,8 +192,20 @@ fi
 
 echo -e "${GREEN}✓ 已替换子配置文件中的变量${NC}"
 
-# 步骤3.5: 立即验证并清理重复内容（在替换后立即执行）
-# 找到 http 块结束位置并强制截取
+# 步骤3.5: 检查配置文件完整性（不进行截取，保留 stream 块）
+# 验证文件行数是否与模板一致
+template_lines=$(wc -l < "${PROJECT_ROOT}/init_file/nginx.conf" 2>/dev/null | tr -d ' ')
+deployed_lines=$(wc -l < "$NGINX_CONF_DIR/nginx.conf" 2>/dev/null | tr -d ' ')
+
+if [ -n "$template_lines" ] && [ -n "$deployed_lines" ]; then
+    if [ "$deployed_lines" -ne "$template_lines" ]; then
+        echo -e "${YELLOW}⚠ 警告: 部署后的文件行数 ($deployed_lines) 与模板文件 ($template_lines) 不一致${NC}"
+        echo -e "${BLUE}  这可能是正常的，如果模板文件已更新${NC}"
+    fi
+fi
+
+# 步骤4: 检查 http 块后是否有不应该存在的内容（保留 stream 块）
+# 找到 http 块结束位置
 http_start_line=$(grep -n "^http {" "$NGINX_CONF_DIR/nginx.conf" | cut -d: -f1 | head -1)
 if [ -n "$http_start_line" ]; then
     http_end_line=$(awk -v start="$http_start_line" '
@@ -215,95 +227,53 @@ if [ -n "$http_start_line" ]; then
     ' "$NGINX_CONF_DIR/nginx.conf" 2>/dev/null)
     
     if [ -n "$http_end_line" ]; then
-        # 强制截取到 http 块结束位置（确保没有多余内容）
-        head -n "$http_end_line" "$NGINX_CONF_DIR/nginx.conf" > "$NGINX_CONF_DIR/nginx.conf.tmp"
-        if [ $? -eq 0 ]; then
-            mv "$NGINX_CONF_DIR/nginx.conf.tmp" "$NGINX_CONF_DIR/nginx.conf"
-            echo -e "${GREEN}✓ 已清理到 http 块结束位置（第 $http_end_line 行）${NC}"
-        else
-            echo -e "${YELLOW}⚠ 清理失败，但继续执行...${NC}"
-            rm -f "$NGINX_CONF_DIR/nginx.conf.tmp"
-        fi
-    else
-        echo -e "${YELLOW}⚠ 无法确定 http 块结束位置${NC}"
-    fi
-fi
-
-# 步骤4: 清理 http 块后的重复内容（防止之前部署遗留的问题）
-# 使用更简单可靠的方法：找到 http 块结束的 } 行
-http_start_line=$(grep -n "^http {" "$NGINX_CONF_DIR/nginx.conf" | cut -d: -f1 | head -1)
-if [ -n "$http_start_line" ]; then
-    # 使用 awk 找到 http 块的结束位置（括号匹配）
-    http_end_line=$(awk -v start="$http_start_line" '
-        BEGIN { 
-            brace_count = 0
-            found_start = 0
-        }
-        NR >= start {
-            if (!found_start) {
-                found_start = 1
-            }
-            line = $0
-            for (i = 1; i <= length(line); i++) {
-                char = substr(line, i, 1)
-                if (char == "{") {
-                    brace_count++
-                } else if (char == "}") {
-                    brace_count--
-                    if (brace_count == 0 && found_start) {
-                        print NR
-                        exit
-                    }
-                }
-            }
-        }
-    ' "$NGINX_CONF_DIR/nginx.conf" 2>/dev/null)
-    
-    if [ -n "$http_end_line" ]; then
-        total_lines=$(wc -l < "$NGINX_CONF_DIR/nginx.conf" 2>/dev/null | tr -d ' ')
-        # 如果 http 块后还有内容，强制删除
-        if [ -n "$total_lines" ] && [ "$http_end_line" -lt "$total_lines" ]; then
-            echo -e "${YELLOW}  检测到 http 块后有多余内容（第 $((http_end_line + 1))-$total_lines 行），正在清理...${NC}"
-            # 使用 head 截取到 http 块结束位置
-            head -n "$http_end_line" "$NGINX_CONF_DIR/nginx.conf" > "$NGINX_CONF_DIR/nginx.conf.tmp"
-            if [ $? -eq 0 ]; then
-                mv "$NGINX_CONF_DIR/nginx.conf.tmp" "$NGINX_CONF_DIR/nginx.conf"
-                echo -e "${GREEN}✓ 已清理多余内容${NC}"
-            else
-                echo -e "${YELLOW}⚠ 清理失败，但继续执行...${NC}"
-                rm -f "$NGINX_CONF_DIR/nginx.conf.tmp"
+        # 检查 http 块后的内容
+        after_http_start=$((http_end_line + 1))
+        after_http_content=$(sed -n "${after_http_start},\$p" "$NGINX_CONF_DIR/nginx.conf" 2>/dev/null | head -5)
+        
+        # 检查是否是 stream 块（应该保留）
+        if echo "$after_http_content" | grep -q "^stream {"; then
+            echo -e "${GREEN}✓ http 块后包含 stream 块（正确）${NC}"
+        elif [ -n "$after_http_content" ]; then
+            # 检查是否有不应该存在的内容（如重复的 set、include 指令）
+            if echo "$after_http_content" | grep -qE "^\s*(set|include)"; then
+                echo -e "${YELLOW}⚠ 检测到 http 块后有重复的配置指令，但保留 stream 块（如果存在）${NC}"
+                # 只清理重复的 set 和 include 指令，保留 stream 块
+                # 找到 stream 块开始位置
+                stream_start_line=$(grep -n "^stream {" "$NGINX_CONF_DIR/nginx.conf" | cut -d: -f1 | head -1)
+                if [ -n "$stream_start_line" ] && [ "$stream_start_line" -gt "$http_end_line" ]; then
+                    # 有 stream 块，只清理 http 块和 stream 块之间的重复内容
+                    if [ "$stream_start_line" -gt $((http_end_line + 1)) ]; then
+                        echo -e "${YELLOW}  清理 http 块和 stream 块之间的重复内容...${NC}"
+                        # 保留 http 块、空行、stream 块
+                        head -n "$http_end_line" "$NGINX_CONF_DIR/nginx.conf" > "$NGINX_CONF_DIR/nginx.conf.tmp"
+                        echo "" >> "$NGINX_CONF_DIR/nginx.conf.tmp"
+                        tail -n +$stream_start_line "$NGINX_CONF_DIR/nginx.conf" >> "$NGINX_CONF_DIR/nginx.conf.tmp"
+                        mv "$NGINX_CONF_DIR/nginx.conf.tmp" "$NGINX_CONF_DIR/nginx.conf"
+                        echo -e "${GREEN}✓ 已清理重复内容，保留 stream 块${NC}"
+                    fi
+                else
+                    # 没有 stream 块，清理所有 http 块后的内容
+                    echo -e "${YELLOW}  清理 http 块后的重复内容（无 stream 块）...${NC}"
+                    head -n "$http_end_line" "$NGINX_CONF_DIR/nginx.conf" > "$NGINX_CONF_DIR/nginx.conf.tmp"
+                    mv "$NGINX_CONF_DIR/nginx.conf.tmp" "$NGINX_CONF_DIR/nginx.conf"
+                    echo -e "${GREEN}✓ 已清理重复内容${NC}"
+                fi
             fi
-        else
-            echo -e "${GREEN}✓ http 块后无多余内容${NC}"
         fi
-    else
-        echo -e "${YELLOW}⚠ 无法确定 http 块结束位置，跳过清理${NC}"
     fi
 fi
 
-# 步骤5: 验证文件行数并强制清理（双重保护）
+# 步骤5: 验证文件完整性（不强制截取，保留 stream 块）
 template_lines=$(wc -l < "${PROJECT_ROOT}/init_file/nginx.conf" 2>/dev/null | tr -d ' ')
 deployed_lines=$(wc -l < "$NGINX_CONF_DIR/nginx.conf" 2>/dev/null | tr -d ' ')
 
-# 如果行数不一致，强制截取
 if [ -n "$template_lines" ] && [ -n "$deployed_lines" ]; then
-    if [ "$deployed_lines" -gt "$template_lines" ]; then
-        echo -e "${YELLOW}⚠ 警告: 部署后的文件行数 ($deployed_lines) 大于模板文件 ($template_lines)，强制截取到正确行数...${NC}"
-        head -n "$template_lines" "$NGINX_CONF_DIR/nginx.conf" > "$NGINX_CONF_DIR/nginx.conf.tmp" && \
-            mv "$NGINX_CONF_DIR/nginx.conf.tmp" "$NGINX_CONF_DIR/nginx.conf"
-        echo -e "${GREEN}✓ 已截取到正确行数${NC}"
-    fi
-    
-    # 额外检查：确保 http 块结束后没有内容（即使行数一致，也可能有重复内容）
-    if [ -n "$http_end_line" ]; then
-        # 检查 http 块结束后的内容是否包含 set 或 include 指令
-        after_http_content=$(sed -n "$((http_end_line + 1)),\$p" "$NGINX_CONF_DIR/nginx.conf" 2>/dev/null | grep -E "^\s*(set|include)" | head -1)
-        if [ -n "$after_http_content" ]; then
-            echo -e "${YELLOW}⚠ 检测到 http 块后有重复的配置指令，强制清理...${NC}"
-            head -n "$http_end_line" "$NGINX_CONF_DIR/nginx.conf" > "$NGINX_CONF_DIR/nginx.conf.tmp" && \
-                mv "$NGINX_CONF_DIR/nginx.conf.tmp" "$NGINX_CONF_DIR/nginx.conf"
-            echo -e "${GREEN}✓ 已清理重复配置${NC}"
-        fi
+    if [ "$deployed_lines" -ne "$template_lines" ]; then
+        echo -e "${YELLOW}⚠ 警告: 部署后的文件行数 ($deployed_lines) 与模板文件 ($template_lines) 不一致${NC}"
+        echo -e "${BLUE}  如果模板文件包含 stream 块，这是正常的${NC}"
+    else
+        echo -e "${GREEN}✓ 文件行数与模板一致${NC}"
     fi
 fi
 
@@ -320,14 +290,19 @@ echo -e "${YELLOW}  注意: conf.d、lua、logs、cert 目录保持在项目目�
 # 验证配置文件
 echo -e "${GREEN}[3/4] 验证配置...${NC}"
 
-# 最终清理：在验证前再次确保文件正确（最后一道防线）
-echo -e "${YELLOW}  执行最终清理检查...${NC}"
+# 最终验证：检查配置文件结构（保留 stream 块）
+echo -e "${YELLOW}  执行最终验证检查...${NC}"
 template_lines=$(wc -l < "${PROJECT_ROOT}/init_file/nginx.conf" 2>/dev/null | tr -d ' ')
-if [ -n "$template_lines" ]; then
-    # 找到 http 块结束位置
-    http_start_line=$(grep -n "^http {" "$NGINX_CONF_DIR/nginx.conf" 2>/dev/null | cut -d: -f1 | head -1)
-    if [ -n "$http_start_line" ]; then
-        http_end_line=$(awk -v start="$http_start_line" '
+final_lines=$(wc -l < "$NGINX_CONF_DIR/nginx.conf" 2>/dev/null | tr -d ' ')
+
+# 检查是否包含 stream 块
+if grep -q "^stream {" "$NGINX_CONF_DIR/nginx.conf" 2>/dev/null; then
+    echo -e "${GREEN}✓ 配置文件包含 stream 块${NC}"
+    
+    # 验证 stream 块是否完整
+    stream_start_line=$(grep -n "^stream {" "$NGINX_CONF_DIR/nginx.conf" | cut -d: -f1 | head -1)
+    if [ -n "$stream_start_line" ]; then
+        stream_end_line=$(awk -v start="$stream_start_line" '
             BEGIN { brace_count = 0; found_start = 0 }
             NR >= start {
                 if (!found_start) found_start = 1
@@ -345,28 +320,23 @@ if [ -n "$template_lines" ]; then
             }
         ' "$NGINX_CONF_DIR/nginx.conf" 2>/dev/null)
         
-        if [ -n "$http_end_line" ]; then
-            # 强制截取到 http 块结束位置
-            head -n "$http_end_line" "$NGINX_CONF_DIR/nginx.conf" > "$NGINX_CONF_DIR/nginx.conf.final"
-            if [ $? -eq 0 ]; then
-                mv "$NGINX_CONF_DIR/nginx.conf.final" "$NGINX_CONF_DIR/nginx.conf"
-                echo -e "${GREEN}✓ 最终清理完成（截取到第 $http_end_line 行）${NC}"
-            else
-                echo -e "${YELLOW}⚠ 最终清理失败，但继续验证...${NC}"
-                rm -f "$NGINX_CONF_DIR/nginx.conf.final"
-            fi
+        if [ -n "$stream_end_line" ]; then
+            echo -e "${GREEN}✓ stream 块完整（第 $stream_start_line-$stream_end_line 行）${NC}"
         else
-            echo -e "${YELLOW}⚠ 无法确定 http 块结束位置${NC}"
+            echo -e "${YELLOW}⚠ 无法确定 stream 块结束位置${NC}"
         fi
     fi
-    
-    # 额外验证：检查文件行数
-    final_lines=$(wc -l < "$NGINX_CONF_DIR/nginx.conf" 2>/dev/null | tr -d ' ')
-    if [ -n "$final_lines" ] && [ "$final_lines" -gt "$template_lines" ]; then
-        echo -e "${YELLOW}⚠ 文件行数 ($final_lines) 仍大于模板 ($template_lines)，强制截取...${NC}"
-        head -n "$template_lines" "$NGINX_CONF_DIR/nginx.conf" > "$NGINX_CONF_DIR/nginx.conf.final" && \
-            mv "$NGINX_CONF_DIR/nginx.conf.final" "$NGINX_CONF_DIR/nginx.conf"
-        echo -e "${GREEN}✓ 已强制截取到模板行数${NC}"
+else
+    echo -e "${YELLOW}⚠ 配置文件不包含 stream 块（如果模板文件有 stream 块，这可能是问题）${NC}"
+fi
+
+# 验证文件行数
+if [ -n "$template_lines" ] && [ -n "$final_lines" ]; then
+    if [ "$final_lines" -eq "$template_lines" ]; then
+        echo -e "${GREEN}✓ 文件行数与模板一致（$final_lines 行）${NC}"
+    else
+        echo -e "${YELLOW}⚠ 文件行数 ($final_lines) 与模板 ($template_lines) 不一致${NC}"
+        echo -e "${BLUE}  如果模板文件包含 stream 块，这是正常的${NC}"
     fi
 fi
 

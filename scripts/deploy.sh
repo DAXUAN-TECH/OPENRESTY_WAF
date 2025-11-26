@@ -109,8 +109,8 @@ fi
 echo -e "${GREEN}✓ waf 用户检查完成${NC}"
 echo ""
 
-# 尝试更新 OpenResty 的 systemd 启动用户为 waf（如果存在 openresty.service）
-echo -e "${GREEN}[0.1/5] 检查并更新 OpenResty systemd 服务用户...${NC}"
+# 尝试更新 OpenResty 的 systemd 启动用户和环境（如果存在 openresty.service）
+echo -e "${GREEN}[0.1/5] 检查并更新 OpenResty systemd 服务用户和环境变量...${NC}"
 
 # 优先使用 /etc/systemd/system，其次是常见的系统路径
 OPENRESTY_SERVICE_FILE=""
@@ -130,7 +130,7 @@ if [ -n "$OPENRESTY_SERVICE_FILE" ]; then
 
     # 确保 [Service] 段存在
     if ! grep -q "^\[Service\]" "$OPENRESTY_SERVICE_FILE"; then
-        echo -e "${YELLOW}  ⚠ 服务文件中未找到 [Service] 段，跳过用户更新${NC}"
+        echo -e "${YELLOW}  ⚠ 服务文件中未找到 [Service] 段，跳过用户/环境更新${NC}"
     else
         # 更新或插入 User=waf
         if grep -q "^User=" "$OPENRESTY_SERVICE_FILE"; then
@@ -144,8 +144,6 @@ if [ -n "$OPENRESTY_SERVICE_FILE" ]; then
         if grep -q "^Group=" "$OPENRESTY_SERVICE_FILE"; then
             sed -i "s/^Group=.*/Group=$WAF_GROUP/" "$OPENRESTY_SERVICE_FILE"
         else
-            # 如果没有 Group 行，同样插入到 [Service] 段之后（紧跟在 User 后面更清晰）
-            # 再次插入不会破坏顺序，因为 sed 是基于当前文件内容操作
             sed -i "/^\[Service\]/a Group=$WAF_GROUP" "$OPENRESTY_SERVICE_FILE"
         fi
 
@@ -170,7 +168,14 @@ if [ -n "$OPENRESTY_SERVICE_FILE" ]; then
             sed -i "/^\[Service\]/a NoNewPrivileges=false" "$OPENRESTY_SERVICE_FILE"
         fi
 
-        echo -e "${GREEN}  ✓ 已将 OpenResty 服务用户设置为: User=$WAF_USER, Group=$WAF_GROUP${NC}"
+        # 设置 Environment=OPENRESTY_PREFIX（供 Lua 层 find_openresty_binary 使用）
+        if grep -q "^Environment=OPENRESTY_PREFIX=" "$OPENRESTY_SERVICE_FILE"; then
+            sed -i "s|^Environment=OPENRESTY_PREFIX=.*|Environment=OPENRESTY_PREFIX=$OPENRESTY_PREFIX|" "$OPENRESTY_SERVICE_FILE"
+        else
+            sed -i "/^\[Service\]/a Environment=OPENRESTY_PREFIX=$OPENRESTY_PREFIX" "$OPENRESTY_SERVICE_FILE"
+        fi
+
+        echo -e "${GREEN}  ✓ 已将 OpenResty 服务用户和环境变量设置为: User=$WAF_USER, Group=$WAF_GROUP, OPENRESTY_PREFIX=$OPENRESTY_PREFIX${NC}"
 
         # 重新加载 systemd 配置
         if command -v systemctl >/dev/null 2>&1; then

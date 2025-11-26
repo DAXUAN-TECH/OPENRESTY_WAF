@@ -85,19 +85,39 @@ echo -e "${BLUE}[2/6] 计算优化参数...${NC}"
 WORKER_PROCESSES=$CPU_CORES
 echo "  Worker 进程数: $WORKER_PROCESSES"
 
-# 每个 Worker 的连接数（最大 65535）
-WORKER_CONNECTIONS=65535
-echo "  每个 Worker 连接数: $WORKER_CONNECTIONS"
+# 每个 Worker 的连接数（根据内存自动调整，上限 65535）
+# 参考 docs/性能优化指南.md 中的低/中/高并发建议：
+# - 低内存（<2GB）：低并发配置，worker_connections=10240
+# - 中等内存（2GB-8GB）：中并发配置，worker_connections=32768
+# - 高内存（>=8GB）：高并发配置，worker_connections=65535
+if [ "$TOTAL_MEM" -lt 2048 ]; then
+    WORKER_CONNECTIONS=10240
+elif [ "$TOTAL_MEM" -lt 8192 ]; then
+    WORKER_CONNECTIONS=32768
+else
+    WORKER_CONNECTIONS=65535
+fi
+echo "  每个 Worker 连接数: $WORKER_CONNECTIONS (根据内存自动计算)"
 
 # 理论最大并发连接数
 MAX_CONNECTIONS=$((WORKER_PROCESSES * WORKER_CONNECTIONS))
 echo "  理论最大并发连接数: $MAX_CONNECTIONS"
 
-# 文件描述符限制（建议为最大并发数的 2 倍）
+# 文件描述符限制（建议为最大并发数的 2 倍，但不超过系统能力）
 ULIMIT_NOFILE=$((MAX_CONNECTIONS * 2))
-if [ $ULIMIT_NOFILE -gt 1000000 ]; then
-    ULIMIT_NOFILE=1000000  # 最大限制为 100 万
+# 理论上限 100 万，避免过大
+if [ "$ULIMIT_NOFILE" -gt 1000000 ]; then
+    ULIMIT_NOFILE=1000000
 fi
+
+# 如果支持，读取当前系统 fs.nr_open 作为硬上限，进一步裁剪
+if [ -r /proc/sys/fs/nr_open ]; then
+    SYS_NR_OPEN=$(cat /proc/sys/fs/nr_open 2>/dev/null || echo 0)
+    if [ "$SYS_NR_OPEN" -gt 0 ] && [ "$ULIMIT_NOFILE" -gt "$SYS_NR_OPEN" ]; then
+        ULIMIT_NOFILE="$SYS_NR_OPEN"
+    fi
+fi
+
 echo "  文件描述符限制: $ULIMIT_NOFILE"
 
 # 共享内存大小（根据内存计算）
@@ -250,7 +270,7 @@ if [ -f "$NGINX_CONF_DIR/nginx.conf" ]; then
         sed -i "s/worker_connections.*/worker_connections  $WORKER_CONNECTIONS;/" "$NGINX_CONF_DIR/nginx.conf"
     fi
     
-    echo -e "    ${GREEN}✓ nginx.conf 已优化${NC}"
+    echo -e "    ${GREEN}✓ nginx.conf 已优化（worker_processes=$WORKER_PROCESSES, worker_connections=$WORKER_CONNECTIONS）${NC}"
 fi
 
 # 5.2 优化 performance.conf

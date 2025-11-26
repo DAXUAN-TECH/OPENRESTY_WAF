@@ -684,8 +684,7 @@
                 <div style="font-size: 14px; color: #666;">规则已成功创建并保存</div>
             </div>
             <div style="display: flex; justify-content: center; gap: 15px; margin-top: 30px;">
-                <button type="button" onclick="continueCreateRule()" style="padding: 10px 24px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; min-width: 100px;">继续创建</button>
-                <button type="button" onclick="confirmCreateRule()" style="padding: 10px 24px; background: #f5f5f5; color: #333; border: 1px solid #ddd; border-radius: 4px; cursor: pointer; font-size: 14px; min-width: 100px;">确定</button>
+                <button type="button" onclick="confirmCreateRule()" style="padding: 10px 24px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; min-width: 100px;">确定</button>
             </div>
         </div>
     </div>
@@ -1749,12 +1748,12 @@
             modal.classList.add('show');
         }
         
-        // 继续创建规则（返回创建规则页面）
-        function continueCreateRule() {
+        // 确定（关闭提示框并返回创建规则页面）
+        function confirmCreateRule() {
             // 关闭提示框
             const modal = document.getElementById('create-success-modal');
             modal.classList.remove('show');
-            // 重置表单但保持在创建页面
+            // 重置表单
             resetCreateForm();
             // 切换到创建规则标签页
             switchTab('create');
@@ -1763,13 +1762,6 @@
             if (createTab) {
                 createTab.scrollIntoView({ behavior: 'smooth', block: 'start' });
             }
-        }
-        
-        // 确定（关闭提示框）
-        function confirmCreateRule() {
-            // 关闭提示框
-            const modal = document.getElementById('create-success-modal');
-            modal.classList.remove('show');
         }
         
         // 初始化

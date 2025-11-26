@@ -9,14 +9,31 @@ local audit_log = require "waf.audit_log"
 
 local _M = {}
 
+-- 检查文件是否存在且可执行
+local function is_executable(path)
+    if not path or path == "" then
+        return false
+    end
+    -- 尝试打开文件（检查是否存在）
+    local file = io.open(path, "r")
+    if not file then
+        return false
+    end
+    file:close()
+    
+    -- 检查文件是否可执行（使用 test 命令）
+    local test_cmd = "test -x " .. path .. " 2>/dev/null"
+    local test_result = os.execute(test_cmd)
+    return (test_result == 0)
+end
+
 -- 查找nginx可执行文件（可移植性实现）
 local function find_nginx_binary()
     -- 1. 优先从环境变量获取（最高优先级）
     local nginx_binary_env = os.getenv("NGINX_BINARY")
     if nginx_binary_env and nginx_binary_env ~= "" then
-        local file = io.open(nginx_binary_env, "r")
-        if file then
-            file:close()
+        if is_executable(nginx_binary_env) then
+            ngx.log(ngx.DEBUG, "从NGINX_BINARY环境变量找到nginx可执行文件: ", nginx_binary_env)
             return nginx_binary_env
         end
     end
@@ -29,9 +46,8 @@ local function find_nginx_binary()
             openresty_prefix .. "/nginx/sbin/nginx"
         }
         for _, path in ipairs(possible_paths) do
-            local file = io.open(path, "r")
-            if file then
-                file:close()
+            if is_executable(path) then
+                ngx.log(ngx.DEBUG, "从OPENRESTY_PREFIX环境变量找到nginx可执行文件: ", path)
                 return path
             end
         end
@@ -44,15 +60,35 @@ local function find_nginx_binary()
         local which_path = which_result:read("*line")
         which_result:close()
         if which_path and which_path ~= "" then
-            local file = io.open(which_path, "r")
-            if file then
-                file:close()
+            -- 清理路径（去除换行符和空格）
+            which_path = which_path:gsub("^%s+", ""):gsub("%s+$", "")
+            if is_executable(which_path) then
+                ngx.log(ngx.DEBUG, "通过which命令找到nginx可执行文件: ", which_path)
                 return which_path
             end
         end
     end
     
-    -- 4. 如果都找不到，返回nil（由调用者处理错误）
+    -- 4. 尝试常见的默认安装路径
+    local default_paths = {
+        "/usr/local/openresty/bin/openresty",
+        "/usr/local/bin/openresty",
+        "/usr/bin/openresty",
+        "/opt/openresty/bin/openresty",
+        "/usr/local/openresty/nginx/sbin/nginx",
+        "/usr/local/nginx/sbin/nginx",
+        "/usr/sbin/nginx",
+        "/usr/bin/nginx"
+    }
+    for _, path in ipairs(default_paths) do
+        if is_executable(path) then
+            ngx.log(ngx.DEBUG, "从默认路径找到nginx可执行文件: ", path)
+            return path
+        end
+    end
+    
+    -- 5. 如果都找不到，返回nil（由调用者处理错误）
+    ngx.log(ngx.WARN, "无法找到nginx可执行文件，已尝试所有可能的路径")
     return nil
 end
 
@@ -62,27 +98,51 @@ local function do_reload_nginx()
     local nginx_binary = find_nginx_binary()
     
     if not nginx_binary then
-        return false, "未找到nginx可执行文件，请设置NGINX_BINARY或OPENRESTY_PREFIX环境变量"
+        local error_msg = "未找到nginx可执行文件，请设置NGINX_BINARY或OPENRESTY_PREFIX环境变量"
+        ngx.log(ngx.ERR, error_msg)
+        return false, error_msg
     end
     
-    -- 执行nginx配置测试
+    ngx.log(ngx.INFO, "使用nginx可执行文件: ", nginx_binary)
+    
+    -- 第一步：执行nginx配置测试（必须先测试，确保配置正确）
+    ngx.log(ngx.INFO, "开始测试nginx配置...")
     local test_cmd = nginx_binary .. " -t 2>&1"
     local test_result = io.popen(test_cmd)
+    if not test_result then
+        local error_msg = "无法执行nginx配置测试命令"
+        ngx.log(ngx.ERR, error_msg)
+        return false, error_msg
+    end
+    
     local test_output = test_result:read("*all")
     local test_code = test_result:close()
     
     if test_code ~= 0 then
-        return false, "nginx配置测试失败: " .. (test_output or "unknown error")
+        local error_msg = "nginx配置测试失败: " .. (test_output or "unknown error")
+        ngx.log(ngx.ERR, error_msg)
+        return false, error_msg
     end
     
-    -- 执行nginx配置重新加载
+    ngx.log(ngx.INFO, "nginx配置测试通过")
+    
+    -- 第二步：执行nginx配置重新加载（测试通过后才重载）
+    ngx.log(ngx.INFO, "开始重新加载nginx配置...")
     local reload_cmd = nginx_binary .. " -s reload 2>&1"
     local reload_result = io.popen(reload_cmd)
+    if not reload_result then
+        local error_msg = "无法执行nginx重载命令"
+        ngx.log(ngx.ERR, error_msg)
+        return false, error_msg
+    end
+    
     local reload_output = reload_result:read("*all")
     local reload_code = reload_result:close()
     
     if reload_code ~= 0 then
-        return false, "nginx配置重新加载失败: " .. (reload_output or "unknown error")
+        local error_msg = "nginx配置重新加载失败: " .. (reload_output or "unknown error")
+        ngx.log(ngx.ERR, error_msg)
+        return false, error_msg
     end
     
     ngx.log(ngx.INFO, "nginx配置重新加载成功")

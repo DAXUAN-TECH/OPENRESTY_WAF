@@ -698,29 +698,25 @@ function _M.check_stream(rule_id)
             block_reason = auto_block_info.reason
         }
         block_reason = auto_block_info.reason or "auto_frequency"
-        goto block
     end
 
     -- 2. 检查单个 IP
-    is_blocked, matched_rule = check_single_ip(client_ip)
-    if is_blocked then
-        goto block
+    if not is_blocked then
+        is_blocked, matched_rule = check_single_ip(client_ip)
     end
 
     -- 3. 检查 IP 段
-    is_blocked, matched_rule = check_ip_range(client_ip)
-    if is_blocked then
-        goto block
+    if not is_blocked then
+        is_blocked, matched_rule = check_ip_range(client_ip)
     end
 
     -- 4. 检查地域封控
-    is_blocked, matched_rule = check_geo_block(client_ip)
-    if is_blocked then
-        goto block
+    if not is_blocked then
+        is_blocked, matched_rule = check_geo_block(client_ip)
     end
 
     -- 5. 检查是否需要自动封控（基于频率统计）
-    if config.auto_block.enable then
+    if not is_blocked and config.auto_block.enable then
         local should_block, block_info = frequency_stats.should_auto_block(client_ip)
         if should_block then
             -- 创建自动封控规则
@@ -733,26 +729,27 @@ function _M.check_stream(rule_id)
                     block_reason = block_info.reason
                 }
                 block_reason = block_info.reason or "auto_frequency"
-                goto block
             end
         end
     end
 
-    -- 未匹配任何规则，允许通过
-    return
-
-    ::block::
-    -- 记录封控日志
-    log_block(client_ip, matched_rule, block_reason)
-    
-    -- 记录监控指标
-    if config.metrics and config.metrics.enable then
-        metrics.record_block(block_reason)
+    -- 如果被封控，执行封控逻辑
+    if is_blocked then
+        -- 记录封控日志
+        log_block(client_ip, matched_rule, block_reason)
+        
+        -- 记录监控指标
+        if config.metrics and config.metrics.enable then
+            metrics.record_block(block_reason)
+        end
+        
+        -- Stream块中拒绝连接（使用ngx.exit()）
+        ngx.log(ngx.WARN, "Stream connection blocked: ", client_ip, ", reason: ", block_reason)
+        ngx.exit(1)  -- 拒绝连接
     end
     
-    -- Stream块中拒绝连接（使用ngx.exit()）
-    ngx.log(ngx.WARN, "Stream connection blocked: ", client_ip, ", reason: ", block_reason)
-    ngx.exit(1)  -- 拒绝连接
+    -- 未匹配任何规则，允许通过
+    return
 end
 
 -- 主检查函数（用于HTTP/HTTPS代理）
@@ -818,29 +815,25 @@ function _M.check(rule_id)
             block_reason = auto_block_info.reason
         }
         block_reason = auto_block_info.reason or "auto_frequency"
-        goto block
     end
 
     -- 2. 检查单个 IP
-    is_blocked, matched_rule = check_single_ip(client_ip)
-    if is_blocked then
-        goto block
+    if not is_blocked then
+        is_blocked, matched_rule = check_single_ip(client_ip)
     end
 
     -- 3. 检查 IP 段
-    is_blocked, matched_rule = check_ip_range(client_ip)
-    if is_blocked then
-        goto block
+    if not is_blocked then
+        is_blocked, matched_rule = check_ip_range(client_ip)
     end
 
     -- 4. 检查地域封控
-    is_blocked, matched_rule = check_geo_block(client_ip)
-    if is_blocked then
-        goto block
+    if not is_blocked then
+        is_blocked, matched_rule = check_geo_block(client_ip)
     end
 
     -- 5. 检查是否需要自动封控（基于频率统计）
-    if config.auto_block.enable then
+    if not is_blocked and config.auto_block.enable then
         local should_block, block_info = frequency_stats.should_auto_block(client_ip)
         if should_block then
             -- 创建自动封控规则
@@ -853,29 +846,31 @@ function _M.check(rule_id)
                     block_reason = block_info.reason
                 }
                 block_reason = block_info.reason or "auto_frequency"
-                goto block
             end
         end
     end
 
-    -- 未匹配任何规则，允许通过
-    return
-
-    ::block::
-    -- 记录封控日志
-    log_block(client_ip, matched_rule, block_reason)
-    
-    -- 记录监控指标
-    if config.metrics and config.metrics.enable then
-        metrics.record_block(block_reason)
+    -- 如果被封控，执行封控逻辑
+    if is_blocked then
+        -- 记录封控日志
+        log_block(client_ip, matched_rule, block_reason)
+        
+        -- 记录监控指标
+        if config.metrics and config.metrics.enable then
+            metrics.record_block(block_reason)
+        end
+        
+        -- 返回 403
+        ngx.status = 403
+        ngx.header.content_type = "text/html; charset=utf-8"
+        ngx.say(config.block.block_page)
+        ngx.exit(403)
     end
     
-    -- 返回 403
-    ngx.status = 403
-    ngx.header.content_type = "text/html; charset=utf-8"
-    ngx.say(config.block.block_page)
-    ngx.exit(403)
+    -- 未匹配任何规则，允许通过
+    return
 end
 
 return _M
+
 

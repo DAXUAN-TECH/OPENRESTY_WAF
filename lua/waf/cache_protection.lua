@@ -5,6 +5,85 @@
 local config = require "config"
 local cjson = require "cjson"
 
+-- 加载 bit 库（用于位运算，兼容 LuaJIT/Lua 5.1）
+local bit = bit
+if not bit then
+    local ok, bit_module = pcall(require, "bit")
+    if ok and bit_module then
+        bit = bit_module
+    else
+        -- 如果 bit 库不可用，使用数学运算替代
+        bit = {
+            bxor = function(x, y)
+                -- 异或操作：使用数学运算实现
+                local result = 0
+                local power = 1
+                local x_val = x
+                local y_val = y
+                for i = 1, 32 do
+                    local x_bit = x_val % 2
+                    local y_bit = y_val % 2
+                    if (x_bit == 1 and y_bit == 0) or (x_bit == 0 and y_bit == 1) then
+                        result = result + power
+                    end
+                    x_val = math.floor(x_val / 2)
+                    y_val = math.floor(y_val / 2)
+                    power = power * 2
+                    if x_val == 0 and y_val == 0 then
+                        break
+                    end
+                end
+                return result
+            end,
+            band = function(x, y)
+                -- 位与操作：使用数学运算实现
+                local result = 0
+                local power = 1
+                local x_val = x
+                local y_val = y
+                for i = 1, 32 do
+                    local x_bit = x_val % 2
+                    local y_bit = y_val % 2
+                    if x_bit == 1 and y_bit == 1 then
+                        result = result + power
+                    end
+                    x_val = math.floor(x_val / 2)
+                    y_val = math.floor(y_val / 2)
+                    power = power * 2
+                    if x_val == 0 and y_val == 0 then
+                        break
+                    end
+                end
+                return result
+            end,
+            bor = function(x, y)
+                -- 位或操作：使用数学运算实现
+                local result = 0
+                local power = 1
+                local x_val = x
+                local y_val = y
+                for i = 1, 32 do
+                    local x_bit = x_val % 2
+                    local y_bit = y_val % 2
+                    if x_bit == 1 or y_bit == 1 then
+                        result = result + power
+                    end
+                    x_val = math.floor(x_val / 2)
+                    y_val = math.floor(y_val / 2)
+                    power = power * 2
+                    if x_val == 0 and y_val == 0 then
+                        break
+                    end
+                end
+                return result
+            end,
+            lshift = function(x, n)
+                return x * (2^n)
+            end
+        }
+    end
+end
+
 local _M = {}
 local cache = ngx.shared.waf_cache
 
@@ -18,13 +97,26 @@ local RATE_LIMIT_THRESHOLD = config.cache_protection and config.cache_protection
 -- 布隆过滤器键前缀
 local BLOOM_FILTER_PREFIX = "bloom:"
 
--- 简单的哈希函数（FNV-1a）
+-- 简单的哈希函数（FNV-1a，兼容 LuaJIT/Lua 5.1）
 local function hash(str, seed)
     local hash = seed or 2166136261
     for i = 1, #str do
-        hash = hash ~ string.byte(str, i)
+        local byte = string.byte(str, i)
+        -- 使用 bit 库进行异或操作（兼容 LuaJIT）
+        if bit and bit.bxor then
+            hash = bit.bxor(hash, byte)
+        else
+            -- 回退：使用简化的哈希算法
+            hash = hash + byte
+        end
         hash = hash * 16777619
-        hash = hash & 0xFFFFFFFF  -- 限制为32位
+        -- 使用 bit 库进行位与操作（兼容 LuaJIT）
+        if bit and bit.band then
+            hash = bit.band(hash, 0xFFFFFFFF)  -- 限制为32位
+        else
+            -- 回退：使用取模限制为32位
+            hash = hash % 4294967296  -- 2^32
+        end
     end
     return hash
 end
@@ -54,10 +146,22 @@ function _M.bloom_add(key, value)
         local byte_index = math.floor(h / 8) + 1
         local bit_index = h % 8
         
-        if bloom_data[byte_index] then
-            bloom_data[byte_index] = bloom_data[byte_index] | (1 << bit_index)
+        -- 使用 bit 库进行位运算（兼容 LuaJIT）
+        local bit_mask
+        if bit and bit.lshift then
+            bit_mask = bit.lshift(1, bit_index)
         else
-            bloom_data[byte_index] = 1 << bit_index
+            bit_mask = 2^bit_index
+        end
+        
+        if bloom_data[byte_index] then
+            if bit and bit.bor then
+                bloom_data[byte_index] = bit.bor(bloom_data[byte_index], bit_mask)
+            else
+                bloom_data[byte_index] = bloom_data[byte_index] + bit_mask
+            end
+        else
+            bloom_data[byte_index] = bit_mask
         end
     end
     
@@ -86,7 +190,29 @@ function _M.bloom_check(key, value)
         local byte_index = math.floor(h / 8) + 1
         local bit_index = h % 8
         
-        if not bloom_data[byte_index] or (bloom_data[byte_index] & (1 << bit_index)) == 0 then
+        -- 使用 bit 库进行位运算（兼容 LuaJIT）
+        local bit_mask
+        if bit and bit.lshift then
+            bit_mask = bit.lshift(1, bit_index)
+        else
+            bit_mask = 2^bit_index
+        end
+        
+        local byte_value = bloom_data[byte_index] or 0
+        local bit_value
+        if bit and bit.band then
+            bit_value = bit.band(byte_value, bit_mask)
+        else
+            -- 回退：使用取模检查
+            bit_value = byte_value % (bit_mask * 2)
+            if bit_value >= bit_mask then
+                bit_value = bit_mask
+            else
+                bit_value = 0
+            end
+        end
+        
+        if bit_value == 0 then
             return false  -- 某个位为0，肯定不存在
         end
     end

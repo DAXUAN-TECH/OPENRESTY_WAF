@@ -566,8 +566,8 @@ if [ -f "$NGINX_CONF_DIR/nginx.conf" ]; then
     fi
 fi
 
-# 5. 检查配置文件语法和完整性
-echo -e "${GREEN}[5/5] 检查配置文件语法和完整性...${NC}"
+# 6. 检查配置文件语法和完整性（已在步骤3中完成，这里只是最终确认）
+echo -e "${GREEN}[6/6] 最终确认...${NC}"
 
 # 验证 nginx.conf 语法
 if [ -f "${OPENRESTY_PREFIX}/bin/openresty" ]; then
@@ -596,8 +596,8 @@ for config in "${CRITICAL_CONFIGS[@]}"; do
     fi
 done
 
-# 设置权限
-echo -e "${GREEN}[5/5] 设置文件权限...${NC}"
+# 5. 设置权限
+echo -e "${GREEN}[5/6] 设置文件权限...${NC}"
 
 # 设置项目根目录的所有者为 waf:waf
 echo -e "${YELLOW}  设置项目目录所有者为 waf:waf...${NC}"

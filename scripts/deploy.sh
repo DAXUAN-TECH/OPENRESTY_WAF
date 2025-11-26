@@ -109,53 +109,6 @@ fi
 echo -e "${GREEN}✓ waf 用户检查完成${NC}"
 echo ""
 
-# 创建 root 侧的 OpenResty 重载脚本，并为 waf 配置免密 sudo（方案3）
-echo -e "${GREEN}[0.05/5] 创建 waf_reload_openresty.sh 脚本并配置 sudoers...${NC}"
-
-RELOAD_SCRIPT="/usr/local/bin/waf_reload_openresty.sh"
-SUDOERS_FILE="/etc/sudoers.d/waf_openresty_reload"
-
-# 生成/覆盖重载脚本
-cat > "$RELOAD_SCRIPT" <<EOF
-#!/bin/bash
-
-OPENRESTY_BIN="${OPENRESTY_PREFIX}/bin/openresty"
-
-echo "[waf_reload_openresty] 使用二进制: \$OPENRESTY_BIN"
-
-# 第一步：测试配置
-if ! "\$OPENRESTY_BIN" -t; then
-  echo "[waf_reload_openresty] 配置测试失败，停止重载"
-  exit 1
-fi
-
-echo "[waf_reload_openresty] 配置测试通过，开始执行重载..."
-
-# 第二步：执行重载
-if "\$OPENRESTY_BIN" -s reload; then
-  echo "[waf_reload_openresty] OpenResty 重载成功"
-  exit 0
-else
-  echo "[waf_reload_openresty] OpenResty 重载失败"
-  exit 1
-fi
-EOF
-
-chmod 750 "$RELOAD_SCRIPT"
-chown root:root "$RELOAD_SCRIPT" 2>/dev/null || true
-
-echo -e "${GREEN}  ✓ 已创建重载脚本: $RELOAD_SCRIPT${NC}"
-
-# 为 waf 用户配置免密 sudo 执行该脚本
-cat > "$SUDOERS_FILE" <<EOF
-Defaults:$WAF_USER !requiretty
-$WAF_USER ALL=(root) NOPASSWD: $RELOAD_SCRIPT
-EOF
-
-chmod 440 "$SUDOERS_FILE"
-echo -e "${GREEN}  ✓ 已创建 sudoers 配置: $SUDOERS_FILE${NC}"
-
-
 # 尝试更新 OpenResty 的 systemd 启动用户为 waf（如果存在 openresty.service）
 echo -e "${GREEN}[0.1/5] 检查并更新 OpenResty systemd 服务用户...${NC}"
 

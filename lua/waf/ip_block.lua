@@ -431,8 +431,207 @@ local function check_rule_version()
     end
 end
 
+-- 检查特定规则ID（用于反向代理关联的规则）
+local function check_specific_rule(client_ip, rule_id)
+    if not rule_id then
+        return false, nil
+    end
+    
+    -- 查询指定规则
+    local sql = [[
+        SELECT id, rule_name, rule_type, rule_value, priority 
+        FROM waf_block_rules 
+        WHERE id = ? 
+        AND status = 1
+        AND (start_time IS NULL OR start_time <= NOW())
+        AND (end_time IS NULL OR end_time >= NOW())
+        LIMIT 1
+    ]]
+    
+    local res, err = mysql_pool.query(sql, rule_id)
+    if err then
+        ngx.log(ngx.ERR, "check specific rule query error: ", err)
+        return false, nil
+    end
+    
+    if not res or #res == 0 then
+        -- 规则不存在或已禁用，允许通过
+        return false, nil
+    end
+    
+    local rule = res[1]
+    local rule_type = rule.rule_type
+    local rule_value = rule.rule_value
+    
+    -- 检查规则类型
+    if rule_type == "ip_whitelist" then
+        -- IP白名单：检查单个IP、CIDR格式、IP范围格式（支持多选，用逗号分隔）
+        local is_match = false
+        
+        -- 检查精确匹配（单个IP或逗号分隔列表中的IP）
+        if rule_value == client_ip or 
+           rule_value:match("^" .. client_ip .. ",") or
+           rule_value:match("," .. client_ip .. ",") or
+           rule_value:match("," .. client_ip .. "$") then
+            is_match = true
+        else
+            -- 检查CIDR格式
+            if ip_utils.match_cidr(client_ip, rule_value) then
+                is_match = true
+            else
+                -- 检查IP范围格式
+                local start_ip, end_ip = ip_utils.parse_ip_range(rule_value)
+                if start_ip and end_ip and ip_utils.match_ip_range(client_ip, start_ip, end_ip) then
+                    is_match = true
+                else
+                    -- 检查逗号分隔列表中的CIDR或IP范围
+                    for v in rule_value:gmatch("([^,]+)") do
+                        local value = v:match("^%s*(.-)%s*$")
+                        if value == client_ip then
+                            is_match = true
+                            break
+                        elseif ip_utils.match_cidr(client_ip, value) then
+                            is_match = true
+                            break
+                        else
+                            local start, end_ip_range = ip_utils.parse_ip_range(value)
+                            if start and end_ip_range and ip_utils.match_ip_range(client_ip, start, end_ip_range) then
+                                is_match = true
+                                break
+                            end
+                        end
+                    end
+                end
+            end
+        end
+        
+        if is_match then
+            -- 白名单匹配，允许通过
+            return false, nil
+        else
+            -- 白名单不匹配，拒绝访问
+            return true, rule
+        end
+    elseif rule_type == "ip_blacklist" then
+        -- IP黑名单：检查单个IP、CIDR格式、IP范围格式（支持多选，用逗号分隔）
+        local is_match = false
+        
+        -- 检查精确匹配（单个IP或逗号分隔列表中的IP）
+        if rule_value == client_ip or 
+           rule_value:match("^" .. client_ip .. ",") or
+           rule_value:match("," .. client_ip .. ",") or
+           rule_value:match("," .. client_ip .. "$") then
+            is_match = true
+        else
+            -- 检查CIDR格式
+            if ip_utils.match_cidr(client_ip, rule_value) then
+                is_match = true
+            else
+                -- 检查IP范围格式
+                local start_ip, end_ip = ip_utils.parse_ip_range(rule_value)
+                if start_ip and end_ip and ip_utils.match_ip_range(client_ip, start_ip, end_ip) then
+                    is_match = true
+                else
+                    -- 检查逗号分隔列表中的CIDR或IP范围
+                    for v in rule_value:gmatch("([^,]+)") do
+                        local value = v:match("^%s*(.-)%s*$")
+                        if value == client_ip then
+                            is_match = true
+                            break
+                        elseif ip_utils.match_cidr(client_ip, value) then
+                            is_match = true
+                            break
+                        else
+                            local start, end_ip_range = ip_utils.parse_ip_range(value)
+                            if start and end_ip_range and ip_utils.match_ip_range(client_ip, start, end_ip_range) then
+                                is_match = true
+                                break
+                            end
+                        end
+                    end
+                end
+            end
+        end
+        
+        if is_match then
+            -- 黑名单匹配，拒绝访问
+            return true, rule
+        else
+            -- 黑名单不匹配，允许通过
+            return false, nil
+        end
+    elseif rule_type == "geo_whitelist" or rule_type == "geo_blacklist" then
+        -- 地域规则：需要获取IP的地理位置信息，然后检查是否匹配规则值
+        -- 使用geo_block模块获取地理位置信息
+        local geo_info = geo_block.get_geo_info(client_ip)
+        if not geo_info or not geo_info.country_code then
+            -- 无法获取地理位置信息，允许通过（安全起见）
+            return false, nil
+        end
+        
+        local country_code = geo_info.country_code
+        local region_name = geo_info.region_name
+        local city_name = geo_info.city_name
+        
+        -- 构建匹配值列表（从精确到模糊）
+        local match_values = {}
+        if country_code == "CN" then
+            -- 中国：构建省市匹配值
+            if region_name and city_name then
+                table.insert(match_values, country_code .. ":" .. region_name .. ":" .. city_name)
+            end
+            if region_name then
+                table.insert(match_values, country_code .. ":" .. region_name)
+            end
+            table.insert(match_values, country_code)
+        else
+            -- 其他国家只匹配国家代码
+            table.insert(match_values, country_code)
+        end
+        
+        -- 检查规则值是否匹配
+        local rule_values = {}
+        for v in rule_value:gmatch("([^,]+)") do
+            table.insert(rule_values, v:match("^%s*(.-)%s*$"))
+        end
+        
+        local is_match = false
+        for _, match_value in ipairs(match_values) do
+            for _, rule_val in ipairs(rule_values) do
+                if match_value == rule_val then
+                    is_match = true
+                    break
+                end
+            end
+            if is_match then
+                break
+            end
+        end
+        
+        if rule_type == "geo_whitelist" then
+            -- 地域白名单：匹配则允许通过，不匹配则拒绝
+            if is_match then
+                return false, nil  -- 白名单匹配，允许通过
+            else
+                return true, rule  -- 白名单不匹配，拒绝访问
+            end
+        else
+            -- 地域黑名单：匹配则拒绝，不匹配则允许
+            if is_match then
+                return true, rule  -- 黑名单匹配，拒绝访问
+            else
+                return false, nil  -- 黑名单不匹配，允许通过
+            end
+        end
+    else
+        -- 不支持的规则类型，允许通过
+        return false, nil
+    end
+end
+
 -- 主检查函数
-function _M.check()
+-- @param rule_id 可选的规则ID，如果提供则只检查该规则（用于反向代理关联的规则）
+function _M.check(rule_id)
     -- 检查IP封控功能是否启用（优先从数据库读取）
     local ip_block_enabled = feature_switches.is_enabled("ip_block")
     if not ip_block_enabled or not config.block.enable then
@@ -446,6 +645,31 @@ function _M.check()
     local client_ip = ip_utils.get_real_ip()
     if not client_ip then
         return
+    end
+
+    -- 如果指定了规则ID，只检查该规则
+    if rule_id then
+        local rule_id_num = tonumber(rule_id)
+        if rule_id_num then
+            local is_blocked, matched_rule = check_specific_rule(client_ip, rule_id_num)
+            if is_blocked then
+                -- 记录封控日志
+                log_block(client_ip, matched_rule, "manual")
+                
+                -- 记录监控指标
+                if config.metrics and config.metrics.enable then
+                    metrics.record_block("manual")
+                end
+                
+                -- 返回 403
+                ngx.status = 403
+                ngx.header.content_type = "text/html; charset=utf-8"
+                ngx.say(config.block.block_page)
+                ngx.exit(403)
+            end
+            -- 白名单匹配或规则不匹配，允许通过
+            return
+        end
     end
 
     -- 检查白名单（优先级最高）

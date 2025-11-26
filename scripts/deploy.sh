@@ -109,6 +109,67 @@ fi
 echo -e "${GREEN}✓ waf 用户检查完成${NC}"
 echo ""
 
+# 尝试更新 OpenResty 的 systemd 启动用户为 waf（如果存在 openresty.service）
+echo -e "${GREEN}[0.1/5] 检查并更新 OpenResty systemd 服务用户...${NC}"
+
+# 优先使用 /etc/systemd/system，其次是常见的系统路径
+OPENRESTY_SERVICE_FILE=""
+for candidate in \
+    "/etc/systemd/system/openresty.service" \
+    "/lib/systemd/system/openresty.service" \
+    "/usr/lib/systemd/system/openresty.service"
+do
+    if [ -f "$candidate" ]; then
+        OPENRESTY_SERVICE_FILE="$candidate"
+        break
+    fi
+done
+
+if [ -n "$OPENRESTY_SERVICE_FILE" ]; then
+    echo -e "${YELLOW}  检测到 OpenResty systemd 服务文件: $OPENRESTY_SERVICE_FILE${NC}"
+
+    # 确保 [Service] 段存在
+    if ! grep -q "^\[Service\]" "$OPENRESTY_SERVICE_FILE"; then
+        echo -e "${YELLOW}  ⚠ 服务文件中未找到 [Service] 段，跳过用户更新${NC}"
+    else
+        # 更新或插入 User=waf
+        if grep -q "^User=" "$OPENRESTY_SERVICE_FILE"; then
+            sed -i "s/^User=.*/User=$WAF_USER/" "$OPENRESTY_SERVICE_FILE"
+        else
+            # 在 [Service] 行之后插入 User
+            sed -i "/^\[Service\]/a User=$WAF_USER" "$OPENRESTY_SERVICE_FILE"
+        fi
+
+        # 更新或插入 Group=waf
+        if grep -q "^Group=" "$OPENRESTY_SERVICE_FILE"; then
+            sed -i "s/^Group=.*/Group=$WAF_GROUP/" "$OPENRESTY_SERVICE_FILE"
+        else
+            # 如果没有 Group 行，同样插入到 [Service] 段之后（紧跟在 User 后面更清晰）
+            # 再次插入不会破坏顺序，因为 sed 是基于当前文件内容操作
+            sed -i "/^\[Service\]/a Group=$WAF_GROUP" "$OPENRESTY_SERVICE_FILE"
+        fi
+
+        echo -e "${GREEN}  ✓ 已将 OpenResty 服务用户设置为: User=$WAF_USER, Group=$WAF_GROUP${NC}"
+
+        # 重新加载 systemd 配置
+        if command -v systemctl >/dev/null 2>&1; then
+            if systemctl daemon-reload 2>/dev/null; then
+                echo -e "${GREEN}  ✓ 已执行 systemctl daemon-reload${NC}"
+            else
+                echo -e "${YELLOW}  ⚠ 无法执行 systemctl daemon-reload，请手动运行: systemctl daemon-reload${NC}"
+            fi
+        else
+            echo -e "${YELLOW}  ⚠ 未检测到 systemctl 命令，可能不是 systemd 系统，跳过重载${NC}"
+        fi
+
+        echo -e "${BLUE}  说明: 之后请使用 systemd 管理 OpenResty，例如: systemctl restart openresty${NC}"
+        echo -e "${BLUE}        master 和 worker 进程将以 waf 用户运行，配合 Lua 中的 openresty -s reload 实现自动热重载${NC}"
+    fi
+else
+    echo -e "${YELLOW}  ⚠ 未找到 openresty.service（可能是手动安装或使用其它方式启动），跳过 systemd 用户配置${NC}"
+    echo -e "${YELLOW}    如需自动重载与 waf 用户配合，建议使用 install_openresty.sh 安装或手动创建 openresty.service${NC}"
+fi
+
 # 创建必要的目录（如果不存在）
 echo -e "${GREEN}[1/5] 检查并创建目录...${NC}"
 if [ ! -d "${PROJECT_ROOT}/logs" ]; then

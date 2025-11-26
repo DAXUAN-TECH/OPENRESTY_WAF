@@ -597,27 +597,9 @@ function _M.cleanup_configs()
     end
     
     -- 清理所有代理配置文件
-    local vhost_dir = project_root .. "/conf.d/vhost_conf"
-    local patterns = {
-        "proxy_http_*.conf",
-        "proxy_stream_*.conf"
-    }
-    
-    for _, pattern in ipairs(patterns) do
-        local cmd = "find " .. vhost_dir .. " -maxdepth 1 -name '" .. pattern .. "' 2>/dev/null"
-        local files = io.popen(cmd)
-        if files then
-            for file in files:lines() do
-                local ok, err = os.remove(file)
-                if ok then
-                    ngx.log(ngx.INFO, "删除代理配置文件: ", file)
-                else
-                    ngx.log(ngx.WARN, "删除配置文件失败: ", file, ", 错误: ", err or "unknown")
-                end
-            end
-            files:close()
-        end
-    end
+    -- 注意：代理配置文件已移到 http_https 和 tcp_udp 子目录
+    -- 这里不再清理 vhost_conf 中的代理配置文件（它们已移到对应子目录）
+    -- vhost_conf 目录保留用于手动配置的server（如waf.conf等）
     
     -- 清理所有HTTP/HTTPS代理配置文件（包括upstream和server配置）
     local http_dir = project_root .. "/conf.d/upstream/http_https"

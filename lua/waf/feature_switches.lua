@@ -8,8 +8,17 @@ local cjson = require "cjson"
 
 local _M = {}
 
--- 功能开关缓存（使用ngx.shared缓存）
-local cache = ngx.shared.waf_cache
+-- 安全获取共享内存（兼容Stream块）
+local function get_cache()
+    local ok, cache = pcall(function()
+        return ngx.shared.waf_cache
+    end)
+    if ok and cache then
+        return cache
+    end
+    return nil
+end
+local cache = get_cache()
 local CACHE_KEY_PREFIX = "feature_switch:"
 local CACHE_TTL = 300  -- 缓存5分钟
 
@@ -38,8 +47,10 @@ local function load_from_database()
                 config_source = row.config_source
             }
             -- 更新缓存
-            local cache_key = CACHE_KEY_PREFIX .. row.feature_key
-            cache:set(cache_key, row.enable == 1 and "1" or "0", CACHE_TTL)
+            if cache then
+                local cache_key = CACHE_KEY_PREFIX .. row.feature_key
+                cache:set(cache_key, row.enable == 1 and "1" or "0", CACHE_TTL)
+            end
         end
     end
     
@@ -87,8 +98,11 @@ end
 -- 获取所有功能开关
 function _M.get_all()
     -- 先从缓存获取
-    local cache_key = CACHE_KEY_PREFIX .. "_all"
-    local cached = cache:get(cache_key)
+    local cached = nil
+    if cache then
+        local cache_key = CACHE_KEY_PREFIX .. "_all"
+        cached = cache:get(cache_key)
+    end
     if cached then
         local ok, switches = pcall(cjson.decode, cached)
         if ok and switches then
@@ -110,7 +124,10 @@ function _M.get_all()
     local merged = merge_switches(db_switches, config_switches)
     
     -- 更新缓存
-    cache:set(cache_key, cjson.encode(merged), CACHE_TTL)
+    if cache then
+        local cache_key = CACHE_KEY_PREFIX .. "_all"
+        cache:set(cache_key, cjson.encode(merged), CACHE_TTL)
+    end
     
     return merged, nil
 end
@@ -122,8 +139,11 @@ function _M.get(feature_key)
     end
     
     -- 先从缓存获取
-    local cache_key = CACHE_KEY_PREFIX .. feature_key
-    local cached = cache:get(cache_key)
+    local cached = nil
+    if cache then
+        local cache_key = CACHE_KEY_PREFIX .. feature_key
+        cached = cache:get(cache_key)
+    end
     if cached then
         return cached == "1", nil
     end
@@ -174,12 +194,25 @@ function _M.get(feature_key)
         local is_connection_error = err:match("Connection refused") or err:match("Can't connect")
         
         -- 对于认证错误和连接错误，使用缓存机制避免重复日志
-        local error_cache_key = "db_error:" .. feature_key
-        local last_error_time = cache:get(error_cache_key)
+        local last_error_time = nil
         local current_time = ngx.time()
-        
-        -- 如果距离上次错误超过60秒，才记录错误日志（避免日志刷屏）
-        if not last_error_time or (current_time - last_error_time) > 60 then
+        if cache then
+            local error_cache_key = "db_error:" .. feature_key
+            last_error_time = cache:get(error_cache_key)
+            
+            -- 如果距离上次错误超过60秒，才记录错误日志（避免日志刷屏）
+            if not last_error_time or (current_time - last_error_time) > 60 then
+                if is_auth_error then
+                    ngx.log(ngx.WARN, "database authentication failed for feature switch: ", feature_key, ", using config fallback")
+                elseif is_connection_error then
+                    ngx.log(ngx.WARN, "database connection failed for feature switch: ", feature_key, ", using config fallback")
+                else
+                    ngx.log(ngx.ERR, "failed to get feature switch: ", feature_key, ", error: ", err)
+                end
+                cache:set(error_cache_key, current_time, 300)  -- 缓存5分钟
+            end
+        else
+            -- 如果缓存不可用，直接记录错误（不限制频率）
             if is_auth_error then
                 ngx.log(ngx.WARN, "database authentication failed for feature switch: ", feature_key, ", using config fallback")
             elseif is_connection_error then
@@ -187,13 +220,15 @@ function _M.get(feature_key)
             else
                 ngx.log(ngx.ERR, "failed to get feature switch: ", feature_key, ", error: ", err)
             end
-            cache:set(error_cache_key, current_time, 300)  -- 缓存5分钟
         end
         
         -- 如果数据库查询失败，尝试从配置文件获取
         if config.features and config.features[feature_key] then
             local enable = config.features[feature_key].enable == true
-            cache:set(cache_key, enable and "1" or "0", CACHE_TTL)
+            if cache then
+                local cache_key = CACHE_KEY_PREFIX .. feature_key
+                cache:set(cache_key, enable and "1" or "0", CACHE_TTL)
+            end
             return enable, nil
         end
         return false, nil  -- 认证错误时返回false而不是nil，避免上层继续报错
@@ -210,7 +245,10 @@ function _M.get(feature_key)
     end
     
     -- 更新缓存
-    cache:set(cache_key, enable and "1" or "0", CACHE_TTL)
+    if cache then
+        local cache_key = CACHE_KEY_PREFIX .. feature_key
+        cache:set(cache_key, enable and "1" or "0", CACHE_TTL)
+    end
     
     return enable, nil
 end
@@ -264,9 +302,11 @@ function _M.update(feature_key, enable)
     end
     
     -- 清除缓存
-    local cache_key = CACHE_KEY_PREFIX .. feature_key
-    cache:delete(cache_key)
-    cache:delete(CACHE_KEY_PREFIX .. "_all")
+    if cache then
+        local cache_key = CACHE_KEY_PREFIX .. feature_key
+        cache:delete(cache_key)
+        cache:delete(CACHE_KEY_PREFIX .. "_all")
+    end
     
     return true, nil
 end

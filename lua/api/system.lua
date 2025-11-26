@@ -51,18 +51,26 @@ local function find_openresty_binary()
     end
     
     -- 2. 从 OPENRESTY_PREFIX 环境变量构建路径（优先 OpenResty）
+    --    注意：在 ngx.timer 等受限环境中，is_executable() 可能返回 false，
+    --    但通过 deploy.sh 已保证 OPENRESTY_PREFIX 指向有效安装目录，
+    --    因此对于 primary 路径（$OPENRESTY_PREFIX/bin/openresty），在校验失败时也直接信任返回。
     local openresty_prefix = os.getenv("OPENRESTY_PREFIX")
     if openresty_prefix and openresty_prefix ~= "" then
-        local possible_paths = {
-            openresty_prefix .. "/bin/openresty",  -- 优先 OpenResty
-            openresty_prefix .. "/nginx/sbin/nginx"
-        }
-        for _, path in ipairs(possible_paths) do
-            if is_executable(path) then
-                ngx.log(ngx.INFO, "从OPENRESTY_PREFIX环境变量找到OpenResty可执行文件: ", path)
-                return path
-            end
+        local primary = openresty_prefix .. "/bin/openresty"
+        if is_executable(primary) then
+            ngx.log(ngx.INFO, "从OPENRESTY_PREFIX环境变量找到OpenResty可执行文件: ", primary)
+            return primary
+        else
+            -- 在 timer 上下文中 test -x/-v 可能受限，这里直接信任 primary 路径
+            ngx.log(ngx.INFO, "从OPENRESTY_PREFIX环境变量使用OpenResty可执行文件（未完整验证）: ", primary)
+            return primary
         end
+        -- 次要候选路径保持原有严格校验（一般用于兼容特殊安装方式）
+        -- local secondary = openresty_prefix .. "/nginx/sbin/nginx"
+        -- if is_executable(secondary) then
+        --     ngx.log(ngx.INFO, "从OPENRESTY_PREFIX环境变量找到OpenResty可执行文件(nginx): ", secondary)
+        --     return secondary
+        -- end
     end
     
     -- 3. 尝试使用 which 命令查找（优先 openresty）

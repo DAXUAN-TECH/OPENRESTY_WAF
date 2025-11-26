@@ -133,12 +133,18 @@ function _M.check_auto_block(client_ip)
     end
 
     local cache_key = CACHE_KEY_PREFIX .. client_ip
-    local cached = cache:get(cache_key)
+    local cached = nil
+    if cache then
+        cached = cache:get(cache_key)
+    end
     if cached ~= nil then
         if cached == "1" then
             -- 从另一个缓存获取封控信息
-            local info_cache_key = cache_key .. ":info"
-            local info_data = cache:get(info_cache_key)
+            local info_data = nil
+            if cache then
+                local info_cache_key = cache_key .. ":info"
+                info_data = cache:get(info_cache_key)
+            end
             if info_data then
                 local ok, info = pcall(function()
                     return cjson.decode(info_data)
@@ -186,17 +192,25 @@ function _M.check_auto_block(client_ip)
             end
         end
 
-        cache:set(cache_key, "1", CACHE_TTL)
-        cache:set(cache_key .. ":info", cjson.encode(block_info), CACHE_TTL)
+        if cache then
+            cache:set(cache_key, "1", CACHE_TTL)
+            cache:set(cache_key .. ":info", cjson.encode(block_info), CACHE_TTL)
+        end
         return true, block_info
     end
 
-    cache:set(cache_key, "0", CACHE_TTL)
+    if cache then
+        cache:set(cache_key, "0", CACHE_TTL)
+    end
     return false, nil
 end
 
 -- 清除缓存
 function _M.invalidate_cache(client_ip)
+    if not cache then
+        return
+    end
+    
     if client_ip then
         cache:delete(CACHE_KEY_PREFIX .. client_ip)
         cache:delete(CACHE_KEY_PREFIX .. client_ip .. ":info")

@@ -436,7 +436,14 @@ end
 -- 记录封控日志
 local function log_block(client_ip, rule, block_reason)
     if not rule then
+        ngx.log(ngx.WARN, "log_block: rule is nil, client_ip: ", client_ip)
         return
+    end
+
+    -- 确保rule.id存在，如果不存在则记录警告
+    if not rule.id then
+        ngx.log(ngx.WARN, "log_block: rule.id is nil, rule: ", cjson.encode(rule), ", client_ip: ", client_ip)
+        -- 即使rule.id为nil，也尝试记录日志（rule_id将为NULL）
     end
 
     local request_path = ngx.var.request_uri or ""
@@ -448,9 +455,14 @@ local function log_block(client_ip, rule, block_reason)
         VALUES (?, ?, ?, NOW(), ?, ?, ?)
     ]]
 
-    local ok, err = mysql_pool.insert(sql, client_ip, rule.id, rule.rule_name, request_path, user_agent, block_reason)
+    local ok, err = mysql_pool.insert(sql, client_ip, rule.id, rule.rule_name or "", request_path, user_agent, block_reason)
     if err then
-        ngx.log(ngx.ERR, "block log insert error: ", err)
+        ngx.log(ngx.ERR, "block log insert error: ", err, ", client_ip: ", client_ip, ", rule_id: ", rule.id or "nil")
+    else
+        -- 记录成功日志（仅在调试模式下）
+        if config.debug and config.debug.log_block_insert then
+            ngx.log(ngx.INFO, "block log inserted: client_ip=", client_ip, ", rule_id=", rule.id or "nil", ", rule_name=", rule.rule_name or "")
+        end
     end
 end
 

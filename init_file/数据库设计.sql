@@ -573,13 +573,14 @@ CREATE TABLE IF NOT EXISTS waf_proxy_configs (
     priority INT NOT NULL DEFAULT 0 COMMENT '优先级（数字越大优先级越高，用于匹配顺序）',
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '配置创建时间',
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '配置最后更新时间',
-    FOREIGN KEY (ip_rule_id) REFERENCES waf_block_rules(id) ON DELETE SET NULL COMMENT '外键约束：关联防护规则表',
     PRIMARY KEY (id),
     UNIQUE KEY uk_proxy_name (proxy_name) COMMENT '代理名称唯一索引，确保每个代理配置名称只出现一次',
     KEY idx_status_priority (status, priority) COMMENT '状态和优先级联合索引，用于排序查询',
     KEY idx_proxy_type (proxy_type) COMMENT '代理类型索引，用于按类型查询',
     KEY idx_listen_port (listen_port) COMMENT '监听端口索引，用于快速查找端口配置',
-    KEY idx_server_name (server_name(100)) COMMENT '服务器名称索引，用于HTTP代理匹配'
+    KEY idx_server_name (server_name(100)) COMMENT '服务器名称索引，用于HTTP代理匹配',
+    -- 外键约束：关联防护规则表（规则删除时设置为NULL）
+    CONSTRAINT fk_proxy_ip_rule FOREIGN KEY (ip_rule_id) REFERENCES waf_block_rules(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci 
 ROW_FORMAT=DYNAMIC COMMENT='反向代理配置表：存储反向代理配置，支持HTTP、TCP、UDP代理';
 

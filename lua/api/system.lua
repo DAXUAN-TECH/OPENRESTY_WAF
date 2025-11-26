@@ -300,8 +300,8 @@ function _M.test_nginx_config()
         return
     end
     
-    -- 执行OpenResty配置测试
-    local test_cmd = openresty_binary .. " -t"
+    -- 执行OpenResty配置测试（使用 -e /dev/null 避免权限问题）
+    local test_cmd = openresty_binary .. " -t -e /dev/null"
     local test_result = io.popen(test_cmd)
     local test_output = test_result:read("*all")
     local test_code = test_result:close()

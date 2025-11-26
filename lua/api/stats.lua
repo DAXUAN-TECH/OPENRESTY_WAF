@@ -55,6 +55,7 @@ function _M.overview()
     ]]
     
     -- 规则命中统计（TOP 10）
+    -- 注意：只统计有rule_id的记录，如果rule_id为NULL，说明封控日志记录时rule.id为nil
     local sql_top_rules = [[
         SELECT rule_id, rule_name, COUNT(*) as hit_count
         FROM waf_block_logs

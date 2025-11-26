@@ -149,6 +149,27 @@ if [ -n "$OPENRESTY_SERVICE_FILE" ]; then
             sed -i "/^\[Service\]/a Group=$WAF_GROUP" "$OPENRESTY_SERVICE_FILE"
         fi
 
+        # 为非 root 的 OpenResty 进程授予绑定 80/443 等低端口的能力
+        # 使用 systemd 的 CapabilityBoundingSet 和 AmbientCapabilities
+        if grep -q "^CapabilityBoundingSet=" "$OPENRESTY_SERVICE_FILE"; then
+            sed -i "s/^CapabilityBoundingSet=.*/CapabilityBoundingSet=CAP_NET_BIND_SERVICE/" "$OPENRESTY_SERVICE_FILE"
+        else
+            sed -i "/^\[Service\]/a CapabilityBoundingSet=CAP_NET_BIND_SERVICE" "$OPENRESTY_SERVICE_FILE"
+        fi
+
+        if grep -q "^AmbientCapabilities=" "$OPENRESTY_SERVICE_FILE"; then
+            sed -i "s/^AmbientCapabilities=.*/AmbientCapabilities=CAP_NET_BIND_SERVICE/" "$OPENRESTY_SERVICE_FILE"
+        else
+            sed -i "/^\[Service\]/a AmbientCapabilities=CAP_NET_BIND_SERVICE" "$OPENRESTY_SERVICE_FILE"
+        fi
+
+        # 部分发行版在启用 AmbientCapabilities 时需要显式关闭 NoNewPrivileges
+        if grep -q "^NoNewPrivileges=" "$OPENRESTY_SERVICE_FILE"; then
+            sed -i "s/^NoNewPrivileges=.*/NoNewPrivileges=false/" "$OPENRESTY_SERVICE_FILE"
+        else
+            sed -i "/^\[Service\]/a NoNewPrivileges=false" "$OPENRESTY_SERVICE_FILE"
+        fi
+
         echo -e "${GREEN}  ✓ 已将 OpenResty 服务用户设置为: User=$WAF_USER, Group=$WAF_GROUP${NC}"
 
         # 重新加载 systemd 配置
@@ -684,6 +705,16 @@ fi
 chown -R "$WAF_USER:$WAF_GROUP" "${PROJECT_ROOT}/logs" 2>/dev/null || true
 chmod 755 "${PROJECT_ROOT}/logs"
 chmod 644 "$NGINX_CONF_DIR/nginx.conf"
+
+# 设置 OpenResty 系统日志目录权限（/usr/local/openresty/nginx/logs）
+# 说明：这里的 error.log 和 nginx.pid 是 OpenResty 自带目录，必须确保 waf 用户可读写
+if [ -d "${OPENRESTY_PREFIX}/nginx/logs" ]; then
+    echo -e "${YELLOW}  设置 OpenResty 系统日志目录所有者为 waf:waf...${NC}"
+    chown -R "$WAF_USER:$WAF_GROUP" "${OPENRESTY_PREFIX}/nginx/logs" 2>/dev/null || {
+        echo -e "${YELLOW}  ⚠ 无法设置 ${OPENRESTY_PREFIX}/nginx/logs 所有者，可能影响 error.log/nginx.pid 访问权限${NC}"
+    }
+    chmod 755 "${OPENRESTY_PREFIX}/nginx/logs" 2>/dev/null || true
+fi
 
 # conf.d 保持在项目目录，设置项目目录权限
 # 重要：确保 nginx worker 进程（waf 用户）可以写入配置文件

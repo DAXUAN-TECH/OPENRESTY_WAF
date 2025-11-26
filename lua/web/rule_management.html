@@ -412,9 +412,10 @@
             min-height: 80px;
         }
         
-        /* IP黑白名单规则值输入框样式（比描述输入框更高更宽） */
+        /* IP黑白名单规则值输入框样式（比描述输入框更高更宽，宽度是原来的2倍） */
         .rule-value-input {
-            width: 100% !important;
+            width: 200% !important;
+            max-width: 2800px !important;
             min-height: 100px !important;
             padding: 15px !important;
             font-size: 15px !important;
@@ -426,6 +427,11 @@
         }
         
         /* 确保规则值输入框在显示时正确应用样式 */
+        #rule-value-group {
+            width: 100%;
+            overflow-x: auto;
+        }
+        
         #rule-value-group .rule-value-input {
             display: block;
         }

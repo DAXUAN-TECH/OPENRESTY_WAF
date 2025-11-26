@@ -731,7 +731,7 @@ function _M.check_stream(rule_id)
                 end
                 
                 -- Stream块中拒绝连接（使用ngx.exit()）
-                ngx.log(ngx.WARN, "Stream connection blocked by IP rule: ", client_ip, ", rule_id: ", rule_id_num)
+                ngx.log(ngx.INFO, "Stream connection blocked by IP rule: ", client_ip, ", rule_id: ", rule_id_num)
                 ngx.exit(1)  -- 拒绝连接
             end
             -- 白名单匹配或规则不匹配，允许通过
@@ -805,7 +805,7 @@ function _M.check_stream(rule_id)
         end
         
         -- Stream块中拒绝连接（使用ngx.exit()）
-        ngx.log(ngx.WARN, "Stream connection blocked: ", client_ip, ", reason: ", block_reason)
+        ngx.log(ngx.INFO, "Stream connection blocked: ", client_ip, ", reason: ", block_reason)
         ngx.exit(1)  -- 拒绝连接
     end
     

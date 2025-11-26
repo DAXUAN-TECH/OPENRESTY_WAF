@@ -303,6 +303,7 @@ echo -e "${YELLOW}  替换子配置文件中的 \$project_root 变量...${NC}"
 # 需要替换的文件列表（明确指定，避免误替换）
 REPLACE_FILES=(
     "$PROJECT_ROOT_ABS/conf.d/set_conf/lua.conf"
+    "$PROJECT_ROOT_ABS/conf.d/set_conf/stream_lua.conf"
     "$PROJECT_ROOT_ABS/conf.d/set_conf/log.conf"
 )
 

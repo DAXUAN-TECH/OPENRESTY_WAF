@@ -1,4 +1,4 @@
--- 代理设置管理API模块
+-- 代理管理API模块
 -- 路径：项目目录下的 lua/api/proxy.lua（保持在项目目录，不复制到系统目录）
 -- 功能：处理代理配置的CRUD操作API请求
 
@@ -11,13 +11,13 @@ local audit_log = require "waf.audit_log"
 
 local _M = {}
 
--- 检查代理设置管理功能是否启用（优先从数据库读取）
+-- 检查代理管理功能是否启用（优先从数据库读取）
 local function check_feature_enabled()
     local enabled = feature_switches.is_enabled("proxy_management")
     if not enabled then
         api_utils.json_response({
             success = false,
-            error = "代理设置功能已禁用"
+            error = "代理管理功能已禁用"
         }, 403)
         return false
     end

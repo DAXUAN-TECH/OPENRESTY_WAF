@@ -166,7 +166,7 @@ function _M.route()
         return _M.route_stats(path, method)
     end
     
-    -- 代理设置管理相关路由
+    -- 代理管理相关路由
     if path:match("^/api/proxy") then
         return _M.route_proxy(path, method)
     end
@@ -535,7 +535,7 @@ function _M.route_logs(path, method)
     end
 end
 
--- 代理设置管理路由分发
+-- 代理管理路由分发
 function _M.route_proxy(path, method)
     -- 代理配置列表（GET /api/proxy 或 GET /api/proxy/list）
     if path == "/api/proxy" or path == "/api/proxy/list" then

@@ -281,7 +281,7 @@ local function check_ip_range(client_ip)
         local sql = [[
             SELECT id, rule_name, rule_value, priority FROM waf_block_rules 
             WHERE status = 1 
-            AND rule_type = 'ip_range'
+            AND rule_type IN ('ip_whitelist', 'ip_blacklist')
             AND (start_time IS NULL OR start_time <= NOW())
             AND (end_time IS NULL OR end_time >= NOW())
             ORDER BY priority DESC

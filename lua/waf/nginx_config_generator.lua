@@ -367,8 +367,20 @@ end
 function _M.generate_all_configs()
     local project_root = path_utils.get_project_root()
     if not project_root then
-        return false, "无法获取项目根目录"
+        ngx.log(ngx.ERR, "无法获取项目根目录，package.path: ", package.path)
+        return false, "无法获取项目根目录，请检查配置"
     end
+    
+    -- 验证项目根目录是否有效
+    local confd_path = project_root .. "/conf.d"
+    local test_file = io.open(confd_path, "r")
+    if not test_file then
+        ngx.log(ngx.ERR, "项目根目录无效，conf.d目录不存在: ", confd_path, ", project_root: ", project_root)
+        return false, "项目根目录无效，conf.d目录不存在: " .. confd_path
+    end
+    test_file:close()
+    
+    ngx.log(ngx.INFO, "使用项目根目录: ", project_root)
     
     -- 获取所有启用的代理配置
     local sql = [[
@@ -389,9 +401,20 @@ function _M.generate_all_configs()
     end
     
     -- 确保目录存在
-    path_utils.ensure_dir(project_root .. "/conf.d/set_conf")
-    path_utils.ensure_dir(project_root .. "/conf.d/vhost_conf")
-    path_utils.ensure_dir(project_root .. "/conf.d/upstream")
+    local dirs = {
+        project_root .. "/conf.d/set_conf",
+        project_root .. "/conf.d/vhost_conf",
+        project_root .. "/conf.d/upstream"
+    }
+    
+    for _, dir in ipairs(dirs) do
+        local ok = path_utils.ensure_dir(dir)
+        if not ok then
+            ngx.log(ngx.ERR, "无法创建目录: ", dir)
+            return false, "无法创建目录: " .. dir
+        end
+        ngx.log(ngx.DEBUG, "目录已确保存在: ", dir)
+    end
     
     -- 构建活跃代理ID映射（用于清理已删除的配置文件）
     local active_proxy_ids = {}
@@ -431,10 +454,20 @@ function _M.generate_all_configs()
                 -- 生成独立的upstream配置文件
                 if upstream_config and upstream_name then
                     local upstream_file = project_root .. "/conf.d/upstream/" .. upstream_name .. ".conf"
+                    
+                    -- 确保upstream目录存在
+                    local upstream_dir = project_root .. "/conf.d/upstream"
+                    local dir_ok = path_utils.ensure_dir(upstream_dir)
+                    if not dir_ok then
+                        ngx.log(ngx.ERR, "无法创建upstream目录: ", upstream_dir)
+                        return false, "无法创建upstream目录: " .. upstream_dir
+                    end
+                    
                     local upstream_fd = io.open(upstream_file, "w")
                     if upstream_fd then
                         local upstream_file_content = "# ============================================\n"
                         upstream_file_content = upstream_file_content .. "# Upstream配置: " .. escape_nginx_value(proxy.proxy_name) .. " (代理ID: " .. proxy.id .. ")\n"
+                        upstream_file_content = upstream_file_content .. "# 类型: " .. string.upper(proxy.proxy_type) .. "\n"
                         upstream_file_content = upstream_file_content .. "# 自动生成，请勿手动修改\n"
                         upstream_file_content = upstream_file_content .. "# ============================================\n\n"
                         upstream_file_content = upstream_file_content .. upstream_config
@@ -442,7 +475,8 @@ function _M.generate_all_configs()
                         upstream_fd:close()
                         ngx.log(ngx.INFO, "生成upstream配置文件: ", upstream_file)
                     else
-                        ngx.log(ngx.ERR, "无法创建upstream配置文件: ", upstream_file)
+                        ngx.log(ngx.ERR, "无法创建upstream配置文件: ", upstream_file, ", 项目根目录: ", project_root)
+                        return false, "无法创建upstream配置文件: " .. upstream_file
                     end
                 end
             end
@@ -454,9 +488,18 @@ function _M.generate_all_configs()
             local config_content = generate_http_proxy_file(proxy, upstream_name)
             local config_file = project_root .. "/conf.d/vhost_conf/proxy_http_" .. proxy.id .. ".conf"
             
+            -- 确保vhost_conf目录存在
+            local vhost_dir = project_root .. "/conf.d/vhost_conf"
+            local dir_ok = path_utils.ensure_dir(vhost_dir)
+            if not dir_ok then
+                ngx.log(ngx.ERR, "无法创建vhost_conf目录: ", vhost_dir)
+                return false, "无法创建vhost_conf目录: " .. vhost_dir
+            end
+            
             local fd = io.open(config_file, "w")
             if not fd then
-                ngx.log(ngx.ERR, "无法创建HTTP代理配置文件: ", config_file)
+                ngx.log(ngx.ERR, "无法创建HTTP代理配置文件: ", config_file, ", 项目根目录: ", project_root)
+                return false, "无法创建HTTP代理配置文件: " .. config_file
             else
                 fd:write(config_content)
                 fd:close()
@@ -467,9 +510,18 @@ function _M.generate_all_configs()
             local config_content = generate_stream_proxy_file(proxy, upstream_name)
             local config_file = project_root .. "/conf.d/vhost_conf/proxy_stream_" .. proxy.id .. ".conf"
             
+            -- 确保vhost_conf目录存在
+            local vhost_dir = project_root .. "/conf.d/vhost_conf"
+            local dir_ok = path_utils.ensure_dir(vhost_dir)
+            if not dir_ok then
+                ngx.log(ngx.ERR, "无法创建vhost_conf目录: ", vhost_dir)
+                return false, "无法创建vhost_conf目录: " .. vhost_dir
+            end
+            
             local fd = io.open(config_file, "w")
             if not fd then
-                ngx.log(ngx.ERR, "无法创建Stream代理配置文件: ", config_file)
+                ngx.log(ngx.ERR, "无法创建Stream代理配置文件: ", config_file, ", 项目根目录: ", project_root)
+                return false, "无法创建Stream代理配置文件: " .. config_file
             else
                 fd:write(config_content)
                 fd:close()

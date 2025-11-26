@@ -10,9 +10,30 @@ local _M = {}
 function _M.get_project_root()
     -- 优先从lua_package_path推断（适用于所有阶段，包括 init_worker）
     -- 这是最可靠的方法，不依赖任何 nginx API，可以在任何阶段使用
+    -- 遍历所有路径，找到包含项目目录特征的路径
+    for path in package.path:gmatch("([^;]+)") do
+        -- 提取路径：从 lua/?.lua 推断项目根目录
+        local project_root = path:match("(.+)/lua/%?%.lua")
+        if project_root and project_root ~= "" then
+            -- 验证路径是否合理（不应该是系统目录）
+            -- 排除常见的系统目录
+            if not project_root:match("^/usr/local/share") and 
+               not project_root:match("^/usr/share") and
+               not project_root:match("^/usr/lib") then
+                -- 验证路径是否存在 conf.d 目录（项目目录的特征）
+                local confd_path = project_root .. "/conf.d"
+                local test_file = io.open(confd_path, "r")
+                if test_file then
+                    test_file:close()
+                    return project_root
+                end
+            end
+        end
+    end
+    
+    -- 如果上面的方法没找到，尝试第一个路径（向后兼容）
     local first_path = package.path:match("([^;]+)")
     if first_path then
-        -- 提取路径：从 lua/?.lua 推断项目根目录
         local project_root = first_path:match("(.+)/lua/%?%.lua")
         if project_root and project_root ~= "" then
             return project_root

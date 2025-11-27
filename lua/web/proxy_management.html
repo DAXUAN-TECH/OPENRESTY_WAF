@@ -478,9 +478,9 @@
                 
                 <div class="form-row" id="http-fields">
                     <div class="form-group">
-                        <label>监听域名 *</label>
-                        <input type="text" id="create-server-name" placeholder="example.com www.example.com">
-                        <small style="color: #666; display: block; margin-top: 4px;">支持多个域名，用空格分隔</small>
+                        <label>监听域名</label>
+                        <input type="text" id="create-server-name" placeholder="example.com www.example.com（可选）">
+                        <small style="color: #666; display: block; margin-top: 4px;">支持多个域名，用空格分隔（可为空）</small>
                     </div>
                     <div class="form-group">
                         <label>监听端口 *</label>
@@ -498,9 +498,9 @@
                 
                 <div class="form-row" id="tcp-udp-fields" style="display: none;">
                     <div class="form-group">
-                        <label>监听域名 *</label>
-                        <input type="text" id="create-tcp-udp-server-name" placeholder="example.com www.example.com">
-                        <small style="color: #666; display: block; margin-top: 4px;">支持多个域名，用空格分隔</small>
+                        <label>监听域名</label>
+                        <input type="text" id="create-tcp-udp-server-name" placeholder="example.com www.example.com（可选）">
+                        <small style="color: #666; display: block; margin-top: 4px;">支持多个域名，用空格分隔（可为空）</small>
                     </div>
                     <div class="form-group">
                         <label>监听端口 *</label>
@@ -596,9 +596,9 @@
                 </div>
                 <div class="form-row" id="edit-http-fields">
                     <div class="form-group">
-                        <label>监听域名 *</label>
+                        <label>监听域名</label>
                         <input type="text" id="edit-server-name">
-                        <small style="color: #666; display: block; margin-top: 4px;">支持多个域名，用空格分隔</small>
+                        <small style="color: #666; display: block; margin-top: 4px;">支持多个域名，用空格分隔（可为空）</small>
                     </div>
                     <div class="form-group">
                         <label>监听端口 *</label>
@@ -616,9 +616,9 @@
                 
                 <div class="form-row" id="edit-tcp-udp-fields" style="display: none;">
                     <div class="form-group">
-                        <label>监听域名 *</label>
+                        <label>监听域名</label>
                         <input type="text" id="edit-tcp-udp-server-name">
-                        <small style="color: #666; display: block; margin-top: 4px;">支持多个域名，用空格分隔</small>
+                        <small style="color: #666; display: block; margin-top: 4px;">支持多个域名，用空格分隔（可为空）</small>
                     </div>
                     <div class="form-group">
                         <label>监听端口 *</label>
@@ -1014,8 +1014,12 @@
             };
             
             if (proxyData.proxy_type === 'http') {
-                proxyData.server_name = document.getElementById('create-server-name').value;
+                const serverName = document.getElementById('create-server-name').value.trim();
+                proxyData.server_name = serverName || null;
                 proxyData.location_path = document.getElementById('create-location-path').value || '/';
+            } else if (proxyData.proxy_type === 'tcp' || proxyData.proxy_type === 'udp') {
+                const serverName = document.getElementById('create-tcp-udp-server-name').value.trim();
+                proxyData.server_name = serverName || null;
             }
             
             // 获取后端服务器列表
@@ -1178,12 +1182,14 @@
             if (proxyType === 'http') {
                 proxyData.listen_port = parseInt(document.getElementById('edit-listen-port').value);
                 proxyData.listen_address = document.getElementById('edit-listen-address').value;
-                proxyData.server_name = document.getElementById('edit-server-name').value;
+                const serverName = document.getElementById('edit-server-name').value.trim();
+                proxyData.server_name = serverName || null;
                 proxyData.location_path = document.getElementById('edit-location-path').value || '/';
             } else if (proxyType === 'tcp' || proxyType === 'udp') {
                 proxyData.listen_port = parseInt(document.getElementById('edit-tcp-udp-listen-port').value);
                 proxyData.listen_address = document.getElementById('edit-tcp-udp-listen-address').value;
-                proxyData.server_name = document.getElementById('edit-tcp-udp-server-name').value || null;
+                const serverName = document.getElementById('edit-tcp-udp-server-name').value.trim();
+                proxyData.server_name = serverName || null;
             }
             
             // 获取后端服务器列表

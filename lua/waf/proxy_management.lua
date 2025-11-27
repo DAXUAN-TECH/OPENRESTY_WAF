@@ -27,11 +27,8 @@ local function validate_proxy_config(proxy_data)
         return false, "监听端口必须在1-65535之间"
     end
     
-    if proxy_data.proxy_type == "http" then
-        if not proxy_data.server_name or proxy_data.server_name == "" then
-            return false, "HTTP代理必须指定服务器名称"
-        end
-    end
+    -- 注意：server_name（监听域名）可以为空，nginx配置生成器会正确处理
+    -- 如果server_name为空，nginx会使用默认的server块
     
     -- 验证后端服务器列表（只支持upstream类型）
     if not proxy_data.backends or type(proxy_data.backends) ~= "table" or #proxy_data.backends == 0 then

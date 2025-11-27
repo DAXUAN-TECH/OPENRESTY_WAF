@@ -10,6 +10,15 @@ local _M = {}
 
 -- 验证代理配置
 local function validate_proxy_config(proxy_data)
+    -- 处理 cjson.null，转换为 nil
+    local cjson = require "cjson"
+    local function null_to_nil(value)
+        if value == nil or value == cjson.null then
+            return nil
+        end
+        return value
+    end
+    
     if not proxy_data.proxy_name or proxy_data.proxy_name == "" then
         return false, "代理名称不能为空"
     end
@@ -23,7 +32,12 @@ local function validate_proxy_config(proxy_data)
         return false, "无效的代理类型（支持：http、tcp、udp）"
     end
     
-    if not proxy_data.listen_port or proxy_data.listen_port < 1 or proxy_data.listen_port > 65535 then
+    -- 处理 listen_port，确保不是 cjson.null，并转换为数字
+    local listen_port = null_to_nil(proxy_data.listen_port)
+    if listen_port then
+        listen_port = tonumber(listen_port)
+    end
+    if not listen_port or listen_port < 1 or listen_port > 65535 then
         return false, "监听端口必须在1-65535之间"
     end
     
@@ -40,7 +54,12 @@ local function validate_proxy_config(proxy_data)
         if not backend.backend_address or backend.backend_address == "" then
             return false, string.format("第%d个后端服务器的地址不能为空", i)
         end
-        if not backend.backend_port or backend.backend_port < 1 or backend.backend_port > 65535 then
+        -- 处理 backend_port，确保不是 cjson.null，并转换为数字
+        local backend_port = null_to_nil(backend.backend_port)
+        if backend_port then
+            backend_port = tonumber(backend_port)
+        end
+        if not backend_port or backend_port < 1 or backend_port > 65535 then
             return false, string.format("第%d个后端服务器的端口必须在1-65535之间", i)
         end
         -- 只有HTTP/HTTPS代理才允许有backend_path，TCP/UDP代理不应该有backend_path
@@ -79,17 +98,6 @@ function _M.create_proxy(proxy_data)
         return nil, "代理名称已存在"
     end
     
-    -- 检查端口是否已被占用（相同类型的代理）
-    local port_check_sql = [[
-        SELECT id FROM waf_proxy_configs 
-        WHERE proxy_type = ? AND listen_port = ? AND status = 1
-        LIMIT 1
-    ]]
-    local port_conflict = mysql_pool.query(port_check_sql, proxy_data.proxy_type, proxy_data.listen_port)
-    if port_conflict and #port_conflict > 0 then
-        return nil, "该端口已被其他启用的代理配置占用"
-    end
-    
     -- 处理 cjson.null，转换为 nil
     local cjson = require "cjson"
     local function null_to_nil(value)
@@ -97,6 +105,23 @@ function _M.create_proxy(proxy_data)
             return nil
         end
         return value
+    end
+    
+    -- 确保 listen_port 是数字（验证函数已经验证过，这里再次确保）
+    local listen_port = tonumber(proxy_data.listen_port)
+    if not listen_port then
+        return nil, "监听端口必须是有效的数字"
+    end
+    
+    -- 检查端口是否已被占用（相同类型的代理）
+    local port_check_sql = [[
+        SELECT id FROM waf_proxy_configs 
+        WHERE proxy_type = ? AND listen_port = ? AND status = 1
+        LIMIT 1
+    ]]
+    local port_conflict = mysql_pool.query(port_check_sql, proxy_data.proxy_type, listen_port)
+    if port_conflict and #port_conflict > 0 then
+        return nil, "该端口已被其他启用的代理配置占用"
     end
     
     -- 验证ip_rule_id（如果提供）
@@ -154,7 +179,7 @@ function _M.create_proxy(proxy_data)
     local insert_id, err = mysql_pool.insert(sql,
         proxy_data.proxy_name,
         proxy_data.proxy_type,
-        proxy_data.listen_port,
+        listen_port,
         listen_address,
         server_name,
         location_path,
@@ -390,26 +415,30 @@ function _M.update_proxy(proxy_id, proxy_data)
         end
     end
     
-    -- 检查端口冲突
-    if proxy_data.listen_port and proxy_data.listen_port ~= proxy.listen_port then
-        local port_check_sql = [[
-            SELECT id FROM waf_proxy_configs 
-            WHERE proxy_type = ? AND listen_port = ? AND status = 1 AND id != ?
-            LIMIT 1
-        ]]
-        local proxy_type = proxy_data.proxy_type or proxy.proxy_type
-        local port_conflict = mysql_pool.query(port_check_sql, proxy_type, proxy_data.listen_port, proxy_id)
-        if port_conflict and #port_conflict > 0 then
-            return nil, "该端口已被其他启用的代理配置占用"
-        end
-    end
-    
     -- 处理 cjson.null，转换为 nil
+    local cjson = require "cjson"
     local function null_to_nil(value)
         if value == nil or value == cjson.null then
             return nil
         end
         return value
+    end
+    
+    -- 检查端口冲突（确保 listen_port 是数字）
+    if proxy_data.listen_port then
+        local listen_port = tonumber(proxy_data.listen_port)
+        if listen_port and listen_port ~= tonumber(proxy.listen_port) then
+            local port_check_sql = [[
+                SELECT id FROM waf_proxy_configs 
+                WHERE proxy_type = ? AND listen_port = ? AND status = 1 AND id != ?
+                LIMIT 1
+            ]]
+            local proxy_type = proxy_data.proxy_type or proxy.proxy_type
+            local port_conflict = mysql_pool.query(port_check_sql, proxy_type, listen_port, proxy_id)
+            if port_conflict and #port_conflict > 0 then
+                return nil, "该端口已被其他启用的代理配置占用"
+            end
+        end
     end
     
     -- 验证ip_rule_id（如果提供）

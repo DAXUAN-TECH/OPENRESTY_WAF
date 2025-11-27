@@ -624,7 +624,18 @@
                     new_password: newPassword
                 })
             })
-                .then(response => response.json())
+                .then(response => {
+                    // 检查响应状态
+                    if (!response.ok) {
+                        // HTTP状态码不是2xx，尝试解析错误信息
+                        return response.json().then(data => {
+                            throw new Error(data.message || data.error || '修改密码失败');
+                        }).catch(() => {
+                            throw new Error('修改密码失败，HTTP状态码: ' + response.status);
+                        });
+                    }
+                    return response.json();
+                })
                 .then(data => {
                     if (data.success) {
                         showSuccess('密码修改成功');
@@ -632,14 +643,17 @@
                         document.getElementById('changePasswordForm').reset();
                         document.getElementById('passwordStrength').textContent = '';
                         document.getElementById('passwordMatch').textContent = '';
+                        // 恢复按钮状态
+                        button.disabled = false;
+                        button.innerHTML = '修改密码';
                     } else {
-                        showError(data.message || '修改密码失败');
+                        showError(data.message || data.error || '修改密码失败');
                         button.disabled = false;
                         button.innerHTML = '修改密码';
                     }
                 })
                 .catch(err => {
-                    showError('网络错误，请稍后重试');
+                    showError(err.message || '网络错误，请稍后重试');
                     button.disabled = false;
                     button.innerHTML = '修改密码';
                 });

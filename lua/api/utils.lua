@@ -34,10 +34,49 @@ function _M.get_args()
         ngx.req.read_body()
         local body = ngx.req.get_body_data()
         if body then
-            local ok, json_data = pcall(cjson.decode, body)
-            if ok and json_data then
-                for k, v in pairs(json_data) do
-                    args[k] = v
+            -- 检查 Content-Type
+            local content_type = ngx.req.get_headers()["Content-Type"] or ""
+            
+            -- 如果是 JSON 格式
+            if content_type:match("application/json") then
+                local ok, json_data = pcall(cjson.decode, body)
+                if ok and json_data then
+                    for k, v in pairs(json_data) do
+                        args[k] = v
+                    end
+                end
+            -- 如果是 form-urlencoded 格式
+            elseif content_type:match("application/x-www-form-urlencoded") then
+                local ok, post_args = pcall(ngx.req.get_post_args)
+                if ok and post_args then
+                    for k, v in pairs(post_args) do
+                        -- post_args 的值可能是数组（同名参数），取第一个
+                        if type(v) == "table" then
+                            args[k] = v[1]
+                        else
+                            args[k] = v
+                        end
+                    end
+                end
+            else
+                -- 尝试先解析 JSON，如果失败则尝试 form-urlencoded
+                local ok, json_data = pcall(cjson.decode, body)
+                if ok and json_data then
+                    for k, v in pairs(json_data) do
+                        args[k] = v
+                    end
+                else
+                    -- 尝试解析 form-urlencoded
+                    local ok2, post_args = pcall(ngx.req.get_post_args)
+                    if ok2 and post_args then
+                        for k, v in pairs(post_args) do
+                            if type(v) == "table" then
+                                args[k] = v[1]
+                            else
+                                args[k] = v
+                            end
+                        end
+                    end
                 end
             end
         end

@@ -496,7 +496,7 @@ function _M.check_ip_allowed(ip_address)
     end
     
     -- 白名单已启用，检查IP是否在白名单中
-    ok, res, err = pcall(function()
+    local ok, res, err = pcall(function()
         local sql = "SELECT ip_address FROM waf_system_access_whitelist WHERE status = 1"
         return mysql_pool.query(sql)
     end)

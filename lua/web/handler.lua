@@ -200,23 +200,7 @@ end
 
 -- 检查认证（需要登录的页面）
 local function check_auth()
-    -- 系统访问白名单检查（在认证之前）
-    local system_access_whitelist_api = require "api.system_access_whitelist"
-    local client_ip = ngx.var.remote_addr
-    local ip_allowed = system_access_whitelist_api.check_ip_allowed(client_ip)
-    if not ip_allowed then
-        ngx.log(ngx.WARN, "System access whitelist: IP ", client_ip, " is not allowed")
-        ngx.status = 403
-        ngx.header.content_type = "text/html; charset=utf-8"
-        ngx.say([[
-<html><head><meta charset="UTF-8"><title>访问被拒绝</title></head><body>
-<h1>403 Forbidden</h1>
-<p>您的IP地址（]] .. escape_html(client_ip) .. [[）不在系统访问白名单中，无法访问WAF管理系统。</p>
-<p>请联系管理员将您的IP地址添加到系统访问白名单。</p>
-</body></html>
-        ]])
-        return false
-    end
+    -- 注意：系统访问白名单检查在waf.conf的access_by_lua_block中执行
     
     local authenticated, session = auth.is_authenticated()
     if not authenticated then

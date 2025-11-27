@@ -16,18 +16,57 @@ local function validate_rule_value(rule_type, rule_value)
         return false, "规则值不能为空"
     end
     
-    -- IP白名单和IP黑名单：支持单个IP或IP段（CIDR格式或IP范围格式）
+    -- IP白名单和IP黑名单：支持单个IP、多个IP（逗号分隔）、IP段（CIDR格式或IP范围格式）
     if rule_type == "ip_whitelist" or rule_type == "ip_blacklist" then
-        -- 先检查是否为单个IP
-        if ip_utils.is_valid_ip(rule_value) then
-            -- 单个IP，验证通过
-        elseif ip_utils.is_valid_cidr(rule_value) then
-            -- CIDR格式，验证通过
+        -- 检查是否包含逗号（多个IP）
+        if rule_value:match(",") then
+            -- 多个IP，逐个验证
+            local ip_list = {}
+            for ip_str in rule_value:gmatch("([^,]+)") do
+                local ip = ip_str:match("^%s*(.-)%s*$")  -- 去除首尾空格
+                if ip and ip ~= "" then
+                    table.insert(ip_list, ip)
+                end
+            end
+            
+            if #ip_list == 0 then
+                return false, "IP列表不能为空"
+            end
+            
+            -- 验证每个IP
+            for _, ip in ipairs(ip_list) do
+                local is_valid = false
+                -- 检查是否为单个IP
+                if ip_utils.is_valid_ip(ip) then
+                    is_valid = true
+                -- 检查是否为CIDR格式
+                elseif ip_utils.is_valid_cidr(ip) then
+                    is_valid = true
+                -- 检查是否为IP范围格式
+                else
+                    local start_ip, end_ip = ip_utils.parse_ip_range(ip)
+                    if start_ip and end_ip then
+                        is_valid = true
+                    end
+                end
+                
+                if not is_valid then
+                    return false, "无效的IP格式: " .. ip .. "（应为单个IP如192.168.1.100、CIDR格式如192.168.1.0/24或IP范围如192.168.1.1-192.168.1.100）"
+                end
+            end
         else
-            -- 检查是否为IP范围格式
-            local start_ip, end_ip = ip_utils.parse_ip_range(rule_value)
-            if not start_ip or not end_ip then
-                return false, "无效的IP格式（应为单个IP如192.168.1.100、CIDR格式如192.168.1.0/24或IP范围如192.168.1.1-192.168.1.100）"
+            -- 单个IP或IP段
+            -- 先检查是否为单个IP
+            if ip_utils.is_valid_ip(rule_value) then
+                -- 单个IP，验证通过
+            elseif ip_utils.is_valid_cidr(rule_value) then
+                -- CIDR格式，验证通过
+            else
+                -- 检查是否为IP范围格式
+                local start_ip, end_ip = ip_utils.parse_ip_range(rule_value)
+                if not start_ip or not end_ip then
+                    return false, "无效的IP格式（应为单个IP如192.168.1.100、多个IP如192.168.1.1,192.168.1.2、CIDR格式如192.168.1.0/24或IP范围如192.168.1.1-192.168.1.100）"
+                end
             end
         end
     elseif rule_type == "geo_whitelist" or rule_type == "geo_blacklist" then

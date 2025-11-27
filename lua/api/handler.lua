@@ -28,21 +28,9 @@ local function require_api_auth()
     local path = uri:match("^([^?]+)")
     local method = ngx.req.get_method()
     
-    -- 登录相关 API 不需要认证，但需要速率限制和白名单检查
+    -- 登录相关 API 不需要认证，但需要速率限制
+    -- 注意：系统访问白名单检查在waf.conf的access_by_lua_block中执行
     if path == "/api/auth/login" or path == "/api/auth/check" then
-        -- 登录接口也需要白名单检查（但允许登录，因为需要登录后才能管理白名单）
-        -- 注意：如果白名单已启用且IP不在白名单中，登录会失败，需要管理员手动添加IP
-        local system_access_whitelist_api = require "api.system_access_whitelist"
-        local client_ip = ngx.var.remote_addr
-        local ip_allowed = system_access_whitelist_api.check_ip_allowed(client_ip)
-        if not ip_allowed then
-            ngx.log(ngx.WARN, "System access whitelist: IP ", client_ip, " is not allowed for login")
-            api_utils.json_response({
-                error = "Forbidden",
-                message = "您的IP地址不在系统访问白名单中，无法访问。请联系管理员将您的IP添加到白名单。"
-            }, 403)
-            return false
-        end
         -- 登录接口速率限制
         if path == "/api/auth/login" then
             local username = nil
@@ -73,18 +61,7 @@ local function require_api_auth()
         return true
     end
     
-    -- 系统访问白名单检查（在认证之前，除了登录API）
-    local system_access_whitelist_api = require "api.system_access_whitelist"
-    local client_ip = ngx.var.remote_addr
-    local ip_allowed = system_access_whitelist_api.check_ip_allowed(client_ip)
-    if not ip_allowed then
-        ngx.log(ngx.WARN, "System access whitelist: IP ", client_ip, " is not allowed")
-        api_utils.json_response({
-            error = "Forbidden",
-            message = "您的IP地址不在系统访问白名单中，无法访问"
-        }, 403)
-        return false
-    end
+    -- 注意：系统访问白名单检查在waf.conf的access_by_lua_block中执行
     
     -- 其他所有 API 都需要认证
     local authenticated, session = auth.is_authenticated()

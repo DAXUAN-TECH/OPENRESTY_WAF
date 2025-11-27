@@ -265,6 +265,18 @@ function _M.create()
     local authenticated, session = auth.is_authenticated()
     local username = authenticated and session.username or "system"
     
+    -- 检查当前白名单条目数量（在插入前）
+    local count_ok, count_res, count_err = pcall(function()
+        local count_sql = "SELECT COUNT(*) as total FROM waf_system_access_whitelist"
+        return mysql_pool.query(count_sql)
+    end)
+    
+    local is_first_entry = false
+    if count_ok and not count_err and count_res and count_res[1] then
+        local current_count = tonumber(count_res[1].total) or 0
+        is_first_entry = (current_count == 0)
+    end
+    
     local ok, res, err = pcall(function()
         local sql = [[
             INSERT INTO waf_system_access_whitelist (ip_address, description, status)
@@ -277,6 +289,26 @@ function _M.create()
         ngx.log(ngx.ERR, "create: failed to insert: ", tostring(err))
         api_utils.json_response({error = "创建失败"}, 500)
         return
+    end
+    
+    -- 如果是第一条白名单条目，自动开启系统白名单
+    if is_first_entry then
+        local update_config_ok, update_config_res, update_config_err = pcall(function()
+            local update_sql = [[
+                UPDATE waf_system_access_whitelist_config 
+                SET enabled = 1, updated_by = ?
+                WHERE id = 1
+            ]]
+            return mysql_pool.query(update_sql, username)
+        end)
+        
+        if update_config_ok and not update_config_err then
+            ngx.log(ngx.INFO, "create: 第一条白名单条目已创建，自动开启系统白名单")
+            audit_log.log("update", "system_access_whitelist_config", "1", 
+                "添加第一条白名单条目，自动开启系统白名单", "success")
+        else
+            ngx.log(ngx.WARN, "create: 第一条白名单条目已创建，但自动开启系统白名单失败: ", tostring(update_config_err))
+        end
     end
     
     -- 记录审计日志
@@ -293,9 +325,14 @@ function _M.create()
         end
     end)
     
+    local message = "创建成功，nginx配置正在重新加载"
+    if is_first_entry then
+        message = "创建成功，系统白名单已自动开启，nginx配置正在重新加载"
+    end
+    
     api_utils.json_response({
         success = true,
-        message = "创建成功，nginx配置正在重新加载",
+        message = message,
         data = {id = res}
     })
 end
@@ -434,6 +471,18 @@ function _M.delete()
     
     local id = tonumber(id_match)
     
+    -- 删除前检查当前白名单条目数量
+    local count_before_ok, count_before_res, count_before_err = pcall(function()
+        local count_sql = "SELECT COUNT(*) as total FROM waf_system_access_whitelist"
+        return mysql_pool.query(count_sql)
+    end)
+    
+    local is_last_entry = false
+    if count_before_ok and not count_before_err and count_before_res and count_before_res[1] then
+        local count_before = tonumber(count_before_res[1].total) or 0
+        is_last_entry = (count_before == 1)  -- 如果删除前只有1条，删除后就是0条
+    end
+    
     local ok, res, err = pcall(function()
         local sql = "DELETE FROM waf_system_access_whitelist WHERE id = ?"
         return mysql_pool.query(sql, id)
@@ -450,6 +499,26 @@ function _M.delete()
     local authenticated, session = auth.is_authenticated()
     local username = authenticated and session.username or "system"
     
+    -- 如果是最后一条白名单条目，自动关闭系统白名单
+    if is_last_entry then
+        local update_config_ok, update_config_res, update_config_err = pcall(function()
+            local update_sql = [[
+                UPDATE waf_system_access_whitelist_config 
+                SET enabled = 0, updated_by = ?
+                WHERE id = 1
+            ]]
+            return mysql_pool.query(update_sql, username)
+        end)
+        
+        if update_config_ok and not update_config_err then
+            ngx.log(ngx.INFO, "delete: 最后一条白名单条目已删除，自动关闭系统白名单")
+            audit_log.log("update", "system_access_whitelist_config", "1", 
+                "删除最后一条白名单条目，自动关闭系统白名单", "success")
+        else
+            ngx.log(ngx.WARN, "delete: 最后一条白名单条目已删除，但自动关闭系统白名单失败: ", tostring(update_config_err))
+        end
+    end
+    
     -- 记录审计日志
     audit_log.log("delete", "system_access_whitelist", tostring(id), 
         "删除系统访问白名单", "success")
@@ -465,9 +534,14 @@ function _M.delete()
         end
     end)
     
+    local message = "删除成功，nginx配置正在重新加载"
+    if is_last_entry then
+        message = "删除成功，系统白名单已自动关闭，nginx配置正在重新加载"
+    end
+    
     api_utils.json_response({
         success = true,
-        message = "删除成功，nginx配置正在重新加载"
+        message = message
     })
 end
 

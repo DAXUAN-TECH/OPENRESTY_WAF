@@ -62,87 +62,6 @@
             display: block;
         }
         
-        /* 开关样式 */
-        .switch-container {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 20px;
-            background: #f9f9f9;
-            border-radius: 8px;
-            margin-bottom: 30px;
-        }
-        
-        .switch-label {
-            font-size: 16px;
-            font-weight: 500;
-            color: #333;
-        }
-        
-        .switch-description {
-            font-size: 14px;
-            color: #666;
-            margin-top: 5px;
-        }
-        
-        .switch {
-            position: relative;
-            display: inline-block;
-            width: 60px;
-            height: 34px;
-        }
-        
-        .switch input {
-            opacity: 0;
-            width: 0;
-            height: 0;
-        }
-        
-        .slider {
-            position: absolute;
-            cursor: pointer;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background-color: #ccc;
-            transition: .4s;
-            border-radius: 34px;
-        }
-        
-        .slider:before {
-            position: absolute;
-            content: "";
-            height: 26px;
-            width: 26px;
-            left: 4px;
-            bottom: 4px;
-            background-color: white;
-            transition: all 0.4s ease;
-            border-radius: 13px;
-            display: block;
-            box-sizing: border-box;
-            border: none;
-            outline: none;
-            margin: 0;
-            padding: 0;
-            -webkit-appearance: none;
-            appearance: none;
-        }
-        
-        input:checked + .slider {
-            background-color: #4CAF50;
-        }
-        
-        input:checked + .slider:before {
-            transform: translateX(26px);
-        }
-        
-        input:disabled + .slider {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-        
         /* 工具栏样式 */
         .toolbar {
             display: flex;
@@ -437,18 +356,6 @@
         
         <!-- 系统访问白名单 -->
         <div id="whitelist-tab" class="tab-content active">
-            <!-- 开关控制 -->
-            <div class="switch-container">
-                <div>
-                    <div class="switch-label">系统访问白名单</div>
-                    <div class="switch-description">开启后，只有白名单内的IP才能访问WAF管理系统</div>
-                </div>
-                <label class="switch">
-                    <input type="checkbox" id="whitelist-enabled" onchange="toggleWhitelist()">
-                    <span class="slider"></span>
-                </label>
-            </div>
-            
             <!-- 工具栏 -->
             <div class="toolbar">
                 <div class="filters">
@@ -553,52 +460,6 @@
             }
         }
         const showAlert = showAlertCustom;
-        
-        // 加载白名单开关状态
-        async function loadConfig() {
-            try {
-                const response = await fetch('/api/system/access/whitelist/config');
-                const data = await response.json();
-                if (data.success && data.data) {
-                    document.getElementById('whitelist-enabled').checked = data.data.enabled == 1;
-                }
-            } catch (error) {
-                console.error('loadConfig error:', error);
-            }
-        }
-        
-        // 切换白名单开关
-        async function toggleWhitelist() {
-            const enabled = document.getElementById('whitelist-enabled').checked ? 1 : 0;
-            const button = document.getElementById('whitelist-enabled');
-            button.disabled = true;
-            
-            try {
-                const response = await fetch('/api/system/access/whitelist/config', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                    },
-                    body: `enabled=${enabled}`
-                });
-                
-                const data = await response.json();
-                if (data.success) {
-                    showAlert(data.message || (enabled == 1 ? '白名单已启用' : '白名单已禁用'), 'success');
-                } else {
-                    showAlert(data.error || '操作失败', 'error');
-                    // 恢复开关状态
-                    document.getElementById('whitelist-enabled').checked = !document.getElementById('whitelist-enabled').checked;
-                }
-            } catch (error) {
-                console.error('toggleWhitelist error:', error);
-                showAlert('网络错误: ' + error.message, 'error');
-                // 恢复开关状态
-                document.getElementById('whitelist-enabled').checked = !document.getElementById('whitelist-enabled').checked;
-            } finally {
-                button.disabled = false;
-            }
-        }
         
         // 加载白名单列表
         async function loadWhitelist(page = 1) {
@@ -878,7 +739,6 @@
         
         // 页面加载时初始化
         window.addEventListener('DOMContentLoaded', function() {
-            loadConfig();
             loadWhitelist();
             
             // 点击模态框外部关闭

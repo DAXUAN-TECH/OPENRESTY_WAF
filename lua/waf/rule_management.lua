@@ -475,6 +475,35 @@ function _M.delete_rule(rule_id)
         return nil, err
     end
     
+    -- 检查是否有代理引用该规则
+    local check_proxy_sql = [[
+        SELECT id, proxy_name, proxy_type, listen_port
+        FROM waf_proxy_configs
+        WHERE ip_rule_id = ?
+        ORDER BY id ASC
+    ]]
+    local proxies, err = mysql_pool.query(check_proxy_sql, rule_id)
+    if err then
+        ngx.log(ngx.ERR, "check proxy references error: ", err)
+        return nil, "检查代理引用时出错: " .. (err or "unknown error")
+    end
+    
+    -- 如果有代理引用，返回错误信息，包含引用的代理名称列表
+    if proxies and #proxies > 0 then
+        local proxy_names = {}
+        for _, proxy in ipairs(proxies) do
+            local proxy_info = proxy.proxy_name
+            if proxy.proxy_type then
+                proxy_info = proxy_info .. " (" .. proxy.proxy_type .. ":" .. (proxy.listen_port or "") .. ")"
+            end
+            table.insert(proxy_names, proxy_info)
+        end
+        local proxy_list = table.concat(proxy_names, "、")
+        local error_msg = string.format("该规则被以下代理引用，无法删除：%s", proxy_list)
+        ngx.log(ngx.WARN, "Cannot delete rule ", rule_id, ", referenced by proxies: ", proxy_list)
+        return nil, error_msg
+    end
+    
     -- 执行删除
     local sql = "DELETE FROM waf_block_rules WHERE id = ?"
     local res, err = mysql_pool.query(sql, rule_id)

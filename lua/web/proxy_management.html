@@ -203,6 +203,10 @@
             max-height: 90vh;
             overflow-y: auto;
             position: relative;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
         }
         
         .modal-header {
@@ -552,6 +556,23 @@
                         <input type="text" id="edit-listen-address">
                     </div>
                 </div>
+                
+                <div class="form-row" id="edit-tcp-udp-fields" style="display: none;">
+                    <div class="form-group">
+                        <label>监听域名 *</label>
+                        <input type="text" id="edit-tcp-udp-server-name">
+                        <small style="color: #666; display: block; margin-top: 4px;">支持多个域名，用空格分隔</small>
+                    </div>
+                    <div class="form-group">
+                        <label>监听端口 *</label>
+                        <input type="number" id="edit-tcp-udp-listen-port" required min="1" max="65535">
+                    </div>
+                    <div class="form-group">
+                        <label>监听地址</label>
+                        <input type="text" id="edit-tcp-udp-listen-address">
+                    </div>
+                </div>
+                
                 <div class="form-group" id="edit-upstream-fields">
                     <label>后端服务器列表</label>
                     <div class="backends-list" id="edit-backends-list"></div>
@@ -999,8 +1020,13 @@
                     // 显示/隐藏相关字段
                     if (proxy.proxy_type === 'http') {
                         document.getElementById('edit-http-fields').style.display = 'flex';
+                        document.getElementById('edit-tcp-udp-fields').style.display = 'none';
+                    } else if (proxy.proxy_type === 'tcp' || proxy.proxy_type === 'udp') {
+                        document.getElementById('edit-http-fields').style.display = 'none';
+                        document.getElementById('edit-tcp-udp-fields').style.display = 'flex';
                     } else {
                         document.getElementById('edit-http-fields').style.display = 'none';
+                        document.getElementById('edit-tcp-udp-fields').style.display = 'none';
                     }
                     
                     // 加载后端服务器列表

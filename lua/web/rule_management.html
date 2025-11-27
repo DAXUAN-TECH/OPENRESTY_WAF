@@ -732,13 +732,6 @@
                     <label>生效结束时间</label>
                     <input type="datetime-local" id="edit-end-time">
                 </div>
-                <div class="form-group">
-                    <label>状态</label>
-                    <select id="edit-status">
-                        <option value="1">启用</option>
-                        <option value="0">禁用</option>
-                    </select>
-                </div>
                 <div class="form-actions">
                     <button type="button" class="btn btn-secondary" onclick="closeEditModal()">取消</button>
                     <button type="submit" class="btn btn-primary">保存</button>
@@ -1122,7 +1115,6 @@
                     document.getElementById('edit-description').value = rule.description || '';
                     document.getElementById('edit-rule-group').value = rule.rule_group || '';
                     document.getElementById('edit-priority').value = rule.priority;
-                    document.getElementById('edit-status').value = rule.status;
                     
                     if (rule.start_time) {
                         document.getElementById('edit-start-time').value = rule.start_time.replace(' ', 'T').substring(0, 16);

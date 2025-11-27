@@ -488,5 +488,45 @@ function _M.generate_password()
     }, 200)
 end
 
+-- 修改用户密码
+function _M.change_password()
+    local session = auth.require_auth()
+    if not session then
+        return
+    end
+    
+    local args = api_utils.get_args()
+    local old_password = args.old_password
+    local new_password = args.new_password
+    
+    if not old_password or not new_password then
+        api_utils.json_response({
+            error = "Bad Request",
+            message = "旧密码和新密码不能为空"
+        }, 400)
+        return
+    end
+    
+    -- 调用auth模块修改密码
+    local ok, err = auth.change_password(session.username, old_password, new_password)
+    if not ok then
+        -- 记录审计日志（失败）
+        audit_log.log_password_change(session.username, false, err or "修改密码失败")
+        api_utils.json_response({
+            error = "Bad Request",
+            message = err or "修改密码失败"
+        }, 400)
+        return
+    end
+    
+    -- 记录审计日志（成功）
+    audit_log.log_password_change(session.username, true, nil)
+    
+    api_utils.json_response({
+        success = true,
+        message = "密码修改成功"
+    }, 200)
+end
+
 return _M
 

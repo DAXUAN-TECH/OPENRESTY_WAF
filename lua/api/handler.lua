@@ -670,6 +670,8 @@ function _M.route_auth(path, method)
         return auth_api.check_password_strength()
     elseif path == "/api/auth/password/generate" then
         return auth_api.generate_password()
+    elseif path == "/api/auth/password/change" then
+        return auth_api.change_password()
     else
         api_utils.json_response({error = "Not Found"}, 404)
     end

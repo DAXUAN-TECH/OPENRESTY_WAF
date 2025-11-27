@@ -281,6 +281,18 @@ function _M.log_totp_action(action_type, username, success, error_message)
     )
 end
 
+-- 记录密码修改操作
+function _M.log_password_change(username, success, error_message)
+    _M.log(
+        "change_password",
+        "user",
+        username,
+        "修改密码",
+        success and "success" or "failed",
+        error_message
+    )
+end
+
 -- 记录系统操作
 function _M.log_system_action(action_type, description, success, error_message)
     _M.log(

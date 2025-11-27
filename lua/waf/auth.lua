@@ -458,6 +458,62 @@ function _M.user_has_totp(username)
     return false
 end
 
+-- 修改用户密码
+-- 参数：username - 用户名
+--      old_password - 旧密码（用于验证）
+--      new_password - 新密码
+-- 返回：ok - 是否成功，err - 错误信息
+function _M.change_password(username, old_password, new_password)
+    if not username or not old_password or not new_password then
+        return false, "用户名、旧密码和新密码不能为空"
+    end
+    
+    -- 验证旧密码
+    local verify_ok, user = _M.verify_credentials(username, old_password)
+    if not verify_ok then
+        return false, "旧密码错误"
+    end
+    
+    -- 检查新密码强度
+    local strength = password_utils.check_password_strength(new_password)
+    if not strength.valid then
+        return false, strength.message or "新密码不符合要求"
+    end
+    
+    -- 生成新密码哈希
+    local password_hash, hash_err = password_utils.hash_password(new_password, 10)
+    if not password_hash then
+        ngx.log(ngx.ERR, "change_password: failed to hash new password: ", tostring(hash_err))
+        return false, "生成密码哈希失败"
+    end
+    
+    -- 更新数据库中的密码
+    local mysql_pool = require "waf.mysql_pool"
+    local ok, err = pcall(function()
+        local sql = [[
+            UPDATE waf_users
+            SET password_hash = ?,
+                password_changed_at = NOW(),
+                password_must_change = 0
+            WHERE username = ?
+        ]]
+        return mysql_pool.query(sql, password_hash, username)
+    end)
+    
+    if not ok then
+        ngx.log(ngx.ERR, "change_password: database query failed: ", tostring(err))
+        return false, "更新密码失败"
+    end
+    
+    if err then
+        ngx.log(ngx.ERR, "change_password: database error: ", tostring(err))
+        return false, "更新密码失败"
+    end
+    
+    ngx.log(ngx.INFO, "change_password: password changed successfully for user: ", username)
+    return true, nil
+end
+
 -- 创建会话
 function _M.create_session(username, user_info)
     local session_id = generate_session_id()

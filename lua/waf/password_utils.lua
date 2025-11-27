@@ -137,9 +137,22 @@ function _M.verify_password(password, hash)
 end
 
 -- 检查密码强度
+-- 要求：至少8位，包含大小写字母、数字、符号
 function _M.check_password_strength(password)
     if not password then
-        return false, "Password is required"
+        return {
+            valid = false,
+            strength = "weak",
+            score = 0,
+            checks = {
+                length_ok = false,
+                has_upper = false,
+                has_lower = false,
+                has_digit = false,
+                has_special = false
+            },
+            message = "密码不能为空"
+        }
     end
     
     local strength = {
@@ -150,6 +163,9 @@ function _M.check_password_strength(password)
         has_special = password:match("[%W_]") ~= nil,
     }
     
+    -- 密码必须满足所有条件：至少8位，包含大小写字母、数字、符号
+    local valid = strength.length_ok and strength.has_upper and strength.has_lower and strength.has_digit and strength.has_special
+    
     local score = 0
     if strength.length_ok then score = score + 1 end
     if strength.has_upper then score = score + 1 end
@@ -158,17 +174,40 @@ function _M.check_password_strength(password)
     if strength.has_special then score = score + 1 end
     
     local level = "weak"
-    if score >= 4 then
+    if valid then
         level = "strong"
-    elseif score >= 3 then
+    elseif score >= 4 then
         level = "medium"
     end
     
+    -- 生成错误消息
+    local message = nil
+    if not valid then
+        local missing = {}
+        if not strength.length_ok then
+            table.insert(missing, "至少8位")
+        end
+        if not strength.has_upper then
+            table.insert(missing, "大写字母")
+        end
+        if not strength.has_lower then
+            table.insert(missing, "小写字母")
+        end
+        if not strength.has_digit then
+            table.insert(missing, "数字")
+        end
+        if not strength.has_special then
+            table.insert(missing, "符号")
+        end
+        message = "密码必须包含：" .. table.concat(missing, "、")
+    end
+    
     return {
-        valid = strength.length_ok,
+        valid = valid,
         strength = level,
         score = score,
-        checks = strength
+        checks = strength,
+        message = message
     }
 end
 

@@ -272,6 +272,54 @@
         <div class="error-message" id="errorMessage"></div>
         <div class="success-message" id="successMessage"></div>
         
+        <!-- 修改密码 -->
+        <div class="section">
+            <div class="section-title">修改密码</div>
+            <div class="section-description">
+                修改您的登录密码。密码必须至少8位，且包含大写字母、小写字母、数字和符号。
+            </div>
+            
+            <form id="changePasswordForm" onsubmit="changePassword(event)">
+                <div class="form-group">
+                    <label for="oldPassword">当前密码 *</label>
+                    <input 
+                        type="password" 
+                        id="oldPassword" 
+                        placeholder="请输入当前密码" 
+                        required
+                    >
+                </div>
+                
+                <div class="form-group">
+                    <label for="newPassword">新密码 *</label>
+                    <input 
+                        type="password" 
+                        id="newPassword" 
+                        placeholder="请输入新密码（至少8位，包含大小写字母、数字、符号）" 
+                        required
+                        minlength="8"
+                    >
+                    <div id="passwordStrength" style="margin-top: 8px; font-size: 12px; color: #666;"></div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="confirmPassword">确认新密码 *</label>
+                    <input 
+                        type="password" 
+                        id="confirmPassword" 
+                        placeholder="请再次输入新密码" 
+                        required
+                        minlength="8"
+                    >
+                    <div id="passwordMatch" style="margin-top: 8px; font-size: 12px; color: #666;"></div>
+                </div>
+                
+                <button type="submit" class="button button-primary" id="changePasswordButton">
+                    修改密码
+                </button>
+            </form>
+        </div>
+        
         <!-- 双因素认证设置 -->
         <div class="section">
             <div class="section-title">双因素认证（2FA）</div>
@@ -564,8 +612,138 @@
             document.getElementById('successMessage').classList.remove('show');
         }
         
+        // 修改密码
+        function changePassword(event) {
+            event.preventDefault();
+            hideMessages();
+            
+            const oldPassword = document.getElementById('oldPassword').value;
+            const newPassword = document.getElementById('newPassword').value;
+            const confirmPassword = document.getElementById('confirmPassword').value;
+            
+            // 验证新密码和确认密码是否一致
+            if (newPassword !== confirmPassword) {
+                showError('新密码和确认密码不一致');
+                return;
+            }
+            
+            // 验证新密码强度
+            const strength = checkPasswordStrength(newPassword);
+            if (!strength.valid) {
+                showError(strength.message || '新密码不符合要求');
+                return;
+            }
+            
+            const button = document.getElementById('changePasswordButton');
+            button.disabled = true;
+            button.innerHTML = '<span class="loading"></span>修改中...';
+            
+            fetch('/api/auth/password/change', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    old_password: oldPassword,
+                    new_password: newPassword
+                })
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        showSuccess('密码修改成功');
+                        // 清空表单
+                        document.getElementById('changePasswordForm').reset();
+                        document.getElementById('passwordStrength').textContent = '';
+                        document.getElementById('passwordMatch').textContent = '';
+                    } else {
+                        showError(data.message || '修改密码失败');
+                        button.disabled = false;
+                        button.innerHTML = '修改密码';
+                    }
+                })
+                .catch(err => {
+                    showError('网络错误，请稍后重试');
+                    button.disabled = false;
+                    button.innerHTML = '修改密码';
+                });
+        }
+        
+        // 检查密码强度
+        function checkPasswordStrength(password) {
+            if (!password) {
+                return { valid: false, message: '密码不能为空' };
+            }
+            
+            const checks = {
+                length: password.length >= 8,
+                hasUpper: /[A-Z]/.test(password),
+                hasLower: /[a-z]/.test(password),
+                hasDigit: /[0-9]/.test(password),
+                hasSpecial: /[^A-Za-z0-9]/.test(password)
+            };
+            
+            const valid = checks.length && checks.hasUpper && checks.hasLower && checks.hasDigit && checks.hasSpecial;
+            
+            if (!valid) {
+                const missing = [];
+                if (!checks.length) missing.push('至少8位');
+                if (!checks.hasUpper) missing.push('大写字母');
+                if (!checks.hasLower) missing.push('小写字母');
+                if (!checks.hasDigit) missing.push('数字');
+                if (!checks.hasSpecial) missing.push('符号');
+                return { valid: false, message: '密码必须包含：' + missing.join('、') };
+            }
+            
+            return { valid: true };
+        }
+        
         // 页面加载时检查认证状态
         checkAuth();
+        
+        // 实时检查密码强度
+        (function() {
+            const newPasswordInput = document.getElementById('newPassword');
+            const confirmPasswordInput = document.getElementById('confirmPassword');
+            const passwordStrengthDiv = document.getElementById('passwordStrength');
+            const passwordMatchDiv = document.getElementById('passwordMatch');
+            
+            if (newPasswordInput && passwordStrengthDiv) {
+                newPasswordInput.addEventListener('input', function() {
+                    const password = this.value;
+                    if (password) {
+                        const strength = checkPasswordStrength(password);
+                        if (strength.valid) {
+                            passwordStrengthDiv.textContent = '✓ 密码强度符合要求';
+                            passwordStrengthDiv.style.color = '#4caf50';
+                        } else {
+                            passwordStrengthDiv.textContent = strength.message || '密码不符合要求';
+                            passwordStrengthDiv.style.color = '#dc3545';
+                        }
+                    } else {
+                        passwordStrengthDiv.textContent = '';
+                    }
+                });
+            }
+            
+            if (confirmPasswordInput && newPasswordInput && passwordMatchDiv) {
+                confirmPasswordInput.addEventListener('input', function() {
+                    const newPassword = newPasswordInput.value;
+                    const confirmPassword = this.value;
+                    if (confirmPassword) {
+                        if (newPassword === confirmPassword) {
+                            passwordMatchDiv.textContent = '✓ 密码一致';
+                            passwordMatchDiv.style.color = '#4caf50';
+                        } else {
+                            passwordMatchDiv.textContent = '✗ 密码不一致';
+                            passwordMatchDiv.style.color = '#dc3545';
+                        }
+                    } else {
+                        passwordMatchDiv.textContent = '';
+                    }
+                });
+            }
+        })();
     </script>
 </body>
 </html>

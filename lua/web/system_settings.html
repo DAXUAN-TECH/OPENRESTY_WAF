@@ -1,0 +1,814 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>系统设置 - WAF管理</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        /* 统一容器样式 */
+        .container {
+            width: 100%;
+            max-width: 100%;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            padding: 30px;
+            box-sizing: border-box;
+            overflow-x: auto;
+        }
+        
+        /* 标题样式 */
+        h1 {
+            color: #333;
+            font-size: 24px;
+            margin-bottom: 30px;
+            font-weight: 600;
+        }
+        
+        /* 标签页样式 */
+        .tabs {
+            display: flex;
+            border-bottom: 2px solid #e0e0e0;
+            margin-bottom: 20px;
+        }
+        
+        .tab {
+            padding: 12px 24px;
+            cursor: pointer;
+            border: none;
+            background: none;
+            font-size: 16px;
+            color: #666;
+            transition: all 0.3s;
+        }
+        
+        .tab.active {
+            color: #4CAF50;
+            border-bottom: 2px solid #4CAF50;
+            font-weight: bold;
+        }
+        
+        .tab:hover {
+            color: #4CAF50;
+        }
+        
+        .tab-content {
+            display: none;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        /* 开关样式 */
+        .switch-container {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 20px;
+            background: #f9f9f9;
+            border-radius: 8px;
+            margin-bottom: 30px;
+        }
+        
+        .switch-label {
+            font-size: 16px;
+            font-weight: 500;
+            color: #333;
+        }
+        
+        .switch-description {
+            font-size: 14px;
+            color: #666;
+            margin-top: 5px;
+        }
+        
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 60px;
+            height: 34px;
+        }
+        
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+            border-radius: 34px;
+        }
+        
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 26px;
+            width: 26px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        
+        input:checked + .slider {
+            background-color: #4CAF50;
+        }
+        
+        input:checked + .slider:before {
+            transform: translateX(26px);
+        }
+        
+        input:disabled + .slider {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        /* 工具栏样式 */
+        .toolbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        
+        .filters {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        
+        .filters select,
+        .filters input {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        
+        /* 按钮样式 */
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+        
+        .btn-primary {
+            background: #4CAF50;
+            color: #fff;
+        }
+        
+        .btn-primary:hover {
+            background: #45a049;
+        }
+        
+        .btn-secondary {
+            background: #f0f0f0;
+            color: #333;
+        }
+        
+        .btn-secondary:hover {
+            background: #e0e0e0;
+        }
+        
+        .btn-danger {
+            background: #f44336;
+            color: #fff;
+        }
+        
+        .btn-danger:hover {
+            background: #da190b;
+        }
+        
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        /* 表格样式 */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+        }
+        
+        thead {
+            background: #f5f5f5;
+        }
+        
+        th {
+            padding: 12px;
+            text-align: center;
+            border-bottom: 1px solid #e0e0e0;
+            background-color: #f5f5f5;
+            font-weight: 600;
+            color: #333;
+        }
+        
+        td {
+            padding: 12px;
+            border-bottom: 1px solid #f0f0f0;
+            text-align: center;
+        }
+        
+        tbody tr:hover {
+            background: #f8f9fa;
+        }
+        
+        /* 表单样式 */
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+            color: #333;
+        }
+        
+        .form-group input,
+        .form-group textarea {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        
+        .form-group textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+        
+        .form-actions {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+        }
+        
+        /* 模态框样式 */
+        .modal {
+            display: none;
+            position: absolute;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100% !important;
+            height: 100% !important;
+            overflow: auto;
+            background-color: rgba(0, 0, 0, 0.5);
+        }
+        
+        .modal.show {
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+        }
+        
+        .modal-content {
+            background-color: #fefefe;
+            margin: auto;
+            padding: 30px;
+            border: 1px solid #888;
+            border-radius: 8px;
+            width: 90%;
+            max-width: 600px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        }
+        
+        .close {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        
+        .close:hover,
+        .close:focus {
+            color: #000;
+        }
+        
+        /* 状态标签 */
+        .status-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        
+        .status-enabled {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .status-disabled {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
+        /* 分页样式 */
+        .pagination {
+            padding: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #fff;
+            border-top: 1px solid #e0e0e0;
+        }
+        
+        .pagination-info {
+            color: #666;
+            font-size: 14px;
+        }
+        
+        .pagination-controls {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .pagination-btn {
+            padding: 6px 12px;
+            border: 1px solid #ddd;
+            background: #fff;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        
+        .pagination-btn:hover:not(:disabled) {
+            background: #f0f0f0;
+        }
+        
+        .pagination-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .empty {
+            text-align: center;
+            padding: 40px;
+            color: #999;
+        }
+    </style>
+    <script src="/common.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>系统设置</h1>
+        
+        <div class="tabs">
+            <button class="tab active" onclick="switchTab('whitelist')">系统访问白名单</button>
+        </div>
+        
+        <div id="alert-container"></div>
+        
+        <!-- 系统访问白名单 -->
+        <div id="whitelist-tab" class="tab-content active">
+            <!-- 开关控制 -->
+            <div class="switch-container">
+                <div>
+                    <div class="switch-label">系统访问白名单</div>
+                    <div class="switch-description">开启后，只有白名单内的IP才能访问WAF管理系统</div>
+                </div>
+                <label class="switch">
+                    <input type="checkbox" id="whitelist-enabled" onchange="toggleWhitelist()">
+                    <span class="slider"></span>
+                </label>
+            </div>
+            
+            <!-- 工具栏 -->
+            <div class="toolbar">
+                <div class="filters">
+                    <select id="filter-status">
+                        <option value="">全部状态</option>
+                        <option value="1">已启用</option>
+                        <option value="0">已禁用</option>
+                    </select>
+                </div>
+                <div style="display: flex; gap: 10px;">
+                    <button class="btn btn-primary" onclick="applyFilters()">筛选</button>
+                    <button class="btn btn-secondary" onclick="resetFilters()">重置筛选</button>
+                    <button class="btn btn-primary" onclick="showAddModal()">添加IP</button>
+                    <button class="btn btn-primary" onclick="loadWhitelist()">刷新</button>
+                </div>
+            </div>
+            
+            <!-- 白名单列表 -->
+            <table id="whitelist-table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>IP地址</th>
+                        <th>说明</th>
+                        <th>状态</th>
+                        <th>创建时间</th>
+                        <th>更新时间</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody id="whitelist-tbody">
+                    <tr>
+                        <td colspan="7" style="text-align: center; padding: 20px;">加载中...</td>
+                    </tr>
+                </tbody>
+            </table>
+            
+            <!-- 分页 -->
+            <div class="pagination" id="whitelist-pagination"></div>
+        </div>
+    </div>
+    
+    <!-- 添加/编辑模态框 -->
+    <div id="edit-modal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeEditModal()">&times;</span>
+            <h2 id="modal-title">添加IP</h2>
+            <form id="edit-form" onsubmit="saveWhitelist(event)">
+                <div class="form-group">
+                    <label>IP地址 *</label>
+                    <input type="text" id="edit-ip-address" placeholder="192.168.1.1 或 192.168.1.0/24" required>
+                    <small style="color: #666; font-size: 12px;">支持单个IP或CIDR格式（如：192.168.1.0/24）</small>
+                </div>
+                <div class="form-group">
+                    <label>说明</label>
+                    <textarea id="edit-description" placeholder="请输入说明"></textarea>
+                </div>
+                <div class="form-group">
+                    <label>状态</label>
+                    <select id="edit-status">
+                        <option value="1">已启用</option>
+                        <option value="0">已禁用</option>
+                    </select>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeEditModal()">取消</button>
+                    <button type="submit" class="btn btn-primary">保存</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <script>
+        let currentPage = 1;
+        const pageSize = 20;
+        let editingId = null;
+        
+        // 切换标签页
+        function switchTab(tab) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => {
+                c.classList.remove('active');
+                c.style.display = 'none';
+            });
+            
+            if (tab === 'whitelist') {
+                document.querySelectorAll('.tab')[0].classList.add('active');
+                const whitelistTab = document.getElementById('whitelist-tab');
+                whitelistTab.classList.add('active');
+                whitelistTab.style.display = 'block';
+                loadWhitelist();
+            }
+        }
+        
+        // 使用公共函数 showAlert
+        function showAlertCustom(message, type = 'success') {
+            const container = document.getElementById('alert-container');
+            if (container) {
+                const alert = document.createElement('div');
+                alert.className = `alert alert-${type}`;
+                alert.textContent = message;
+                container.innerHTML = '';
+                container.appendChild(alert);
+                setTimeout(() => {
+                    alert.remove();
+                }, 3000);
+            } else {
+                window.showAlert(message, type);
+            }
+        }
+        const showAlert = showAlertCustom;
+        
+        // 加载白名单开关状态
+        async function loadConfig() {
+            try {
+                const response = await fetch('/api/system/access/whitelist/config');
+                const data = await response.json();
+                if (data.success && data.data) {
+                    document.getElementById('whitelist-enabled').checked = data.data.enabled == 1;
+                }
+            } catch (error) {
+                console.error('loadConfig error:', error);
+            }
+        }
+        
+        // 切换白名单开关
+        async function toggleWhitelist() {
+            const enabled = document.getElementById('whitelist-enabled').checked ? 1 : 0;
+            const button = document.getElementById('whitelist-enabled');
+            button.disabled = true;
+            
+            try {
+                const response = await fetch('/api/system/access/whitelist/config', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: `enabled=${enabled}`
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    showAlert(data.message || (enabled == 1 ? '白名单已启用' : '白名单已禁用'), 'success');
+                } else {
+                    showAlert(data.error || '操作失败', 'error');
+                    // 恢复开关状态
+                    document.getElementById('whitelist-enabled').checked = !document.getElementById('whitelist-enabled').checked;
+                }
+            } catch (error) {
+                console.error('toggleWhitelist error:', error);
+                showAlert('网络错误: ' + error.message, 'error');
+                // 恢复开关状态
+                document.getElementById('whitelist-enabled').checked = !document.getElementById('whitelist-enabled').checked;
+            } finally {
+                button.disabled = false;
+            }
+        }
+        
+        // 加载白名单列表
+        async function loadWhitelist(page = 1) {
+            currentPage = page;
+            const tbody = document.getElementById('whitelist-tbody');
+            const pagination = document.getElementById('whitelist-pagination');
+            
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 20px;">加载中...</td></tr>';
+            pagination.innerHTML = '';
+            
+            const params = new URLSearchParams({
+                page: page,
+                page_size: pageSize
+            });
+            
+            const status = document.getElementById('filter-status').value;
+            if (status) {
+                params.append('status', status);
+            }
+            
+            try {
+                const response = await fetch('/api/system/access/whitelist?' + params.toString());
+                const data = await response.json();
+                
+                if (data.success && data.data) {
+                    if (data.data.length === 0) {
+                        tbody.innerHTML = '<tr><td colspan="7" class="empty">暂无数据</td></tr>';
+                    } else {
+                        tbody.innerHTML = '';
+                        data.data.forEach(item => {
+                            const row = document.createElement('tr');
+                            row.innerHTML = `
+                                <td>${item.id}</td>
+                                <td>${escapeHtml(item.ip_address)}</td>
+                                <td>${escapeHtml(item.description || '-')}</td>
+                                <td><span class="status-badge ${item.status == 1 ? 'status-enabled' : 'status-disabled'}">${item.status == 1 ? '已启用' : '已禁用'}</span></td>
+                                <td>${item.created_at || '-'}</td>
+                                <td>${item.updated_at || '-'}</td>
+                                <td>
+                                    <button class="btn btn-primary" style="padding: 4px 8px; font-size: 12px;" onclick="editWhitelist(${item.id})">编辑</button>
+                                    <button class="btn btn-danger" style="padding: 4px 8px; font-size: 12px;" onclick="deleteWhitelist(${item.id})">删除</button>
+                                </td>
+                            `;
+                            tbody.appendChild(row);
+                        });
+                    }
+                    
+                    if (data.pagination) {
+                        renderPagination(pagination, data.pagination, loadWhitelist);
+                    }
+                } else {
+                    showAlert(data.error || '加载失败', 'error');
+                    tbody.innerHTML = '<tr><td colspan="7" class="empty">加载失败</td></tr>';
+                }
+            } catch (error) {
+                console.error('loadWhitelist error:', error);
+                showAlert('网络错误: ' + error.message, 'error');
+                tbody.innerHTML = '<tr><td colspan="7" class="empty">加载失败</td></tr>';
+            }
+        }
+        
+        // 渲染分页
+        function renderPagination(container, pagination, loadFn) {
+            if (!pagination || pagination.total_pages <= 1) return;
+            
+            const info = document.createElement('div');
+            info.className = 'pagination-info';
+            info.textContent = `共 ${pagination.total} 条，第 ${pagination.page}/${pagination.total_pages} 页`;
+            
+            const controls = document.createElement('div');
+            controls.className = 'pagination-controls';
+            
+            const prevBtn = document.createElement('button');
+            prevBtn.className = 'pagination-btn';
+            prevBtn.textContent = '上一页';
+            prevBtn.disabled = pagination.page <= 1;
+            prevBtn.onclick = () => loadFn(pagination.page - 1);
+            
+            const nextBtn = document.createElement('button');
+            nextBtn.className = 'pagination-btn';
+            nextBtn.textContent = '下一页';
+            nextBtn.disabled = pagination.page >= pagination.total_pages;
+            nextBtn.onclick = () => loadFn(pagination.page + 1);
+            
+            controls.appendChild(prevBtn);
+            controls.appendChild(nextBtn);
+            
+            container.appendChild(info);
+            container.appendChild(controls);
+        }
+        
+        // 显示添加模态框
+        function showAddModal() {
+            editingId = null;
+            document.getElementById('modal-title').textContent = '添加IP';
+            document.getElementById('edit-form').reset();
+            document.getElementById('edit-status').value = '1';
+            document.getElementById('edit-modal').classList.add('show');
+        }
+        
+        // 编辑白名单
+        async function editWhitelist(id) {
+            editingId = id;
+            document.getElementById('modal-title').textContent = '编辑IP';
+            
+            try {
+                // 从当前列表中查找
+                const tbody = document.getElementById('whitelist-tbody');
+                const rows = tbody.querySelectorAll('tr');
+                let found = false;
+                
+                for (const row of rows) {
+                    const cells = row.querySelectorAll('td');
+                    if (cells.length > 0 && parseInt(cells[0].textContent) === id) {
+                        document.getElementById('edit-ip-address').value = cells[1].textContent.trim();
+                        document.getElementById('edit-description').value = cells[2].textContent.trim() === '-' ? '' : cells[2].textContent.trim();
+                        const statusText = cells[3].textContent.trim();
+                        document.getElementById('edit-status').value = statusText === '已启用' ? '1' : '0';
+                        found = true;
+                        break;
+                    }
+                }
+                
+                if (!found) {
+                    showAlert('未找到该记录', 'error');
+                    return;
+                }
+                
+                document.getElementById('edit-modal').classList.add('show');
+            } catch (error) {
+                console.error('editWhitelist error:', error);
+                showAlert('加载失败: ' + error.message, 'error');
+            }
+        }
+        
+        // 保存白名单
+        async function saveWhitelist(event) {
+            event.preventDefault();
+            
+            const ipAddress = document.getElementById('edit-ip-address').value.trim();
+            const description = document.getElementById('edit-description').value.trim();
+            const status = document.getElementById('edit-status').value;
+            
+            if (!ipAddress) {
+                showAlert('IP地址不能为空', 'error');
+                return;
+            }
+            
+            const submitBtn = event.target.querySelector('button[type="submit"]');
+            submitBtn.disabled = true;
+            submitBtn.textContent = '保存中...';
+            
+            try {
+                let url = '/api/system/access/whitelist';
+                let method = 'POST';
+                
+                if (editingId) {
+                    url = '/api/system/access/whitelist/' + editingId;
+                    method = 'PUT';
+                }
+                
+                const params = new URLSearchParams({
+                    ip_address: ipAddress,
+                    description: description,
+                    status: status
+                });
+                
+                const response = await fetch(url, {
+                    method: method,
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: params.toString()
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showAlert(editingId ? '更新成功' : '创建成功', 'success');
+                    closeEditModal();
+                    loadWhitelist(currentPage);
+                } else {
+                    showAlert(data.error || '操作失败', 'error');
+                }
+            } catch (error) {
+                console.error('saveWhitelist error:', error);
+                showAlert('网络错误: ' + error.message, 'error');
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = '保存';
+            }
+        }
+        
+        // 删除白名单
+        async function deleteWhitelist(id) {
+            if (!confirm('确定要删除这条白名单记录吗？')) {
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/system/access/whitelist/' + id, {
+                    method: 'DELETE'
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showAlert('删除成功', 'success');
+                    loadWhitelist(currentPage);
+                } else {
+                    showAlert(data.error || '删除失败', 'error');
+                }
+            } catch (error) {
+                console.error('deleteWhitelist error:', error);
+                showAlert('网络错误: ' + error.message, 'error');
+            }
+        }
+        
+        // 关闭编辑模态框
+        function closeEditModal() {
+            document.getElementById('edit-modal').classList.remove('show');
+            editingId = null;
+        }
+        
+        // 应用筛选
+        function applyFilters() {
+            loadWhitelist(1);
+        }
+        
+        // 重置筛选
+        function resetFilters() {
+            document.getElementById('filter-status').value = '';
+            loadWhitelist(1);
+        }
+        
+        // HTML转义
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
+        // 页面加载时初始化
+        window.addEventListener('DOMContentLoaded', function() {
+            loadConfig();
+            loadWhitelist();
+            
+            // 点击模态框外部关闭
+            window.onclick = function(event) {
+                const modal = document.getElementById('edit-modal');
+                if (event.target == modal) {
+                    closeEditModal();
+                }
+            }
+        });
+    </script>
+</body>
+</html>
+

@@ -756,6 +756,37 @@ ORDER BY scheduled_time ASC;
 -- ADD KEY idx_status_priority (status, priority),
 -- ADD KEY idx_rule_group (rule_group);
 
+-- ============================================
+-- 21. 系统访问白名单表（中频更新表）
+-- ============================================
+CREATE TABLE IF NOT EXISTS waf_system_access_whitelist (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '主键ID，自增',
+    ip_address VARCHAR(45) NOT NULL COMMENT 'IP地址（支持IPv4和IPv6，支持CIDR格式）',
+    description TEXT DEFAULT NULL COMMENT '白名单说明（记录添加白名单的原因或来源）',
+    status TINYINT NOT NULL DEFAULT 1 COMMENT '状态：1-启用（白名单生效），0-禁用（白名单不生效）',
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '记录创建时间',
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '记录最后更新时间',
+    PRIMARY KEY (id),
+    KEY idx_status_ip (status, ip_address(20)) COMMENT '状态和IP地址联合索引，用于快速查询启用的白名单',
+    KEY idx_ip_address (ip_address(20)) COMMENT 'IP地址索引，用于快速匹配IP'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci 
+ROW_FORMAT=DYNAMIC COMMENT='系统访问白名单表：存储允许访问WAF管理系统的IP地址，开启时只有白名单内的IP才能访问';
+
+-- ============================================
+-- 22. 系统访问白名单开关配置表（低频更新表）
+-- ============================================
+CREATE TABLE IF NOT EXISTS waf_system_access_whitelist_config (
+    id INT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '主键ID，自增',
+    enabled TINYINT NOT NULL DEFAULT 0 COMMENT '是否启用：1-启用（白名单生效），0-禁用（白名单不生效，所有IP可访问）',
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '配置最后更新时间',
+    updated_by VARCHAR(50) DEFAULT NULL COMMENT '最后更新人（用户名）',
+    PRIMARY KEY (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci 
+ROW_FORMAT=DYNAMIC COMMENT='系统访问白名单开关配置表：控制白名单功能是否启用';
+
+-- 初始化系统访问白名单开关配置（默认关闭）
+INSERT IGNORE INTO waf_system_access_whitelist_config (id, enabled) VALUES (1, 0);
+
 -- IP频率统计表：添加统计字段（如果不存在）
 -- ALTER TABLE waf_ip_frequency
 -- ADD COLUMN total_bytes BIGINT UNSIGNED DEFAULT 0 COMMENT '总字节数',

@@ -12,6 +12,7 @@ local auth_api = require "api.auth"
 local stats_api = require "api.stats"
 local proxy_api = require "api.proxy"
 local system_api = require "api.system"
+local system_access_whitelist_api = require "api.system_access_whitelist"
 local logs_api = require "api.logs"
 local geo_api = require "api.geo"
 local api_utils = require "api.utils"
@@ -26,6 +27,19 @@ local function require_api_auth()
     local uri = ngx.var.request_uri
     local path = uri:match("^([^?]+)")
     local method = ngx.req.get_method()
+    
+    -- 系统访问白名单检查（在认证之前）
+    local system_access_whitelist_api = require "api.system_access_whitelist"
+    local client_ip = ngx.var.remote_addr
+    local ip_allowed = system_access_whitelist_api.check_ip_allowed(client_ip)
+    if not ip_allowed then
+        ngx.log(ngx.WARN, "System access whitelist: IP ", client_ip, " is not allowed")
+        api_utils.json_response({
+            error = "Forbidden",
+            message = "您的IP地址不在系统访问白名单中，无法访问"
+        }, 403)
+        return false
+    end
     
     -- 登录相关 API 不需要认证，但需要速率限制
     if path == "/api/auth/login" or path == "/api/auth/check" then
@@ -174,6 +188,11 @@ function _M.route()
     -- 系统管理相关路由
     if path:match("^/api/system") then
         return _M.route_system(path, method)
+    end
+    
+    -- 系统访问白名单相关路由
+    if path:match("^/api/system/access/whitelist") then
+        return _M.route_system_access_whitelist(path, method)
     end
     
     -- 日志查看相关路由
@@ -633,6 +652,57 @@ function _M.route_system(path, method)
     -- 未匹配的系统路由
     api_utils.json_response({
         error = "System API endpoint not found",
+        path = path,
+        method = method
+    }, 404)
+end
+
+-- 系统访问白名单路由分发
+function _M.route_system_access_whitelist(path, method)
+    -- 获取白名单开关配置
+    if path == "/api/system/access/whitelist/config" then
+        if method == "GET" then
+            return system_access_whitelist_api.get_config()
+        elseif method == "POST" then
+            return system_access_whitelist_api.update_config()
+        else
+            api_utils.json_response({error = "Method not allowed"}, 405)
+            return
+        end
+    end
+    
+    -- 白名单列表
+    if path == "/api/system/access/whitelist" or path == "/api/system/access/whitelist/list" then
+        if method == "GET" then
+            return system_access_whitelist_api.list()
+        elseif method == "POST" then
+            return system_access_whitelist_api.create()
+        else
+            api_utils.json_response({error = "Method not allowed"}, 405)
+            return
+        end
+    end
+    
+    -- 白名单详情、更新、删除
+    local id_match = path:match("^/api/system/access/whitelist/(%d+)$")
+    if id_match then
+        if method == "GET" then
+            -- 可以添加get详情接口
+            api_utils.json_response({error = "Not implemented"}, 501)
+            return
+        elseif method == "PUT" or method == "POST" then
+            return system_access_whitelist_api.update()
+        elseif method == "DELETE" then
+            return system_access_whitelist_api.delete()
+        else
+            api_utils.json_response({error = "Method not allowed"}, 405)
+            return
+        end
+    end
+    
+    -- 未匹配的路由
+    api_utils.json_response({
+        error = "System access whitelist API endpoint not found",
         path = path,
         method = method
     }, 404)

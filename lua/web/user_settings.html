@@ -617,9 +617,10 @@
             event.preventDefault();
             hideMessages();
             
-            const oldPassword = document.getElementById('oldPassword').value;
-            const newPassword = document.getElementById('newPassword').value;
-            const confirmPassword = document.getElementById('confirmPassword').value;
+            // 去除前后空格
+            const oldPassword = document.getElementById('oldPassword').value.trim();
+            const newPassword = document.getElementById('newPassword').value.trim();
+            const confirmPassword = document.getElementById('confirmPassword').value.trim();
             
             // 验证新密码和确认密码是否一致
             if (newPassword !== confirmPassword) {

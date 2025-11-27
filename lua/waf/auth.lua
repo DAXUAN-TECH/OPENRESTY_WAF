@@ -468,10 +468,25 @@ function _M.change_password(username, old_password, new_password)
         return false, "用户名、旧密码和新密码不能为空"
     end
     
+    -- 去除密码前后空格（防止用户误输入空格）
+    if type(old_password) == "string" then
+        old_password = old_password:match("^%s*(.-)%s*$") or old_password
+    end
+    if type(new_password) == "string" then
+        new_password = new_password:match("^%s*(.-)%s*$") or new_password
+    end
+    
+    -- 再次检查去除空格后的密码是否为空
+    if old_password == "" or new_password == "" then
+        return false, "密码不能为空"
+    end
+    
     -- 验证旧密码
+    ngx.log(ngx.INFO, "change_password: verifying old password for user: ", username, ", password length: ", tostring(old_password and #old_password or 0))
     local verify_ok, user = _M.verify_credentials(username, old_password)
     if not verify_ok then
-        return false, "旧密码错误"
+        ngx.log(ngx.WARN, "change_password: old password verification failed for user: ", username)
+        return false, "旧密码错误，请检查输入的密码是否正确"
     end
     
     -- 检查新密码强度

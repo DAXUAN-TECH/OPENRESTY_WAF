@@ -499,7 +499,15 @@ function _M.change_password()
     local old_password = args.old_password
     local new_password = args.new_password
     
-    if not old_password or not new_password then
+    -- 去除前后空格
+    if old_password and type(old_password) == "string" then
+        old_password = old_password:match("^%s*(.-)%s*$") or old_password
+    end
+    if new_password and type(new_password) == "string" then
+        new_password = new_password:match("^%s*(.-)%s*$") or new_password
+    end
+    
+    if not old_password or old_password == "" or not new_password or new_password == "" then
         api_utils.json_response({
             error = "Bad Request",
             message = "旧密码和新密码不能为空"

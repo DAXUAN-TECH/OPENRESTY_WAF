@@ -55,8 +55,9 @@
         alertDiv.className = `alert alert-${type}`;
         alertDiv.style.cssText = `
             position: fixed;
-            top: 20px;
-            right: 20px;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
             padding: 15px 20px;
             background: ${type === 'success' ? '#d4edda' : type === 'error' ? '#f8d7da' : '#fff3cd'};
             color: ${type === 'success' ? '#155724' : type === 'error' ? '#721c24' : '#856404'};

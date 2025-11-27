@@ -119,8 +119,8 @@
             box-sizing: border-box;
             /* 确保与sidebar-header完美对齐 */
             min-height: 80px;
-            /* 紧贴sidebar，无间隙 */
-            margin-left: 0;
+            /* 紧贴sidebar，无间隙 - 设置初始值防止闪烁 */
+            margin-left: 200px; /* sidebar的最小宽度，JavaScript会更新为精确值 */
         }
         .top-banner::before {
             content: '';
@@ -199,8 +199,8 @@
             padding: 30px;
             overflow-y: auto;
             background: #f5f5f5;
-            /* 紧贴sidebar，无间隙 */
-            margin-left: 0;
+            /* 紧贴sidebar，无间隙 - 设置初始值防止闪烁 */
+            margin-left: 200px; /* sidebar的最小宽度，JavaScript会更新为精确值 */
         }
         /* 响应式设计 */
         @media (max-width: 768px) {
@@ -214,14 +214,14 @@
             }
             .top-banner {
                 padding: 0 2%;
-                margin-left: 0;
+                margin-left: 200px; /* 响应式下也使用初始值 */
             }
             .banner-title {
                 font-size: 18px;
             }
             .content-area {
                 padding: 20px;
-                margin-left: 0;
+                margin-left: 200px; /* 响应式下也使用初始值 */
             }
         }
         
@@ -352,6 +352,7 @@
             
             // 页面加载时同步（延迟一点确保DOM完全渲染）
             function initSync() {
+                // 立即执行一次，防止闪烁
                 syncBannerHeight();
                 syncSidebarWidth();
                 // 再次同步，确保字体加载后高度正确
@@ -359,6 +360,11 @@
                     syncBannerHeight();
                     syncSidebarWidth();
                 }, 100);
+                // 第三次同步，确保所有资源加载完成（防止网络卡顿时的闪烁）
+                setTimeout(function() {
+                    syncBannerHeight();
+                    syncSidebarWidth();
+                }, 300);
             }
             
             if (document.readyState === 'loading') {

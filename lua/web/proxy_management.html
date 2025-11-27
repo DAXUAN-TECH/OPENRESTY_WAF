@@ -433,6 +433,22 @@
                     </div>
                 </div>
                 
+                <div class="form-row" id="tcp-udp-fields" style="display: none;">
+                    <div class="form-group">
+                        <label>监听域名 *</label>
+                        <input type="text" id="create-tcp-udp-server-name" placeholder="example.com www.example.com">
+                        <small style="color: #666; display: block; margin-top: 4px;">支持多个域名，用空格分隔</small>
+                    </div>
+                    <div class="form-group">
+                        <label>监听端口 *</label>
+                        <input type="number" id="create-tcp-udp-listen-port" required min="1" max="65535" placeholder="3306">
+                    </div>
+                    <div class="form-group">
+                        <label>监听地址</label>
+                        <input type="text" id="create-tcp-udp-listen-address" value="0.0.0.0" placeholder="0.0.0.0">
+                    </div>
+                </div>
+                
                 <div class="form-group" id="upstream-fields">
                     <label>后端服务器列表</label>
                     <div class="backends-list" id="backends-list">
@@ -635,19 +651,31 @@
         function toggleProxyFields() {
             const proxyType = document.getElementById('create-proxy-type').value;
             const httpFields = document.getElementById('http-fields');
+            const tcpUdpFields = document.getElementById('tcp-udp-fields');
             
             if (proxyType === 'http') {
                 httpFields.style.display = 'flex';
+                tcpUdpFields.style.display = 'none';
                 // 显示所有后端服务器列表中的路径字段
                 document.querySelectorAll('#backends-list .backend-path').forEach(field => {
                     field.style.display = 'block';
                 });
-            } else {
+                // 同步监听端口和监听地址的值
+                document.getElementById('create-tcp-udp-listen-port').value = document.getElementById('create-listen-port').value;
+                document.getElementById('create-tcp-udp-listen-address').value = document.getElementById('create-listen-address').value;
+            } else if (proxyType === 'tcp' || proxyType === 'udp') {
                 httpFields.style.display = 'none';
+                tcpUdpFields.style.display = 'flex';
                 // 隐藏所有后端服务器列表中的路径字段
                 document.querySelectorAll('#backends-list .backend-path').forEach(field => {
                     field.style.display = 'none';
                 });
+                // 同步监听端口和监听地址的值
+                document.getElementById('create-listen-port').value = document.getElementById('create-tcp-udp-listen-port').value;
+                document.getElementById('create-listen-address').value = document.getElementById('create-tcp-udp-listen-address').value;
+            } else {
+                httpFields.style.display = 'none';
+                tcpUdpFields.style.display = 'none';
             }
         }
         
@@ -1014,8 +1042,14 @@
             
             const proxyType = document.getElementById('edit-proxy-type').value;
             if (proxyType === 'http') {
+                proxyData.listen_port = parseInt(document.getElementById('edit-listen-port').value);
+                proxyData.listen_address = document.getElementById('edit-listen-address').value;
                 proxyData.server_name = document.getElementById('edit-server-name').value;
                 proxyData.location_path = document.getElementById('edit-location-path').value || '/';
+            } else if (proxyType === 'tcp' || proxyType === 'udp') {
+                proxyData.listen_port = parseInt(document.getElementById('edit-tcp-udp-listen-port').value);
+                proxyData.listen_address = document.getElementById('edit-tcp-udp-listen-address').value;
+                proxyData.server_name = document.getElementById('edit-tcp-udp-server-name').value || null;
             }
             
             // 获取后端服务器列表

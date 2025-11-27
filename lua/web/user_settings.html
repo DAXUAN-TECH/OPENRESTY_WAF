@@ -242,30 +242,15 @@
         @keyframes spin {
             to { transform: rotate(360deg); }
         }
-        
-        .back-link {
-            display: inline-block;
-            margin-bottom: 20px;
-            color: #0066cc;
-            text-decoration: none;
-            font-size: 14px;
-        }
-        
-        .back-link:hover {
-            text-decoration: underline;
-        }
     </style>
     <script src="/common.js"></script>
     </head>
     <body>
     <div class="container">
-        <a href="/admin" class="back-link">← 返回管理首页</a>
-        
         <div class="header">
             <h1>用户设置</h1>
             <div class="user-info">
                 <span id="username">加载中...</span>
-                <a href="/api/auth/logout">退出登录</a>
             </div>
         </div>
         

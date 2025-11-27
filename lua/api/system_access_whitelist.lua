@@ -340,8 +340,10 @@ function _M.update()
         end
     end
     
-    if status ~= nil then
-        status = tonumber(status)
+    -- 如果传入了status参数，则更新状态（用于启用/禁用功能）
+    local status = nil
+    if args.status ~= nil then
+        status = tonumber(args.status)
         if status ~= 0 and status ~= 1 then
             api_utils.json_response({error = "状态必须是0或1"}, 400)
             return

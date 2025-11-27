@@ -260,22 +260,21 @@ function _M.update()
     -- 记录审计日志（成功）
     audit_log.log_proxy_action("update", proxy_id, proxy_name, true, nil)
     
-    -- 如果代理配置已启用或状态改变，尝试触发nginx重载（异步，不阻塞响应）
-    if proxy_data.status == 1 or proxy_data.status == nil then
-        ngx.timer.at(0, function()
-            local ok, result = system_api.reload_nginx_internal()
-            if not ok then
-                ngx.log(ngx.WARN, "自动触发nginx重载失败: ", result or "unknown error")
-            else
-                ngx.log(ngx.INFO, "自动触发nginx重载成功")
-            end
-        end)
-    end
+    -- 触发nginx重载（异步，不阻塞响应）
+    -- 注意：代理配置更新后（无论状态如何）都需要reload使新配置生效
+    ngx.timer.at(0, function()
+        local ok, result = system_api.reload_nginx_internal()
+        if not ok then
+            ngx.log(ngx.WARN, "更新代理配置后自动触发nginx重载失败: ", result or "unknown error")
+        else
+            ngx.log(ngx.INFO, "更新代理配置后自动触发nginx重载成功")
+        end
+    end)
     
     api_utils.json_response({
         success = true,
         proxy = result,
-        message = "代理配置已更新" .. ((proxy_data.status == 1 or proxy_data.status == nil) and "，nginx配置正在重新加载" or "")
+        message = "代理配置已更新，nginx配置正在重新加载"
     })
 end
 

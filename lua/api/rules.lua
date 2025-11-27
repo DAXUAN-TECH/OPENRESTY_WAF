@@ -8,6 +8,7 @@ local cjson = require "cjson"
 local config = require "config"
 local feature_switches = require "waf.feature_switches"
 local audit_log = require "waf.audit_log"
+local system_api = require "api.system"
 
 local _M = {}
 
@@ -259,9 +260,21 @@ function _M.update()
     -- 记录审计日志（成功）
     audit_log.log_rule_action("update", rule_id, rule_name, true, nil)
     
+    -- 触发nginx重载（异步，不阻塞响应）
+    -- 注意：规则更新后需要reload使新规则生效
+    ngx.timer.at(0, function()
+        local ok, result = system_api.reload_nginx_internal()
+        if not ok then
+            ngx.log(ngx.WARN, "更新规则后自动触发nginx重载失败: ", result or "unknown error")
+        else
+            ngx.log(ngx.INFO, "更新规则后自动触发nginx重载成功")
+        end
+    end)
+    
     api_utils.json_response({
         success = true,
-        rule = result
+        rule = result,
+        message = "规则已更新，nginx配置正在重新加载"
     })
 end
 

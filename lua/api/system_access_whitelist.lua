@@ -7,6 +7,7 @@ local api_utils = require "api.utils"
 local cjson = require "cjson"
 local audit_log = require "waf.audit_log"
 local ip_utils = require "waf.ip_utils"
+local system_api = require "api.system"
 
 local _M = {}
 
@@ -114,9 +115,19 @@ function _M.update_config()
     audit_log.log(updated_by, "update", "system_access_whitelist_config", "1", 
         "更新系统访问白名单开关: " .. (enabled == 1 and "启用" or "禁用"), "success")
     
+    -- 触发nginx重载（异步，不阻塞响应）
+    ngx.timer.at(0, function()
+        local ok, result = system_api.reload_nginx_internal()
+        if not ok then
+            ngx.log(ngx.WARN, "系统访问白名单开关更新后自动触发nginx重载失败: ", result or "unknown error")
+        else
+            ngx.log(ngx.INFO, "系统访问白名单开关更新后自动触发nginx重载成功")
+        end
+    end)
+    
     api_utils.json_response({
         success = true,
-        message = enabled == 1 and "白名单已启用" or "白名单已禁用"
+        message = enabled == 1 and "白名单已启用，nginx配置正在重新加载" or "白名单已禁用，nginx配置正在重新加载"
     })
 end
 
@@ -248,9 +259,19 @@ function _M.create()
     audit_log.log(username, "create", "system_access_whitelist", tostring(res), 
         "创建系统访问白名单: " .. ip_address, "success")
     
+    -- 触发nginx重载（异步，不阻塞响应）
+    ngx.timer.at(0, function()
+        local ok, result = system_api.reload_nginx_internal()
+        if not ok then
+            ngx.log(ngx.WARN, "创建系统访问白名单后自动触发nginx重载失败: ", result or "unknown error")
+        else
+            ngx.log(ngx.INFO, "创建系统访问白名单后自动触发nginx重载成功")
+        end
+    end)
+    
     api_utils.json_response({
         success = true,
-        message = "创建成功",
+        message = "创建成功，nginx配置正在重新加载",
         data = {id = res}
     })
 end
@@ -354,9 +375,20 @@ function _M.update()
     audit_log.log(username, "update", "system_access_whitelist", tostring(id), 
         "更新系统访问白名单", "success")
     
+    -- 触发nginx重载（异步，不阻塞响应）
+    -- 注意：如果IP地址改变，需要reload使新的IP生效
+    ngx.timer.at(0, function()
+        local ok, result = system_api.reload_nginx_internal()
+        if not ok then
+            ngx.log(ngx.WARN, "更新系统访问白名单后自动触发nginx重载失败: ", result or "unknown error")
+        else
+            ngx.log(ngx.INFO, "更新系统访问白名单后自动触发nginx重载成功")
+        end
+    end)
+    
     api_utils.json_response({
         success = true,
-        message = "更新成功"
+        message = "更新成功，nginx配置正在重新加载"
     })
 end
 

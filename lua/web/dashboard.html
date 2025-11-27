@@ -234,8 +234,8 @@
             // 更新指标卡片
             updateMetrics(metrics);
             
-            // 更新图表
-            updateBlockTrendChart(metrics);
+            // 更新图表（从API获取真实数据）
+            await updateBlockTrendChart();
             
             // 更新系统信息
             updateSystemInfo(metrics);
@@ -328,57 +328,142 @@
         }
     }
     
-    // 更新封控趋势图表
-    function updateBlockTrendChart(metrics) {
+    // 更新封控趋势图表（从API获取真实数据）
+    async function updateBlockTrendChart() {
         const ctx = document.getElementById('blockTrendChart').getContext('2d');
         
         if (blockTrendChart) {
             blockTrendChart.destroy();
         }
         
-        // 生成示例数据（实际应该从API获取时间序列数据）
-        const labels = [];
-        const data = [];
-        const now = new Date();
-        for (let i = 11; i >= 0; i--) {
-            const time = new Date(now.getTime() - i * 5 * 60 * 1000);
-            labels.push(time.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }));
-            // 使用实际指标数据，如果没有则使用随机数
-            data.push(Math.floor((metrics.waf_blocks_total || 0) / 12) + Math.floor(Math.random() * 10));
-        }
-        
-        blockTrendChart = new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: labels,
-                datasets: [{
-                    label: '封控次数',
-                    data: data,
-                    borderColor: '#3498db',
-                    backgroundColor: 'rgba(52, 152, 219, 0.1)',
-                    tension: 0.4,
-                    fill: true
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: true,
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        ticks: {
-                            precision: 0
-                        }
-                    }
-                },
-                plugins: {
-                    legend: {
-                        display: true,
-                        position: 'top'
-                    }
+        try {
+            // 计算时间范围（最近1小时）
+            const endTime = new Date();
+            const startTime = new Date(endTime.getTime() - 60 * 60 * 1000); // 1小时前
+            
+            // 格式化时间为MySQL格式
+            const formatTime = (date) => {
+                const year = date.getFullYear();
+                const month = String(date.getMonth() + 1).padStart(2, '0');
+                const day = String(date.getDate()).padStart(2, '0');
+                const hours = String(date.getHours()).padStart(2, '0');
+                const minutes = String(date.getMinutes()).padStart(2, '0');
+                const seconds = String(date.getSeconds()).padStart(2, '0');
+                return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+            };
+            
+            const startTimeStr = formatTime(startTime);
+            const endTimeStr = formatTime(endTime);
+            
+            // 从API获取时间序列数据（按小时分组，最近1小时）
+            const timeseriesRes = await fetch(`/api/stats/timeseries?start_time=${encodeURIComponent(startTimeStr)}&end_time=${encodeURIComponent(endTimeStr)}&interval=hour`);
+            
+            if (!timeseriesRes.ok) {
+                throw new Error('获取时间序列数据失败');
+            }
+            
+            const timeseriesData = await timeseriesRes.json();
+            
+            let labels = [];
+            let data = [];
+            
+            if (timeseriesData.success && timeseriesData.data && Array.isArray(timeseriesData.data)) {
+                // 使用API返回的真实数据
+                timeseriesData.data.forEach(item => {
+                    // 格式化时间显示
+                    const time = new Date(item.time);
+                    labels.push(time.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }));
+                    data.push(item.block_count || 0);
+                });
+            }
+            
+            // 如果没有数据，生成空的时间点（最近1小时，每5分钟一个点）
+            if (labels.length === 0) {
+                const now = new Date();
+                for (let i = 11; i >= 0; i--) {
+                    const time = new Date(now.getTime() - i * 5 * 60 * 1000);
+                    labels.push(time.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }));
+                    data.push(0);
                 }
             }
-        });
+            
+            blockTrendChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: '封控次数',
+                        data: data,
+                        borderColor: '#3498db',
+                        backgroundColor: 'rgba(52, 152, 219, 0.1)',
+                        tension: 0.4,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                precision: 0
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top'
+                        }
+                    }
+                }
+            });
+        } catch (error) {
+            console.error('更新图表失败：', error);
+            // 如果API调用失败，显示空图表
+            const now = new Date();
+            const labels = [];
+            const data = [];
+            for (let i = 11; i >= 0; i--) {
+                const time = new Date(now.getTime() - i * 5 * 60 * 1000);
+                labels.push(time.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }));
+                data.push(0);
+            }
+            
+            blockTrendChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: '封控次数',
+                        data: data,
+                        borderColor: '#3498db',
+                        backgroundColor: 'rgba(52, 152, 219, 0.1)',
+                        tension: 0.4,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                precision: 0
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top'
+                        }
+                    }
+                }
+            });
+        }
     }
     
     // 更新系统信息

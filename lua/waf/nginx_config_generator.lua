@@ -174,7 +174,7 @@ local function generate_http_server_config(proxy, upstream_name)
     config = config .. "\n    location " .. escape_nginx_value(proxy.location_path or "/") .. " {\n"
     
     -- 代理到后端
-    -- 注意：如果生成了upstream配置（无论是single还是upstream类型），都使用upstream
+    -- 注意：只支持upstream类型（多个后端服务器），使用upstream配置
     if upstream_name then
         local backend_path = null_to_nil(proxy.backend_path)
         if backend_path and backend_path ~= "" then
@@ -319,7 +319,7 @@ local function generate_stream_server_config(proxy, upstream_name)
     end
     
     -- 代理到后端
-    -- 注意：如果生成了upstream配置（无论是single还是upstream类型），都使用upstream
+    -- 注意：只支持upstream类型（多个后端服务器），使用upstream配置
     if upstream_name then
         config = config .. "    proxy_pass " .. upstream_name .. ";\n"
     else
@@ -550,38 +550,20 @@ function _M.generate_all_configs()
         active_proxy_ids[proxy.id] = true
         
         -- 查询后端服务器并生成upstream配置
-        -- 注意：无论是single还是upstream类型，都生成upstream配置文件，便于统一管理和后续扩展
+        -- 注意：只支持upstream类型（多个后端服务器），不再支持single类型
         local backends = nil
         local upstream_name = nil
         local upstream_config = nil
         
-        if proxy.backend_type == "upstream" then
-            -- upstream类型：从数据库查询多个后端服务器
-            local backends_sql = [[
-                SELECT id, backend_address, backend_port, weight, max_fails, fail_timeout,
-                       backup, down, status
-                FROM waf_proxy_backends
-                WHERE proxy_id = ? AND status = 1
-                ORDER BY weight DESC, id ASC
-            ]]
-            backends, _ = mysql_pool.query(backends_sql, proxy.id)
-        else
-            -- single类型：从proxy配置中构建单个后端服务器
-            local backend_address = null_to_nil(proxy.backend_address)
-            local backend_port = null_to_nil(proxy.backend_port)
-            if backend_address and backend_port then
-                backends = {{
-                    backend_address = backend_address,
-                    backend_port = backend_port,
-                    weight = 1,
-                    max_fails = null_to_nil(proxy.max_fails) or 3,
-                    fail_timeout = null_to_nil(proxy.fail_timeout) or 30,
-                    backup = 0,
-                    down = 0,
-                    status = 1
-                }}
-            end
-        end
+        -- 从数据库查询多个后端服务器
+        local backends_sql = [[
+            SELECT id, backend_address, backend_port, weight, max_fails, fail_timeout,
+                   backup, down, status
+            FROM waf_proxy_backends
+            WHERE proxy_id = ? AND status = 1
+            ORDER BY weight DESC, id ASC
+        ]]
+        backends, _ = mysql_pool.query(backends_sql, proxy.id)
         
         -- 生成upstream配置（如果有后端服务器）
         if backends and #backends > 0 then

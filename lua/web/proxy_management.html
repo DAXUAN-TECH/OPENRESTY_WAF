@@ -644,14 +644,6 @@
                 if (tcpUdpBackendPort) tcpUdpBackendPort.style.display = 'none';
                 // HTTP代理时，移除TCP/UDP模式样式
                 if (backendAddress) backendAddress.classList.remove('tcp-udp-mode');
-            } else if (proxyType === 'tcp' || proxyType === 'udp') {
-                httpFields.style.display = 'none';
-                httpPathFields.style.display = 'none';
-                if (httpBackendPort) httpBackendPort.style.display = 'none';
-                if (httpBackendPath) httpBackendPath.style.display = 'none';
-                if (tcpUdpBackendPort) tcpUdpBackendPort.style.display = 'block';
-                // TCP/UDP代理时，添加TCP/UDP模式样式（缩短75%）
-                if (backendAddress) backendAddress.classList.add('tcp-udp-mode');
             } else {
                 httpFields.style.display = 'none';
                 httpPathFields.style.display = 'none';

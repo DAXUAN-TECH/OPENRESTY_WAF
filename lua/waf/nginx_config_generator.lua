@@ -631,7 +631,7 @@ function _M.generate_all_configs()
                     local upstream_file_content = "# ============================================\n"
                     upstream_file_content = upstream_file_content .. "# Upstream配置: " .. escape_nginx_value(proxy.proxy_name) .. " (代理ID: " .. proxy.id .. ")\n"
                     upstream_file_content = upstream_file_content .. "# 类型: " .. string.upper(proxy.proxy_type) .. "\n"
-                    upstream_file_content = upstream_file_content .. "# 后端类型: " .. (proxy.backend_type == "upstream" and "多个后端（负载均衡）" or "单个后端") .. "\n"
+                    upstream_file_content = upstream_file_content .. "# 后端类型: 多个后端（负载均衡）\n"
                     upstream_file_content = upstream_file_content .. "# 自动生成，请勿手动修改\n"
                     upstream_file_content = upstream_file_content .. "# ============================================\n\n"
                     upstream_file_content = upstream_file_content .. upstream_config

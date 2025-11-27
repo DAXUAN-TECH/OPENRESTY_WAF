@@ -496,7 +496,11 @@ function _M.update_proxy(proxy_id, proxy_data)
                 (proxy_id, backend_address, backend_port, backend_path, weight, max_fails, fail_timeout, backup, down, status)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ]]
-            local backend_path = null_to_nil(backend.backend_path)
+            -- 只有HTTP/HTTPS代理才允许有backend_path，TCP/UDP代理应该为nil
+            local backend_path = nil
+            if proxy.proxy_type == "http" then
+                backend_path = null_to_nil(backend.backend_path)
+            end
             mysql_pool.insert(backend_sql,
                 proxy_id,
                 backend.backend_address,

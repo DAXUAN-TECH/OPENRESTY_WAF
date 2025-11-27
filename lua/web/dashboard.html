@@ -5,7 +5,7 @@
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
         gap: 20px;
-        margin: 0 30px 30px 30px;
+        margin-bottom: 30px;
     }
     .metric-card {
         background: #fff;
@@ -53,7 +53,7 @@
     .chart-container {
         background: #fff;
         padding: 25px;
-        margin: 0 30px 30px 30px;
+        margin-bottom: 30px;
         border-radius: 8px;
         box-shadow: 0 2px 8px rgba(0,0,0,0.1);
     }
@@ -66,7 +66,7 @@
     .info-section {
         background: #fff;
         padding: 25px;
-        margin: 0 30px 20px 30px;
+        margin-bottom: 20px;
         border-radius: 8px;
         box-shadow: 0 2px 8px rgba(0,0,0,0.1);
     }
@@ -94,9 +94,19 @@
         color: #2c3e50;
         font-weight: 500;
     }
+    /* 统一容器样式 - 白色背景卡片 */
+    .container {
+        width: 100%;
+        max-width: 100%;
+        background: white;
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        padding: 30px;
+    }
+    
     .auto-refresh {
         text-align: right;
-        margin: 30px 30px 20px 30px;
+        margin-bottom: 20px;
         padding: 15px;
         background: #fff;
         border-radius: 8px;
@@ -118,7 +128,6 @@
     .loading {
         text-align: center;
         padding: 60px;
-        margin: 30px;
         color: #666;
         font-size: 16px;
     }
@@ -135,16 +144,17 @@
     }
 </style>
 
-<div class="auto-refresh">
-    <label>
-        <input type="checkbox" id="autoRefresh" checked> 自动刷新（30秒）
-    </label>
-</div>
+<div class="container">
+    <div class="auto-refresh">
+        <label>
+            <input type="checkbox" id="autoRefresh" checked> 自动刷新（30秒）
+        </label>
+    </div>
 
-<div id="loading" class="loading">加载中...</div>
+    <div id="loading" class="loading">加载中...</div>
 
-<div id="content" style="display:none;">
-    <div class="metrics-grid">
+    <div id="content" style="display:none;">
+        <div class="metrics-grid">
         <div class="metric-card">
             <h3>数据库健康状态</h3>
             <div class="value" id="dbHealth">-</div>

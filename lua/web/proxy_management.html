@@ -678,27 +678,27 @@
             const proxyType = document.getElementById('create-proxy-type').value;
             const httpFields = document.getElementById('http-fields');
             const httpPathFields = document.getElementById('http-path-fields');
-            const httpBackendPort = document.getElementById('http-backend-port');
-            const httpBackendPath = document.getElementById('http-backend-path');
+            const httpBackendPort = document.querySelector('#single-backend-fields .http-backend-port-field');
+            const httpBackendPath = document.querySelector('#single-backend-fields .http-backend-path-field');
             const tcpUdpBackendPort = document.getElementById('tcp-udp-backend-port');
             
             if (proxyType === 'http') {
                 httpFields.style.display = 'block';
                 httpPathFields.style.display = 'block';
-                httpBackendPort.style.display = 'block';
-                httpBackendPath.style.display = 'block';
+                if (httpBackendPort) httpBackendPort.style.display = 'block';
+                if (httpBackendPath) httpBackendPath.style.display = 'block';
                 tcpUdpBackendPort.style.display = 'none';
             } else if (proxyType === 'tcp' || proxyType === 'udp') {
                 httpFields.style.display = 'none';
                 httpPathFields.style.display = 'none';
-                httpBackendPort.style.display = 'none';
-                httpBackendPath.style.display = 'none';
+                if (httpBackendPort) httpBackendPort.style.display = 'none';
+                if (httpBackendPath) httpBackendPath.style.display = 'none';
                 tcpUdpBackendPort.style.display = 'block';
             } else {
                 httpFields.style.display = 'none';
                 httpPathFields.style.display = 'none';
-                httpBackendPort.style.display = 'none';
-                httpBackendPath.style.display = 'none';
+                if (httpBackendPort) httpBackendPort.style.display = 'none';
+                if (httpBackendPath) httpBackendPath.style.display = 'none';
                 tcpUdpBackendPort.style.display = 'none';
             }
         }
@@ -1050,23 +1050,25 @@
                     
                     // 显示/隐藏相关字段
                     toggleEditBackendFields();
+                    const editHttpBackendPort = document.querySelector('#edit-single-backend-fields .http-backend-port-field');
+                    const editHttpBackendPath = document.querySelector('#edit-single-backend-fields .http-backend-path-field');
                     if (proxy.proxy_type === 'http') {
                         document.getElementById('edit-http-fields').style.display = 'block';
                         document.getElementById('edit-http-path-fields').style.display = 'block';
                         document.getElementById('edit-tcp-udp-backend-port').style.display = 'none';
                         // HTTP代理单个后端时显示端口和路径字段
                         if (proxy.backend_type === 'single') {
-                            document.getElementById('edit-http-backend-port').style.display = 'block';
-                            document.getElementById('edit-http-backend-path').style.display = 'block';
+                            if (editHttpBackendPort) editHttpBackendPort.style.display = 'block';
+                            if (editHttpBackendPath) editHttpBackendPath.style.display = 'block';
                         } else {
-                            document.getElementById('edit-http-backend-port').style.display = 'none';
-                            document.getElementById('edit-http-backend-path').style.display = 'none';
+                            if (editHttpBackendPort) editHttpBackendPort.style.display = 'none';
+                            if (editHttpBackendPath) editHttpBackendPath.style.display = 'none';
                         }
                     } else {
                         document.getElementById('edit-http-fields').style.display = 'none';
                         document.getElementById('edit-http-path-fields').style.display = 'none';
-                        document.getElementById('edit-http-backend-port').style.display = 'none';
-                        document.getElementById('edit-http-backend-path').style.display = 'none';
+                        if (editHttpBackendPort) editHttpBackendPort.style.display = 'none';
+                        if (editHttpBackendPath) editHttpBackendPath.style.display = 'none';
                         document.getElementById('edit-tcp-udp-backend-port').style.display = 'block';
                     }
                     

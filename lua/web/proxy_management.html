@@ -448,13 +448,9 @@
                         <input type="text" id="create-backend-address" placeholder="IP地址" style="flex: 2;">
                         <input type="number" id="create-http-backend-port" class="http-backend-port-field" min="1" max="65535" placeholder="端口" style="flex: 1;">
                         <input type="text" id="create-backend-path" class="http-backend-path-field" placeholder="路径" value="" style="flex: 1;">
+                        <input type="number" id="create-backend-port" class="tcp-udp-backend-port-field" min="1" max="65535" placeholder="端口" style="flex: 1; display: none;">
                     </div>
-                    <small style="color: #666;">单个后端时，请输入IP地址或域名（不含端口）。HTTP代理时，端口和路径为可选。</small>
-                </div>
-                
-                <div class="form-group" id="tcp-udp-backend-port">
-                    <label>后端端口（TCP/UDP）</label>
-                    <input type="number" id="create-backend-port" min="1" max="65535" placeholder="8080">
+                    <small style="color: #666;">单个后端时，请输入IP地址或域名（不含端口）。HTTP代理时，端口和路径为可选；TCP/UDP代理时，端口为必填。</small>
                 </div>
                 
                 <div class="form-group" id="upstream-fields" style="display: none;">
@@ -569,12 +565,9 @@
                         <input type="text" id="edit-backend-address" style="flex: 2;">
                         <input type="number" id="edit-http-backend-port" class="http-backend-port-field" min="1" max="65535" placeholder="端口" style="flex: 1;">
                         <input type="text" id="edit-backend-path" class="http-backend-path-field" placeholder="路径" style="flex: 1;">
+                        <input type="number" id="edit-backend-port" class="tcp-udp-backend-port-field" min="1" max="65535" placeholder="端口" style="flex: 1; display: none;">
                     </div>
-                    <small style="color: #666;">单个后端时，请输入IP地址或域名（不含端口）。HTTP代理时，端口和路径为可选。</small>
-                </div>
-                <div class="form-group" id="edit-tcp-udp-backend-port">
-                    <label>后端端口（TCP/UDP）</label>
-                    <input type="number" id="edit-backend-port" min="1" max="65535">
+                    <small style="color: #666;">单个后端时，请输入IP地址或域名（不含端口）。HTTP代理时，端口和路径为可选；TCP/UDP代理时，端口为必填。</small>
                 </div>
                 <div class="form-group" id="edit-upstream-fields" style="display: none;">
                     <label>后端服务器列表</label>

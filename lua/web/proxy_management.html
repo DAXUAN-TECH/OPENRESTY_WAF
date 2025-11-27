@@ -744,10 +744,16 @@
             const proxyType = document.getElementById('create-proxy-type').value;
             const httpFields = document.getElementById('http-fields');
             const tcpUdpFields = document.getElementById('tcp-udp-fields');
+            const createListenPort = document.getElementById('create-listen-port');
+            const createTcpUdpListenPort = document.getElementById('create-tcp-udp-listen-port');
             
             if (proxyType === 'http') {
                 httpFields.style.display = 'flex';
                 tcpUdpFields.style.display = 'none';
+                // 为显示的字段添加required属性
+                createListenPort.setAttribute('required', 'required');
+                // 为隐藏的字段移除required属性
+                createTcpUdpListenPort.removeAttribute('required');
                 // 显示所有后端服务器列表中的路径字段
                 document.querySelectorAll('#backends-list .backend-path').forEach(field => {
                     field.style.display = 'block';
@@ -758,6 +764,10 @@
             } else if (proxyType === 'tcp' || proxyType === 'udp') {
                 httpFields.style.display = 'none';
                 tcpUdpFields.style.display = 'flex';
+                // 为隐藏的字段移除required属性
+                createListenPort.removeAttribute('required');
+                // 为显示的字段添加required属性
+                createTcpUdpListenPort.setAttribute('required', 'required');
                 // 隐藏所有后端服务器列表中的路径字段
                 document.querySelectorAll('#backends-list .backend-path').forEach(field => {
                     field.style.display = 'none';
@@ -768,6 +778,9 @@
             } else {
                 httpFields.style.display = 'none';
                 tcpUdpFields.style.display = 'none';
+                // 当没有选择代理类型时，移除所有required属性
+                createListenPort.removeAttribute('required');
+                createTcpUdpListenPort.removeAttribute('required');
             }
         }
         
@@ -1100,16 +1113,30 @@
                     document.getElementById('edit-priority').value = proxy.priority || 0;
                     document.getElementById('edit-ip-rule-id').value = proxy.ip_rule_id || '';
                     
-                    // 显示/隐藏相关字段
+                    // 显示/隐藏相关字段，并动态管理required属性
+                    const editListenPort = document.getElementById('edit-listen-port');
+                    const editTcpUdpListenPort = document.getElementById('edit-tcp-udp-listen-port');
+                    
                     if (proxy.proxy_type === 'http') {
                         document.getElementById('edit-http-fields').style.display = 'flex';
                         document.getElementById('edit-tcp-udp-fields').style.display = 'none';
+                        // 为显示的字段添加required属性
+                        editListenPort.setAttribute('required', 'required');
+                        // 为隐藏的字段移除required属性
+                        editTcpUdpListenPort.removeAttribute('required');
                     } else if (proxy.proxy_type === 'tcp' || proxy.proxy_type === 'udp') {
                         document.getElementById('edit-http-fields').style.display = 'none';
                         document.getElementById('edit-tcp-udp-fields').style.display = 'flex';
+                        // 为隐藏的字段移除required属性
+                        editListenPort.removeAttribute('required');
+                        // 为显示的字段添加required属性
+                        editTcpUdpListenPort.setAttribute('required', 'required');
                     } else {
                         document.getElementById('edit-http-fields').style.display = 'none';
                         document.getElementById('edit-tcp-udp-fields').style.display = 'none';
+                        // 当没有选择代理类型时，移除所有required属性
+                        editListenPort.removeAttribute('required');
+                        editTcpUdpListenPort.removeAttribute('required');
                     }
                     
                     // 加载后端服务器列表

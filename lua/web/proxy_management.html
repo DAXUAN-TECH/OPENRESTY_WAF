@@ -387,6 +387,8 @@
                         <th>监听端口</th>
                         <th>监听域名</th>
                         <th>后端地址</th>
+                        <th>防护规则</th>
+                        <th>规则类型</th>
                         <th>状态</th>
                         <th>创建时间</th>
                         <th>操作</th>
@@ -860,7 +862,7 @@
             } catch (error) {
                 console.error('loadProxies error:', error);
                 showAlert('网络错误: ' + error.message, 'error');
-                tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 20px; color: #e74c3c;">加载失败: ' + escapeHtmlFn(error.message) + '</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="11" style="text-align: center; padding: 20px; color: #e74c3c;">加载失败: ' + escapeHtmlFn(error.message) + '</td></tr>';
             }
         }
         
@@ -901,6 +903,8 @@
                     <td>${proxy.listen_address}:${proxy.listen_port}</td>
                     <td>${proxy.server_name || '-'}</td>
                     <td>${backendDisplay}</td>
+                    <td>${proxy.rule_name || '-'}</td>
+                    <td>${getRuleTypeName(proxy.rule_type) || '-'}</td>
                     <td>${getStatusBadge(proxy.status)}</td>
                     <td>${formatDateTime(proxy.created_at)}</td>
                     <td>

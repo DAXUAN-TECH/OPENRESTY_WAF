@@ -264,18 +264,20 @@ function _M.list_proxies(params)
     
     local total = count_res[1] and count_res[1].total or 0
     
-    -- 查询列表
+    -- 查询列表（LEFT JOIN规则表获取规则名称和类型）
     local offset = (page - 1) * page_size
     local sql = string.format([[
-        SELECT id, proxy_name, proxy_type, listen_port, listen_address, server_name, location_path,
-               backend_type, backend_path, load_balance,
-               health_check_enable, health_check_interval, health_check_timeout,
-               max_fails, fail_timeout, proxy_timeout, proxy_connect_timeout,
-               proxy_send_timeout, proxy_read_timeout, ssl_enable, ssl_cert_path, ssl_key_path,
-               description, ip_rule_id, status, priority, created_at, updated_at
-        FROM waf_proxy_configs
+        SELECT p.id, p.proxy_name, p.proxy_type, p.listen_port, p.listen_address, p.server_name, p.location_path,
+               p.backend_type, p.backend_path, p.load_balance,
+               p.health_check_enable, p.health_check_interval, p.health_check_timeout,
+               p.max_fails, p.fail_timeout, p.proxy_timeout, p.proxy_connect_timeout,
+               p.proxy_send_timeout, p.proxy_read_timeout, p.ssl_enable, p.ssl_cert_path, p.ssl_key_path,
+               p.description, p.ip_rule_id, p.status, p.priority, p.created_at, p.updated_at,
+               r.rule_name, r.rule_type
+        FROM waf_proxy_configs p
+        LEFT JOIN waf_block_rules r ON p.ip_rule_id = r.id
         %s
-        ORDER BY priority DESC, created_at DESC
+        ORDER BY p.priority DESC, p.created_at DESC
         LIMIT %d OFFSET %d
     ]], where_sql, page_size, offset)
     

@@ -182,9 +182,14 @@
         }
         
         
+        /* 确保content-area成为定位上下文 */
+        .content-area {
+            position: relative;
+        }
+        
         .modal {
             display: none;
-            position: fixed;
+            position: absolute;
             z-index: 1000;
             left: 0;
             top: 0;

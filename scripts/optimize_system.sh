@@ -199,6 +199,7 @@ else
 fi
 
 if ! grep -q "# OpenResty WAF Optimization" /etc/security/limits.conf; then
+    # 配置不存在，添加新配置
     cat >> /etc/security/limits.conf <<EOF
 
 # OpenResty WAF Optimization
@@ -213,7 +214,43 @@ $OPENRESTY_USER hard nofile $ULIMIT_NOFILE
 EOF
     echo -e "    ${GREEN}✓ 已添加文件描述符限制（包含用户: $OPENRESTY_USER）${NC}"
 else
-    echo -e "    ${YELLOW}⚠ 文件描述符限制已存在，跳过${NC}"
+    # 配置已存在，检查是否需要添加当前运行用户
+    if [ "$OPENRESTY_USER" != "nobody" ] && ! grep -q "^$OPENRESTY_USER soft nofile" /etc/security/limits.conf; then
+        # 在 OpenResty WAF Optimization 块末尾添加当前运行用户
+        # 找到 OpenResty WAF Optimization 块的结束位置（下一个空行或文件末尾）
+        sed -i "/# OpenResty WAF Optimization/,/^$/ {
+            /^$/a $OPENRESTY_USER soft nofile $ULIMIT_NOFILE
+            /^$/a $OPENRESTY_USER hard nofile $ULIMIT_NOFILE
+        }" /etc/security/limits.conf
+        
+        # 如果上面的 sed 没有成功（可能因为块末尾没有空行），直接在块后添加
+        if ! grep -q "^$OPENRESTY_USER soft nofile" /etc/security/limits.conf; then
+            # 找到 OpenResty WAF Optimization 注释行的行号
+            local line_num=$(grep -n "# OpenResty WAF Optimization" /etc/security/limits.conf | cut -d: -f1)
+            if [ -n "$line_num" ]; then
+                # 在注释行后找到最后一个配置行的位置
+                local last_line=$(awk "/# OpenResty WAF Optimization/,/^$/{if (!/^#/ && !/^$/) print NR}" /etc/security/limits.conf | tail -1)
+                if [ -n "$last_line" ]; then
+                    sed -i "${last_line}a $OPENRESTY_USER soft nofile $ULIMIT_NOFILE\n$OPENRESTY_USER hard nofile $ULIMIT_NOFILE" /etc/security/limits.conf
+                else
+                    # 如果找不到配置行，直接在注释行后添加
+                    sed -i "${line_num}a $OPENRESTY_USER soft nofile $ULIMIT_NOFILE\n$OPENRESTY_USER hard nofile $ULIMIT_NOFILE" /etc/security/limits.conf
+                fi
+            fi
+        fi
+        
+        if grep -q "^$OPENRESTY_USER soft nofile" /etc/security/limits.conf; then
+            echo -e "    ${GREEN}✓ 已添加缺失的用户 $OPENRESTY_USER 到文件描述符限制${NC}"
+        else
+            echo -e "    ${YELLOW}⚠ 尝试添加用户 $OPENRESTY_USER 失败，请手动添加${NC}"
+        fi
+    else
+        if [ "$OPENRESTY_USER" = "nobody" ]; then
+            echo -e "    ${BLUE}✓ 文件描述符限制已存在，当前运行用户为 nobody（已包含）${NC}"
+        else
+            echo -e "    ${BLUE}✓ 文件描述符限制已存在，当前运行用户 $OPENRESTY_USER 已在配置中${NC}"
+        fi
+    fi
 fi
 
 # 4.2 优化内核参数

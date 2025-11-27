@@ -175,14 +175,14 @@ function _M.route()
         return _M.route_proxy(path, method)
     end
     
+    -- 系统访问白名单相关路由（必须在系统管理路由之前，因为路径更具体）
+    if path:match("^/api/system/access/whitelist") then
+        return _M.route_system_access_whitelist(path, method)
+    end
+    
     -- 系统管理相关路由
     if path:match("^/api/system") then
         return _M.route_system(path, method)
-    end
-    
-    -- 系统访问白名单相关路由
-    if path:match("^/api/system/access/whitelist") then
-        return _M.route_system_access_whitelist(path, method)
     end
     
     -- 日志查看相关路由

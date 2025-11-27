@@ -189,6 +189,7 @@
             top: 0;
             width: 100%;
             height: 100%;
+            overflow: auto;
             background-color: rgba(0,0,0,0.5);
         }
         
@@ -201,6 +202,7 @@
             max-width: 800px;
             max-height: 90vh;
             overflow-y: auto;
+            position: relative;
         }
         
         .modal-header {
@@ -592,13 +594,6 @@
                     </select>
                     <small style="color: #666;">只能选择一个IP相关规则（IP白名单、IP黑名单、地域白名单、地域黑名单）作为防护条件</small>
                 </div>
-                <div class="form-group">
-                    <label>状态</label>
-                    <select id="edit-status">
-                        <option value="1">启用</option>
-                        <option value="0">禁用</option>
-                    </select>
-                </div>
                 <div class="form-actions">
                     <button type="button" class="btn btn-secondary" onclick="closeEditModal()">取消</button>
                     <button type="submit" class="btn btn-primary">保存</button>
@@ -969,6 +964,7 @@
         }
         
         // 编辑代理
+        let currentEditingProxy = null; // 保存当前正在编辑的代理数据
         async function editProxy(id) {
             try {
                 const response = await fetch(`/api/proxy/${id}`);
@@ -976,6 +972,7 @@
                 
                 if (data.success) {
                     const proxy = data.proxy;
+                    currentEditingProxy = proxy; // 保存代理数据
                     document.getElementById('edit-id').value = proxy.id;
                     document.getElementById('edit-proxy-name').value = proxy.proxy_name;
                     document.getElementById('edit-proxy-type').value = proxy.proxy_type;
@@ -997,7 +994,6 @@
                     document.getElementById('edit-proxy-read-timeout').value = proxy.proxy_read_timeout || 60;
                     document.getElementById('edit-description').value = proxy.description || '';
                     document.getElementById('edit-priority').value = proxy.priority || 0;
-                    document.getElementById('edit-status').value = proxy.status;
                     document.getElementById('edit-ip-rule-id').value = proxy.ip_rule_id || '';
                     
                     // 显示/隐藏相关字段
@@ -1065,7 +1061,8 @@
                 proxy_connect_timeout: parseInt(document.getElementById('edit-proxy-connect-timeout').value) || 60,
                 proxy_send_timeout: parseInt(document.getElementById('edit-proxy-send-timeout').value) || 60,
                 proxy_read_timeout: parseInt(document.getElementById('edit-proxy-read-timeout').value) || 60,
-                ip_rule_id: ipRuleId ? parseInt(ipRuleId) : null
+                ip_rule_id: ipRuleId ? parseInt(ipRuleId) : null,
+                status: currentEditingProxy ? currentEditingProxy.status : 1
             };
             
             if (proxyType === 'http') {

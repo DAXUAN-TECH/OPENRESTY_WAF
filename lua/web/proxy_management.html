@@ -729,6 +729,7 @@
             const upstreamFields = document.getElementById('edit-upstream-fields');
             const editHttpBackendPort = document.querySelector('#edit-single-backend-fields .http-backend-port-field');
             const editHttpBackendPath = document.querySelector('#edit-single-backend-fields .http-backend-path-field');
+            const editTcpUdpBackendPort = document.querySelector('#edit-single-backend-fields .tcp-udp-backend-port-field');
             
             if (backendType === 'single') {
                 singleFields.style.display = 'block';
@@ -737,9 +738,15 @@
                 if (proxyType === 'http') {
                     if (editHttpBackendPort) editHttpBackendPort.style.display = 'block';
                     if (editHttpBackendPath) editHttpBackendPath.style.display = 'block';
+                    if (editTcpUdpBackendPort) editTcpUdpBackendPort.style.display = 'none';
+                } else if (proxyType === 'tcp' || proxyType === 'udp') {
+                    if (editHttpBackendPort) editHttpBackendPort.style.display = 'none';
+                    if (editHttpBackendPath) editHttpBackendPath.style.display = 'none';
+                    if (editTcpUdpBackendPort) editTcpUdpBackendPort.style.display = 'block';
                 } else {
                     if (editHttpBackendPort) editHttpBackendPort.style.display = 'none';
                     if (editHttpBackendPath) editHttpBackendPath.style.display = 'none';
+                    if (editTcpUdpBackendPort) editTcpUdpBackendPort.style.display = 'none';
                 }
             } else {
                 singleFields.style.display = 'none';
@@ -1126,7 +1133,15 @@
                     proxyData.backend_path = backendPath.trim();
                 }
             } else {
-                proxyData.backend_port = parseInt(document.getElementById('edit-backend-port').value);
+                // TCP/UDP代理单个后端时，需要后端端口
+                if (proxyData.backend_type === 'single') {
+                    const tcpUdpBackendPort = document.querySelector('#edit-single-backend-fields .tcp-udp-backend-port-field');
+                    if (tcpUdpBackendPort && tcpUdpBackendPort.value) {
+                        proxyData.backend_port = parseInt(tcpUdpBackendPort.value);
+                    }
+                } else {
+                    proxyData.backend_port = parseInt(document.getElementById('edit-backend-port').value);
+                }
             }
             
             if (proxyData.backend_type === 'upstream') {

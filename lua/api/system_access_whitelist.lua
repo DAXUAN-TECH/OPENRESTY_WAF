@@ -112,7 +112,7 @@ function _M.update_config()
     end
     
     -- 记录审计日志
-    audit_log.log(updated_by, "update", "system_access_whitelist_config", "1", 
+    audit_log.log("update", "system_access_whitelist_config", "1", 
         "更新系统访问白名单开关: " .. (enabled == 1 and "启用" or "禁用"), "success")
     
     -- 触发nginx重载（异步，不阻塞响应）
@@ -174,7 +174,7 @@ function _M.list()
     table.insert(params, page_size)
     table.insert(params, offset)
     
-    ok, res, err = pcall(function()
+    local ok, res, err = pcall(function()
         return mysql_pool.query(sql, unpack(params))
     end)
     
@@ -283,7 +283,7 @@ function _M.create()
     end
     
     -- 记录审计日志
-    audit_log.log(username, "create", "system_access_whitelist", tostring(res), 
+    audit_log.log("create", "system_access_whitelist", tostring(res), 
         "创建系统访问白名单: " .. ip_address, "success")
     
     -- 触发nginx重载（异步，不阻塞响应）
@@ -399,7 +399,7 @@ function _M.update()
     local username = authenticated and session.username or "system"
     
     -- 记录审计日志
-    audit_log.log(username, "update", "system_access_whitelist", tostring(id), 
+    audit_log.log("update", "system_access_whitelist", tostring(id), 
         "更新系统访问白名单", "success")
     
     -- 触发nginx重载（异步，不阻塞响应）
@@ -452,7 +452,7 @@ function _M.delete()
     local username = authenticated and session.username or "system"
     
     -- 记录审计日志
-    audit_log.log(username, "delete", "system_access_whitelist", tostring(id), 
+    audit_log.log("delete", "system_access_whitelist", tostring(id), 
         "删除系统访问白名单", "success")
     
     -- 触发nginx重载（异步，不阻塞响应）

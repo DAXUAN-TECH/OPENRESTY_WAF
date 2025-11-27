@@ -640,10 +640,6 @@
             if (proxyType === 'http') {
                 httpFields.style.display = 'block';
                 httpPathFields.style.display = 'block';
-                if (httpBackendPath) httpBackendPath.style.display = 'block';
-                if (tcpUdpBackendPort) tcpUdpBackendPort.style.display = 'none';
-                // HTTP代理时，移除TCP/UDP模式样式
-                if (backendAddress) backendAddress.classList.remove('tcp-udp-mode');
             } else {
                 httpFields.style.display = 'none';
                 httpPathFields.style.display = 'none';

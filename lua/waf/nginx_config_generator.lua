@@ -155,9 +155,10 @@ local function generate_http_server_config(proxy, upstream_name)
     end
     
     -- WAF封控检查（如果关联了防护规则）
-    if proxy.ip_rule_id then
-        config = config .. "\n    # WAF封控检查（关联防护规则ID: " .. proxy.ip_rule_id .. "）\n"
-        config = config .. "    set $proxy_ip_rule_id " .. proxy.ip_rule_id .. ";\n"
+    local ip_rule_id = null_to_nil(proxy.ip_rule_id)
+    if ip_rule_id then
+        config = config .. "\n    # WAF封控检查（关联防护规则ID: " .. ip_rule_id .. "）\n"
+        config = config .. "    set $proxy_ip_rule_id " .. ip_rule_id .. ";\n"
         config = config .. "    access_by_lua_block {\n"
         config = config .. "        local rule_id = ngx.var.proxy_ip_rule_id\n"
         config = config .. "        require(\"waf.ip_block\").check(rule_id)\n"
@@ -302,9 +303,10 @@ local function generate_stream_server_config(proxy, upstream_name)
     config = config .. ";\n"
     
     -- WAF封控检查（如果关联了防护规则）
-    if proxy.ip_rule_id then
-        config = config .. "\n    # WAF封控检查（关联防护规则ID: " .. proxy.ip_rule_id .. "）\n"
-        config = config .. "    set $proxy_ip_rule_id " .. proxy.ip_rule_id .. ";\n"
+    local ip_rule_id = null_to_nil(proxy.ip_rule_id)
+    if ip_rule_id then
+        config = config .. "\n    # WAF封控检查（关联防护规则ID: " .. ip_rule_id .. "）\n"
+        config = config .. "    set $proxy_ip_rule_id " .. ip_rule_id .. ";\n"
         config = config .. "    preread_by_lua_block {\n"
         config = config .. "        local rule_id = ngx.var.proxy_ip_rule_id\n"
         config = config .. "        require(\"waf.ip_block\").check_stream(rule_id)\n"

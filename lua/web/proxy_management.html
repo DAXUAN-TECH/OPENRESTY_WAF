@@ -1034,10 +1034,9 @@
             
             const id = document.getElementById('edit-id').value;
             const ipRuleId = document.getElementById('edit-ip-rule-id').value;
+            const proxyType = document.getElementById('edit-proxy-type').value;
             const proxyData = {
                 proxy_name: document.getElementById('edit-proxy-name').value,
-                listen_port: parseInt(document.getElementById('edit-listen-port').value),
-                listen_address: document.getElementById('edit-listen-address').value,
                 backend_type: 'upstream',
                 description: document.getElementById('edit-description').value || '',
                 priority: parseInt(document.getElementById('edit-priority').value) || 0,
@@ -1048,7 +1047,6 @@
                 ip_rule_id: ipRuleId ? parseInt(ipRuleId) : null
             };
             
-            const proxyType = document.getElementById('edit-proxy-type').value;
             if (proxyType === 'http') {
                 proxyData.listen_port = parseInt(document.getElementById('edit-listen-port').value);
                 proxyData.listen_address = document.getElementById('edit-listen-address').value;

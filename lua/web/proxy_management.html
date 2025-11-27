@@ -1246,6 +1246,18 @@
             }
         }
         
+        // 获取规则类型中文名称
+        function getRuleTypeName(ruleType) {
+            if (!ruleType) return '';
+            const typeNames = {
+                'ip_whitelist': 'IP白名单',
+                'ip_blacklist': 'IP黑名单',
+                'geo_whitelist': '地域白名单',
+                'geo_blacklist': '地域黑名单'
+            };
+            return typeNames[ruleType] || ruleType;
+        }
+        
         function formatDateTime(datetime) {
             if (!datetime) return '-';
             return datetime.replace('T', ' ').substring(0, 19);

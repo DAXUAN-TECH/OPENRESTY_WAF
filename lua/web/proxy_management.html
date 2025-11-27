@@ -205,10 +205,19 @@
             height: 100% !important;
         }
         
+        /* 当edit-modal显示时，确保使用flex布局居中 */
+        #edit-modal[style*="display: flex"],
+        #edit-modal[style*="display:flex"],
+        #edit-modal[style*="display: block"] {
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            width: 100% !important;
+            height: 100% !important;
+        }
+        
         .modal[style*="display: block"],
-        .modal[style*="display:flex"],
-        #edit-modal[style*="display: block"],
-        #edit-modal[style*="display:flex"] {
+        .modal[style*="display:flex"] {
             display: flex !important;
             align-items: center;
             justify-content: center;
@@ -1091,6 +1100,9 @@
                     }
                     
                     const editModal = document.getElementById('edit-modal');
+                    // 明确设置width和height，确保居中
+                    editModal.style.width = '100%';
+                    editModal.style.height = '100%';
                     editModal.style.display = 'flex';
                     editModal.style.alignItems = 'center';
                     editModal.style.justifyContent = 'center';

@@ -336,6 +336,19 @@
         .backend-item input {
             flex: 1;
         }
+        
+        /* TCP/UDP代理单个后端时，IP和端口输入框缩短75%（保留25%宽度） */
+        #single-backend-fields .backend-item .backend-address-field.tcp-udp-mode,
+        #single-backend-fields .backend-item .tcp-udp-backend-port-field {
+            max-width: 25%;
+            flex: 0 0 25%;
+        }
+        
+        #edit-single-backend-fields .backend-item .backend-address-field.tcp-udp-mode,
+        #edit-single-backend-fields .backend-item .tcp-udp-backend-port-field {
+            max-width: 25%;
+            flex: 0 0 25%;
+        }
     </style>
     <script src="/common.js"></script>
     </head>
@@ -445,7 +458,7 @@
                 <div class="form-group" id="single-backend-fields">
                     <label>后端服务器配置 *</label>
                     <div class="backend-item">
-                        <input type="text" id="create-backend-address" placeholder="IP地址" style="flex: 2;">
+                        <input type="text" id="create-backend-address" placeholder="IP地址" style="flex: 2;" class="backend-address-field">
                         <input type="number" id="create-http-backend-port" class="http-backend-port-field" min="1" max="65535" placeholder="端口" style="flex: 1;">
                         <input type="text" id="create-backend-path" class="http-backend-path-field" placeholder="路径" value="" style="flex: 1;">
                         <input type="number" id="create-backend-port" class="tcp-udp-backend-port-field" min="1" max="65535" placeholder="端口" style="flex: 1; display: none;">
@@ -562,7 +575,7 @@
                 <div class="form-group" id="edit-single-backend-fields">
                     <label>后端服务器配置 *</label>
                     <div class="backend-item">
-                        <input type="text" id="edit-backend-address" style="flex: 2;">
+                        <input type="text" id="edit-backend-address" style="flex: 2;" class="backend-address-field">
                         <input type="number" id="edit-http-backend-port" class="http-backend-port-field" min="1" max="65535" placeholder="端口" style="flex: 1;">
                         <input type="text" id="edit-backend-path" class="http-backend-path-field" placeholder="路径" style="flex: 1;">
                         <input type="number" id="edit-backend-port" class="tcp-udp-backend-port-field" min="1" max="65535" placeholder="端口" style="flex: 1; display: none;">
@@ -674,6 +687,7 @@
             const httpBackendPort = document.querySelector('#single-backend-fields .http-backend-port-field');
             const httpBackendPath = document.querySelector('#single-backend-fields .http-backend-path-field');
             const tcpUdpBackendPort = document.querySelector('#single-backend-fields .tcp-udp-backend-port-field');
+            const backendAddress = document.querySelector('#single-backend-fields .backend-address-field');
             
             if (proxyType === 'http') {
                 httpFields.style.display = 'block';
@@ -681,18 +695,24 @@
                 if (httpBackendPort) httpBackendPort.style.display = 'block';
                 if (httpBackendPath) httpBackendPath.style.display = 'block';
                 if (tcpUdpBackendPort) tcpUdpBackendPort.style.display = 'none';
+                // HTTP代理时，移除TCP/UDP模式样式
+                if (backendAddress) backendAddress.classList.remove('tcp-udp-mode');
             } else if (proxyType === 'tcp' || proxyType === 'udp') {
                 httpFields.style.display = 'none';
                 httpPathFields.style.display = 'none';
                 if (httpBackendPort) httpBackendPort.style.display = 'none';
                 if (httpBackendPath) httpBackendPath.style.display = 'none';
                 if (tcpUdpBackendPort) tcpUdpBackendPort.style.display = 'block';
+                // TCP/UDP代理时，添加TCP/UDP模式样式（缩短75%）
+                if (backendAddress) backendAddress.classList.add('tcp-udp-mode');
             } else {
                 httpFields.style.display = 'none';
                 httpPathFields.style.display = 'none';
                 if (httpBackendPort) httpBackendPort.style.display = 'none';
                 if (httpBackendPath) httpBackendPath.style.display = 'none';
                 if (tcpUdpBackendPort) tcpUdpBackendPort.style.display = 'none';
+                // 未选择代理类型时，移除TCP/UDP模式样式
+                if (backendAddress) backendAddress.classList.remove('tcp-udp-mode');
             }
         }
         
@@ -704,6 +724,7 @@
             const upstreamFields = document.getElementById('upstream-fields');
             const httpBackendPort = document.querySelector('#single-backend-fields .http-backend-port-field');
             const httpBackendPath = document.querySelector('#single-backend-fields .http-backend-path-field');
+            const backendAddress = document.querySelector('#single-backend-fields .backend-address-field');
             
             if (backendType === 'single') {
                 singleFields.style.display = 'block';
@@ -712,9 +733,13 @@
                 if (proxyType === 'http') {
                     if (httpBackendPort) httpBackendPort.style.display = 'block';
                     if (httpBackendPath) httpBackendPath.style.display = 'block';
-                } else {
+                    // HTTP代理时，移除TCP/UDP模式样式
+                    if (backendAddress) backendAddress.classList.remove('tcp-udp-mode');
+                } else if (proxyType === 'tcp' || proxyType === 'udp') {
                     if (httpBackendPort) httpBackendPort.style.display = 'none';
                     if (httpBackendPath) httpBackendPath.style.display = 'none';
+                    // TCP/UDP代理时，添加TCP/UDP模式样式（缩短75%）
+                    if (backendAddress) backendAddress.classList.add('tcp-udp-mode');
                 }
             } else {
                 singleFields.style.display = 'none';
@@ -730,6 +755,7 @@
             const editHttpBackendPort = document.querySelector('#edit-single-backend-fields .http-backend-port-field');
             const editHttpBackendPath = document.querySelector('#edit-single-backend-fields .http-backend-path-field');
             const editTcpUdpBackendPort = document.querySelector('#edit-single-backend-fields .tcp-udp-backend-port-field');
+            const editBackendAddress = document.querySelector('#edit-single-backend-fields .backend-address-field');
             
             if (backendType === 'single') {
                 singleFields.style.display = 'block';
@@ -739,14 +765,20 @@
                     if (editHttpBackendPort) editHttpBackendPort.style.display = 'block';
                     if (editHttpBackendPath) editHttpBackendPath.style.display = 'block';
                     if (editTcpUdpBackendPort) editTcpUdpBackendPort.style.display = 'none';
+                    // HTTP代理时，移除TCP/UDP模式样式
+                    if (editBackendAddress) editBackendAddress.classList.remove('tcp-udp-mode');
                 } else if (proxyType === 'tcp' || proxyType === 'udp') {
                     if (editHttpBackendPort) editHttpBackendPort.style.display = 'none';
                     if (editHttpBackendPath) editHttpBackendPath.style.display = 'none';
                     if (editTcpUdpBackendPort) editTcpUdpBackendPort.style.display = 'block';
+                    // TCP/UDP代理时，添加TCP/UDP模式样式（缩短75%）
+                    if (editBackendAddress) editBackendAddress.classList.add('tcp-udp-mode');
                 } else {
                     if (editHttpBackendPort) editHttpBackendPort.style.display = 'none';
                     if (editHttpBackendPath) editHttpBackendPath.style.display = 'none';
                     if (editTcpUdpBackendPort) editTcpUdpBackendPort.style.display = 'none';
+                    // 未选择代理类型时，移除TCP/UDP模式样式
+                    if (editBackendAddress) editBackendAddress.classList.remove('tcp-udp-mode');
                 }
             } else {
                 singleFields.style.display = 'none';

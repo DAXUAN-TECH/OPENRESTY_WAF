@@ -671,7 +671,7 @@
                 <div class="form-group" id="rule-value-group">
                     <label>规则值 *</label>
                     <textarea id="create-rule-value" required placeholder="" class="rule-value-input"></textarea>
-                    <small style="color: #666; display: none;" id="rule-value-hint"></small>
+                    <small style="color: #666;" id="rule-value-hint">支持单个IP（如：192.168.1.100）、多个IP（逗号分隔，如：192.168.1.1,192.168.1.2,192.168.1.3）或IP段（如：192.168.1.0/24 或 192.168.1.1-192.168.1.100）</small>
                 </div>
                 
                 <!-- 地域选择器 -->
@@ -1399,10 +1399,9 @@
                 ruleValueInput.style.display = 'block';
                 ruleValueHint.style.display = 'block';
                 
-                // 清空提示
+                // 清空placeholder，保留提示文本
                 ruleValueInput.placeholder = '';
-                ruleValueHint.textContent = '';
-                ruleValueHint.style.display = 'none';
+                ruleValueHint.textContent = '支持单个IP（如：192.168.1.100）、多个IP（逗号分隔，如：192.168.1.1,192.168.1.2,192.168.1.3）或IP段（如：192.168.1.0/24 或 192.168.1.1-192.168.1.100）';
             }
             
             // 清空规则值
@@ -1741,9 +1740,9 @@
             const ruleValueInput = document.getElementById('create-rule-value');
             const ruleValueHint = document.getElementById('rule-value-hint');
             ruleValueInput.style.display = 'block';
-            ruleValueHint.style.display = 'none';
+            ruleValueHint.style.display = 'block';
             ruleValueInput.placeholder = '';
-            ruleValueHint.textContent = '';
+            ruleValueHint.textContent = '支持单个IP（如：192.168.1.100）、多个IP（逗号分隔，如：192.168.1.1,192.168.1.2,192.168.1.3）或IP段（如：192.168.1.0/24 或 192.168.1.1-192.168.1.100）';
             // 重置日期为默认值
             setDefaultDates();
             // 清空地域选择

@@ -218,10 +218,10 @@ else
     if [ "$OPENRESTY_USER" != "nobody" ] && ! grep -q "^$OPENRESTY_USER soft nofile" /etc/security/limits.conf; then
         # 在 OpenResty WAF Optimization 块末尾添加当前运行用户
         # 找到 OpenResty WAF Optimization 注释行后的最后一个配置行
-        local optimization_start=$(grep -n "# OpenResty WAF Optimization" /etc/security/limits.conf | cut -d: -f1)
+        optimization_start=$(grep -n "# OpenResty WAF Optimization" /etc/security/limits.conf | cut -d: -f1)
         if [ -n "$optimization_start" ]; then
             # 找到该块内的最后一行配置（非注释、非空行，包含nofile）
-            local last_config_line=$(awk -v start="$optimization_start" '
+            last_config_line=$(awk -v start="$optimization_start" '
                 NR >= start && !/^#/ && !/^$/ && /nofile/ {
                     last = NR
                 }

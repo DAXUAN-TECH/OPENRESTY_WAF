@@ -673,26 +673,26 @@
             const httpPathFields = document.getElementById('http-path-fields');
             const httpBackendPort = document.querySelector('#single-backend-fields .http-backend-port-field');
             const httpBackendPath = document.querySelector('#single-backend-fields .http-backend-path-field');
-            const tcpUdpBackendPort = document.getElementById('tcp-udp-backend-port');
+            const tcpUdpBackendPort = document.querySelector('#single-backend-fields .tcp-udp-backend-port-field');
             
             if (proxyType === 'http') {
                 httpFields.style.display = 'block';
                 httpPathFields.style.display = 'block';
                 if (httpBackendPort) httpBackendPort.style.display = 'block';
                 if (httpBackendPath) httpBackendPath.style.display = 'block';
-                tcpUdpBackendPort.style.display = 'none';
+                if (tcpUdpBackendPort) tcpUdpBackendPort.style.display = 'none';
             } else if (proxyType === 'tcp' || proxyType === 'udp') {
                 httpFields.style.display = 'none';
                 httpPathFields.style.display = 'none';
                 if (httpBackendPort) httpBackendPort.style.display = 'none';
                 if (httpBackendPath) httpBackendPath.style.display = 'none';
-                tcpUdpBackendPort.style.display = 'block';
+                if (tcpUdpBackendPort) tcpUdpBackendPort.style.display = 'block';
             } else {
                 httpFields.style.display = 'none';
                 httpPathFields.style.display = 'none';
                 if (httpBackendPort) httpBackendPort.style.display = 'none';
                 if (httpBackendPath) httpBackendPath.style.display = 'none';
-                tcpUdpBackendPort.style.display = 'none';
+                if (tcpUdpBackendPort) tcpUdpBackendPort.style.display = 'none';
             }
         }
         

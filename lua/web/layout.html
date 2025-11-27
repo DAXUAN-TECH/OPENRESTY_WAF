@@ -124,6 +124,11 @@
             min-height: 80px;
             /* 紧贴sidebar，无间隙 - 使用CSS变量防止闪烁 */
             margin-left: var(--sidebar-width);
+            /* 防止闪烁：在JavaScript执行前隐藏，执行后显示 */
+            visibility: hidden;
+        }
+        .top-banner.layout-ready {
+            visibility: visible;
         }
         .top-banner::before {
             content: '';
@@ -204,6 +209,11 @@
             background: #f5f5f5;
             /* 紧贴sidebar，无间隙 - 使用CSS变量防止闪烁 */
             margin-left: var(--sidebar-width);
+            /* 防止闪烁：在JavaScript执行前隐藏，执行后显示 */
+            visibility: hidden;
+        }
+        .content-area.layout-ready {
+            visibility: visible;
         }
         /* 响应式设计 */
         @media (max-width: 768px) {
@@ -248,6 +258,9 @@
             function syncSidebarWidthImmediate() {
                 // 尝试获取sidebar元素
                 var sidebar = document.querySelector('.sidebar');
+                var topBanner = document.querySelector('.top-banner');
+                var contentArea = document.querySelector('.content-area');
+                
                 if (sidebar) {
                     var sidebarRect = sidebar.getBoundingClientRect();
                     var sidebarWidth = sidebarRect.width;
@@ -258,8 +271,6 @@
                     document.documentElement.style.setProperty('--sidebar-width', sidebarWidth + 'px');
                     
                     // 同时设置内联样式作为备用
-                    var topBanner = document.querySelector('.top-banner');
-                    var contentArea = document.querySelector('.content-area');
                     if (topBanner) {
                         topBanner.style.marginLeft = sidebarWidth + 'px';
                         topBanner.style.width = availableWidth + 'px';
@@ -268,9 +279,24 @@
                         contentArea.style.marginLeft = sidebarWidth + 'px';
                         contentArea.style.width = availableWidth + 'px';
                     }
+                    
+                    // 显示元素（防止闪烁）
+                    if (topBanner) {
+                        topBanner.classList.add('layout-ready');
+                    }
+                    if (contentArea) {
+                        contentArea.classList.add('layout-ready');
+                    }
                 } else {
                     // 如果sidebar还没加载，使用默认值
                     document.documentElement.style.setProperty('--sidebar-width', '200px');
+                    // 即使sidebar没加载，也显示元素（避免一直隐藏）
+                    if (topBanner) {
+                        topBanner.classList.add('layout-ready');
+                    }
+                    if (contentArea) {
+                        contentArea.classList.add('layout-ready');
+                    }
                 }
             }
             
@@ -296,10 +322,32 @@
                     var sidebar = document.querySelector('.sidebar');
                     if (sidebar) {
                         syncSidebarWidthImmediate();
-                        observer.disconnect(); // 找到后停止观察
+                        // 延迟一点再停止观察，确保所有元素都已加载
+                        setTimeout(function() {
+                            observer.disconnect();
+                        }, 100);
                     }
                 });
-                observer.observe(document.body, { childList: true, subtree: true });
+                // 如果body还没加载，等待body加载
+                if (document.body) {
+                    observer.observe(document.body, { childList: true, subtree: true });
+                } else {
+                    // 等待body加载
+                    if (document.readyState === 'loading') {
+                        document.addEventListener('DOMContentLoaded', function() {
+                            if (document.body) {
+                                observer.observe(document.body, { childList: true, subtree: true });
+                            }
+                        });
+                    }
+                }
+            }
+            
+            // 使用requestAnimationFrame确保在下一帧执行（更早的时机）
+            if (typeof requestAnimationFrame !== 'undefined') {
+                requestAnimationFrame(function() {
+                    syncSidebarWidthImmediate();
+                });
             }
         })();
     </script>

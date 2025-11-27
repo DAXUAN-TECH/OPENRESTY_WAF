@@ -87,6 +87,31 @@ fi
 
 echo ""
 
+# 检测 OpenResty 运行用户
+echo -e "${BLUE}[2/4] 检测 OpenResty 运行用户...${NC}"
+OPENRESTY_USER="nobody"
+if pgrep -f "nginx: master" > /dev/null 2>&1; then
+    # 检测 master 进程的用户
+    DETECTED_USER=$(ps -o user= -p $(pgrep -f "nginx: master" | head -1) 2>/dev/null | tr -d ' ' || echo "")
+    if [ -n "$DETECTED_USER" ]; then
+        OPENRESTY_USER="$DETECTED_USER"
+        echo "  检测到 OpenResty 运行用户: $OPENRESTY_USER"
+    else
+        echo -e "  ${YELLOW}⚠ 无法检测运行用户，使用默认值: nobody${NC}"
+    fi
+else
+    echo -e "  ${YELLOW}⚠ OpenResty 未运行，使用默认值: nobody${NC}"
+    # 检查 systemd 服务文件中的用户配置
+    SYSTEMD_SERVICE="/etc/systemd/system/openresty.service"
+    if [ -f "$SYSTEMD_SERVICE" ] && grep -q "^User=" "$SYSTEMD_SERVICE"; then
+        DETECTED_USER=$(grep "^User=" "$SYSTEMD_SERVICE" | cut -d'=' -f2 | tr -d ' ')
+        if [ -n "$DETECTED_USER" ]; then
+            OPENRESTY_USER="$DETECTED_USER"
+            echo "  从 systemd 服务文件检测到用户: $OPENRESTY_USER"
+        fi
+    fi
+fi
+
 # 检查limits.conf
 echo -e "${BLUE}[2/4] 检查 /etc/security/limits.conf...${NC}"
 
@@ -110,13 +135,22 @@ root soft nofile $ULIMIT_NOFILE
 root hard nofile $ULIMIT_NOFILE
 nobody soft nofile $ULIMIT_NOFILE
 nobody hard nofile $ULIMIT_NOFILE
+$OPENRESTY_USER soft nofile $ULIMIT_NOFILE
+$OPENRESTY_USER hard nofile $ULIMIT_NOFILE
 EOF
+
+echo -e "  ${GREEN}✓ 已更新 /etc/security/limits.conf（包含用户: $OPENRESTY_USER）${NC}"
 
 echo -e "  ${GREEN}✓ 已更新 /etc/security/limits.conf${NC}"
 echo ""
 
 # 检查systemd服务文件
 echo -e "${BLUE}[3/4] 检查 systemd 服务文件...${NC}"
+
+# 如果检测到运行用户，确保在脚本中记录
+if [ -n "$OPENRESTY_USER" ] && [ "$OPENRESTY_USER" != "nobody" ]; then
+    echo "  检测到的 OpenResty 运行用户: $OPENRESTY_USER"
+fi
 
 SYSTEMD_SERVICE="/etc/systemd/system/openresty.service"
 if [ -f "$SYSTEMD_SERVICE" ]; then

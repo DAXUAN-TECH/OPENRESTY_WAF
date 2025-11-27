@@ -176,6 +176,28 @@ echo -e "${BLUE}[4/6] 优化系统参数...${NC}"
 
 # 4.1 优化文件描述符限制
 echo "  优化文件描述符限制..."
+
+# 检测 OpenResty 运行用户
+OPENRESTY_USER="nobody"
+if pgrep -f "nginx: master" > /dev/null 2>&1; then
+    # 检测 master 进程的用户
+    DETECTED_USER=$(ps -o user= -p $(pgrep -f "nginx: master" | head -1) 2>/dev/null | tr -d ' ' || echo "")
+    if [ -n "$DETECTED_USER" ]; then
+        OPENRESTY_USER="$DETECTED_USER"
+        echo "    检测到 OpenResty 运行用户: $OPENRESTY_USER"
+    fi
+else
+    # 检查 systemd 服务文件中的用户配置
+    SYSTEMD_SERVICE="/etc/systemd/system/openresty.service"
+    if [ -f "$SYSTEMD_SERVICE" ] && grep -q "^User=" "$SYSTEMD_SERVICE"; then
+        DETECTED_USER=$(grep "^User=" "$SYSTEMD_SERVICE" | cut -d'=' -f2 | tr -d ' ')
+        if [ -n "$DETECTED_USER" ]; then
+            OPENRESTY_USER="$DETECTED_USER"
+            echo "    从 systemd 服务文件检测到用户: $OPENRESTY_USER"
+        fi
+    fi
+fi
+
 if ! grep -q "# OpenResty WAF Optimization" /etc/security/limits.conf; then
     cat >> /etc/security/limits.conf <<EOF
 
@@ -186,8 +208,10 @@ root soft nofile $ULIMIT_NOFILE
 root hard nofile $ULIMIT_NOFILE
 nobody soft nofile $ULIMIT_NOFILE
 nobody hard nofile $ULIMIT_NOFILE
+$OPENRESTY_USER soft nofile $ULIMIT_NOFILE
+$OPENRESTY_USER hard nofile $ULIMIT_NOFILE
 EOF
-    echo -e "    ${GREEN}✓ 已添加文件描述符限制${NC}"
+    echo -e "    ${GREEN}✓ 已添加文件描述符限制（包含用户: $OPENRESTY_USER）${NC}"
 else
     echo -e "    ${YELLOW}⚠ 文件描述符限制已存在，跳过${NC}"
 fi

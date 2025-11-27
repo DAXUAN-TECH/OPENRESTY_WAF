@@ -38,7 +38,7 @@ sudo ./scripts/fix_file_descriptor_limit.sh
 sudo vi /etc/security/limits.conf
 ```
 
-添加以下内容：
+添加以下内容（注意：脚本会自动检测 OpenResty 运行用户并添加）：
 
 ```
 # OpenResty WAF 文件描述符限制
@@ -48,7 +48,13 @@ root soft nofile 65535
 root hard nofile 65535
 nobody soft nofile 65535
 nobody hard nofile 65535
+waf soft nofile 65535
+waf hard nofile 65535
 ```
+
+**说明**：
+- 如果 OpenResty 以 `waf` 用户运行（推荐），需要添加 `waf` 用户
+- 脚本会自动检测 OpenResty 的运行用户并添加到配置中
 
 #### 步骤 2：更新 systemd 服务文件（如果使用 systemd）
 

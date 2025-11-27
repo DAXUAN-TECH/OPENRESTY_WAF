@@ -149,6 +149,8 @@ function _M.create_proxy(proxy_data)
     local priority = proxy_data.priority or 0
     local ip_rule_id = null_to_nil(proxy_data.ip_rule_id)
     
+    -- 注意：backend_address 和 backend_port 在 waf_proxy_configs 表中已不再使用（只支持upstream类型）
+    -- 但为了兼容数据库结构，仍然需要插入值（可以插入空值或默认值）
     local insert_id, err = mysql_pool.insert(sql,
         proxy_data.proxy_name,
         proxy_data.proxy_type,
@@ -157,8 +159,8 @@ function _M.create_proxy(proxy_data)
         server_name,
         location_path,
         backend_type,
-        proxy_data.backend_address,
-        backend_port,
+        nil,  -- backend_address（不再使用，因为使用upstream类型）
+        nil,  -- backend_port（不再使用，因为使用upstream类型）
         backend_path,
         load_balance,
         health_check_enable,

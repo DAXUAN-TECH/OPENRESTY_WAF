@@ -546,6 +546,38 @@ function _M.route_proxy(path, method)
         end
     end
     
+    -- 启用代理配置（/api/proxy/{id}/enable）- 必须在 /api/proxy/{id} 之前匹配
+    local enable_match = path:match("^/api/proxy/(%d+)/enable$")
+    if enable_match then
+        if method == "POST" then
+            return proxy_api.enable()
+        else
+            api_utils.json_response({
+                error = "Method not allowed",
+                path = path,
+                method = method,
+                allowed_methods = {"POST"}
+            }, 405)
+            return
+        end
+    end
+    
+    -- 禁用代理配置（/api/proxy/{id}/disable）- 必须在 /api/proxy/{id} 之前匹配
+    local disable_match = path:match("^/api/proxy/(%d+)/disable$")
+    if disable_match then
+        if method == "POST" then
+            return proxy_api.disable()
+        else
+            api_utils.json_response({
+                error = "Method not allowed",
+                path = path,
+                method = method,
+                allowed_methods = {"POST"}
+            }, 405)
+            return
+        end
+    end
+    
     -- 代理配置详情、更新、删除（/api/proxy/{id}）
     local proxy_id_match = path:match("^/api/proxy/(%d+)$")
     if proxy_id_match then
@@ -556,18 +588,6 @@ function _M.route_proxy(path, method)
         elseif method == "DELETE" then
             return proxy_api.delete()
         end
-    end
-    
-    -- 启用代理配置（/api/proxy/{id}/enable）
-    local enable_match = path:match("^/api/proxy/(%d+)/enable$")
-    if enable_match then
-        return proxy_api.enable()
-    end
-    
-    -- 禁用代理配置（/api/proxy/{id}/disable）
-    local disable_match = path:match("^/api/proxy/(%d+)/disable$")
-    if disable_match then
-        return proxy_api.disable()
     end
     
     -- 未匹配的代理路由

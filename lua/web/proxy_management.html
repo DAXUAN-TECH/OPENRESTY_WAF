@@ -889,7 +889,8 @@
                         }
                         return addr;
                     });
-                    backendDisplay = backendList.join(', ');
+                    // 使用 <br> 标签分隔，每个后端地址显示在单独一行
+                    backendDisplay = backendList.join('<br>');
                 }
                 
                 return `

@@ -33,8 +33,19 @@ local function validate_proxy_config(proxy_data)
         end
     end
     
-    if not proxy_data.backend_address or proxy_data.backend_address == "" then
-        return false, "后端地址不能为空"
+    -- 验证后端服务器列表（只支持upstream类型）
+    if not proxy_data.backends or type(proxy_data.backends) ~= "table" or #proxy_data.backends == 0 then
+        return false, "后端服务器列表不能为空，至少需要添加一个后端服务器"
+    end
+    
+    -- 验证每个后端服务器
+    for i, backend in ipairs(proxy_data.backends) do
+        if not backend.backend_address or backend.backend_address == "" then
+            return false, string.format("第%d个后端服务器的地址不能为空", i)
+        end
+        if not backend.backend_port or backend.backend_port < 1 or backend.backend_port > 65535 then
+            return false, string.format("第%d个后端服务器的端口必须在1-65535之间", i)
+        end
     end
     
     -- 验证代理名称（防止SQL注入，只允许字母、数字、下划线、中文字符和常见分隔符）

@@ -471,19 +471,12 @@
             <form id="edit-form" onsubmit="saveWhitelist(event)">
                 <div class="form-group">
                     <label>IP地址 *</label>
-                    <input type="text" id="edit-ip-address" placeholder="192.168.1.1 或 192.168.1.0/24" required>
-                    <small style="color: #666; font-size: 12px;">支持单个IP或CIDR格式（如：192.168.1.0/24）</small>
+                    <textarea id="edit-ip-address" placeholder="192.168.1.1 或 192.168.1.1,192.168.1.2 或 192.168.1.0/24 或 192.168.1.1-192.168.1.100" required style="min-height: 80px;"></textarea>
+                    <small style="color: #666; font-size: 12px;">支持单个IP（如：192.168.1.100）、多个IP（逗号分隔，如：192.168.1.1,192.168.1.2,192.168.1.3）或IP段（如：192.168.1.0/24 或 192.168.1.1-192.168.1.100）</small>
                 </div>
                 <div class="form-group">
                     <label>说明</label>
                     <textarea id="edit-description" placeholder="请输入说明"></textarea>
-                </div>
-                <div class="form-group">
-                    <label>状态</label>
-                    <select id="edit-status">
-                        <option value="1">已启用</option>
-                        <option value="0">已禁用</option>
-                    </select>
                 </div>
                 <div class="form-actions">
                     <button type="button" class="btn btn-secondary" onclick="closeEditModal()">取消</button>
@@ -620,6 +613,7 @@
                                 <td>${item.created_at || '-'}</td>
                                 <td>${item.updated_at || '-'}</td>
                                 <td>
+                                    <button class="btn ${item.status == 1 ? 'btn-secondary' : 'btn-primary'}" style="padding: 4px 8px; font-size: 12px;" onclick="toggleWhitelistStatus(${item.id}, ${item.status == 1 ? 0 : 1})">${item.status == 1 ? '禁用' : '启用'}</button>
                                     <button class="btn btn-primary" style="padding: 4px 8px; font-size: 12px;" onclick="editWhitelist(${item.id})">编辑</button>
                                     <button class="btn btn-danger" style="padding: 4px 8px; font-size: 12px;" onclick="deleteWhitelist(${item.id})">删除</button>
                                 </td>
@@ -677,7 +671,6 @@
             editingId = null;
             document.getElementById('modal-title').textContent = '添加IP';
             document.getElementById('edit-form').reset();
-            document.getElementById('edit-status').value = '1';
             document.getElementById('edit-modal').classList.add('show');
         }
         
@@ -697,8 +690,6 @@
                     if (cells.length > 0 && parseInt(cells[0].textContent) === id) {
                         document.getElementById('edit-ip-address').value = cells[1].textContent.trim();
                         document.getElementById('edit-description').value = cells[2].textContent.trim() === '-' ? '' : cells[2].textContent.trim();
-                        const statusText = cells[3].textContent.trim();
-                        document.getElementById('edit-status').value = statusText === '已启用' ? '1' : '0';
                         found = true;
                         break;
                     }
@@ -722,7 +713,6 @@
             
             const ipAddress = document.getElementById('edit-ip-address').value.trim();
             const description = document.getElementById('edit-description').value.trim();
-            const status = document.getElementById('edit-status').value;
             
             if (!ipAddress) {
                 showAlert('IP地址不能为空', 'error');
@@ -744,8 +734,7 @@
                 
                 const params = new URLSearchParams({
                     ip_address: ipAddress,
-                    description: description,
-                    status: status
+                    description: description
                 });
                 
                 const response = await fetch(url, {
@@ -814,6 +803,36 @@
         function resetFilters() {
             document.getElementById('filter-status').value = '';
             loadWhitelist(1);
+        }
+        
+        // 切换白名单状态
+        async function toggleWhitelistStatus(id, newStatus) {
+            const statusText = newStatus == 1 ? '启用' : '禁用';
+            if (!confirm(`确定要${statusText}这条白名单记录吗？`)) {
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/system/access/whitelist/' + id, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: `status=${newStatus}`
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showAlert(`${statusText}成功`, 'success');
+                    loadWhitelist(currentPage);
+                } else {
+                    showAlert(data.error || `${statusText}失败`, 'error');
+                }
+            } catch (error) {
+                console.error('toggleWhitelistStatus error:', error);
+                showAlert('网络错误: ' + error.message, 'error');
+            }
         }
         
         // HTML转义

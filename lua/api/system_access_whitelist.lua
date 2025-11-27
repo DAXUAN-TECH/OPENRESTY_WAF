@@ -233,24 +233,21 @@ function _M.create()
     local args = api_utils.get_args()
     local ip_address = args.ip_address
     local description = args.description or ""
-    local status = tonumber(args.status) or 1
+    local status = 1  -- 默认启用
     
     if not ip_address or ip_address == "" then
         api_utils.json_response({error = "IP地址不能为空"}, 400)
         return
     end
     
-    -- 验证IP地址格式（支持CIDR）
-    local is_valid = ip_utils.is_valid_ip(ip_address) or ip_utils.is_valid_cidr(ip_address)
+    -- 验证IP地址格式（支持单个IP、多个IP、CIDR、IP范围）
+    local is_valid, error_msg = _M.validate_ip_value(ip_address)
     if not is_valid then
-        api_utils.json_response({error = "IP地址格式不正确"}, 400)
+        api_utils.json_response({error = error_msg or "IP地址格式不正确"}, 400)
         return
     end
     
-    if status ~= 0 and status ~= 1 then
-        api_utils.json_response({error = "状态必须是0或1"}, 400)
-        return
-    end
+    -- status默认为1（启用），但创建时不需要验证，因为已经设置为1
     
     -- 检查是否已存在
     local check_ok, check_res, check_err = pcall(function()
@@ -324,10 +321,10 @@ function _M.update()
     local status = args.status
     
     if ip_address and ip_address ~= "" then
-        -- 验证IP地址格式
-        local is_valid = ip_utils.is_valid_ip(ip_address) or ip_utils.is_valid_cidr(ip_address)
+        -- 验证IP地址格式（支持单个IP、多个IP、CIDR、IP范围）
+        local is_valid, error_msg = _M.validate_ip_value(ip_address)
         if not is_valid then
-            api_utils.json_response({error = "IP地址格式不正确"}, 400)
+            api_utils.json_response({error = error_msg or "IP地址格式不正确"}, 400)
             return
         end
         
@@ -472,6 +469,75 @@ function _M.delete()
     })
 end
 
+-- 验证IP值格式（支持单个IP、多个IP、CIDR、IP范围）
+function _M.validate_ip_value(ip_value)
+    if not ip_value or ip_value == "" then
+        return false, "IP地址不能为空"
+    end
+    
+    -- 检查是否包含逗号（多个IP）
+    if ip_value:match(",") then
+        -- 多个IP，逐个验证
+        local ip_list = {}
+        for ip_str in ip_value:gmatch("([^,]+)") do
+            local ip = ip_str:match("^%s*(.-)%s*$")  -- 去除首尾空格
+            if ip and ip ~= "" then
+                table.insert(ip_list, ip)
+            end
+        end
+        
+        if #ip_list == 0 then
+            return false, "未找到有效的IP地址"
+        end
+        
+        -- 验证每个IP
+        for _, ip in ipairs(ip_list) do
+            local is_valid = false
+            -- 检查是否为单个IP
+            if ip_utils.is_valid_ip(ip) then
+                is_valid = true
+            -- 检查是否为CIDR格式
+            elseif ip_utils.is_valid_cidr(ip) then
+                is_valid = true
+            -- 检查是否为IP范围格式
+            else
+                local start_ip, end_ip = ip_utils.parse_ip_range(ip)
+                if start_ip and end_ip then
+                    is_valid = true
+                end
+            end
+            
+            if not is_valid then
+                return false, "无效的IP格式: " .. ip .. "（应为单个IP如192.168.1.100、多个IP如192.168.1.1,192.168.1.2、CIDR格式如192.168.1.0/24或IP范围如192.168.1.1-192.168.1.100）"
+            end
+        end
+        
+        return true
+    else
+        -- 单个IP或IP段
+        local is_valid = false
+        -- 检查是否为单个IP
+        if ip_utils.is_valid_ip(ip_value) then
+            is_valid = true
+        -- 检查是否为CIDR格式
+        elseif ip_utils.is_valid_cidr(ip_value) then
+            is_valid = true
+        -- 检查是否为IP范围格式
+        else
+            local start_ip, end_ip = ip_utils.parse_ip_range(ip_value)
+            if start_ip and end_ip then
+                is_valid = true
+            end
+        end
+        
+        if not is_valid then
+            return false, "无效的IP格式（应为单个IP如192.168.1.100、多个IP如192.168.1.1,192.168.1.2、CIDR格式如192.168.1.0/24或IP范围如192.168.1.1-192.168.1.100）"
+        end
+        
+        return true
+    end
+end
+
 -- 检查IP是否在白名单中（用于认证中间件）
 function _M.check_ip_allowed(ip_address)
     if not ip_address then
@@ -515,15 +581,45 @@ function _M.check_ip_allowed(ip_address)
     -- 检查IP是否匹配任何白名单条目
     for _, row in ipairs(res) do
         local whitelist_ip = row.ip_address
-        -- 检查是否为CIDR格式
-        if whitelist_ip:match("/") then
-            -- CIDR格式，使用match_cidr
-            if ip_utils.match_cidr(ip_address, whitelist_ip) then
-                return true
+        
+        -- 检查是否包含逗号（多个IP）
+        if whitelist_ip:match(",") then
+            -- 多个IP，逐个检查
+            for ip_str in whitelist_ip:gmatch("([^,]+)") do
+                local ip = ip_str:match("^%s*(.-)%s*$")  -- 去除首尾空格
+                if ip and ip ~= "" then
+                    -- 检查是否为CIDR格式
+                    if ip:match("/") then
+                        if ip_utils.match_cidr(ip_address, ip) then
+                            return true
+                        end
+                    -- 检查是否为IP范围格式
+                    elseif ip:match("-") then
+                        local start_ip, end_ip = ip_utils.parse_ip_range(ip)
+                        if start_ip and end_ip and ip_utils.match_ip_range(ip_address, start_ip, end_ip) then
+                            return true
+                        end
+                    -- 单个IP，直接比较
+                    elseif ip_address == ip then
+                        return true
+                    end
+                end
             end
         else
+            -- 单个IP或IP段
+            -- 检查是否为CIDR格式
+            if whitelist_ip:match("/") then
+                if ip_utils.match_cidr(ip_address, whitelist_ip) then
+                    return true
+                end
+            -- 检查是否为IP范围格式
+            elseif whitelist_ip:match("-") then
+                local start_ip, end_ip = ip_utils.parse_ip_range(whitelist_ip)
+                if start_ip and end_ip and ip_utils.match_ip_range(ip_address, start_ip, end_ip) then
+                    return true
+                end
             -- 单个IP，直接比较
-            if ip_address == whitelist_ip then
+            elseif ip_address == whitelist_ip then
                 return true
             end
         end

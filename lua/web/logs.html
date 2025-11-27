@@ -832,25 +832,8 @@
         
         // 页面加载时初始化
         window.addEventListener('DOMContentLoaded', function() {
-            // 设置默认时间范围（最近24小时）
-            const now = new Date();
-            const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-            
-            const formatDateTime = (date) => {
-                const year = date.getFullYear();
-                const month = String(date.getMonth() + 1).padStart(2, '0');
-                const day = String(date.getDate()).padStart(2, '0');
-                const hours = String(date.getHours()).padStart(2, '0');
-                const minutes = String(date.getMinutes()).padStart(2, '0');
-                return `${year}-${month}-${day}T${hours}:${minutes}`;
-            };
-            
-            document.getElementById('access-end-time').value = formatDateTime(now);
-            document.getElementById('access-start-time').value = formatDateTime(yesterday);
-            document.getElementById('block-end-time').value = formatDateTime(now);
-            document.getElementById('block-start-time').value = formatDateTime(yesterday);
-            document.getElementById('audit-end-time').value = formatDateTime(now);
-            document.getElementById('audit-start-time').value = formatDateTime(yesterday);
+            // 时间筛选默认为空，不设置默认时间范围
+            // 用户可以根据需要自行设置时间范围进行筛选
             
             // 加载访问日志
             loadAccessLogs();

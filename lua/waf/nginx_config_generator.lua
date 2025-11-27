@@ -23,6 +23,8 @@ local function escape_nginx_value(value)
     end
     -- 转义特殊字符
     value = tostring(value)
+    -- 去除前导和尾随空格
+    value = value:gsub("^%s+", ""):gsub("%s+$", "")
     value = value:gsub(";", "\\;")
     value = value:gsub("\\", "\\\\")
     value = value:gsub("\"", "\\\"")

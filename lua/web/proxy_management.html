@@ -1055,9 +1055,19 @@
                         document.getElementById('edit-http-fields').style.display = 'block';
                         document.getElementById('edit-http-path-fields').style.display = 'block';
                         document.getElementById('edit-tcp-udp-backend-port').style.display = 'none';
+                        // HTTP代理单个后端时显示端口和路径字段
+                        if (proxy.backend_type === 'single') {
+                            document.getElementById('edit-http-backend-port').style.display = 'block';
+                            document.getElementById('edit-http-backend-path').style.display = 'block';
+                        } else {
+                            document.getElementById('edit-http-backend-port').style.display = 'none';
+                            document.getElementById('edit-http-backend-path').style.display = 'none';
+                        }
                     } else {
                         document.getElementById('edit-http-fields').style.display = 'none';
                         document.getElementById('edit-http-path-fields').style.display = 'none';
+                        document.getElementById('edit-http-backend-port').style.display = 'none';
+                        document.getElementById('edit-http-backend-path').style.display = 'none';
                         document.getElementById('edit-tcp-udp-backend-port').style.display = 'block';
                     }
                     

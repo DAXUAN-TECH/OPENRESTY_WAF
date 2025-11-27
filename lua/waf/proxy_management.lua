@@ -105,12 +105,12 @@ function _M.create_proxy(proxy_data)
     local sql = [[
         INSERT INTO waf_proxy_configs 
         (proxy_name, proxy_type, listen_port, listen_address, server_name, location_path,
-         backend_type, backend_address, backend_port, load_balance,
+         backend_type, backend_address, backend_port, backend_path, load_balance,
          health_check_enable, health_check_interval, health_check_timeout,
          max_fails, fail_timeout, proxy_timeout, proxy_connect_timeout,
          proxy_send_timeout, proxy_read_timeout, ssl_enable, ssl_cert_path, ssl_key_path,
          description, ip_rule_id, status, priority)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ]]
     
     local listen_address = proxy_data.listen_address or "0.0.0.0"
@@ -147,6 +147,7 @@ function _M.create_proxy(proxy_data)
         backend_type,
         proxy_data.backend_address,
         backend_port,
+        backend_path,
         load_balance,
         health_check_enable,
         health_check_interval,
@@ -246,7 +247,7 @@ function _M.list_proxies(params)
     local offset = (page - 1) * page_size
     local sql = string.format([[
         SELECT id, proxy_name, proxy_type, listen_port, listen_address, server_name, location_path,
-               backend_type, backend_address, backend_port, load_balance,
+               backend_type, backend_address, backend_port, backend_path, load_balance,
                health_check_enable, health_check_interval, health_check_timeout,
                max_fails, fail_timeout, proxy_timeout, proxy_connect_timeout,
                proxy_send_timeout, proxy_read_timeout, ssl_enable, ssl_cert_path, ssl_key_path,

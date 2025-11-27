@@ -854,14 +854,34 @@
                 return;
             }
             
-            tbody.innerHTML = proxies.map(proxy => `
+            tbody.innerHTML = proxies.map(proxy => {
+                // 格式化后端地址显示
+                let backendDisplay = '-';
+                if (proxy.backends && proxy.backends.length > 0) {
+                    const backendList = proxy.backends.map(backend => {
+                        let addr = backend.backend_address;
+                        if (backend.backend_port) {
+                            addr += ':' + backend.backend_port;
+                        }
+                        if (backend.backend_path && proxy.proxy_type === 'http') {
+                            addr += backend.backend_path;
+                        }
+                        if (backend.weight && backend.weight !== 1) {
+                            addr += ` (权重:${backend.weight})`;
+                        }
+                        return addr;
+                    });
+                    backendDisplay = backendList.join(', ');
+                }
+                
+                return `
                 <tr>
                     <td>${proxy.id}</td>
                     <td>${proxy.proxy_name}</td>
                     <td>${getProxyTypeName(proxy.proxy_type)}</td>
                     <td>${proxy.listen_address}:${proxy.listen_port}</td>
                     <td>${proxy.server_name || '-'}</td>
-                    <td>${proxy.backend_address}${proxy.backend_port ? ':' + proxy.backend_port : ''}</td>
+                    <td>${backendDisplay}</td>
                     <td>${getStatusBadge(proxy.status)}</td>
                     <td>${formatDateTime(proxy.created_at)}</td>
                     <td>
@@ -875,7 +895,8 @@
                         </div>
                     </td>
                 </tr>
-            `).join('');
+            `;
+            }).join('');
         }
         
         // 创建代理

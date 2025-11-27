@@ -62,6 +62,24 @@
             display: block;
         }
         
+        /* proxies-tab内容对齐 */
+        #proxies-tab {
+            display: flex;
+            flex-direction: column;
+            align-items: stretch; /* 让子元素拉伸到与proxies-tab同宽 */
+            width: 100%;
+        }
+        
+        #proxies-tab .toolbar {
+            width: 100%;
+            max-width: 100%;
+        }
+        
+        #proxies-tab #proxies-table {
+            width: 100%;
+            max-width: 100%;
+        }
+        
         /* 工具栏样式 */
         .toolbar {
             display: flex;

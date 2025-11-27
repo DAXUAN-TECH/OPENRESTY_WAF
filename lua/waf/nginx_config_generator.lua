@@ -491,16 +491,16 @@ function _M.generate_all_configs()
     -- 获取所有启用的代理配置
     -- 注意：只查询 status = 1 的代理，禁用的代理（status = 0）不会被查询
     -- 禁用的代理的配置文件会在 cleanup_orphaned_files() 中被清理
-    local sql = [[
-        SELECT id, proxy_name, proxy_type, listen_port, listen_address, server_name, location_path,
-               backend_type, backend_address, backend_port, load_balance,
+        local sql = [[
+            SELECT id, proxy_name, proxy_type, listen_port, listen_address, server_name, location_path,
+               backend_type, backend_path, load_balance,
                ssl_enable, ssl_cert_path, ssl_key_path,
                proxy_timeout, proxy_connect_timeout, proxy_send_timeout, proxy_read_timeout,
                ip_rule_id, status, priority
-        FROM waf_proxy_configs
-        WHERE status = 1
-        ORDER BY priority DESC, id ASC
-    ]]
+            FROM waf_proxy_configs
+            WHERE status = 1
+            ORDER BY priority DESC, id ASC
+        ]]
     
     local proxies, err = mysql_pool.query(sql)
     if err then

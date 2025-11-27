@@ -442,21 +442,21 @@
                     </select>
                 </div>
                 
-                <div class="form-group" id="single-backend-fields">
-                    <label>后端地址 *</label>
-                    <input type="text" id="create-backend-address" placeholder="127.0.0.1 或 域名">
-                    <small style="color: #666;">单个后端时，请输入IP地址或域名（不含端口）</small>
-                </div>
-                
-                <div class="form-group" id="http-backend-port">
-                    <label>后端端口（HTTP代理）</label>
-                    <input type="number" id="create-http-backend-port" min="1" max="65535" placeholder="8080">
-                </div>
-                
-                <div class="form-group" id="http-backend-path">
-                    <label>后端路径（HTTP代理）</label>
-                    <input type="text" id="create-backend-path" placeholder="/aaa" value="">
-                    <small style="color: #666;">可选，代理到后端的特定路径，如 /aaa。留空则代理到后端根路径</small>
+                <div class="form-row" id="single-backend-fields">
+                    <div class="form-group" style="flex: 2;">
+                        <label>后端地址 *</label>
+                        <input type="text" id="create-backend-address" placeholder="127.0.0.1 或 域名">
+                        <small style="color: #666;">单个后端时，请输入IP地址或域名（不含端口）</small>
+                    </div>
+                    <div class="form-group" id="http-backend-port" style="flex: 1;">
+                        <label>后端端口（HTTP代理）</label>
+                        <input type="number" id="create-http-backend-port" min="1" max="65535" placeholder="8080">
+                    </div>
+                    <div class="form-group" id="http-backend-path" style="flex: 1;">
+                        <label>后端路径（HTTP代理）</label>
+                        <input type="text" id="create-backend-path" placeholder="/aaa" value="">
+                        <small style="color: #666;">可选，如 /aaa</small>
+                    </div>
                 </div>
                 
                 <div class="form-group" id="tcp-udp-backend-port">
@@ -570,19 +570,21 @@
                         <option value="upstream">多个后端（负载均衡）</option>
                     </select>
                 </div>
-                <div class="form-group" id="edit-single-backend-fields">
-                    <label>后端地址 *</label>
-                    <input type="text" id="edit-backend-address">
-                    <small style="color: #666;">单个后端时，请输入IP地址或域名（不含端口）</small>
-                </div>
-                <div class="form-group" id="edit-http-backend-port">
-                    <label>后端端口（HTTP代理）</label>
-                    <input type="number" id="edit-http-backend-port" min="1" max="65535">
-                </div>
-                <div class="form-group" id="edit-http-backend-path">
-                    <label>后端路径（HTTP代理）</label>
-                    <input type="text" id="edit-backend-path" placeholder="/aaa">
-                    <small style="color: #666;">可选，代理到后端的特定路径，如 /aaa。留空则代理到后端根路径</small>
+                <div class="form-row" id="edit-single-backend-fields">
+                    <div class="form-group" style="flex: 2;">
+                        <label>后端地址 *</label>
+                        <input type="text" id="edit-backend-address">
+                        <small style="color: #666;">单个后端时，请输入IP地址或域名（不含端口）</small>
+                    </div>
+                    <div class="form-group" id="edit-http-backend-port" style="flex: 1;">
+                        <label>后端端口（HTTP代理）</label>
+                        <input type="number" id="edit-http-backend-port" min="1" max="65535">
+                    </div>
+                    <div class="form-group" id="edit-http-backend-path" style="flex: 1;">
+                        <label>后端路径（HTTP代理）</label>
+                        <input type="text" id="edit-backend-path" placeholder="/aaa">
+                        <small style="color: #666;">可选，如 /aaa</small>
+                    </div>
                 </div>
                 <div class="form-group" id="edit-tcp-udp-backend-port">
                     <label>后端端口（TCP/UDP）</label>

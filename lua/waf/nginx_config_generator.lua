@@ -51,15 +51,27 @@ local function generate_upstream_config(proxy, backends)
     -- 后端服务器
     for _, backend in ipairs(backends) do
         if backend.status == 1 then
-            local server_line = "    server " .. escape_nginx_value(backend.backend_address) .. ":" .. backend.backend_port
-            if backend.weight and backend.weight > 1 then
-                server_line = server_line .. " weight=" .. backend.weight
+            -- 处理 cjson.null，确保 backend_address 和 backend_port 不为 nil
+            local backend_address = null_to_nil(backend.backend_address)
+            local backend_port = null_to_nil(backend.backend_port)
+            
+            if not backend_address or not backend_port then
+                ngx.log(ngx.WARN, "跳过无效的后端服务器配置（地址或端口为空）: ", cjson.encode(backend))
+                goto continue
             end
-            if backend.max_fails then
-                server_line = server_line .. " max_fails=" .. backend.max_fails
+            
+            local server_line = "    server " .. escape_nginx_value(backend_address) .. ":" .. backend_port
+            local weight = null_to_nil(backend.weight)
+            if weight and weight > 1 then
+                server_line = server_line .. " weight=" .. weight
             end
-            if backend.fail_timeout then
-                server_line = server_line .. " fail_timeout=" .. backend.fail_timeout .. "s"
+            local max_fails = null_to_nil(backend.max_fails)
+            if max_fails then
+                server_line = server_line .. " max_fails=" .. max_fails
+            end
+            local fail_timeout = null_to_nil(backend.fail_timeout)
+            if fail_timeout then
+                server_line = server_line .. " fail_timeout=" .. fail_timeout .. "s"
             end
             if backend.backup == 1 then
                 server_line = server_line .. " backup"
@@ -70,6 +82,7 @@ local function generate_upstream_config(proxy, backends)
             server_line = server_line .. ";\n"
             config = config .. server_line
         end
+        ::continue::
     end
     
     -- Keepalive配置（HTTP代理）

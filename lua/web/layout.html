@@ -334,10 +334,19 @@
                     const sidebarRect = sidebar.getBoundingClientRect();
                     const sidebarWidth = sidebarRect.width;
                     
+                    // 获取视口宽度
+                    const viewportWidth = window.innerWidth;
+                    
+                    // 计算content-area和top-banner的可用宽度
+                    // 确保不会超出屏幕
+                    const availableWidth = viewportWidth - sidebarWidth;
+                    
                     // 设置top-banner和content-area的左边距等于sidebar宽度
                     // 这样它们就会紧贴sidebar的右边，无间隙
                     topBanner.style.marginLeft = sidebarWidth + 'px';
+                    topBanner.style.width = availableWidth + 'px';
                     contentArea.style.marginLeft = sidebarWidth + 'px';
+                    contentArea.style.width = availableWidth + 'px';
                 }
             }
             

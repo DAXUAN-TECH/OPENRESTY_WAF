@@ -8,6 +8,14 @@ local cjson = require "cjson"
 
 local _M = {}
 
+-- 将 cjson.null 转换为 nil
+local function null_to_nil(value)
+    if value == nil or value == cjson.null then
+        return nil
+    end
+    return value
+end
+
 -- 转义nginx配置值（防止注入攻击）
 local function escape_nginx_value(value)
     if not value then
@@ -143,8 +151,9 @@ local function generate_http_server_config(proxy, upstream_name)
     else
         -- 如果没有upstream配置（理论上不应该发生），使用直接地址
         local backend_url = "http://" .. escape_nginx_value(proxy.backend_address)
-        if proxy.backend_port then
-            backend_url = backend_url .. ":" .. proxy.backend_port
+        local backend_port = null_to_nil(proxy.backend_port)
+        if backend_port then
+            backend_url = backend_url .. ":" .. backend_port
         end
         config = config .. "        proxy_pass " .. backend_url .. ";\n"
     end
@@ -205,15 +214,27 @@ local function generate_stream_upstream_config(proxy, backends)
     -- 后端服务器
     for _, backend in ipairs(backends) do
         if backend.status == 1 then
-            local server_line = "    server " .. escape_nginx_value(backend.backend_address) .. ":" .. backend.backend_port
-            if backend.weight and backend.weight > 1 then
-                server_line = server_line .. " weight=" .. backend.weight
+            -- 处理 cjson.null，确保 backend_address 和 backend_port 不为 nil
+            local backend_address = null_to_nil(backend.backend_address)
+            local backend_port = null_to_nil(backend.backend_port)
+            
+            if not backend_address or not backend_port then
+                ngx.log(ngx.WARN, "跳过无效的后端服务器配置（地址或端口为空）: ", cjson.encode(backend))
+                goto continue
             end
-            if backend.max_fails then
-                server_line = server_line .. " max_fails=" .. backend.max_fails
+            
+            local server_line = "    server " .. escape_nginx_value(backend_address) .. ":" .. backend_port
+            local weight = null_to_nil(backend.weight)
+            if weight and weight > 1 then
+                server_line = server_line .. " weight=" .. weight
             end
-            if backend.fail_timeout then
-                server_line = server_line .. " fail_timeout=" .. backend.fail_timeout .. "s"
+            local max_fails = null_to_nil(backend.max_fails)
+            if max_fails then
+                server_line = server_line .. " max_fails=" .. max_fails
+            end
+            local fail_timeout = null_to_nil(backend.fail_timeout)
+            if fail_timeout then
+                server_line = server_line .. " fail_timeout=" .. fail_timeout .. "s"
             end
             if backend.backup == 1 then
                 server_line = server_line .. " backup"
@@ -224,6 +245,7 @@ local function generate_stream_upstream_config(proxy, backends)
             server_line = server_line .. ";\n"
             config = config .. server_line
         end
+        ::continue::
     end
     
     config = config .. "}\n\n"
@@ -263,7 +285,7 @@ local function generate_stream_server_config(proxy, upstream_name)
     else
         -- 如果没有upstream配置（理论上不应该发生），使用直接地址
         local backend_address = escape_nginx_value(proxy.backend_address)
-        local backend_port = proxy.backend_port or 8080
+        local backend_port = null_to_nil(proxy.backend_port) or 8080
         config = config .. "    proxy_pass " .. backend_address .. ":" .. backend_port .. ";\n"
     end
     
@@ -505,13 +527,15 @@ function _M.generate_all_configs()
             backends, _ = mysql_pool.query(backends_sql, proxy.id)
         else
             -- single类型：从proxy配置中构建单个后端服务器
-            if proxy.backend_address and proxy.backend_port then
+            local backend_address = null_to_nil(proxy.backend_address)
+            local backend_port = null_to_nil(proxy.backend_port)
+            if backend_address and backend_port then
                 backends = {{
-                    backend_address = proxy.backend_address,
-                    backend_port = proxy.backend_port,
+                    backend_address = backend_address,
+                    backend_port = backend_port,
                     weight = 1,
-                    max_fails = proxy.max_fails or 3,
-                    fail_timeout = proxy.fail_timeout or 30,
+                    max_fails = null_to_nil(proxy.max_fails) or 3,
+                    fail_timeout = null_to_nil(proxy.fail_timeout) or 30,
                     backup = 0,
                     down = 0,
                     status = 1

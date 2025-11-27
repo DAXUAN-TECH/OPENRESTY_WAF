@@ -251,6 +251,37 @@ else
     fi
 fi
 
+# 4.1.1 更新 systemd 服务文件中的 LimitNOFILE
+echo "  更新 systemd 服务文件..."
+SYSTEMD_SERVICE="/etc/systemd/system/openresty.service"
+if [ -f "$SYSTEMD_SERVICE" ]; then
+    # 确保 [Service] 段存在
+    if ! grep -q "^\[Service\]" "$SYSTEMD_SERVICE"; then
+        echo -e "    ${YELLOW}⚠ 服务文件中未找到 [Service] 段，跳过 LimitNOFILE 更新${NC}"
+    else
+        # 更新或插入 LimitNOFILE
+        if grep -q "^LimitNOFILE=" "$SYSTEMD_SERVICE"; then
+            sed -i "s/^LimitNOFILE=.*/LimitNOFILE=$ULIMIT_NOFILE/" "$SYSTEMD_SERVICE"
+            echo -e "    ${GREEN}✓ 已更新 systemd 服务文件中的 LimitNOFILE=${NC}"
+        else
+            # 在 [Service] 行之后插入 LimitNOFILE
+            sed -i "/^\[Service\]/a LimitNOFILE=$ULIMIT_NOFILE" "$SYSTEMD_SERVICE"
+            echo -e "    ${GREEN}✓ 已添加 LimitNOFILE=$ULIMIT_NOFILE 到 systemd 服务文件${NC}"
+        fi
+        
+        # 重新加载 systemd 配置
+        if command -v systemctl >/dev/null 2>&1; then
+            if systemctl daemon-reload 2>/dev/null; then
+                echo -e "    ${GREEN}✓ 已重新加载 systemd 配置${NC}"
+            else
+                echo -e "    ${YELLOW}⚠ 无法执行 systemctl daemon-reload，请手动运行${NC}"
+            fi
+        fi
+    fi
+else
+    echo -e "    ${YELLOW}⚠ 未找到 systemd 服务文件，跳过 LimitNOFILE 更新${NC}"
+fi
+
 # 4.2 优化内核参数
 echo "  优化内核参数..."
 if ! grep -q "# OpenResty WAF Optimization" /etc/sysctl.conf; then

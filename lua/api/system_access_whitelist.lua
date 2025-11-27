@@ -428,9 +428,20 @@ function _M.delete()
     audit_log.log(username, "delete", "system_access_whitelist", tostring(id), 
         "删除系统访问白名单", "success")
     
+    -- 触发nginx重载（异步，不阻塞响应）
+    -- 注意：删除IP后需要reload使变更生效
+    ngx.timer.at(0, function()
+        local ok, result = system_api.reload_nginx_internal()
+        if not ok then
+            ngx.log(ngx.WARN, "删除系统访问白名单后自动触发nginx重载失败: ", result or "unknown error")
+        else
+            ngx.log(ngx.INFO, "删除系统访问白名单后自动触发nginx重载成功")
+        end
+    end)
+    
     api_utils.json_response({
         success = true,
-        message = "删除成功"
+        message = "删除成功，nginx配置正在重新加载"
     })
 end
 

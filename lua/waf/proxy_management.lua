@@ -46,6 +46,12 @@ local function validate_proxy_config(proxy_data)
         if not backend.backend_port or backend.backend_port < 1 or backend.backend_port > 65535 then
             return false, string.format("第%d个后端服务器的端口必须在1-65535之间", i)
         end
+        -- 只有HTTP/HTTPS代理才允许有backend_path，TCP/UDP代理不应该有backend_path
+        if proxy_data.proxy_type ~= "http" then
+            if backend.backend_path and backend.backend_path ~= "" then
+                return false, string.format("第%d个后端服务器：TCP/UDP代理不支持后端路径配置", i)
+            end
+        end
     end
     
     -- 验证代理名称（防止SQL注入，只允许字母、数字、下划线、中文字符和常见分隔符）
@@ -194,7 +200,11 @@ function _M.create_proxy(proxy_data)
                 (proxy_id, backend_address, backend_port, backend_path, weight, max_fails, fail_timeout, backup, down, status)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ]]
-            local backend_path = null_to_nil(backend.backend_path)
+            -- 只有HTTP/HTTPS代理才允许有backend_path，TCP/UDP代理应该为nil
+            local backend_path = nil
+            if proxy_data.proxy_type == "http" then
+                backend_path = null_to_nil(backend.backend_path)
+            end
             mysql_pool.insert(backend_sql,
                 insert_id,
                 backend.backend_address,

@@ -316,10 +316,9 @@ local function generate_stream_server_config(proxy, upstream_name)
     if upstream_name then
         config = config .. "    proxy_pass " .. upstream_name .. ";\n"
     else
-        -- 如果没有upstream配置（理论上不应该发生），使用直接地址
-        local backend_address = escape_nginx_value(proxy.backend_address)
-        local backend_port = normalize_port(proxy.backend_port) or "8080"
-        config = config .. "    proxy_pass " .. backend_address .. ":" .. backend_port .. ";\n"
+        -- 如果没有upstream配置，记录错误（不应该发生，因为现在只支持upstream类型）
+        ngx.log(ngx.ERR, "generate_tcp_udp_config: no upstream config for proxy_id=", proxy.id, ", proxy_name=", proxy.proxy_name)
+        config = config .. "    # 错误：缺少后端服务器配置\n"
     end
     
     -- 超时设置

@@ -185,17 +185,10 @@ local function generate_http_server_config(proxy, upstream_name)
             config = config .. "        proxy_pass http://" .. upstream_name .. ";\n"
         end
     else
-        -- 如果没有upstream配置（理论上不应该发生），使用直接地址
-        local backend_url = "http://" .. escape_nginx_value(proxy.backend_address)
-        local backend_port = normalize_port(proxy.backend_port)
-        if backend_port then
-            backend_url = backend_url .. ":" .. backend_port
-        end
-        local backend_path = null_to_nil(proxy.backend_path)
-        if backend_path and backend_path ~= "" then
-            backend_url = backend_url .. escape_nginx_value(backend_path)
-        end
-        config = config .. "        proxy_pass " .. backend_url .. ";\n"
+        -- 如果没有upstream配置，记录错误（不应该发生，因为现在只支持upstream类型）
+        ngx.log(ngx.ERR, "generate_http_config: no upstream config for proxy_id=", proxy.id, ", proxy_name=", proxy.proxy_name)
+        config = config .. "        # 错误：缺少后端服务器配置\n"
+        config = config .. "        return 503;\n"
     end
     
     -- 请求头设置

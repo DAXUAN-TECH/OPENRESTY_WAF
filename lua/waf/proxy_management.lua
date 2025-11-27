@@ -122,12 +122,12 @@ function _M.create_proxy(proxy_data)
     local sql = [[
         INSERT INTO waf_proxy_configs 
         (proxy_name, proxy_type, listen_port, listen_address, server_name, location_path,
-         backend_type, backend_address, backend_port, backend_path, load_balance,
+         backend_type, backend_path, load_balance,
          health_check_enable, health_check_interval, health_check_timeout,
          max_fails, fail_timeout, proxy_timeout, proxy_connect_timeout,
          proxy_send_timeout, proxy_read_timeout, ssl_enable, ssl_cert_path, ssl_key_path,
          description, ip_rule_id, status, priority)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ]]
     
     local listen_address = proxy_data.listen_address or "0.0.0.0"
@@ -135,7 +135,6 @@ function _M.create_proxy(proxy_data)
     local location_path = proxy_data.location_path or "/"
     -- 只支持多个后端（负载均衡），不再支持单个后端
     local backend_type = "upstream"
-    local backend_port = null_to_nil(proxy_data.backend_port)
     local backend_path = null_to_nil(proxy_data.backend_path)
     local load_balance = proxy_data.load_balance or "round_robin"
     local health_check_enable = proxy_data.health_check_enable ~= nil and proxy_data.health_check_enable ~= cjson.null and proxy_data.health_check_enable or 1
@@ -155,8 +154,6 @@ function _M.create_proxy(proxy_data)
     local priority = proxy_data.priority or 0
     local ip_rule_id = null_to_nil(proxy_data.ip_rule_id)
     
-    -- 注意：backend_address 和 backend_port 在 waf_proxy_configs 表中已不再使用（只支持upstream类型）
-    -- 但为了兼容数据库结构，仍然需要插入值（可以插入空值或默认值）
     local insert_id, err = mysql_pool.insert(sql,
         proxy_data.proxy_name,
         proxy_data.proxy_type,
@@ -165,8 +162,6 @@ function _M.create_proxy(proxy_data)
         server_name,
         location_path,
         backend_type,
-        nil,  -- backend_address（不再使用，因为使用upstream类型）
-        nil,  -- backend_port（不再使用，因为使用upstream类型）
         backend_path,
         load_balance,
         health_check_enable,
@@ -273,7 +268,7 @@ function _M.list_proxies(params)
     local offset = (page - 1) * page_size
     local sql = string.format([[
         SELECT id, proxy_name, proxy_type, listen_port, listen_address, server_name, location_path,
-               backend_type, backend_address, backend_port, backend_path, load_balance,
+               backend_type, backend_path, load_balance,
                health_check_enable, health_check_interval, health_check_timeout,
                max_fails, fail_timeout, proxy_timeout, proxy_connect_timeout,
                proxy_send_timeout, proxy_read_timeout, ssl_enable, ssl_cert_path, ssl_key_path,
@@ -322,7 +317,7 @@ function _M.get_proxy(proxy_id)
     
     local sql = [[
         SELECT id, proxy_name, proxy_type, listen_port, listen_address, server_name, location_path,
-               backend_type, backend_address, backend_port, backend_path, load_balance,
+               backend_type, backend_path, load_balance,
                health_check_enable, health_check_interval, health_check_timeout,
                max_fails, fail_timeout, proxy_timeout, proxy_connect_timeout,
                proxy_send_timeout, proxy_read_timeout, ssl_enable, ssl_cert_path, ssl_key_path,
@@ -442,7 +437,7 @@ function _M.update_proxy(proxy_id, proxy_data)
     
     local fields_to_update = {
         "proxy_name", "proxy_type", "listen_port", "listen_address", "server_name", "location_path",
-        "backend_type", "backend_address", "backend_port", "load_balance",
+        "backend_type", "load_balance",
         "health_check_enable", "health_check_interval", "health_check_timeout",
         "max_fails", "fail_timeout", "proxy_timeout", "proxy_connect_timeout",
         "proxy_send_timeout", "proxy_read_timeout", "ssl_enable", "ssl_cert_path", "ssl_key_path",
@@ -453,7 +448,7 @@ function _M.update_proxy(proxy_id, proxy_data)
         if proxy_data[field] ~= nil and proxy_data[field] ~= cjson.null then
             table.insert(update_fields, field .. " = ?")
             -- 对于可能为null的字段，使用null_to_nil处理
-            if field == "server_name" or field == "backend_port" or field == "ssl_cert_path" or 
+            if field == "server_name" or field == "ssl_cert_path" or 
                field == "ssl_key_path" or field == "description" or field == "ip_rule_id" then
                 table.insert(update_params, null_to_nil(proxy_data[field]))
             else

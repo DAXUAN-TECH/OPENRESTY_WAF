@@ -489,7 +489,8 @@ function _M.update_proxy(proxy_id, proxy_data)
     end
     
     if proxy_data.status ~= nil then
-        table.insert(update_fields, "status = " .. tonumber(proxy_data.status))
+        table.insert(update_fields, "status = ?")
+        table.insert(update_params, tonumber(proxy_data.status))
     end
     
     if #update_fields == 0 then

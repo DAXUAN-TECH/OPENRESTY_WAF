@@ -16,6 +16,20 @@ local function null_to_nil(value)
     return value
 end
 
+-- 规范化端口值（去除空格，确保是数字或数字字符串）
+local function normalize_port(port)
+    if not port then
+        return nil
+    end
+    -- 转换为字符串并去除前后空格
+    local port_str = tostring(port):gsub("^%s+", ""):gsub("%s+$", "")
+    -- 如果是空字符串，返回nil
+    if port_str == "" then
+        return nil
+    end
+    return port_str
+end
+
 -- 转义nginx配置值（防止注入攻击）
 local function escape_nginx_value(value)
     if not value then
@@ -173,7 +187,7 @@ local function generate_http_server_config(proxy, upstream_name)
     else
         -- 如果没有upstream配置（理论上不应该发生），使用直接地址
         local backend_url = "http://" .. escape_nginx_value(proxy.backend_address)
-        local backend_port = null_to_nil(proxy.backend_port)
+        local backend_port = normalize_port(proxy.backend_port)
         if backend_port then
             backend_url = backend_url .. ":" .. backend_port
         end
@@ -311,7 +325,7 @@ local function generate_stream_server_config(proxy, upstream_name)
     else
         -- 如果没有upstream配置（理论上不应该发生），使用直接地址
         local backend_address = escape_nginx_value(proxy.backend_address)
-        local backend_port = null_to_nil(proxy.backend_port) or 8080
+        local backend_port = normalize_port(proxy.backend_port) or "8080"
         config = config .. "    proxy_pass " .. backend_address .. ":" .. backend_port .. ";\n"
     end
     

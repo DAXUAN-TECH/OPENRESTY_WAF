@@ -3567,7 +3567,7 @@ init_database() {
     sync_user_variables
     
     # 查找 SQL 文件（使用全局 SCRIPT_DIR，避免重复定义）
-    SQL_FILE="${SCRIPT_DIR}/../init_file/数据库设计.sql"
+    SQL_FILE="${SCRIPT_DIR}/../init_file/init.sql"
     
     # 检查 SQL 文件是否存在且可读（合并检查）
     if [ ! -f "$SQL_FILE" ] || [ ! -r "$SQL_FILE" ]; then
@@ -4047,7 +4047,7 @@ show_next_steps() {
     
     if [ -z "$MYSQL_DATABASE" ]; then
         echo "3. 创建数据库和用户（用于 WAF 系统）:"
-        echo "   mysql -u root -p < init_file/数据库设计.sql"
+        echo "   mysql -u root -p < init_file/init.sql"
         echo ""
     fi
     
@@ -4150,7 +4150,7 @@ FLUSH PRIVILEGES;"
     # 导入数据
     echo -e "${BLUE}导入数据库数据...${NC}"
     # 使用全局 SCRIPT_DIR（避免重复定义）
-    SQL_FILE="${SCRIPT_DIR}/../init_file/数据库设计.sql"
+    SQL_FILE="${SCRIPT_DIR}/../init_file/init.sql"
     
     if [ ! -f "$SQL_FILE" ]; then
         echo -e "${YELLOW}⚠ SQL 文件不存在: ${SQL_FILE}${NC}"
@@ -4396,7 +4396,7 @@ main() {
         echo -e "${BLUE}手动导入 SQL 脚本命令:${NC}"
         if [ -n "$MYSQL_DATABASE" ] && [ -n "$MYSQL_USER" ]; then
             # 使用全局 SCRIPT_DIR（避免重复定义）
-            SQL_FILE="${SCRIPT_DIR}/../init_file/数据库设计.sql"
+            SQL_FILE="${SCRIPT_DIR}/../init_file/init.sql"
             echo "  mysql -u ${MYSQL_USER} -p ${MYSQL_DATABASE} < ${SQL_FILE}"
         else
             echo "  mysql -u <user> -p <database> < <sql_file>"

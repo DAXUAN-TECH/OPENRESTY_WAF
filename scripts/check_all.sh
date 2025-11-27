@@ -351,7 +351,7 @@ echo -e "${BLUE}[6/7] 检查必要文件...${NC}"
 
 REQUIRED_FILES=(
     "init_file/nginx.conf"
-    "init_file/数据库设计.sql"
+    "init_file/init.sql"
     "conf.d/http_set/lua.conf"
     "conf.d/http_set/log.conf"
     "conf.d/http_set/waf.conf"

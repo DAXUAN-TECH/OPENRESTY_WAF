@@ -48,7 +48,7 @@ OPENRESTY_WAF/
 ├── start_README.md          # 一键启动脚本说明
 ├── init_file/               # 初始配置文件目录
 │   ├── nginx.conf           # Nginx 主配置文件（部署时复制到系统目录）
-│   └── 数据库设计.sql       # 数据库表结构
+│   └── init.sql            # 数据库表结构
 ├── conf.d/                  # 配置文件目录（保持在项目目录）⭐
 │   ├── README.md            # 配置说明
 │   ├── set_conf/            # 参数配置文件
@@ -167,7 +167,7 @@ OPENRESTY_WAF/
 
 **部署策略说明**：
 - ✅ `init_file/nginx.conf` - 复制到 `${OPENRESTY_PREFIX}/nginx/conf/nginx.conf`（默认：`/usr/local/openresty/nginx/conf/nginx.conf`）
-- ✅ `init_file/数据库设计.sql` - 用于初始化数据库
+- ✅ `init_file/init.sql` - 用于初始化数据库
 - ✅ `conf.d/` - **保持在项目目录**（方便配置管理，修改后无需重新部署）
 - ✅ `lua/` - **保持在项目目录**（不复制）
 - ✅ `logs/` - **保持在项目目录**（日志文件）
@@ -293,7 +293,7 @@ sudo ./scripts/install_mysql.sh
 sudo ./scripts/install_redis.sh
 
 # 创建数据库
-mysql -u root -p < init_file/数据库设计.sql
+mysql -u root -p < init_file/init.sql
 
 # 修改配置文件中的数据库连接信息
 vim lua/config.lua
@@ -379,7 +379,7 @@ sudo ./scripts/optimize_system.sh
 - [项目全面分析报告](docs/项目全面分析报告.md) - **全方位项目分析报告（运维、架构、产品视角）** ⭐
 - [需求文档](docs/需求文档.md) - 功能需求、非功能需求、数据需求
 - [技术实施方案](docs/技术实施方案.md) - 架构设计、实现方案、性能优化
-- [数据库设计](init_file/数据库设计.sql) - 表结构设计、索引优化
+- [数据库设计](init_file/init.sql) - 表结构设计、索引优化
 
 ### 部署与运维
 - [一键安装脚本说明](install_README.md) - 一键安装脚本使用说明（推荐）⭐

@@ -67,7 +67,7 @@ sudo OPENRESTY_PREFIX=/opt/openresty ./scripts/deploy.sh
 OPENRESTY_WAF/
 ├── init_file/          # 初始配置文件目录
 │   ├── nginx.conf      # 主配置文件（复制到系统目录）
-│   └── 数据库设计.sql  # 数据库表结构
+│   └── init.sql        # 数据库表结构
 ├── conf.d/             # 配置文件（保持在项目目录）⭐
 │   ├── set_conf/       # 参数配置
 │   ├── vhost_conf/     # 虚拟主机配置
@@ -243,7 +243,7 @@ sudo chmod 755 /path/to/project/logs
 ### 数据库集成
 
 1. **数据库初始化**：
-   - `install_mysql.sh` 执行 `init_file/数据库设计.sql`
+   - `install_mysql.sh` 执行 `init_file/init.sql`
    - 创建数据库和表结构
    - Lua 代码通过 `mysql_pool.lua` 连接数据库
 

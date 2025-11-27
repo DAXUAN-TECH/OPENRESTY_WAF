@@ -159,7 +159,7 @@
 
 检查以下必要文件是否存在：
 - `init_file/nginx.conf`
-- `init_file/数据库设计.sql`
+- `init_file/init.sql`
 - `conf.d/set_conf/lua.conf`
 - `conf.d/set_conf/log.conf`
 - `conf.d/set_conf/waf.conf`

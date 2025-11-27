@@ -271,7 +271,7 @@ sudo ./start.sh uninstall mysql
 
 - `install_mysql.sh` 在创建数据库和用户后会自动：
   - 自动测试 MySQL 连接
-  - 自动执行 `init_file/数据库设计.sql`
+  - 自动执行 `init_file/init.sql`
   - 创建数据库和所有表结构
   - 如果数据库或表已存在，会显示警告（这是正常的，不会影响安装）
 
@@ -475,7 +475,7 @@ lua/config.lua.bak.YYYYMMDD_HHMMSS
 **解决方法**：
 1. 检查数据库是否已存在（如果已存在，这是正常的）
 2. 检查用户权限是否足够
-3. 手动执行 SQL 脚本：`mysql -u user -p < init_file/数据库设计.sql`
+3. 手动执行 SQL 脚本：`mysql -u user -p < init_file/init.sql`
 
 ### 问题 4: 配置文件更新失败
 

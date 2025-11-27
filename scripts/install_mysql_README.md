@@ -161,7 +161,7 @@ FLUSH PRIVILEGES;
 EXIT;
 
 # 3. 导入数据库结构
-mysql -u waf_user -p waf_db < init_file/数据库设计.sql
+mysql -u waf_user -p waf_db < init_file/init.sql
 ```
 
 ## 故障排查
@@ -335,7 +335,7 @@ sudo systemctl restart mysqld
 
 1. **创建 WAF 数据库**：
    ```bash
-   mysql -u root -p < init_file/数据库设计.sql
+   mysql -u root -p < init_file/init.sql
    ```
 
 2. **配置 WAF 连接**：

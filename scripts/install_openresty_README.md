@@ -380,7 +380,7 @@ systemctl status openresty
 2. **配置数据库**：
    ```bash
    # 创建数据库
-   mysql -u root -p < init_file/数据库设计.sql
+   mysql -u root -p < init_file/init.sql
    
    # 修改配置文件（项目目录）
    vim lua/config.lua

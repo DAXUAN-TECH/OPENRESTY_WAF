@@ -140,13 +140,13 @@ sudo ./start.sh
 ### 3. 数据库初始化
 
 **Shell 脚本初始化 → Lua 代码使用**：
-- `install_mysql.sh` 执行 `init_file/数据库设计.sql`
+- `install_mysql.sh` 执行 `init_file/init.sql`
 - 创建数据库和所有表结构
 - Lua 代码通过 `mysql_pool.lua` 连接数据库并执行操作
 
 **路径**：
 - `scripts/install_mysql.sh:2198-2248` - 数据库初始化
-- `init_file/数据库设计.sql` - SQL 脚本
+- `init_file/init.sql` - SQL 脚本
 - `lua/waf/mysql_pool.lua` - MySQL 连接池
 
 ### 4. GeoIP 数据库管理

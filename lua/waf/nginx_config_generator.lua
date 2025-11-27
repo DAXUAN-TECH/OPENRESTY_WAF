@@ -69,7 +69,7 @@ local function generate_upstream_config(proxy, backends)
         if backend.status == 1 then
             -- 处理 cjson.null，确保 backend_address 和 backend_port 不为 nil
             local backend_address = null_to_nil(backend.backend_address)
-            local backend_port = null_to_nil(backend.backend_port)
+            local backend_port = normalize_port(backend.backend_port)
             
             if not backend_address or not backend_port then
                 ngx.log(ngx.WARN, "跳过无效的后端服务器配置（地址或端口为空）: ", cjson.encode(backend))
@@ -256,7 +256,7 @@ local function generate_stream_upstream_config(proxy, backends)
         if backend.status == 1 then
             -- 处理 cjson.null，确保 backend_address 和 backend_port 不为 nil
             local backend_address = null_to_nil(backend.backend_address)
-            local backend_port = null_to_nil(backend.backend_port)
+            local backend_port = normalize_port(backend.backend_port)
             
             if not backend_address or not backend_port then
                 ngx.log(ngx.WARN, "跳过无效的后端服务器配置（地址或端口为空）: ", cjson.encode(backend))

@@ -5,15 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>WAF代理管理界面</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
         
-        /* body样式会被handler.lua移除，这里保留用于文档说明 */
-        
-        /* 统一容器样式 - 白色背景卡片 */
+        /* 统一容器样式 */
         .container {
             width: 100%;
             max-width: 100%;
@@ -23,6 +17,7 @@
             padding: 30px;
         }
         
+        /* 标题样式 */
         h1 {
             color: #333;
             font-size: 24px;
@@ -30,6 +25,7 @@
             font-weight: 600;
         }
         
+        /* 标签页样式 */
         .tabs {
             display: flex;
             border-bottom: 2px solid #e0e0e0;
@@ -64,6 +60,7 @@
             display: block;
         }
         
+        /* 工具栏样式 */
         .toolbar {
             display: flex;
             justify-content: space-between;
@@ -87,6 +84,7 @@
             font-size: 14px;
         }
         
+        /* 按钮样式 */
         .btn {
             padding: 8px 16px;
             border: none;
@@ -141,6 +139,7 @@
             background-color: #616161;
         }
         
+        /* 表格样式 */
         table {
             width: 100%;
             border-collapse: collapse;
@@ -163,6 +162,7 @@
             background-color: #f9f9f9;
         }
         
+        /* 状态徽章 */
         .status-badge {
             padding: 4px 8px;
             border-radius: 4px;
@@ -180,7 +180,7 @@
             color: white;
         }
         
-        /* 确保content-area成为定位上下文 */
+        /* 模态框样式 */
         .content-area {
             position: relative;
         }
@@ -189,15 +189,16 @@
             display: none;
             position: absolute;
             z-index: 1000;
-            left: 0%;
-            top: 0%;
+            left: 0;
+            top: 0;
             width: 100% !important;
             height: 100% !important;
             overflow: auto;
-            background-color: rgba(0, 0, 0, 0.5);
+            background-color: rgba(0,0,0,0.5);
         }
         
-        .modal[style*="display: block"], .modal[style*="display:flex"] {
+        .modal[style*="display: block"],
+        .modal[style*="display:flex"] {
             display: flex !important;
             align-items: center;
             justify-content: center;
@@ -205,7 +206,6 @@
         
         .modal-content {
             background-color: white;
-            margin: 2% auto;
             padding: 30px;
             border-radius: 8px;
             width: 90%;
@@ -233,6 +233,7 @@
             color: #000;
         }
         
+        /* 表单样式 */
         .form-group {
             margin-bottom: 20px;
         }
@@ -275,6 +276,7 @@
             margin-top: 20px;
         }
         
+        /* 分页样式 */
         .pagination {
             display: flex;
             justify-content: center;
@@ -300,6 +302,7 @@
             cursor: not-allowed;
         }
         
+        /* 提示信息 */
         .alert {
             padding: 12px;
             margin-bottom: 20px;
@@ -326,8 +329,7 @@
         .action-buttons button {
             padding: 4px 8px;
             font-size: 12px;
-        }
-        
+        }        
         .backends-list {
             margin-top: 10px;
             padding: 10px;
@@ -349,6 +351,11 @@
             flex: 1;
         }
         
+        .tcp-udp-mode .backend-address-field,
+        .tcp-udp-mode .tcp-udp-backend-port-field {
+            flex: 0 0 25%;
+            max-width: 25%;
+        }
     </style>
     <script src="/common.js"></script>
     </head>

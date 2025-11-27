@@ -193,14 +193,22 @@
             z-index: 1000;
             left: 0;
             top: 0;
-            width: 100% !important;
-            height: 100% !important;
+            width: 100%;
+            height: 100%;
             overflow: auto;
             background-color: rgba(0,0,0,0.5);
         }
         
+        /* edit-modal特定样式，确保居中 */
+        #edit-modal {
+            width: 100% !important;
+            height: 100% !important;
+        }
+        
         .modal[style*="display: block"],
-        .modal[style*="display:flex"] {
+        .modal[style*="display:flex"],
+        #edit-modal[style*="display: block"],
+        #edit-modal[style*="display:flex"] {
             display: flex !important;
             align-items: center;
             justify-content: center;

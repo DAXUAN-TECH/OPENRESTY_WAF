@@ -635,18 +635,15 @@
         function toggleProxyFields() {
             const proxyType = document.getElementById('create-proxy-type').value;
             const httpFields = document.getElementById('http-fields');
-            const httpPathFields = document.getElementById('http-path-fields');
             
             if (proxyType === 'http') {
-                httpFields.style.display = 'block';
-                httpPathFields.style.display = 'block';
+                httpFields.style.display = 'flex';
                 // 显示所有后端服务器列表中的路径字段
                 document.querySelectorAll('#backends-list .backend-path').forEach(field => {
                     field.style.display = 'block';
                 });
             } else {
                 httpFields.style.display = 'none';
-                httpPathFields.style.display = 'none';
                 // 隐藏所有后端服务器列表中的路径字段
                 document.querySelectorAll('#backends-list .backend-path').forEach(field => {
                     field.style.display = 'none';
@@ -948,11 +945,9 @@
                     
                     // 显示/隐藏相关字段
                     if (proxy.proxy_type === 'http') {
-                        document.getElementById('edit-http-fields').style.display = 'block';
-                        document.getElementById('edit-http-path-fields').style.display = 'block';
+                        document.getElementById('edit-http-fields').style.display = 'flex';
                     } else {
                         document.getElementById('edit-http-fields').style.display = 'none';
-                        document.getElementById('edit-http-path-fields').style.display = 'none';
                     }
                     
                     // 加载后端服务器列表

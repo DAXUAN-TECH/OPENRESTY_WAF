@@ -585,9 +585,13 @@ function _M.check_ip_allowed(ip_address)
         return false
     end
     
-    if not res or #res == 0 then
+    -- 严格检查：res必须是非nil的表，且长度大于0
+    -- 使用type检查确保res是table类型，使用#res检查数组长度
+    -- 如果res不是table，或者res是空数组，都视为白名单为空
+    if not res or type(res) ~= "table" or #res == 0 then
         -- 白名单为空，拒绝所有访问
-        ngx.log(ngx.WARN, "check_ip_allowed: whitelist enabled but empty, denying access for IP: ", ip_address)
+        ngx.log(ngx.WARN, "check_ip_allowed: whitelist enabled but empty, denying access for IP: ", ip_address, 
+            " (res type: ", type(res), ", res length: ", res and #res or "nil", ")")
         return false
     end
     

@@ -958,10 +958,18 @@
                     document.getElementById('edit-id').value = proxy.id;
                     document.getElementById('edit-proxy-name').value = proxy.proxy_name;
                     document.getElementById('edit-proxy-type').value = proxy.proxy_type;
-                    document.getElementById('edit-listen-port').value = proxy.listen_port;
-                    document.getElementById('edit-listen-address').value = proxy.listen_address || '0.0.0.0';
-                    document.getElementById('edit-server-name').value = proxy.server_name || '';
-                    document.getElementById('edit-location-path').value = proxy.location_path || '/';
+                    
+                    // 根据代理类型填充不同的字段
+                    if (proxy.proxy_type === 'http') {
+                        document.getElementById('edit-listen-port').value = proxy.listen_port;
+                        document.getElementById('edit-listen-address').value = proxy.listen_address || '0.0.0.0';
+                        document.getElementById('edit-server-name').value = proxy.server_name || '';
+                        document.getElementById('edit-location-path').value = proxy.location_path || '/';
+                    } else if (proxy.proxy_type === 'tcp' || proxy.proxy_type === 'udp') {
+                        document.getElementById('edit-tcp-udp-listen-port').value = proxy.listen_port;
+                        document.getElementById('edit-tcp-udp-listen-address').value = proxy.listen_address || '0.0.0.0';
+                        document.getElementById('edit-tcp-udp-server-name').value = proxy.server_name || '';
+                    }
                     document.getElementById('edit-load-balance').value = proxy.load_balance || 'round_robin';
                     document.getElementById('edit-proxy-connect-timeout').value = proxy.proxy_connect_timeout || 60;
                     document.getElementById('edit-proxy-send-timeout').value = proxy.proxy_send_timeout || 60;

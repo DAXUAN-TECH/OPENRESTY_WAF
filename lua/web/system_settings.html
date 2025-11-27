@@ -118,8 +118,16 @@
             left: 4px;
             bottom: 4px;
             background-color: white;
-            transition: .4s;
-            border-radius: 50%;
+            transition: all 0.4s ease;
+            border-radius: 13px;
+            display: block;
+            box-sizing: border-box;
+            border: none;
+            outline: none;
+            margin: 0;
+            padding: 0;
+            -webkit-appearance: none;
+            appearance: none;
         }
         
         input:checked + .slider {
@@ -199,6 +207,24 @@
         .btn:disabled {
             opacity: 0.5;
             cursor: not-allowed;
+        }
+        
+        /* whitelist-tab内容对齐 */
+        #whitelist-tab {
+            display: flex;
+            flex-direction: column;
+            align-items: stretch;
+            width: 100%;
+        }
+        
+        #whitelist-tab .toolbar {
+            width: 100%;
+            max-width: 100%;
+        }
+        
+        #whitelist-tab #whitelist-table {
+            width: 100%;
+            max-width: 100%;
         }
         
         /* 表格样式 */

@@ -543,6 +543,7 @@ end
 -- 检查IP是否在白名单中（用于认证中间件）
 function _M.check_ip_allowed(ip_address)
     if not ip_address then
+        ngx.log(ngx.ERR, "check_ip_allowed: ip_address is nil")
         return false
     end
     
@@ -552,18 +553,27 @@ function _M.check_ip_allowed(ip_address)
         return mysql_pool.query(sql)
     end)
     
-    if not ok or err or not res or #res == 0 then
-        -- 如果查询失败或配置不存在，默认允许访问（安全起见，不启用白名单）
+    if not ok or err then
+        ngx.log(ngx.ERR, "check_ip_allowed: failed to query config: ", tostring(err))
+        -- 如果查询失败，为了安全，拒绝访问（防止配置错误导致安全漏洞）
+        return false
+    end
+    
+    if not res or #res == 0 then
+        -- 如果配置不存在，默认允许访问（安全起见，不启用白名单）
+        ngx.log(ngx.INFO, "check_ip_allowed: config not found, allowing access")
         return true
     end
     
     local enabled = res[1].enabled
-    if enabled == 0 then
+    if enabled == 0 or enabled == nil then
         -- 白名单未启用，允许所有IP访问
+        ngx.log(ngx.DEBUG, "check_ip_allowed: whitelist disabled, allowing access for IP: ", ip_address)
         return true
     end
     
     -- 白名单已启用，检查IP是否在白名单中
+    ngx.log(ngx.DEBUG, "check_ip_allowed: whitelist enabled, checking IP: ", ip_address)
     local ok, res, err = pcall(function()
         local sql = "SELECT ip_address FROM waf_system_access_whitelist WHERE status = 1"
         return mysql_pool.query(sql)
@@ -577,8 +587,11 @@ function _M.check_ip_allowed(ip_address)
     
     if not res or #res == 0 then
         -- 白名单为空，拒绝所有访问
+        ngx.log(ngx.WARN, "check_ip_allowed: whitelist enabled but empty, denying access for IP: ", ip_address)
         return false
     end
+    
+    ngx.log(ngx.DEBUG, "check_ip_allowed: found ", #res, " whitelist entries")
     
     -- 检查IP是否匹配任何白名单条目
     for _, row in ipairs(res) do
@@ -603,6 +616,7 @@ function _M.check_ip_allowed(ip_address)
                         end
                     -- 单个IP，直接比较
                     elseif ip_address == ip then
+                        ngx.log(ngx.DEBUG, "check_ip_allowed: IP matched in comma-separated list: ", ip_address)
                         return true
                     end
                 end
@@ -612,21 +626,25 @@ function _M.check_ip_allowed(ip_address)
             -- 检查是否为CIDR格式
             if whitelist_ip:match("/") then
                 if ip_utils.match_cidr(ip_address, whitelist_ip) then
+                    ngx.log(ngx.DEBUG, "check_ip_allowed: IP matched CIDR: ", ip_address, " in ", whitelist_ip)
                     return true
                 end
             -- 检查是否为IP范围格式
             elseif whitelist_ip:match("-") then
                 local start_ip, end_ip = ip_utils.parse_ip_range(whitelist_ip)
                 if start_ip and end_ip and ip_utils.match_ip_range(ip_address, start_ip, end_ip) then
+                    ngx.log(ngx.DEBUG, "check_ip_allowed: IP matched range: ", ip_address, " in ", whitelist_ip)
                     return true
                 end
             -- 单个IP，直接比较
             elseif ip_address == whitelist_ip then
+                ngx.log(ngx.DEBUG, "check_ip_allowed: IP matched exactly: ", ip_address)
                 return true
             end
         end
     end
     
+    ngx.log(ngx.DEBUG, "check_ip_allowed: IP not found in whitelist: ", ip_address)
     return false
 end
 

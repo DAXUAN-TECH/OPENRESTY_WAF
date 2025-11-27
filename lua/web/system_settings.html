@@ -204,6 +204,34 @@
             background: #da190b;
         }
         
+        .btn-warning {
+            background: #ff9800;
+            color: #fff;
+        }
+        
+        .btn-warning:hover {
+            background: #e68900;
+        }
+        
+        .btn-info {
+            background: #2196F3;
+            color: #fff;
+        }
+        
+        .btn-info:hover {
+            background: #0b7dda;
+        }
+        
+        .action-buttons {
+            display: flex;
+            gap: 5px;
+        }
+        
+        .action-buttons button {
+            padding: 4px 8px;
+            font-size: 12px;
+        }
+        
         .btn:disabled {
             opacity: 0.5;
             cursor: not-allowed;
@@ -613,9 +641,14 @@
                                 <td>${item.created_at || '-'}</td>
                                 <td>${item.updated_at || '-'}</td>
                                 <td>
-                                    <button class="btn ${item.status == 1 ? 'btn-secondary' : 'btn-primary'}" style="padding: 4px 8px; font-size: 12px;" onclick="toggleWhitelistStatus(${item.id}, ${item.status == 1 ? 0 : 1})">${item.status == 1 ? '禁用' : '启用'}</button>
-                                    <button class="btn btn-primary" style="padding: 4px 8px; font-size: 12px;" onclick="editWhitelist(${item.id})">编辑</button>
-                                    <button class="btn btn-danger" style="padding: 4px 8px; font-size: 12px;" onclick="deleteWhitelist(${item.id})">删除</button>
+                                    <div class="action-buttons">
+                                        <button class="btn btn-info" onclick="editWhitelist(${item.id})">编辑</button>
+                                        ${item.status == 1 ? 
+                                            `<button class="btn btn-warning" onclick="toggleWhitelistStatus(${item.id}, 0)">禁用</button>` :
+                                            `<button class="btn btn-primary" onclick="toggleWhitelistStatus(${item.id}, 1)">启用</button>`
+                                        }
+                                        <button class="btn btn-danger" onclick="deleteWhitelist(${item.id})">删除</button>
+                                    </div>
                                 </td>
                             `;
                             tbody.appendChild(row);

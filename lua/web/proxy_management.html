@@ -396,7 +396,7 @@
                 </thead>
                 <tbody id="proxies-tbody">
                     <tr>
-                        <td colspan="9" style="text-align: center; padding: 20px;">加载中...</td>
+                        <td colspan="11" style="text-align: center; padding: 20px;">加载中...</td>
                     </tr>
                 </tbody>
             </table>
@@ -762,7 +762,7 @@
             
             try {
                 // 显示加载状态
-                tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 20px;">加载中...</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="11" style="text-align: center; padding: 20px;">加载中...</td></tr>';
                 
                 const response = await fetch(url);
                 
@@ -785,7 +785,7 @@
                     if (!data.data) {
                         console.error('API response missing data field:', data);
                         showAlert('响应数据格式错误：缺少 data 字段', 'error');
-                        tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 20px; color: #e74c3c;">响应数据格式错误</td></tr>';
+                        tbody.innerHTML = '<tr><td colspan="11" style="text-align: center; padding: 20px; color: #e74c3c;">响应数据格式错误</td></tr>';
                         return;
                     }
                     
@@ -835,7 +835,7 @@
                         // 既不是数组也不是对象
                         console.error('Proxies is neither array nor object, type:', typeof proxies);
                         showAlert('响应数据格式错误：proxies 类型不正确 (' + typeof proxies + ')', 'error');
-                        tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 20px; color: #e74c3c;">数据格式错误</td></tr>';
+                        tbody.innerHTML = '<tr><td colspan="11" style="text-align: center; padding: 20px; color: #e74c3c;">数据格式错误</td></tr>';
                         return;
                     }
                     
@@ -843,7 +843,7 @@
                     if (!Array.isArray(proxiesArray)) {
                         console.error('Failed to convert proxies to array, final type:', typeof proxiesArray);
                         showAlert('响应数据格式错误：无法将 proxies 转换为数组', 'error');
-                        tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 20px; color: #e74c3c;">数据格式错误</td></tr>';
+                        tbody.innerHTML = '<tr><td colspan="11" style="text-align: center; padding: 20px; color: #e74c3c;">数据格式错误</td></tr>';
                         return;
                     }
                     
@@ -857,7 +857,7 @@
                 } else {
                     const errorMsg = data.error || data.message || '加载失败';
                     showAlert(errorMsg, 'error');
-                    tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 20px; color: #e74c3c;">' + escapeHtmlFn(errorMsg) + '</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="11" style="text-align: center; padding: 20px; color: #e74c3c;">' + escapeHtmlFn(errorMsg) + '</td></tr>';
                 }
             } catch (error) {
                 console.error('loadProxies error:', error);
@@ -870,7 +870,7 @@
         function renderProxiesTable(proxies) {
             const tbody = document.getElementById('proxies-tbody');
             if (proxies.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 20px;">暂无数据</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="11" style="text-align: center; padding: 20px;">暂无数据</td></tr>';
                 return;
             }
             

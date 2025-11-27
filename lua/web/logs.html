@@ -79,6 +79,39 @@
             flex: 1;
             min-width: 200px;
         }
+        
+        /* 访问日志：开始时间和客户端IP保持一样宽度 */
+        #access-tab .filters-row:first-child .filter-group:first-child,
+        #access-tab .filters-row:nth-child(2) .filter-group:first-child {
+            flex: 1 1 0;
+        }
+        /* 访问日志：结束时间和请求域名保持一样宽度 */
+        #access-tab .filters-row:first-child .filter-group:nth-child(2),
+        #access-tab .filters-row:nth-child(2) .filter-group:last-child {
+            flex: 1 1 0;
+        }
+        
+        /* 封控日志：开始时间和客户端IP保持一样宽度 */
+        #block-tab .filters-row:first-child .filter-group:first-child,
+        #block-tab .filters-row:nth-child(2) .filter-group:first-child {
+            flex: 1 1 0;
+        }
+        /* 封控日志：结束时间和封控原因保持一样宽度 */
+        #block-tab .filters-row:first-child .filter-group:nth-child(2),
+        #block-tab .filters-row:nth-child(2) .filter-group:last-child {
+            flex: 1 1 0;
+        }
+        
+        /* 审计日志：开始时间和用户名保持一样宽度 */
+        #audit-tab .filters-row:first-child .filter-group:first-child,
+        #audit-tab .filters-row:nth-child(2) .filter-group:first-child {
+            flex: 1 1 0;
+        }
+        /* 审计日志：结束时间和操作类型保持一样宽度 */
+        #audit-tab .filters-row:first-child .filter-group:nth-child(2),
+        #audit-tab .filters-row:nth-child(2) .filter-group:last-child {
+            flex: 1 1 0;
+        }
         .filter-group label {
             display: block;
             margin-bottom: 5px;
@@ -151,10 +184,27 @@
         }
         .table-wrapper {
             overflow-x: auto;
+            width: 100%;
         }
         table {
             width: 100%;
             border-collapse: collapse;
+        }
+        /* 封控日志：block-table和table-wrapper保持一样的宽度 */
+        #block-table {
+            width: 100%;
+            min-width: 100%;
+        }
+        #block-tab .table-wrapper {
+            width: 100%;
+        }
+        /* 审计日志：audit-table和table-wrapper保持一样的宽度 */
+        #audit-table {
+            width: 100%;
+            min-width: 100%;
+        }
+        #audit-tab .table-wrapper {
+            width: 100%;
         }
         thead {
             background: #f8f9fa;

@@ -10,12 +10,20 @@
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
             background: #f5f5f5;
             color: #333;
-            display: flex;
+            display: grid;
+            grid-template-columns: 15% 85%;
+            grid-template-rows: auto 1fr;
+            grid-template-areas:
+                'sidebar banner'
+                'sidebar content';
             min-height: 100vh;
         }
         /* 左侧菜单栏 */
         .sidebar {
-            width: 240px;
+            grid-area: sidebar;
+            width: 15%;
+            min-width: 200px;
+            max-width: 300px;
             background: #2c3e50;
             color: #ecf0f1;
             position: fixed;
@@ -46,7 +54,8 @@
             text-align: center;
         }
         .sidebar-header .divider {
-            width: 220px;
+            width: 90%;
+            max-width: 220px;
             height: 3px;
             background: #314659;
             margin: 8px 0;
@@ -91,16 +100,11 @@
             background: #34495e;
             margin: 10px 20px;
         }
-        /* 主内容区域 */
-        .main-content {
-            flex: 1;
-            margin-left: 240px;
-            display: flex;
-            flex-direction: column;
-            min-height: 100vh;
-        }
         /* 顶部Banner栏 - 高端渐变设计 */
         .top-banner {
+            grid-area: banner;
+            width: 100%;
+            height: 100%;
             background: linear-gradient(135deg, #34495e 0%, #2c3e50 100%);
             border-bottom: 1px solid rgba(52, 73, 94, 0.3);
             box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08), 
@@ -108,12 +112,11 @@
             display: flex;
             align-items: center;
             justify-content: space-between;
-            padding: 0 30px;
+            padding: 0 2%;
             position: sticky;
             top: 0;
             z-index: 100;
             box-sizing: border-box;
-            position: relative;
             /* 确保与sidebar-header完美对齐 */
             min-height: 80px;
         }
@@ -188,23 +191,42 @@
         }
         /* 内容显示区域 */
         .content-area {
-            flex: 1;
-            padding: 30px;
+            grid-area: content;
+            width: 100%;
+            height: 100%;
+            padding: 2%;
             overflow-y: auto;
         }
         /* 响应式设计 */
         @media (max-width: 768px) {
+            body {
+                grid-template-columns: 200px 1fr;
+            }
             .sidebar {
                 width: 200px;
-            }
-            .main-content {
-                margin-left: 200px;
+                min-width: 200px;
+                max-width: 200px;
             }
             .top-banner {
-                padding: 0 15px;
+                padding: 0 2%;
             }
             .banner-title {
                 font-size: 18px;
+            }
+            .content-area {
+                padding: 2%;
+            }
+        }
+        
+        @media (max-width: 480px) {
+            body {
+                grid-template-columns: 0 100%;
+                grid-template-areas:
+                    'banner'
+                    'content';
+            }
+            .sidebar {
+                display: none;
             }
         }
     </style>
@@ -244,23 +266,20 @@
         </nav>
     </div>
     
-    <!-- 主内容区域 -->
-    <div class="main-content">
-        <!-- 顶部Banner栏 -->
-        <div class="top-banner">
-            <div class="banner-title">{{PAGE_TITLE}}</div>
-            <div class="banner-actions">
-                <div class="user-info">
-                    <span class="username">{{USERNAME}}</span>
-                    <a href="/api/auth/logout" class="logout-btn">退出</a>
-                </div>
+    <!-- 顶部Banner栏 -->
+    <div class="top-banner">
+        <div class="banner-title">{{PAGE_TITLE}}</div>
+        <div class="banner-actions">
+            <div class="user-info">
+                <span class="username">{{USERNAME}}</span>
+                <a href="/api/auth/logout" class="logout-btn">退出</a>
             </div>
         </div>
-        
-        <!-- 内容显示区域 -->
-        <div class="content-area">
-            {{CONTENT}}
-        </div>
+    </div>
+    
+    <!-- 内容显示区域 -->
+    <div class="content-area">
+        {{CONTENT}}
     </div>
     
     {{EXTRA_SCRIPTS}}
@@ -287,10 +306,8 @@
                     const headerRect = sidebarHeader.getBoundingClientRect();
                     const headerHeight = headerRect.height;
                     
-                    // 设置banner高度，确保完美对齐
-                    topBanner.style.height = headerHeight + 'px';
+                    // 在Grid布局中，设置min-height确保对齐，同时保持Grid的自动高度管理
                     topBanner.style.minHeight = headerHeight + 'px';
-                    topBanner.style.maxHeight = headerHeight + 'px';
                     
                     // 确保垂直居中对齐
                     topBanner.style.display = 'flex';

@@ -118,6 +118,7 @@ function _M.create_proxy(proxy_data)
     local location_path = proxy_data.location_path or "/"
     local backend_type = proxy_data.backend_type or "single"
     local backend_port = null_to_nil(proxy_data.backend_port)
+    local backend_path = null_to_nil(proxy_data.backend_path)
     local load_balance = proxy_data.load_balance or "round_robin"
     local health_check_enable = proxy_data.health_check_enable ~= nil and proxy_data.health_check_enable ~= cjson.null and proxy_data.health_check_enable or 1
     local health_check_interval = proxy_data.health_check_interval or 10

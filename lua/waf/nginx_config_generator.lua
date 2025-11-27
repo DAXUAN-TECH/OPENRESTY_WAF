@@ -160,13 +160,24 @@ local function generate_http_server_config(proxy, upstream_name)
     -- 代理到后端
     -- 注意：如果生成了upstream配置（无论是single还是upstream类型），都使用upstream
     if upstream_name then
-        config = config .. "        proxy_pass http://" .. upstream_name .. ";\n"
+        local backend_path = null_to_nil(proxy.backend_path)
+        if backend_path and backend_path ~= "" then
+            -- 如果指定了后端路径，需要在upstream名称后添加路径
+            -- 注意：使用upstream时，路径需要添加到proxy_pass中
+            config = config .. "        proxy_pass http://" .. upstream_name .. escape_nginx_value(backend_path) .. ";\n"
+        else
+            config = config .. "        proxy_pass http://" .. upstream_name .. ";\n"
+        end
     else
         -- 如果没有upstream配置（理论上不应该发生），使用直接地址
         local backend_url = "http://" .. escape_nginx_value(proxy.backend_address)
         local backend_port = null_to_nil(proxy.backend_port)
         if backend_port then
             backend_url = backend_url .. ":" .. backend_port
+        end
+        local backend_path = null_to_nil(proxy.backend_path)
+        if backend_path and backend_path ~= "" then
+            backend_url = backend_url .. escape_nginx_value(backend_path)
         end
         config = config .. "        proxy_pass " .. backend_url .. ";\n"
     end

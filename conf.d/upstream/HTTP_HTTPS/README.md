@@ -8,7 +8,7 @@
 
 ### 自动生成的 Upstream 配置
 
-**位置**：`conf.d/upstream/HTTP_HTTPS/upstream_{proxy_id}.conf`
+**位置**：`conf.d/upstream/HTTP_HTTPS/http_upstream_{proxy_id}.conf`
 
 这些文件由系统根据数据库中的 HTTP/HTTPS 代理配置自动生成。
 
@@ -195,7 +195,7 @@ http {
 
 ### 2. 文件命名规则
 
-- 文件命名：`upstream_{proxy_id}.conf`
+- 文件命名：`http_upstream_{proxy_id}.conf`
 - `{proxy_id}` 是代理配置在数据库中的 ID
 - Upstream 名称：`upstream_{proxy_id}`（在 server 配置中引用）
 
@@ -233,7 +233,7 @@ http {
 ### Q2: 如何查看当前生效的 upstream 配置？
 
 **A**: 可以通过以下方式查看：
-1. 查看配置文件：`cat conf.d/upstream/HTTP_HTTPS/upstream_*.conf`
+1. 查看配置文件：`cat conf.d/upstream/HTTP_HTTPS/http_upstream_*.conf`
 2. 查看 Nginx 配置：`/usr/local/openresty/bin/openresty -T`
 3. 在 Web 管理界面查看代理配置详情
 

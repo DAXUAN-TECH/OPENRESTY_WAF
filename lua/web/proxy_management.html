@@ -377,7 +377,7 @@
                         <th>代理名称</th>
                         <th>类型</th>
                         <th>监听端口</th>
-                        <th>服务器名称</th>
+                        <th>监听域名</th>
                         <th>后端地址</th>
                         <th>状态</th>
                         <th>创建时间</th>
@@ -413,26 +413,24 @@
                     </div>
                 </div>
                 
-                <div class="form-row">
+                <div class="form-row" id="http-fields">
+                    <div class="form-group">
+                        <label>监听域名 *</label>
+                        <input type="text" id="create-server-name" placeholder="example.com www.example.com">
+                        <small style="color: #666; display: block; margin-top: 4px;">支持多个域名，用空格分隔</small>
+                    </div>
                     <div class="form-group">
                         <label>监听端口 *</label>
                         <input type="number" id="create-listen-port" required min="1" max="65535" placeholder="80">
+                    </div>
+                    <div class="form-group" id="http-path-fields">
+                        <label>路径匹配（HTTP代理）</label>
+                        <input type="text" id="create-location-path" value="/" placeholder="/">
                     </div>
                     <div class="form-group">
                         <label>监听地址</label>
                         <input type="text" id="create-listen-address" value="0.0.0.0" placeholder="0.0.0.0">
                     </div>
-                </div>
-                
-                <div class="form-group" id="http-fields">
-                    <label>服务器名称（HTTP代理）*</label>
-                    <input type="text" id="create-server-name" placeholder="example.com www.example.com">
-                    <small style="color: #666;">支持多个域名，用空格分隔</small>
-                </div>
-                
-                <div class="form-group" id="http-path-fields">
-                    <label>路径匹配（HTTP代理）</label>
-                    <input type="text" id="create-location-path" value="/" placeholder="/">
                 </div>
                 
                 <div class="form-group" id="upstream-fields">
@@ -517,23 +515,24 @@
                         <input type="text" id="edit-proxy-type" disabled>
                     </div>
                 </div>
-                <div class="form-row">
+                <div class="form-row" id="edit-http-fields">
+                    <div class="form-group">
+                        <label>监听域名 *</label>
+                        <input type="text" id="edit-server-name">
+                        <small style="color: #666; display: block; margin-top: 4px;">支持多个域名，用空格分隔</small>
+                    </div>
                     <div class="form-group">
                         <label>监听端口 *</label>
                         <input type="number" id="edit-listen-port" required min="1" max="65535">
+                    </div>
+                    <div class="form-group" id="edit-http-path-fields">
+                        <label>路径匹配（HTTP代理）</label>
+                        <input type="text" id="edit-location-path">
                     </div>
                     <div class="form-group">
                         <label>监听地址</label>
                         <input type="text" id="edit-listen-address">
                     </div>
-                </div>
-                <div class="form-group" id="edit-http-fields">
-                    <label>服务器名称（HTTP代理）</label>
-                    <input type="text" id="edit-server-name">
-                </div>
-                <div class="form-group" id="edit-http-path-fields">
-                    <label>路径匹配（HTTP代理）</label>
-                    <input type="text" id="edit-location-path">
                 </div>
                 <div class="form-group" id="edit-upstream-fields">
                     <label>后端服务器列表</label>

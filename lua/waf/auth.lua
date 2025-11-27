@@ -489,24 +489,21 @@ function _M.change_password(username, old_password, new_password)
     
     -- 更新数据库中的密码
     local mysql_pool = require "waf.mysql_pool"
-    local ok, err = pcall(function()
-        local sql = [[
-            UPDATE waf_users
-            SET password_hash = ?,
-                password_changed_at = NOW(),
-                password_must_change = 0
-            WHERE username = ?
-        ]]
-        return mysql_pool.query(sql, password_hash, username)
-    end)
-    
-    if not ok then
-        ngx.log(ngx.ERR, "change_password: database query failed: ", tostring(err))
-        return false, "更新密码失败"
-    end
+    local res, err = mysql_pool.query([[
+        UPDATE waf_users
+        SET password_hash = ?,
+            password_changed_at = NOW(),
+            password_must_change = 0
+        WHERE username = ?
+    ]], password_hash, username)
     
     if err then
         ngx.log(ngx.ERR, "change_password: database error: ", tostring(err))
+        return false, "更新密码失败"
+    end
+    
+    if not res then
+        ngx.log(ngx.ERR, "change_password: database query returned nil")
         return false, "更新密码失败"
     end
     

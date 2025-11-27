@@ -1119,6 +1119,18 @@
             if (proxyType === 'http') {
                 proxyData.server_name = document.getElementById('edit-server-name').value;
                 proxyData.location_path = document.getElementById('edit-location-path').value || '/';
+                // HTTP代理单个后端时，需要后端端口
+                if (proxyData.backend_type === 'single') {
+                    const httpBackendPort = document.getElementById('edit-http-backend-port').value;
+                    if (httpBackendPort) {
+                        proxyData.backend_port = parseInt(httpBackendPort);
+                    }
+                }
+                // HTTP代理后端路径
+                const backendPath = document.getElementById('edit-backend-path').value;
+                if (backendPath && backendPath.trim() !== '') {
+                    proxyData.backend_path = backendPath.trim();
+                }
             } else {
                 proxyData.backend_port = parseInt(document.getElementById('edit-backend-port').value);
             }

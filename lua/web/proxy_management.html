@@ -1084,24 +1084,37 @@
                     toggleEditBackendFields();
                     const editHttpBackendPort = document.querySelector('#edit-single-backend-fields .http-backend-port-field');
                     const editHttpBackendPath = document.querySelector('#edit-single-backend-fields .http-backend-path-field');
+                    const editTcpUdpBackendPort = document.querySelector('#edit-single-backend-fields .tcp-udp-backend-port-field');
+                    const editBackendAddress = document.querySelector('#edit-single-backend-fields .backend-address-field');
                     if (proxy.proxy_type === 'http') {
                         document.getElementById('edit-http-fields').style.display = 'block';
                         document.getElementById('edit-http-path-fields').style.display = 'block';
-                        document.getElementById('edit-tcp-udp-backend-port').style.display = 'none';
                         // HTTP代理单个后端时显示端口和路径字段
                         if (proxy.backend_type === 'single') {
                             if (editHttpBackendPort) editHttpBackendPort.style.display = 'block';
                             if (editHttpBackendPath) editHttpBackendPath.style.display = 'block';
+                            if (editTcpUdpBackendPort) editTcpUdpBackendPort.style.display = 'none';
+                            // HTTP代理时，移除TCP/UDP模式样式
+                            if (editBackendAddress) editBackendAddress.classList.remove('tcp-udp-mode');
                         } else {
                             if (editHttpBackendPort) editHttpBackendPort.style.display = 'none';
                             if (editHttpBackendPath) editHttpBackendPath.style.display = 'none';
+                            if (editTcpUdpBackendPort) editTcpUdpBackendPort.style.display = 'none';
                         }
                     } else {
                         document.getElementById('edit-http-fields').style.display = 'none';
                         document.getElementById('edit-http-path-fields').style.display = 'none';
                         if (editHttpBackendPort) editHttpBackendPort.style.display = 'none';
                         if (editHttpBackendPath) editHttpBackendPath.style.display = 'none';
-                        document.getElementById('edit-tcp-udp-backend-port').style.display = 'block';
+                        // TCP/UDP代理单个后端时显示端口字段
+                        if (proxy.backend_type === 'single') {
+                            if (editTcpUdpBackendPort) editTcpUdpBackendPort.style.display = 'block';
+                            // TCP/UDP代理时，添加TCP/UDP模式样式（缩短75%）
+                            if (editBackendAddress) editBackendAddress.classList.add('tcp-udp-mode');
+                        } else {
+                            if (editTcpUdpBackendPort) editTcpUdpBackendPort.style.display = 'none';
+                            if (editBackendAddress) editBackendAddress.classList.remove('tcp-udp-mode');
+                        }
                     }
                     
                     // 加载后端服务器列表

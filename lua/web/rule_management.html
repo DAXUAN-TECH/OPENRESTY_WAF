@@ -617,7 +617,11 @@
                     </select>
                     <input type="text" id="search-input" placeholder="搜索规则名称..." style="width: 200px;">
                 </div>
-                <button class="btn btn-primary" onclick="loadRules()">刷新</button>
+                <div style="display: flex; gap: 10px;">
+                    <button class="btn btn-primary" onclick="applyFilters()">筛选</button>
+                    <button class="btn btn-secondary" onclick="resetFilters()">重置筛选</button>
+                    <button class="btn btn-primary" onclick="loadRules()">刷新</button>
+                </div>
             </div>
             
             <table id="rules-table">
@@ -805,16 +809,37 @@
         // 切换标签页
         function switchTab(tab) {
             document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => {
+                c.classList.remove('active');
+                c.style.display = 'none'; // 确保隐藏
+            });
             
             if (tab === 'rules') {
                 document.querySelectorAll('.tab')[0].classList.add('active');
-                document.getElementById('rules-tab').classList.add('active');
+                const rulesTab = document.getElementById('rules-tab');
+                rulesTab.classList.add('active');
+                rulesTab.style.display = 'block'; // 确保显示
                 loadRules();
             } else if (tab === 'create') {
                 document.querySelectorAll('.tab')[1].classList.add('active');
-                document.getElementById('create-tab').classList.add('active');
+                const createTab = document.getElementById('create-tab');
+                createTab.classList.add('active');
+                createTab.style.display = 'block'; // 确保显示
             }
+        }
+        
+        // 应用筛选
+        function applyFilters() {
+            loadRules(1); // 重置到第一页并应用筛选
+        }
+        
+        // 重置筛选
+        function resetFilters() {
+            document.getElementById('filter-type').value = '';
+            document.getElementById('filter-status').value = '';
+            document.getElementById('filter-group').value = '';
+            document.getElementById('search-input').value = '';
+            loadRules(1); // 重置到第一页并重新加载
         }
         
         // 使用公共函数 showAlert（已在 common.js 中定义）

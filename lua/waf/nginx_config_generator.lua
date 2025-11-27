@@ -114,11 +114,7 @@ end
 
 -- 生成HTTP server块配置
 local function generate_http_server_config(proxy, upstream_name)
-    local config = "# ============================================\n"
-    config = config .. "# 代理配置: " .. escape_nginx_value(proxy.proxy_name) .. " (ID: " .. proxy.id .. ")\n"
-    config = config .. "# 自动生成，请勿手动修改\n"
-    config = config .. "# ============================================\n\n"
-    config = config .. "server {\n"
+    local config = "server {\n"
     
     -- 监听端口
     local listen_line = "    listen       " .. proxy.listen_port
@@ -288,12 +284,7 @@ end
 
 -- 生成TCP/UDP stream server块配置
 local function generate_stream_server_config(proxy, upstream_name)
-    local config = "# ============================================\n"
-    config = config .. "# 代理配置: " .. escape_nginx_value(proxy.proxy_name) .. " (ID: " .. proxy.id .. ")\n"
-    config = config .. "# 类型: " .. string.upper(proxy.proxy_type) .. "\n"
-    config = config .. "# 自动生成，请勿手动修改\n"
-    config = config .. "# ============================================\n\n"
-    config = config .. "server {\n"
+    local config = "server {\n"
     
     -- 监听端口
     config = config .. "    listen " .. proxy.listen_port

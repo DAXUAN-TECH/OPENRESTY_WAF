@@ -173,8 +173,8 @@ function _M.create_proxy(proxy_data)
         return nil, err
     end
     
-    -- 如果是upstream类型，添加后端服务器
-    if backend_type == "upstream" and proxy_data.backends and #proxy_data.backends > 0 then
+    -- 添加后端服务器（只支持upstream类型）
+    if proxy_data.backends and #proxy_data.backends > 0 then
         for _, backend in ipairs(proxy_data.backends) do
             local backend_sql = [[
                 INSERT INTO waf_proxy_backends
@@ -319,7 +319,7 @@ function _M.get_proxy(proxy_id)
     
     local proxy = proxies[1]
     
-    -- 如果是upstream类型，查询后端服务器
+    -- 查询后端服务器（只支持upstream类型）
     if proxy.backend_type == "upstream" then
         local backends_sql = [[
             SELECT id, backend_address, backend_port, weight, max_fails, fail_timeout,
@@ -458,7 +458,7 @@ function _M.update_proxy(proxy_id, proxy_data)
         return nil, err
     end
     
-    -- 更新后端服务器（如果是upstream类型）
+    -- 更新后端服务器（只支持upstream类型）
     if proxy_data.backends and proxy.backend_type == "upstream" then
         -- 删除旧的后端服务器
         local delete_sql = "DELETE FROM waf_proxy_backends WHERE proxy_id = ?"

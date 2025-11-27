@@ -1064,7 +1064,10 @@
                         });
                     }
                     
-                    document.getElementById('edit-modal').style.display = 'block';
+                    const editModal = document.getElementById('edit-modal');
+                    editModal.style.display = 'flex';
+                    editModal.style.alignItems = 'center';
+                    editModal.style.justifyContent = 'center';
                 } else {
                     showAlert(data.error || '加载失败', 'error');
                 }

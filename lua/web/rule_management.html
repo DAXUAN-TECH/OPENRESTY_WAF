@@ -1145,10 +1145,38 @@
             event.preventDefault();
             
             const id = document.getElementById('edit-id').value;
+            if (!id) {
+                showAlert('规则ID不能为空', 'error');
+                return;
+            }
+            
+            const ruleValue = document.getElementById('edit-rule-value').value.trim();
+            const ruleName = document.getElementById('edit-rule-name').value.trim();
+            
+            if (!ruleValue) {
+                showAlert('规则值不能为空', 'error');
+                document.getElementById('edit-rule-value').focus();
+                return;
+            }
+            
+            if (!ruleName) {
+                showAlert('规则名称不能为空', 'error');
+                document.getElementById('edit-rule-name').focus();
+                return;
+            }
+            
+            // 禁用保存按钮，防止重复提交
+            const submitButton = event.target.querySelector('button[type="submit"]');
+            const originalButtonText = submitButton ? submitButton.innerHTML : '';
+            if (submitButton) {
+                submitButton.disabled = true;
+                submitButton.innerHTML = '保存中...';
+            }
+            
             const ruleData = {
-                rule_value: document.getElementById('edit-rule-value').value,
-                rule_name: document.getElementById('edit-rule-name').value,
-                description: document.getElementById('edit-description').value,
+                rule_value: ruleValue,
+                rule_name: ruleName,
+                description: document.getElementById('edit-description').value || '',
                 rule_group: document.getElementById('edit-rule-group').value || '',
                 priority: parseInt(document.getElementById('edit-priority').value) || 0,
                 status: parseInt(document.getElementById('edit-status').value)
@@ -1182,6 +1210,12 @@
                 }
             } catch (error) {
                 showAlert('网络错误: ' + error.message, 'error');
+            } finally {
+                // 恢复按钮状态
+                if (submitButton) {
+                    submitButton.disabled = false;
+                    submitButton.innerHTML = originalButtonText;
+                }
             }
         }
         

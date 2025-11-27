@@ -557,7 +557,7 @@ function _M.generate_all_configs()
         
         -- 从数据库查询多个后端服务器
         local backends_sql = [[
-            SELECT id, backend_address, backend_port, weight, max_fails, fail_timeout,
+            SELECT id, backend_address, backend_port, backend_path, weight, max_fails, fail_timeout,
                    backup, down, status
             FROM waf_proxy_backends
             WHERE proxy_id = ? AND status = 1

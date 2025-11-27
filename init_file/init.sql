@@ -593,6 +593,7 @@ CREATE TABLE IF NOT EXISTS waf_proxy_backends (
     proxy_id INT UNSIGNED NOT NULL COMMENT '代理配置ID（关联waf_proxy_configs表）',
     backend_address VARCHAR(255) NOT NULL COMMENT '后端服务器地址（IP地址或域名）',
     backend_port INT UNSIGNED NOT NULL COMMENT '后端服务器端口',
+    backend_path VARCHAR(255) DEFAULT NULL COMMENT '后端路径（HTTP/HTTPS代理时使用，代理到后端的特定路径，如/aaa，留空则代理到根路径）',
     weight INT UNSIGNED DEFAULT 1 COMMENT '权重（负载均衡时使用，数字越大权重越高）',
     max_fails INT DEFAULT 3 COMMENT '最大失败次数（超过此次数后标记为不可用）',
     fail_timeout INT DEFAULT 30 COMMENT '失败超时（秒，失败后在此时间内不再尝试）',

@@ -441,11 +441,12 @@
                         <div class="backend-item">
                             <input type="text" placeholder="IP地址" class="backend-address">
                             <input type="number" placeholder="端口" class="backend-port" min="1" max="65535">
+                            <input type="text" placeholder="路径（HTTP/HTTPS）" class="backend-path" style="display: none;">
                             <input type="number" placeholder="权重" class="backend-weight" value="1" min="1">
                             <button type="button" class="btn btn-danger" onclick="removeBackend(this)">删除</button>
                         </div>
                     </div>
-                    <button type="button" class="btn btn-secondary" onclick="addBackend()">添加后端服务器</button>
+                    <button type="button" class="btn btn-primary" onclick="addBackend()">添加后端服务器</button>
                     <div class="form-group" style="margin-top: 10px;">
                         <label>负载均衡算法</label>
                         <select id="create-load-balance">
@@ -537,7 +538,7 @@
                 <div class="form-group" id="edit-upstream-fields">
                     <label>后端服务器列表</label>
                     <div class="backends-list" id="edit-backends-list"></div>
-                    <button type="button" class="btn btn-secondary" onclick="addEditBackend()">添加后端服务器</button>
+                    <button type="button" class="btn btn-primary" onclick="addEditBackend()">添加后端服务器</button>
                     <div class="form-group" style="margin-top: 10px;">
                         <label>负载均衡算法</label>
                         <select id="edit-load-balance">
@@ -640,9 +641,17 @@
             if (proxyType === 'http') {
                 httpFields.style.display = 'block';
                 httpPathFields.style.display = 'block';
+                // 显示所有后端服务器列表中的路径字段
+                document.querySelectorAll('#backends-list .backend-path').forEach(field => {
+                    field.style.display = 'block';
+                });
             } else {
                 httpFields.style.display = 'none';
                 httpPathFields.style.display = 'none';
+                // 隐藏所有后端服务器列表中的路径字段
+                document.querySelectorAll('#backends-list .backend-path').forEach(field => {
+                    field.style.display = 'none';
+                });
             }
         }
         
@@ -651,11 +660,19 @@
         // 添加后端服务器
         function addBackend() {
             const list = document.getElementById('backends-list');
+            const proxyType = document.getElementById('create-proxy-type').value;
             const item = document.createElement('div');
             item.className = 'backend-item';
+            
+            // HTTP/HTTPS代理显示路径字段，TCP/UDP代理不显示
+            const pathField = proxyType === 'http' 
+                ? '<input type="text" placeholder="路径" class="backend-path">'
+                : '<input type="text" placeholder="路径（HTTP/HTTPS）" class="backend-path" style="display: none;">';
+            
             item.innerHTML = `
                 <input type="text" placeholder="IP地址" class="backend-address">
                 <input type="number" placeholder="端口" class="backend-port" min="1" max="65535">
+                ${pathField}
                 <input type="number" placeholder="权重" class="backend-weight" value="1" min="1">
                 <button type="button" class="btn btn-danger" onclick="removeBackend(this)">删除</button>
             `;
@@ -868,8 +885,15 @@
                 const address = item.querySelector('.backend-address').value;
                 const port = parseInt(item.querySelector('.backend-port').value);
                 const weight = parseInt(item.querySelector('.backend-weight').value) || 1;
+                const pathField = item.querySelector('.backend-path');
+                const path = pathField ? pathField.value.trim() : '';
                 if (address && port) {
-                    backends.push({backend_address: address, backend_port: port, weight: weight});
+                    const backend = {backend_address: address, backend_port: port, weight: weight};
+                    // HTTP/HTTPS代理时，如果有路径，添加到后端配置中
+                    if (proxyData.proxy_type === 'http' && path) {
+                        backend.backend_path = path;
+                    }
+                    backends.push(backend);
                 }
             });
             proxyData.backends = backends;
@@ -943,10 +967,26 @@
                             lastItem.querySelector('.backend-address').value = backend.backend_address;
                             lastItem.querySelector('.backend-port').value = backend.backend_port;
                             lastItem.querySelector('.backend-weight').value = backend.weight || 1;
+                            // 设置路径字段（如果存在）
+                            const pathField = lastItem.querySelector('.backend-path');
+                            if (pathField && backend.backend_path) {
+                                pathField.value = backend.backend_path;
+                            }
                         });
                     } else {
                         // 如果没有后端服务器，至少添加一个空的后端项
                         addEditBackend();
+                    }
+                    
+                    // 根据代理类型显示/隐藏路径字段
+                    if (proxy.proxy_type === 'http') {
+                        document.querySelectorAll('#edit-backends-list .backend-path').forEach(field => {
+                            field.style.display = 'block';
+                        });
+                    } else {
+                        document.querySelectorAll('#edit-backends-list .backend-path').forEach(field => {
+                            field.style.display = 'none';
+                        });
                     }
                     
                     document.getElementById('edit-modal').style.display = 'block';
@@ -991,8 +1031,15 @@
                 const address = item.querySelector('.backend-address').value;
                 const port = parseInt(item.querySelector('.backend-port').value);
                 const weight = parseInt(item.querySelector('.backend-weight').value) || 1;
+                const pathField = item.querySelector('.backend-path');
+                const path = pathField ? pathField.value.trim() : '';
                 if (address && port) {
-                    backends.push({backend_address: address, backend_port: port, weight: weight});
+                    const backend = {backend_address: address, backend_port: port, weight: weight};
+                    // HTTP/HTTPS代理时，如果有路径，添加到后端配置中
+                    if (proxyType === 'http' && path) {
+                        backend.backend_path = path;
+                    }
+                    backends.push(backend);
                 }
             });
             proxyData.backends = backends;
@@ -1086,7 +1133,11 @@
         // 重置创建表单
         function resetCreateForm() {
             document.getElementById('create-form').reset();
-            document.getElementById('backends-list').innerHTML = '<div class="backend-item"><input type="text" placeholder="IP地址" class="backend-address"><input type="number" placeholder="端口" class="backend-port" min="1" max="65535"><input type="number" placeholder="权重" class="backend-weight" value="1" min="1"><button type="button" class="btn btn-danger" onclick="removeBackend(this)">删除</button></div>';
+            const proxyType = document.getElementById('create-proxy-type').value;
+            const pathField = proxyType === 'http' 
+                ? '<input type="text" placeholder="路径" class="backend-path">'
+                : '<input type="text" placeholder="路径（HTTP/HTTPS）" class="backend-path" style="display: none;">';
+            document.getElementById('backends-list').innerHTML = `<div class="backend-item"><input type="text" placeholder="IP地址" class="backend-address"><input type="number" placeholder="端口" class="backend-port" min="1" max="65535">${pathField}<input type="number" placeholder="权重" class="backend-weight" value="1" min="1"><button type="button" class="btn btn-danger" onclick="removeBackend(this)">删除</button></div>`;
             toggleProxyFields();
         }
         

@@ -178,13 +178,15 @@ function _M.create_proxy(proxy_data)
         for _, backend in ipairs(proxy_data.backends) do
             local backend_sql = [[
                 INSERT INTO waf_proxy_backends
-                (proxy_id, backend_address, backend_port, weight, max_fails, fail_timeout, backup, down, status)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (proxy_id, backend_address, backend_port, backend_path, weight, max_fails, fail_timeout, backup, down, status)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ]]
+            local backend_path = null_to_nil(backend.backend_path)
             mysql_pool.insert(backend_sql,
                 insert_id,
                 backend.backend_address,
                 backend.backend_port,
+                backend_path,
                 backend.weight or 1,
                 backend.max_fails or 3,
                 backend.fail_timeout or 30,
@@ -269,7 +271,7 @@ function _M.list_proxies(params)
     for _, proxy in ipairs(proxies or {}) do
         if proxy.backend_type == "upstream" then
             local backends_sql = [[
-                SELECT id, backend_address, backend_port, weight, max_fails, fail_timeout,
+                SELECT id, backend_address, backend_port, backend_path, weight, max_fails, fail_timeout,
                        backup, down, status
                 FROM waf_proxy_backends
                 WHERE proxy_id = ? AND status = 1
@@ -322,7 +324,7 @@ function _M.get_proxy(proxy_id)
     -- 查询后端服务器（只支持upstream类型）
     if proxy.backend_type == "upstream" then
         local backends_sql = [[
-            SELECT id, backend_address, backend_port, weight, max_fails, fail_timeout,
+            SELECT id, backend_address, backend_port, backend_path, weight, max_fails, fail_timeout,
                    backup, down, status
             FROM waf_proxy_backends
             WHERE proxy_id = ?
@@ -468,13 +470,15 @@ function _M.update_proxy(proxy_id, proxy_data)
         for _, backend in ipairs(proxy_data.backends) do
             local backend_sql = [[
                 INSERT INTO waf_proxy_backends
-                (proxy_id, backend_address, backend_port, weight, max_fails, fail_timeout, backup, down, status)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (proxy_id, backend_address, backend_port, backend_path, weight, max_fails, fail_timeout, backup, down, status)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ]]
+            local backend_path = null_to_nil(backend.backend_path)
             mysql_pool.insert(backend_sql,
                 proxy_id,
                 backend.backend_address,
                 backend.backend_port,
+                backend_path,
                 backend.weight or 1,
                 backend.max_fails or 3,
                 backend.fail_timeout or 30,

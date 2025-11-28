@@ -407,7 +407,7 @@ local function generate_stream_server_config(proxy, upstream_name)
 end
 
 -- 生成单个HTTP代理的server配置（不包含upstream）
-local function generate_http_proxy_file(proxy, upstream_name)
+local function generate_http_proxy_file(proxy, upstream_name, backends)
     local config = "# ============================================\n"
     config = config .. "# 代理配置: " .. escape_nginx_value(proxy.proxy_name) .. " (ID: " .. proxy.id .. ")\n"
     config = config .. "# 自动生成，请勿手动修改\n"
@@ -705,7 +705,7 @@ function _M.generate_all_configs()
         -- 根据代理类型生成对应的server配置文件
         if proxy.proxy_type == "http" then
             -- 生成HTTP代理server配置文件
-            local config_content = generate_http_proxy_file(proxy, upstream_name)
+            local config_content = generate_http_proxy_file(proxy, upstream_name, backends)
             -- HTTP/HTTPS server配置放在 vhost_conf/http_https 子目录
             local config_file = project_root .. "/conf.d/vhost_conf/http_https/proxy_http_" .. proxy.id .. ".conf"
             

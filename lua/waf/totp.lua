@@ -301,17 +301,45 @@ function _M.generate_totp(secret_base32, time_step, digits)
     end
     
     -- 动态截取（RFC 6238）
-    local offset = bit.band(string.byte(hmac, #hmac), 0x0F) + 1
-    local binary = bit.bor(
-                   bit.lshift(bit.band(string.byte(hmac, offset), 0x7F), 24),
-                   bit.lshift(bit.band(string.byte(hmac, offset + 1), 0xFF), 16),
-                   bit.lshift(bit.band(string.byte(hmac, offset + 2), 0xFF), 8),
-                   bit.band(string.byte(hmac, offset + 3), 0xFF))
+    -- 检查HMAC长度，确保有足够的字节
+    if #hmac < 20 then
+        ngx.log(ngx.ERR, "totp.generate_totp: HMAC length is ", #hmac, ", expected at least 20 bytes")
+        return nil, "Invalid HMAC length"
+    end
     
+    -- 获取最后一个字节的低4位作为偏移量
+    local last_byte = string.byte(hmac, #hmac)
+    local offset = bit.band(last_byte, 0x0F) + 1
+    
+    -- 确保offset + 3不会超出HMAC长度
+    if offset + 3 > #hmac then
+        ngx.log(ngx.ERR, "totp.generate_totp: offset ", offset, " + 3 exceeds HMAC length ", #hmac)
+        return nil, "Invalid offset"
+    end
+    
+    -- 提取4个字节并组合成31位整数（RFC 6238）
+    local byte1 = string.byte(hmac, offset)
+    local byte2 = string.byte(hmac, offset + 1)
+    local byte3 = string.byte(hmac, offset + 2)
+    local byte4 = string.byte(hmac, offset + 3)
+    
+    -- 组合成31位整数（最高位清零，避免负数）
+    local binary = bit.bor(
+                   bit.lshift(bit.band(byte1, 0x7F), 24),  -- 最高位清零
+                   bit.lshift(bit.band(byte2, 0xFF), 16),
+                   bit.lshift(bit.band(byte3, 0xFF), 8),
+                   bit.band(byte4, 0xFF))
+    
+    -- 计算OTP（取模10^digits）
     local otp = binary % (10 ^ digits)
     
     -- 格式化为指定位数
-    return string.format("%0" .. digits .. "d", otp)
+    local result = string.format("%0" .. digits .. "d", otp)
+    
+    -- 添加调试信息（仅在DEBUG模式下）
+    ngx.log(ngx.DEBUG, "totp.generate_totp: HMAC length: ", #hmac, ", offset: ", offset, ", binary: ", binary, ", otp: ", result)
+    
+    return result
 end
 
 -- 验证 TOTP 代码
@@ -371,24 +399,47 @@ function _M.verify_totp(secret_base32, code, time_step, window)
             -- 继续检查下一个窗口
         else
             -- 动态截取（RFC 6238）
-            local offset = bit.band(string.byte(hmac, #hmac), 0x0F) + 1
-            local binary = bit.bor(
-                           bit.lshift(bit.band(string.byte(hmac, offset), 0x7F), 24),
-                           bit.lshift(bit.band(string.byte(hmac, offset + 1), 0xFF), 16),
-                           bit.lshift(bit.band(string.byte(hmac, offset + 2), 0xFF), 8),
-                           bit.band(string.byte(hmac, offset + 3), 0xFF))
-            
-            local test_code = string.format("%06d", binary % 1000000)
-            -- 确保 test_code 是字符串
-            test_code = tostring(test_code)
-            
-            -- 记录每个窗口的代码
-            table.insert(all_codes, string.format("counter[%d]=%s", test_counter, test_code))
-            ngx.log(ngx.INFO, "totp.verify_totp: window[", i, "] counter: ", test_counter, ", generated_code: ", test_code, ", input_code: ", code, ", match: ", test_code == code)
-            
-            if test_code == code then
-                ngx.log(ngx.INFO, "totp.verify_totp: TOTP code verified successfully, counter: ", test_counter, ", window offset: ", i)
-                return true
+            -- 检查HMAC长度，确保有足够的字节
+            if #hmac < 20 then
+                ngx.log(ngx.WARN, "totp.verify_totp: HMAC length is ", #hmac, ", expected at least 20 bytes for counter ", test_counter)
+                table.insert(all_codes, string.format("counter[%d]=ERROR_HMAC_LENGTH", test_counter))
+                -- 继续检查下一个窗口
+            else
+                -- 获取最后一个字节的低4位作为偏移量
+                local last_byte = string.byte(hmac, #hmac)
+                local offset = bit.band(last_byte, 0x0F) + 1
+                
+                -- 确保offset + 3不会超出HMAC长度
+                if offset + 3 > #hmac then
+                    ngx.log(ngx.WARN, "totp.verify_totp: offset ", offset, " + 3 exceeds HMAC length ", #hmac, " for counter ", test_counter)
+                    table.insert(all_codes, string.format("counter[%d]=ERROR_OFFSET", test_counter))
+                else
+                    -- 提取4个字节并组合成31位整数（RFC 6238）
+                    local byte1 = string.byte(hmac, offset)
+                    local byte2 = string.byte(hmac, offset + 1)
+                    local byte3 = string.byte(hmac, offset + 2)
+                    local byte4 = string.byte(hmac, offset + 3)
+                    
+                    -- 组合成31位整数（最高位清零，避免负数）
+                    local binary = bit.bor(
+                                   bit.lshift(bit.band(byte1, 0x7F), 24),  -- 最高位清零
+                                   bit.lshift(bit.band(byte2, 0xFF), 16),
+                                   bit.lshift(bit.band(byte3, 0xFF), 8),
+                                   bit.band(byte4, 0xFF))
+                    
+                    local test_code = string.format("%06d", binary % 1000000)
+                    -- 确保 test_code 是字符串
+                    test_code = tostring(test_code)
+                    
+                    -- 记录每个窗口的代码
+                    table.insert(all_codes, string.format("counter[%d]=%s", test_counter, test_code))
+                    ngx.log(ngx.INFO, "totp.verify_totp: window[", i, "] counter: ", test_counter, ", generated_code: ", test_code, ", input_code: ", code, ", match: ", test_code == code)
+                    
+                    if test_code == code then
+                        ngx.log(ngx.INFO, "totp.verify_totp: TOTP code verified successfully, counter: ", test_counter, ", window offset: ", i)
+                        return true
+                    end
+                end
             end
         end
     end

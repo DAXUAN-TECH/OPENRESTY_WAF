@@ -152,23 +152,23 @@
                     <h2 style="margin-bottom: 20px;">设置双因素认证</h2>
                     <div id="setupModalContent">
                         <div class="qr-container" id="modalQrContainer"></div>
-                        <div class="form-group">
+                <div class="form-group">
                             <label for="modalTotpCode">请输入6位验证码以启用双因素认证</label>
-                            <input 
-                                type="text" 
+                    <input 
+                        type="text" 
                                 id="modalTotpCode" 
-                                placeholder="000000" 
-                                maxlength="6"
-                                pattern="[0-9]{6}"
-                            >
-                        </div>
+                        placeholder="000000" 
+                        maxlength="6"
+                        pattern="[0-9]{6}"
+                    >
+                </div>
                         <div class="form-actions">
                             <button class="button button-primary" id="modalEnableButton" onclick="enableTotpFromModal()">
-                                启用双因素认证
-                            </button>
+                                启用
+                </button>
                             <button class="button button-secondary" onclick="closeSetupModal()">
-                                取消
-                            </button>
+                    取消
+                </button>
                         </div>
                     </div>
                 </div>
@@ -195,10 +195,10 @@
                             <div class="form-actions">
                                 <button class="button button-primary" onclick="verifyOldCode()">
                                     下一步
-                                </button>
+                </button>
                                 <button class="button button-secondary" onclick="closeResetModal()">
                                     取消
-                                </button>
+                </button>
                             </div>
                         </div>
                         <!-- 第二步：显示新二维码和验证新验证码 -->

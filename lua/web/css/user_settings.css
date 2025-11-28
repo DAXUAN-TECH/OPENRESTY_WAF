@@ -325,6 +325,23 @@
             transition: border-color 0.3s;
         }
         
+        /* 弹出框中的验证码输入框样式 */
+        #modalTotpCode {
+            width: 200px !important;
+            max-width: 200px !important;
+            margin: 0 auto;
+            display: block;
+            text-align: center;
+            font-size: 18px;
+            letter-spacing: 8px;
+            padding: 12px;
+        }
+        
+        #modalTotpCode::placeholder {
+            text-align: center;
+            letter-spacing: 4px;
+        }
+        
         .form-group select {
             cursor: pointer;
         }

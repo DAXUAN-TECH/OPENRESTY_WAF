@@ -629,9 +629,13 @@ function _M.check_ip_allowed(ip_address)
         return false
     end
     
+    ngx.log(ngx.DEBUG, "check_ip_allowed: checking IP: ", ip_address)
+    
     -- 先检查开关是否启用（使用config_manager，带缓存）
     -- 如果配置不存在，config_manager会返回默认值0（未启用）
     local enabled = config_manager.get_config("system_access_whitelist_enabled", 0, "number")
+    
+    ngx.log(ngx.DEBUG, "check_ip_allowed: system_access_whitelist_enabled=", enabled)
     
     -- 如果配置不存在，尝试创建默认配置（异步，不阻塞）
     if enabled == nil then
@@ -654,12 +658,12 @@ function _M.check_ip_allowed(ip_address)
     
     if enabled == 0 then
         -- 白名单未启用，允许所有IP访问
-        ngx.log(ngx.DEBUG, "check_ip_allowed: whitelist disabled, allowing access for IP: ", ip_address)
+        ngx.log(ngx.DEBUG, "check_ip_allowed: whitelist disabled (enabled=0), allowing access for IP: ", ip_address)
         return true
     end
     
     -- 白名单已启用，检查IP是否在白名单中
-    ngx.log(ngx.DEBUG, "check_ip_allowed: whitelist enabled, checking IP: ", ip_address)
+    ngx.log(ngx.INFO, "check_ip_allowed: whitelist enabled (enabled=1), checking IP: ", ip_address)
     local ok, res, err = pcall(function()
         local sql = "SELECT ip_address FROM waf_system_access_whitelist WHERE status = 1"
         return mysql_pool.query(sql)
@@ -681,7 +685,7 @@ function _M.check_ip_allowed(ip_address)
         return false
     end
     
-    ngx.log(ngx.DEBUG, "check_ip_allowed: found ", #res, " whitelist entries")
+    ngx.log(ngx.INFO, "check_ip_allowed: found ", #res, " whitelist entries, checking IP: ", ip_address)
     
     -- 检查IP是否匹配任何白名单条目
     for _, row in ipairs(res) do
@@ -734,7 +738,7 @@ function _M.check_ip_allowed(ip_address)
         end
     end
     
-    ngx.log(ngx.DEBUG, "check_ip_allowed: IP not found in whitelist: ", ip_address)
+    ngx.log(ngx.WARN, "check_ip_allowed: IP ", ip_address, " not found in whitelist (checked ", #res, " entries)")
     return false
 end
 

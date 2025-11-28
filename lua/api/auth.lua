@@ -88,14 +88,15 @@ function _M.login()
                     return
                 end
                 
-                -- 验证 TOTP 代码
-                local totp_ok, err = totp.verify_totp(user_info.totp_secret, totp_code)
+                -- 验证 TOTP 代码（使用较大的时间窗口以支持时间偏差）
+                -- 允许前后10个时间窗口（±5分钟），支持跨时区或时间同步不准确的情况
+                local totp_ok, err = totp.verify_totp(user_info.totp_secret, totp_code, 30, 10)
                 if not totp_ok then
                     -- 记录登录失败审计日志
                     audit_log.log_login(username, false, "双因素认证代码错误")
                     api_utils.json_response({
                         error = "Unauthorized",
-                        message = "双因素认证代码错误"
+                        message = "双因素认证代码错误，请确保时间同步正确，验证码在5分钟内有效"
                     }, 401)
                     return
                 end
@@ -358,10 +359,14 @@ function _M.enable_totp()
     local totp_ok, err = false, "Not verified yet"
     local secret_source = "provided"
     
+    -- 增加时间窗口以支持更大的时间偏差（±5分钟，共10个时间窗口）
+    -- 这对于跨时区或时间同步不准确的情况很有帮助
+    local time_window = 10  -- 允许前后10个时间窗口（±5分钟）
+    
     if cached_secret then
         -- 先尝试使用缓存的 secret（服务器生成的，更可靠）
-        ngx.log(ngx.INFO, "auth.enable_totp: trying cached secret first for user: ", session.username)
-        totp_ok, err = totp.verify_totp(cached_secret, code, 30, 3)
+        ngx.log(ngx.INFO, "auth.enable_totp: trying cached secret first for user: ", session.username, ", time_window: ", time_window)
+        totp_ok, err = totp.verify_totp(cached_secret, code, 30, time_window)
         if totp_ok then
             secret = cached_secret
             secret_source = "cached"
@@ -369,7 +374,7 @@ function _M.enable_totp()
         else
             ngx.log(ngx.INFO, "auth.enable_totp: cached secret verification failed, trying provided secret for user: ", session.username)
             -- 如果缓存的 secret 验证失败，尝试提供的 secret
-            totp_ok, err = totp.verify_totp(secret, code, 30, 3)
+            totp_ok, err = totp.verify_totp(secret, code, 30, time_window)
             if totp_ok then
                 secret_source = "provided"
                 ngx.log(ngx.INFO, "auth.enable_totp: provided secret verification successful for user: ", session.username)
@@ -379,8 +384,8 @@ function _M.enable_totp()
         end
     else
         -- 没有缓存的 secret，直接使用提供的 secret
-        ngx.log(ngx.INFO, "auth.enable_totp: no cached secret, using provided secret for user: ", session.username)
-        totp_ok, err = totp.verify_totp(secret, code, 30, 3)
+        ngx.log(ngx.INFO, "auth.enable_totp: no cached secret, using provided secret for user: ", session.username, ", time_window: ", time_window)
+        totp_ok, err = totp.verify_totp(secret, code, 30, time_window)
         secret_source = "provided"
     end
     
@@ -388,7 +393,7 @@ function _M.enable_totp()
         ngx.log(ngx.WARN, "auth.enable_totp: TOTP verification failed for user: ", session.username, ", secret_source: ", secret_source, ", error: ", tostring(err))
         api_utils.json_response({
             error = "Unauthorized",
-            message = "验证码错误，请重试。请确保时间同步正确，验证码在90秒内有效"
+            message = "验证码错误，请重试。请确保时间同步正确，验证码在5分钟内有效。如果时间偏差较大，请检查服务器和手机时间是否准确。"
         }, 401)
         return
     end

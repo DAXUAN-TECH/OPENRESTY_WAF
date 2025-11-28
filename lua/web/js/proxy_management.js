@@ -681,6 +681,16 @@ let currentPage = 1;
             if (modal) {
                 modal.style.display = 'flex';
                 modal.classList.add('show');
+                // 清空已选择的规则
+                selectedIpRules = [];
+                selectedRuleType = null;
+                renderSelectedRules();
+                // 如果规则列表未加载，先加载
+                if (allIpRules.length === 0) {
+                    loadIpRules();
+                } else {
+                    filterIpRulesByType();
+                }
             }
         }
         

@@ -995,23 +995,75 @@ let currentPage = 1;
         async function loadGroups() {
             try {
                 const response = await fetch('/api/rules/groups');
+                
+                // 检查响应状态
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    let errorData;
+                    try {
+                        errorData = JSON.parse(errorText);
+                    } catch (e) {
+                        errorData = { error: errorText || `HTTP ${response.status}: ${response.statusText}` };
+                    }
+                    throw new Error(errorData.error || errorData.message || `HTTP ${response.status}: ${response.statusText}`);
+                }
+                
                 const data = await response.json();
                 
-                if (data.success && data.data) {
-                    const filterGroup = document.getElementById('filter-group');
-                    const groupList = document.getElementById('group-list');
-                    const groupListEdit = document.getElementById('group-list-edit');
-                    
-                    // 清空现有选项（保留"全部分组"）
-                    filterGroup.innerHTML = '<option value="">全部分组</option>';
-                    groupList.innerHTML = '';
-                    groupListEdit.innerHTML = '';
-                    
-                    // 添加分组选项
-                    data.data.forEach(group => {
+                // 防御性检查：确保数据结构正确
+                if (!data || typeof data !== 'object') {
+                    console.error('API response is not an object:', data);
+                    showAlert('响应数据格式错误', 'error');
+                    return;
+                }
+                
+                if (!data.success) {
+                    console.error('API response indicates failure:', data);
+                    showAlert('加载分组列表失败: ' + (data.error || 'unknown error'), 'error');
+                    return;
+                }
+                
+                if (!data.data) {
+                    console.error('API response missing data field:', data);
+                    showAlert('响应数据格式错误：缺少 data 字段', 'error');
+                    return;
+                }
+                
+                // 确保 data.data 是数组
+                let groupsArray = [];
+                if (Array.isArray(data.data)) {
+                    groupsArray = data.data;
+                } else if (typeof data.data === 'object' && data.data !== null) {
+                    // 如果是对象，尝试转换为数组
+                    console.warn('data.data is not an array, attempting to convert:', data.data);
+                    groupsArray = Object.values(data.data);
+                } else {
+                    console.error('data.data is not an array or object:', typeof data.data, data.data);
+                    showAlert('响应数据格式错误：data 字段不是数组', 'error');
+                    return;
+                }
+                
+                const filterGroup = document.getElementById('filter-group');
+                const groupList = document.getElementById('group-list');
+                const groupListEdit = document.getElementById('group-list-edit');
+                
+                // 检查DOM元素是否存在
+                if (!filterGroup || !groupList || !groupListEdit) {
+                    console.error('Required DOM elements not found');
+                    return;
+                }
+                
+                // 清空现有选项（保留"全部分组"）
+                filterGroup.innerHTML = '<option value="">全部分组</option>';
+                groupList.innerHTML = '';
+                groupListEdit.innerHTML = '';
+                
+                // 添加分组选项
+                groupsArray.forEach(group => {
+                    if (group && group.group_name) {
                         const option = document.createElement('option');
                         option.value = group.group_name;
-                        option.textContent = group.group_name + ' (' + group.rule_count + ')';
+                        option.textContent = group.group_name + ' (' + (group.rule_count || 0) + ')';
                         filterGroup.appendChild(option);
                         
                         const optionList = document.createElement('option');
@@ -1021,10 +1073,11 @@ let currentPage = 1;
                         const optionListEdit = document.createElement('option');
                         optionListEdit.value = group.group_name;
                         groupListEdit.appendChild(optionListEdit);
-                    });
-                }
+                    }
+                });
             } catch (error) {
                 console.error('加载分组列表失败:', error);
+                showAlert('加载分组列表失败: ' + error.message, 'error');
             }
         }
         

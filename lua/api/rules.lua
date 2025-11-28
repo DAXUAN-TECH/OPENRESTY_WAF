@@ -394,9 +394,36 @@ function _M.list_groups()
         return
     end
     
+    -- 确保 result 是数组类型（用于 JSON 序列化）
+    local groups_array = {}
+    if result then
+        if type(result) == "table" then
+            -- 检查是否是数组
+            local is_array = false
+            for i, _ in ipairs(result) do
+                is_array = true
+                groups_array[i] = result[i]
+            end
+            
+            -- 如果不是数组，尝试转换
+            if not is_array then
+                local temp_array = {}
+                for k, v in pairs(result) do
+                    if type(k) == "number" and k > 0 then
+                        table.insert(temp_array, {key = k, value = v})
+                    end
+                end
+                table.sort(temp_array, function(a, b) return a.key < b.key end)
+                for _, item in ipairs(temp_array) do
+                    table.insert(groups_array, item.value)
+                end
+            end
+        end
+    end
+    
     api_utils.json_response({
         success = true,
-        data = result
+        data = groups_array
     })
 end
 

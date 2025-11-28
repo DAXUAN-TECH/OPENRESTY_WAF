@@ -111,6 +111,7 @@
             flex-wrap: wrap;
             gap: 15px;
             margin-bottom: 15px;
+            max-width: 1400px;
         }
         .filter-group {
             flex: 1;

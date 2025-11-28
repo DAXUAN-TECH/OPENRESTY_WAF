@@ -274,7 +274,7 @@ function _M.setup_totp()
     audit_log.log_totp_action("setup", session.username, true, nil)
     
     -- 记录调试信息：记录返回的secret和otpauth_url
-    ngx.log(ngx.WARN, "auth.setup_totp: DEBUG - returning secret: ", string.sub(response.secret, 1, 20), "...", ", otpauth_url: ", string.sub(qr_data.otpauth_url, 1, 100), "...")
+    ngx.log(ngx.DEBUG, "auth.setup_totp: returning secret: ", string.sub(response.secret, 1, 20), "...", ", otpauth_url: ", string.sub(qr_data.otpauth_url, 1, 100), "...")
     
     api_utils.json_response(response, 200)
 end

@@ -106,6 +106,14 @@ local function serve_html_with_layout(filename, page_title, session)
     local extra_scripts = ""
     local body_content = content
     
+    -- 提取外部link标签（CSS文件引用，支持多种格式）
+    -- 匹配 <link rel="stylesheet" href="..."> 或 <link rel='stylesheet' href='...'> 等
+    for link_tag in content:gmatch('<link[^>]*rel%s*=%s*["\']stylesheet["\'][^>]*>') do
+        extra_styles = extra_styles .. link_tag .. "\n"
+        -- 从内容中移除link标签（使用更精确的匹配，避免误删）
+        body_content = body_content:gsub('<link[^>]*rel%s*=%s*["\']stylesheet["\'][^>]*>', "", 1)
+    end
+    
     -- 提取style标签（支持多行）
     for style_match in content:gmatch("<style>([%s%S]-)</style>") do
         -- 移除body样式定义，避免与layout.html的body样式冲突

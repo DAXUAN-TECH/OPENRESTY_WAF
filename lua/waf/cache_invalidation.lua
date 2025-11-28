@@ -62,12 +62,26 @@ function _M.invalidate_rule_list_cache()
     cache:delete("rule_list:ip_range:block")
     cache:delete("rule_list:ip_range:whitelist")
     
-    -- 清除Redis缓存（失败不影响主流程）
+    -- 清除Redis缓存（失败不影响主流程，使用pcall确保不会抛出错误）
     if redis_cache.is_available() then
-        local ok1 = redis_cache.delete("rule_list:ip_range:block")
-        local ok2 = redis_cache.delete("rule_list:ip_range:whitelist")
-        if not ok1 or not ok2 then
-            ngx.log(ngx.WARN, "Redis cache delete failed, but continuing with operation")
+        local ok1, result1 = pcall(function()
+            return redis_cache.delete("rule_list:ip_range:block")
+        end)
+        local ok2, result2 = pcall(function()
+            return redis_cache.delete("rule_list:ip_range:whitelist")
+        end)
+        
+        -- 如果pcall失败或操作失败，记录警告但继续执行
+        if not ok1 then
+            ngx.log(ngx.WARN, "Redis cache delete (block) pcall failed: ", tostring(result1))
+        elseif not result1 then
+            ngx.log(ngx.WARN, "Redis cache delete (block) failed, but continuing with operation")
+        end
+        
+        if not ok2 then
+            ngx.log(ngx.WARN, "Redis cache delete (whitelist) pcall failed: ", tostring(result2))
+        elseif not result2 then
+            ngx.log(ngx.WARN, "Redis cache delete (whitelist) failed, but continuing with operation")
         end
     end
     

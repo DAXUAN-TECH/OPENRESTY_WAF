@@ -280,56 +280,34 @@ function _M.delete(key)
         return false
     end
     
-    local red = get_redis()
-    if not red then
-        return false
-    end
-    
-    local redis_key = build_key(key)
-    
-    -- 使用pcall包装Redis操作，捕获可能的socket错误
-    local ok, result, err = pcall(function()
-        return red:del(redis_key)
-    end)
-    
-    -- 如果pcall失败，说明发生了Lua错误（如socket关闭）
-    if not ok then
-        ngx.log(ngx.WARN, "Redis delete pcall failed: ", tostring(result))
-        redis_client = nil
-        -- 尝试重新连接并重试一次
-        red = get_redis()
-        if red then
-            local retry_ok, retry_result, retry_err = pcall(function()
-                return red:del(redis_key)
-            end)
-            if retry_ok and not retry_err then
-                return true
-            else
-                ngx.log(ngx.WARN, "Redis delete retry failed: ", tostring(retry_result or retry_err))
-                redis_client = nil
-                return false
-            end
-        else
-            ngx.log(ngx.WARN, "Redis reconnect failed, delete operation skipped")
+    -- 使用pcall包装整个函数，确保所有错误都被捕获
+    local success, result = pcall(function()
+        local red = get_redis()
+        if not red then
             return false
         end
-    end
-    
-    -- 如果Redis返回错误
-    if err then
-        if err == "closed" or string.find(tostring(err), "closed") then
-            ngx.log(ngx.WARN, "Redis connection closed, attempting to reconnect")
+        
+        local redis_key = build_key(key)
+        
+        -- 使用pcall包装Redis操作，捕获可能的socket错误
+        local ok, del_result, err = pcall(function()
+            return red:del(redis_key)
+        end)
+        
+        -- 如果pcall失败，说明发生了Lua错误（如socket关闭）
+        if not ok then
+            ngx.log(ngx.WARN, "Redis delete pcall failed: ", tostring(del_result))
             redis_client = nil
+            -- 尝试重新连接并重试一次
             red = get_redis()
             if red then
-                -- 重试一次
                 local retry_ok, retry_result, retry_err = pcall(function()
                     return red:del(redis_key)
                 end)
                 if retry_ok and not retry_err then
                     return true
                 else
-                    ngx.log(ngx.ERR, "Redis delete error after reconnect: ", tostring(retry_result or retry_err))
+                    ngx.log(ngx.WARN, "Redis delete retry failed: ", tostring(retry_result or retry_err))
                     redis_client = nil
                     return false
                 end
@@ -337,14 +315,48 @@ function _M.delete(key)
                 ngx.log(ngx.WARN, "Redis reconnect failed, delete operation skipped")
                 return false
             end
-        else
-            ngx.log(ngx.ERR, "Redis delete error: ", tostring(err))
-            redis_client = nil
-            return false
         end
+        
+        -- 如果Redis返回错误
+        if err then
+            if err == "closed" or string.find(tostring(err), "closed") or string.find(tostring(err), "closed socket") then
+                ngx.log(ngx.WARN, "Redis connection closed, attempting to reconnect")
+                redis_client = nil
+                red = get_redis()
+                if red then
+                    -- 重试一次
+                    local retry_ok, retry_result, retry_err = pcall(function()
+                        return red:del(redis_key)
+                    end)
+                    if retry_ok and not retry_err then
+                        return true
+                    else
+                        ngx.log(ngx.WARN, "Redis delete error after reconnect: ", tostring(retry_result or retry_err))
+                        redis_client = nil
+                        return false
+                    end
+                else
+                    ngx.log(ngx.WARN, "Redis reconnect failed, delete operation skipped")
+                    return false
+                end
+            else
+                ngx.log(ngx.WARN, "Redis delete error: ", tostring(err))
+                redis_client = nil
+                return false
+            end
+        end
+        
+        return true
+    end)
+    
+    -- 如果外层pcall失败，说明发生了严重错误
+    if not success then
+        ngx.log(ngx.ERR, "Redis delete outer pcall failed: ", tostring(result))
+        redis_client = nil
+        return false
     end
     
-    return true
+    return result or false
 end
 
 -- 批量删除（使用模式匹配）

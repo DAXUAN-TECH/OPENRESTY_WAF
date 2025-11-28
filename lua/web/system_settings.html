@@ -642,9 +642,40 @@
                     body: params.toString()
                 });
                 
+                // 检查响应状态
+                if (!response.ok) {
+                    // 如果是403错误，说明当前IP已被拒绝访问，需要刷新页面
+                    if (response.status === 403) {
+                        showAlert('系统白名单已启用，当前IP不在白名单中，页面将自动刷新', 'warning');
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 2000);
+                        return;
+                    }
+                    
+                    // 尝试解析错误响应
+                    const errorText = await response.text();
+                    let errorData;
+                    try {
+                        errorData = JSON.parse(errorText);
+                    } catch (e) {
+                        errorData = { error: errorText || `HTTP ${response.status}: ${response.statusText}` };
+                    }
+                    throw new Error(errorData.error || errorData.message || `HTTP ${response.status}: ${response.statusText}`);
+                }
+                
                 const data = await response.json();
                 
                 if (data.success) {
+                    // 检查是否需要刷新页面（系统白名单已启用，但当前IP不在白名单中）
+                    if (data.requires_refresh) {
+                        showAlert(data.warning || '系统白名单已启用，当前IP不在白名单中，页面将自动刷新', 'warning');
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 2000);
+                        return;
+                    }
+                    
                     showAlert(editingId ? '更新成功' : '创建成功', 'success');
                     closeEditModal();
                     loadWhitelist(currentPage);
@@ -653,7 +684,15 @@
                 }
             } catch (error) {
                 console.error('saveWhitelist error:', error);
-                showAlert('网络错误: ' + error.message, 'error');
+                // 检查是否是JSON解析错误（可能是403 HTML页面）
+                if (error.message && error.message.includes('JSON')) {
+                    showAlert('系统白名单已启用，当前IP不在白名单中，页面将自动刷新', 'warning');
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 2000);
+                } else {
+                    showAlert('网络错误: ' + error.message, 'error');
+                }
             } finally {
                 submitBtn.disabled = false;
                 submitBtn.textContent = '保存';

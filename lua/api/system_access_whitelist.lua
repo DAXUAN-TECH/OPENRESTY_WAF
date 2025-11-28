@@ -303,6 +303,7 @@ function _M.create()
     end
     
     -- 如果是第一条启用的白名单条目，自动开启系统白名单
+    local will_enable_whitelist = is_first_enabled_entry
     if is_first_enabled_entry then
         local update_config_ok, update_config_res, update_config_err = pcall(function()
             local update_sql = [[
@@ -319,7 +320,20 @@ function _M.create()
                 "添加第一条启用的白名单条目，自动开启系统白名单", "success")
         else
             ngx.log(ngx.WARN, "create: 第一条启用的白名单条目已创建，但自动开启系统白名单失败: ", tostring(update_config_err))
+            will_enable_whitelist = false
         end
+    end
+    
+    -- 如果系统白名单将被启用，检查当前IP是否在新添加的白名单中
+    local current_ip_allowed = false
+    if will_enable_whitelist then
+        local ip_utils = require "waf.ip_utils"
+        local client_ip = ip_utils.get_real_ip() or ngx.var.remote_addr
+        ngx.log(ngx.INFO, "create: checking if current IP ", client_ip, " is in new whitelist entry: ", ip_address)
+        
+        -- 检查当前IP是否在新添加的白名单条目中
+        current_ip_allowed = _M.check_ip_in_entry(client_ip, ip_address)
+        ngx.log(ngx.INFO, "create: current IP ", client_ip, " allowed in new entry: ", current_ip_allowed)
     end
     
     -- 记录审计日志
@@ -339,6 +353,18 @@ function _M.create()
     local message = "创建成功，nginx配置正在重新加载"
     if is_first_enabled_entry then
         message = "创建成功，系统白名单已自动开启（已添加第一条启用的白名单条目），nginx配置正在重新加载"
+    end
+    
+    -- 如果系统白名单将被启用，但当前IP不在新添加的白名单中，返回特殊响应
+    if will_enable_whitelist and not current_ip_allowed then
+        api_utils.json_response({
+            success = true,
+            message = message,
+            data = {id = res},
+            requires_refresh = true,
+            warning = "系统白名单已自动开启，但当前IP不在白名单中，页面将自动刷新"
+        })
+        return
     end
     
     api_utils.json_response({
@@ -857,6 +883,59 @@ function _M.check_ip_allowed(ip_address)
     end
     
     ngx.log(ngx.WARN, "check_ip_allowed: IP ", ip_address, " not found in whitelist (checked ", #res, " entries: ", table.concat(whitelist_ips, ", "), ")")
+    return false
+end
+
+-- 检查IP是否在白名单条目中（辅助函数，用于创建时检查）
+function _M.check_ip_in_entry(ip_address, whitelist_entry)
+    if not ip_address or not whitelist_entry then
+        return false
+    end
+    
+    local ip_utils = require "waf.ip_utils"
+    
+    -- 检查是否包含逗号（多个IP）
+    if whitelist_entry:match(",") then
+        -- 多个IP，逐个检查
+        for ip_str in whitelist_entry:gmatch("([^,]+)") do
+            local ip = ip_str:match("^%s*(.-)%s*$")  -- 去除首尾空格
+            if ip and ip ~= "" then
+                -- 检查是否为CIDR格式
+                if ip:match("/") then
+                    if ip_utils.match_cidr(ip_address, ip) then
+                        return true
+                    end
+                -- 检查是否为IP范围格式
+                elseif ip:match("-") then
+                    local start_ip, end_ip = ip_utils.parse_ip_range(ip)
+                    if start_ip and end_ip and ip_utils.match_ip_range(ip_address, start_ip, end_ip) then
+                        return true
+                    end
+                -- 单个IP，直接比较
+                elseif ip_address == ip then
+                    return true
+                end
+            end
+        end
+    else
+        -- 单个IP或IP段
+        -- 检查是否为CIDR格式
+        if whitelist_entry:match("/") then
+            if ip_utils.match_cidr(ip_address, whitelist_entry) then
+                return true
+            end
+        -- 检查是否为IP范围格式
+        elseif whitelist_entry:match("-") then
+            local start_ip, end_ip = ip_utils.parse_ip_range(whitelist_entry)
+            if start_ip and end_ip and ip_utils.match_ip_range(ip_address, start_ip, end_ip) then
+                return true
+            end
+        -- 单个IP，直接比较
+        elseif ip_address == whitelist_entry then
+            return true
+        end
+    end
+    
     return false
 end
 

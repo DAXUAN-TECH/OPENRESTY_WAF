@@ -222,37 +222,75 @@ function _M.route()
     end
     
     -- 静态文件服务（JavaScript、CSS等）- 不需要认证
-    if path:match("%.js$") or path:match("%.css$") then
-        local filename = path:match("([^/]+)$")
-        if filename then
-            local project_root = get_project_root_smart()
-            if project_root then
-                local file_path = project_root .. "/lua/web/" .. filename
-                local file = io.open(file_path, "r")
-                if file then
-                    local content = file:read("*all")
-                    file:close()
-                    if content then
-                        if path:match("%.js$") then
-                            ngx.header.content_type = "application/javascript; charset=utf-8"
-                        elseif path:match("%.css$") then
-                            ngx.header.content_type = "text/css; charset=utf-8"
-                        end
-                        ngx.say(content)
-                        return
-                    else
-                        ngx.log(ngx.ERR, "Failed to read content from static file: ", file_path)
-                    end
-                else
-                    ngx.log(ngx.ERR, "Static file not found: ", file_path, " (project_root: ", project_root, ")")
-                end
-            else
-                ngx.log(ngx.ERR, "Failed to determine project root for serving static file: ", filename)
-            end
+    -- 支持子目录路径：/css/xxx.css, /js/xxx.js, /image/xxx.png 等
+    if path:match("%.js$") or path:match("%.css$") or path:match("%.png$") or path:match("%.jpg$") or path:match("%.jpeg$") or path:match("%.gif$") or path:match("%.svg$") or path:match("%.ico$") then
+        local project_root = get_project_root_smart()
+        if not project_root then
+            ngx.log(ngx.ERR, "Failed to determine project root for serving static file: ", path)
+            ngx.status = 404
+            ngx.header.content_type = "text/plain; charset=utf-8"
+            ngx.say("Static file not found: project root not found")
+            return
         end
+        
+        -- 提取路径（去掉开头的/），例如：/css/login.css -> css/login.css
+        local relative_path = path:match("^/(.+)")
+        if not relative_path then
+            ngx.log(ngx.ERR, "Invalid static file path: ", path)
+            ngx.status = 404
+            ngx.header.content_type = "text/plain; charset=utf-8"
+            ngx.say("Static file not found: invalid path")
+            return
+        end
+        
+        -- 构建完整文件路径
+        local file_path = project_root .. "/lua/web/" .. relative_path
+        
+        -- 安全检查：确保路径在lua/web目录下，防止路径遍历攻击
+        local normalized_path = file_path:gsub("/+", "/")
+        local web_dir = project_root .. "/lua/web/"
+        if not normalized_path:match("^" .. web_dir:gsub("%%", "%%%%"):gsub("%-", "%%-")) then
+            ngx.log(ngx.ERR, "Security check failed: path traversal attempt: ", file_path)
+            ngx.status = 403
+            ngx.header.content_type = "text/plain; charset=utf-8"
+            ngx.say("Forbidden: invalid path")
+            return
+        end
+        
+        -- 尝试打开文件
+        local file = io.open(file_path, "r")
+        if file then
+            local content = file:read("*all")
+            file:close()
+            if content then
+                -- 设置正确的Content-Type
+                if path:match("%.js$") then
+                    ngx.header.content_type = "application/javascript; charset=utf-8"
+                elseif path:match("%.css$") then
+                    ngx.header.content_type = "text/css; charset=utf-8"
+                elseif path:match("%.png$") then
+                    ngx.header.content_type = "image/png"
+                elseif path:match("%.jpg$") or path:match("%.jpeg$") then
+                    ngx.header.content_type = "image/jpeg"
+                elseif path:match("%.gif$") then
+                    ngx.header.content_type = "image/gif"
+                elseif path:match("%.svg$") then
+                    ngx.header.content_type = "image/svg+xml"
+                elseif path:match("%.ico$") then
+                    ngx.header.content_type = "image/x-icon"
+                end
+                ngx.say(content)
+                return
+            else
+                ngx.log(ngx.ERR, "Failed to read content from static file: ", file_path)
+            end
+        else
+            ngx.log(ngx.ERR, "Static file not found: ", file_path, " (requested path: ", path, ", project_root: ", project_root, ")")
+        end
+        
         ngx.status = 404
         ngx.header.content_type = "text/plain; charset=utf-8"
-        ngx.say("Static file not found")
+        ngx.say("Static file not found: " .. path)
         return
     end
     

@@ -332,9 +332,9 @@
             transition: border-color 0.3s;
         }
         
-        /* 密码输入框进一步缩短 */
+        /* 密码输入框宽度：根据提示信息内容调整 */
         #changePasswordForm .form-group input[type="password"] {
-            max-width: 230px;
+            max-width: 420px;
         }
         
         /* 弹出框中的验证码输入框样式 */

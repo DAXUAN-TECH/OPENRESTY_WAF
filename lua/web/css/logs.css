@@ -110,14 +110,16 @@
             display: flex;
             flex-wrap: wrap;
             gap: 15px;
-            margin-bottom: 15px;
+            margin-bottom: 0;
             max-width: 1800px;
-            align-items: flex-start;
+            align-items: center;
         }
         .filter-group {
             flex: 0 1 auto;
             min-width: 200px;
             max-width: 280px;
+            display: flex;
+            flex-direction: column;
         }
         
         /* 访问日志：6个筛选框在同一行，使用flex布局 */

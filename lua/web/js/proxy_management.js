@@ -320,19 +320,22 @@ const pageSize = 20;
         
         // 加载代理列表
         async function loadProxies(page = 1) {
-            currentPage = page;
-            const proxyType = document.getElementById('filter-type').value;
-            const status = document.getElementById('filter-status').value;
-            
-            let url = `/api/proxy?page=${page}&page_size=${pageSize}`;
-            if (proxyType) url += `&proxy_type=${proxyType}`;
-            if (status) url += `&status=${status}`;
-            
-            const tbody = document.getElementById('proxies-tbody');
-            if (!tbody) {
-                console.error('proxies-tbody element not found');
-                return;
-            }
+            try {
+                currentPage = page;
+                const filterTypeEl = document.getElementById('filter-type');
+                const filterStatusEl = document.getElementById('filter-status');
+                const proxyType = filterTypeEl ? filterTypeEl.value : '';
+                const status = filterStatusEl ? filterStatusEl.value : '';
+                
+                let url = `/api/proxy?page=${page}&page_size=${pageSize}`;
+                if (proxyType) url += `&proxy_type=${proxyType}`;
+                if (status) url += `&status=${status}`;
+                
+                const tbody = document.getElementById('proxies-tbody');
+                if (!tbody) {
+                    console.error('proxies-tbody element not found');
+                    return;
+                }
             
             // 防御性检查：确保 escapeHtml 函数可用
             const escapeHtmlFn = window.escapeHtml || function(text) {

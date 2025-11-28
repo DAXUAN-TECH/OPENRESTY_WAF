@@ -307,11 +307,15 @@ function _M.enable_totp()
         return
     end
     
-    ngx.log(ngx.INFO, "auth.enable_totp: verifying TOTP for user: ", session.username, ", secret prefix: ", string.sub(secret, 1, 8), "...", ", code: ", code, ", code type: ", type(code))
+    ngx.log(ngx.INFO, "auth.enable_totp: verifying TOTP for user: ", session.username, ", secret length: ", #secret, ", secret prefix: ", string.sub(secret, 1, 8), "...", ", code: ", code, ", code type: ", type(code))
     
     -- 先尝试生成当前代码用于调试
-    local expected_code = totp.generate_totp(secret)
-    ngx.log(ngx.INFO, "auth.enable_totp: expected current code: ", expected_code or "failed to generate", ", received code: ", code)
+    local expected_code, gen_err = totp.generate_totp(secret)
+    if expected_code then
+        ngx.log(ngx.INFO, "auth.enable_totp: expected current code: ", expected_code, ", received code: ", code, ", match: ", expected_code == code)
+    else
+        ngx.log(ngx.WARN, "auth.enable_totp: failed to generate expected code, error: ", tostring(gen_err))
+    end
     
     -- 验证 TOTP 代码（增加时间窗口到3，允许前后3个时间窗口，即90秒）
     local totp_ok, err = totp.verify_totp(secret, code, 30, 3)

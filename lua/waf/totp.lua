@@ -260,59 +260,67 @@ function _M.verify_totp(secret_base32, code, time_step, window)
     end
     code = tostring(code)
     
-    -- 生成当前时间窗口的代码
-    local current_code = _M.generate_totp(secret_base32, time_step, 6)
-    if not current_code then
-        return false, "Failed to generate TOTP"
+    -- 清理验证码：只保留数字
+    code = string.gsub(code, "%D", "")
+    
+    -- 验证验证码格式
+    if not code or #code ~= 6 then
+        ngx.log(ngx.WARN, "totp.verify_totp: invalid code format, code: ", code or "nil", ", length: ", code and #code or 0)
+        return false, "Invalid code format"
     end
     
-    -- 确保 current_code 是字符串
-    current_code = tostring(current_code)
-    
-    -- 检查当前代码（字符串比较）
-    if current_code == code then
-        return true
+    -- 解码密钥（只解码一次，避免重复解码）
+    local secret, err = base32_decode(secret_base32)
+    if not secret then
+        ngx.log(ngx.WARN, "totp.verify_totp: failed to decode secret, error: ", tostring(err))
+        return false, "Invalid secret format"
     end
     
-    -- 检查前后时间窗口（允许时钟偏差）
+    -- 计算当前时间计数器
+    local current_time = ngx.time()
+    local current_counter = math.floor(current_time / time_step)
+    
+    ngx.log(ngx.DEBUG, "totp.verify_totp: current_time: ", current_time, ", time_step: ", time_step, ", current_counter: ", current_counter, ", window: ", window, ", code: ", code)
+    
+    -- 检查所有时间窗口（包括当前窗口和前后窗口）
     for i = -window, window do
-        if i ~= 0 then
-            local test_time = ngx.time() + (i * time_step)
-            local test_counter = math.floor(test_time / time_step)
+        local test_counter = current_counter + i
+        
+        -- 计算时间步数
+        local time_bytes = {}
+        for j = 7, 0, -1 do
+            table.insert(time_bytes, string.char(bit.band(bit.rshift(test_counter, j * 8), 0xFF)))
+        end
+        local time_str = table.concat(time_bytes)
+        
+        -- 计算 HMAC
+        local hmac, hmac_err = hmac_sha1(secret, time_str)
+        if not hmac then
+            ngx.log(ngx.WARN, "totp.verify_totp: failed to compute HMAC for counter ", test_counter, ", error: ", tostring(hmac_err))
+            -- 继续检查下一个窗口
+        else
+            -- 动态截取（RFC 6238）
+            local offset = bit.band(string.byte(hmac, #hmac), 0x0F) + 1
+            local binary = bit.bor(
+                           bit.lshift(bit.band(string.byte(hmac, offset), 0x7F), 24),
+                           bit.lshift(bit.band(string.byte(hmac, offset + 1), 0xFF), 16),
+                           bit.lshift(bit.band(string.byte(hmac, offset + 2), 0xFF), 8),
+                           bit.band(string.byte(hmac, offset + 3), 0xFF))
             
-            -- 解码密钥
-            local secret, err = base32_decode(secret_base32)
-            if not secret then
-                break
-            end
+            local test_code = string.format("%06d", binary % 1000000)
+            -- 确保 test_code 是字符串
+            test_code = tostring(test_code)
             
-            -- 计算时间步数
-            local time_bytes = {}
-            for j = 7, 0, -1 do
-                table.insert(time_bytes, string.char(bit.band(bit.rshift(test_counter, j * 8), 0xFF)))
-            end
-            local time_str = table.concat(time_bytes)
+            ngx.log(ngx.DEBUG, "totp.verify_totp: counter: ", test_counter, ", test_code: ", test_code, ", input_code: ", code, ", match: ", test_code == code)
             
-            -- 计算 HMAC
-            local hmac, err = hmac_sha1(secret, time_str)
-            if hmac then
-                local offset = bit.band(string.byte(hmac, #hmac), 0x0F) + 1
-                local binary = bit.bor(
-                               bit.lshift(bit.band(string.byte(hmac, offset), 0x7F), 24),
-                               bit.lshift(bit.band(string.byte(hmac, offset + 1), 0xFF), 16),
-                               bit.lshift(bit.band(string.byte(hmac, offset + 2), 0xFF), 8),
-                               bit.band(string.byte(hmac, offset + 3), 0xFF))
-                
-                local test_code = string.format("%06d", binary % 1000000)
-                -- 确保 test_code 是字符串
-                test_code = tostring(test_code)
-                if test_code == code then
-                    return true
-                end
+            if test_code == code then
+                ngx.log(ngx.INFO, "totp.verify_totp: TOTP code verified successfully, counter: ", test_counter, ", window offset: ", i)
+                return true
             end
         end
     end
     
+    ngx.log(ngx.WARN, "totp.verify_totp: TOTP code verification failed, code: ", code, ", checked windows: ", -window, " to ", window)
     return false, "Invalid TOTP code"
 end
 

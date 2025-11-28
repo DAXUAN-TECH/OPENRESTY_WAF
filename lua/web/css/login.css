@@ -160,11 +160,18 @@ body {
     padding: 15px;
     border: 2px solid #ddd;
     border-radius: 5px;
-    font-size: 24px;
+    font-size: 28px;
+    font-weight: bold;
     text-align: center;
     letter-spacing: 8px;
     transition: border-color 0.3s;
     font-family: 'Courier New', monospace;
+}
+
+.totp-input::placeholder {
+    font-weight: bold;
+    font-size: 28px;
+    color: #999;
 }
 
 .totp-input:focus {

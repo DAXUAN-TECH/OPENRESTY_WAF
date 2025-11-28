@@ -176,6 +176,35 @@
                 </div>
             </div>
             
+            <!-- 禁用双因素认证弹出框 -->
+            <div id="disableModal" class="modal">
+                <div class="modal-content" style="max-width: 500px;">
+                    <span class="close" onclick="closeDisableModal()">&times;</span>
+                    <h2 style="margin-bottom: 20px; text-align: center;">禁用双因素认证</h2>
+                    <div id="disableModalContent">
+                        <div class="form-group">
+                            <label for="disableTotpCode">请输入当前6位验证码以确认禁用</label>
+                            <input 
+                                type="text" 
+                                id="disableTotpCode" 
+                                placeholder="000000" 
+                                maxlength="6"
+                                pattern="[0-9]{6}"
+                                style="width: 50%; text-align: center;"
+                            >
+                        </div>
+                        <div class="form-actions">
+                            <button class="button button-danger" id="disableConfirmButton" onclick="confirmDisableTotp()">
+                                确定
+                            </button>
+                            <button class="button button-secondary" onclick="closeDisableModal()">
+                                取消
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
             <!-- 重置双因素认证弹出框 -->
             <div id="resetModal" class="modal">
                 <div class="modal-content" style="max-width: 500px;">
@@ -985,19 +1014,77 @@
             }
         }
         
-        // 禁用 TOTP
+        // 显示禁用弹出框
         function disableTotp() {
-            if (!confirm('确定要禁用双因素认证吗？禁用后您的账户安全性将降低。')) {
+            hideMessages();
+            const modal = document.getElementById('disableModal');
+            if (!modal) {
+                console.error('disableModal element not found');
+                showError('弹出框元素未找到，请刷新页面重试');
                 return;
             }
             
-            const code = prompt('请输入当前验证码以确认禁用：');
+            // 显示弹出框
+            modal.style.display = 'flex';
+            modal.style.position = 'fixed';
+            modal.style.zIndex = '10000';
+            modal.style.left = '0';
+            modal.style.top = '0';
+            modal.style.right = '0';
+            modal.style.bottom = '0';
+            modal.style.width = '100vw';
+            modal.style.height = '100vh';
+            modal.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+            modal.style.alignItems = 'center';
+            modal.style.justifyContent = 'center';
+            modal.classList.add('show');
+            
+            // 清空输入框并聚焦
+            const codeInput = document.getElementById('disableTotpCode');
+            if (codeInput) {
+                codeInput.value = '';
+                codeInput.focus();
+            }
+        }
+        
+        // 关闭禁用弹出框
+        function closeDisableModal() {
+            const modal = document.getElementById('disableModal');
+            if (modal) {
+                modal.style.display = 'none';
+                modal.classList.remove('show');
+                // 清除所有内联样式
+                modal.style.position = '';
+                modal.style.zIndex = '';
+                modal.style.left = '';
+                modal.style.top = '';
+                modal.style.right = '';
+                modal.style.bottom = '';
+                modal.style.width = '';
+                modal.style.height = '';
+                modal.style.backgroundColor = '';
+                modal.style.alignItems = '';
+                modal.style.justifyContent = '';
+            }
+            const codeInput = document.getElementById('disableTotpCode');
+            if (codeInput) {
+                codeInput.value = '';
+            }
+        }
+        
+        // 确认禁用 TOTP
+        function confirmDisableTotp() {
+            let code = document.getElementById('disableTotpCode').value.trim();
+            
+            // 确保验证码是纯数字
+            code = code.replace(/\D/g, '');
+            
             if (!code || code.length !== 6) {
                 showError('请输入6位验证码');
                 return;
             }
             
-            const button = document.getElementById('disableButton');
+            const button = document.getElementById('disableConfirmButton');
             button.disabled = true;
             button.innerHTML = '<span class="loading"></span>禁用中...';
             
@@ -1010,21 +1097,31 @@
                     code: code
                 })
             })
-                .then(response => response.json())
+                .then(response => {
+                    if (!response.ok) {
+                        return response.json().then(data => {
+                            console.error('API error:', data);
+                            throw new Error(data.message || '禁用失败');
+                        });
+                    }
+                    return response.json();
+                })
                 .then(data => {
                     if (data.success) {
-                        showSuccess('双因素认证已禁用');
+                        showSuccess('禁用双因素认证成功');
+                        closeDisableModal();
                         loadTotpStatus();
                     } else {
                         showError(data.message || '禁用失败，请检查验证码是否正确');
                         button.disabled = false;
-                        button.innerHTML = '禁用双因素认证';
+                        button.innerHTML = '确定';
                     }
                 })
                 .catch(err => {
-                    showError('网络错误，请稍后重试');
+                    console.error('Error disabling TOTP:', err);
+                    showError(err.message || '网络错误，请稍后重试');
                     button.disabled = false;
-                    button.innerHTML = '禁用双因素认证';
+                    button.innerHTML = '确定';
                 });
         }
         

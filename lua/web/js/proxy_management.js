@@ -445,8 +445,17 @@ const pageSize = 20;
                 }
             } catch (error) {
                 console.error('loadProxies error:', error);
-                showAlert('网络错误: ' + error.message, 'error');
-                tbody.innerHTML = '<tr><td colspan="11" style="text-align: center; padding: 20px; color: #e74c3c;">加载失败: ' + escapeHtmlFn(error.message) + '</td></tr>';
+                const tbody = document.getElementById('proxies-tbody');
+                if (tbody) {
+                    const escapeHtmlFn = window.escapeHtml || function(text) {
+                        if (!text) return '';
+                        const div = document.createElement('div');
+                        div.textContent = text;
+                        return div.innerHTML;
+                    };
+                    showAlert('网络错误: ' + error.message, 'error');
+                    tbody.innerHTML = '<tr><td colspan="11" style="text-align: center; padding: 20px; color: #e74c3c;">加载失败: ' + escapeHtmlFn(error.message) + '</td></tr>';
+                }
             }
         }
         

@@ -168,7 +168,7 @@
         
         th, td {
             padding: 12px;
-            text-align: left;
+            text-align: center;
             border-bottom: 1px solid #e0e0e0;
         }
         
@@ -555,11 +555,6 @@
                 </div>
                 
                 <div class="form-group">
-                    <label>优先级</label>
-                    <input type="number" id="create-priority" value="0" min="0">
-                </div>
-                
-                <div class="form-group">
                     <label>防护规则</label>
                     <select id="create-ip-rule-id">
                         <option value="">不选择（不使用防护规则）</option>
@@ -660,10 +655,6 @@
                 <div class="form-group">
                     <label>描述</label>
                     <textarea id="edit-description"></textarea>
-                </div>
-                <div class="form-group">
-                    <label>优先级</label>
-                    <input type="number" id="edit-priority" min="0">
                 </div>
                 <div class="form-group">
                     <label>防护规则</label>
@@ -1035,7 +1026,6 @@
                 listen_address: listenAddress,
                 backend_type: 'upstream',
                 description: document.getElementById('create-description').value || null,
-                priority: parseInt(document.getElementById('create-priority').value) || 0,
                 proxy_connect_timeout: parseInt(document.getElementById('create-proxy-connect-timeout').value) || 60,
                 proxy_send_timeout: parseInt(document.getElementById('create-proxy-send-timeout').value) || 60,
                 proxy_read_timeout: parseInt(document.getElementById('create-proxy-read-timeout').value) || 60,
@@ -1126,7 +1116,6 @@
                     document.getElementById('edit-proxy-send-timeout').value = proxy.proxy_send_timeout || 60;
                     document.getElementById('edit-proxy-read-timeout').value = proxy.proxy_read_timeout || 60;
                     document.getElementById('edit-description').value = proxy.description || '';
-                    document.getElementById('edit-priority').value = proxy.priority || 0;
                     document.getElementById('edit-ip-rule-id').value = proxy.ip_rule_id || '';
                     
                     // 显示/隐藏相关字段，并动态管理required属性
@@ -1214,7 +1203,6 @@
                 proxy_name: document.getElementById('edit-proxy-name').value,
                 backend_type: 'upstream',
                 description: document.getElementById('edit-description').value || '',
-                priority: parseInt(document.getElementById('edit-priority').value) || 0,
                 proxy_connect_timeout: parseInt(document.getElementById('edit-proxy-connect-timeout').value) || 60,
                 proxy_send_timeout: parseInt(document.getElementById('edit-proxy-send-timeout').value) || 60,
                 proxy_read_timeout: parseInt(document.getElementById('edit-proxy-read-timeout').value) || 60,

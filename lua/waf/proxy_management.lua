@@ -148,8 +148,8 @@ function _M.create_proxy(proxy_data)
          health_check_enable, health_check_interval, health_check_timeout,
          max_fails, fail_timeout, proxy_timeout, proxy_connect_timeout,
          proxy_send_timeout, proxy_read_timeout, ssl_enable, ssl_cert_path, ssl_key_path,
-         description, ip_rule_id, status, priority)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         description, ip_rule_id, status)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ]]
     
     local listen_address = proxy_data.listen_address or "0.0.0.0"
@@ -173,7 +173,6 @@ function _M.create_proxy(proxy_data)
     local ssl_key_path = null_to_nil(proxy_data.ssl_key_path)
     local description = null_to_nil(proxy_data.description)
     local status = proxy_data.status or 1
-    local priority = proxy_data.priority or 0
     local ip_rule_id = null_to_nil(proxy_data.ip_rule_id)
     
     local insert_id, err = mysql_pool.insert(sql,
@@ -200,8 +199,7 @@ function _M.create_proxy(proxy_data)
         ssl_key_path,
         description,
         ip_rule_id,
-        status,
-        priority
+        status
     )
     
     if err then
@@ -345,7 +343,7 @@ function _M.get_proxy(proxy_id)
                health_check_enable, health_check_interval, health_check_timeout,
                max_fails, fail_timeout, proxy_timeout, proxy_connect_timeout,
                proxy_send_timeout, proxy_read_timeout, ssl_enable, ssl_cert_path, ssl_key_path,
-               description, ip_rule_id, status, priority, created_at, updated_at
+               description, ip_rule_id, status, created_at, updated_at
         FROM waf_proxy_configs
         WHERE id = ?
         LIMIT 1
@@ -469,7 +467,7 @@ function _M.update_proxy(proxy_id, proxy_data)
         "health_check_enable", "health_check_interval", "health_check_timeout",
         "max_fails", "fail_timeout", "proxy_timeout", "proxy_connect_timeout",
         "proxy_send_timeout", "proxy_read_timeout", "ssl_enable", "ssl_cert_path", "ssl_key_path",
-        "description", "ip_rule_id", "priority"
+        "description", "ip_rule_id"
     }
     
     for _, field in ipairs(fields_to_update) do

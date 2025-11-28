@@ -489,10 +489,10 @@ function _M.generate_all_configs()
                backend_type, backend_path, load_balance,
                ssl_enable, ssl_cert_path, ssl_key_path,
                proxy_timeout, proxy_connect_timeout, proxy_send_timeout, proxy_read_timeout,
-               ip_rule_id, status, priority
+               ip_rule_id, status
             FROM waf_proxy_configs
             WHERE status = 1
-            ORDER BY priority DESC, id ASC
+            ORDER BY id ASC
         ]]
     
     local proxies, err = mysql_pool.query(sql)

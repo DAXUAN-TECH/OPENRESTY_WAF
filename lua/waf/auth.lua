@@ -225,21 +225,21 @@ function _M.verify_credentials(username, password)
         return false, nil
     end
     
-    -- 记录查询结果详情
+    -- 记录查询结果详情（使用DEBUG级别，减少日志噪音）
     if res then
-        ngx.log(ngx.WARN, "verify_credentials: query result count: ", tostring(#res))
+        ngx.log(ngx.DEBUG, "verify_credentials: query result count: ", tostring(#res))
     else
-        ngx.log(ngx.WARN, "verify_credentials: query result is nil")
+        ngx.log(ngx.DEBUG, "verify_credentials: query result is nil")
     end
     
     if res and #res > 0 then
         local user = res[1]
-        ngx.log(ngx.WARN, "verify_credentials: user found in database: ", username, ", role: ", user.role or "unknown", ", user_id: ", tostring(user.id))
+        ngx.log(ngx.INFO, "verify_credentials: user found in database: ", username, ", role: ", user.role or "unknown", ", user_id: ", tostring(user.id))
         
         -- 使用密码工具模块验证密码（支持BCrypt和简单哈希）
         local verify_ok, verify_err = password_utils.verify_password(password, user.password_hash)
         if verify_ok then
-            ngx.log(ngx.WARN, "verify_credentials: password verification successful for user: ", username)
+            ngx.log(ngx.INFO, "verify_credentials: password verification successful for user: ", username)
             return true, {
                 id = user.id,
                 username = user.username,
@@ -247,17 +247,17 @@ function _M.verify_credentials(username, password)
                 totp_secret = user.totp_secret
             }
         else
-            -- 验证失败，记录日志（但不泄露具体原因）
-            ngx.log(ngx.WARN, "verify_credentials: password verification failed for user: ", username, ", error: ", tostring(verify_err))
+            -- 验证失败，记录警告（需要关注的安全事件）
+            ngx.log(ngx.WARN, "verify_credentials: password verification failed for user: ", username)
             return false, nil
         end
     else
-        ngx.log(ngx.WARN, "verify_credentials: user not found in database: ", username, ", res is nil: ", tostring(res == nil), ", res count: ", res and tostring(#res) or "N/A")
+        ngx.log(ngx.INFO, "verify_credentials: user not found in database: ", username)
     end
     
     -- 如果数据库中没有用户，且尝试登录的是默认管理员账号，自动创建初始管理员用户
     if ok and (not res or #res == 0) then
-        ngx.log(ngx.WARN, "verify_credentials: user not found, checking if database is empty...")
+        ngx.log(ngx.INFO, "verify_credentials: user not found, checking if database is empty...")
         -- 检查数据库中是否有任何用户
         local check_ok, check_res, check_err = pcall(function()
             local check_sql = "SELECT COUNT(*) as user_count FROM waf_users LIMIT 1"
@@ -278,22 +278,22 @@ function _M.verify_credentials(username, password)
             return false, nil
         end
         
-        -- 记录检查结果
+        -- 记录检查结果（使用DEBUG级别）
         if check_res then
-            ngx.log(ngx.WARN, "verify_credentials: user count check result: ", tostring(check_res), ", count: ", check_res and #check_res > 0 and tostring(check_res[1].user_count) or "N/A")
+            ngx.log(ngx.DEBUG, "verify_credentials: user count check result: ", tostring(check_res), ", count: ", check_res and #check_res > 0 and tostring(check_res[1].user_count) or "N/A")
         else
-            ngx.log(ngx.WARN, "verify_credentials: user count check result is nil")
+            ngx.log(ngx.DEBUG, "verify_credentials: user count check result is nil")
         end
         
         -- 如果数据库中没有用户，且尝试登录的是 admin/admin123，自动创建默认管理员用户
         -- 注意：MySQL COUNT(*) 返回的是数字，但可能被转换为字符串，需要转换为数字比较
         local user_count = check_res and #check_res > 0 and (tonumber(check_res[1].user_count) or 0) or 0
-        ngx.log(ngx.WARN, "verify_credentials: user_count (converted): ", tostring(user_count), ", type: ", type(user_count))
+        ngx.log(ngx.DEBUG, "verify_credentials: user_count (converted): ", tostring(user_count), ", type: ", type(user_count))
         
         if check_ok and check_res and #check_res > 0 and user_count == 0 then
-            ngx.log(ngx.WARN, "verify_credentials: database is empty (user_count: 0), username: ", username, ", password match: ", tostring(password == "admin123"))
+            ngx.log(ngx.INFO, "verify_credentials: database is empty (user_count: 0), username: ", username)
             if username == "admin" and password == "admin123" then
-                ngx.log(ngx.WARN, "verify_credentials: database is empty, creating default admin user (username: admin, password: admin123)")
+                ngx.log(ngx.INFO, "verify_credentials: database is empty, creating default admin user (username: admin, password: admin123)")
                 
                 -- 生成密码哈希
                 local password_hash, hash_err = password_utils.hash_password(password, 10)
@@ -328,7 +328,7 @@ function _M.verify_credentials(username, password)
                 end
                 
                 if create_ok and create_result then
-                    ngx.log(ngx.WARN, "verify_credentials: default admin user created successfully, insert_id: ", tostring(create_result))
+                    ngx.log(ngx.INFO, "verify_credentials: default admin user created successfully, insert_id: ", tostring(create_result))
                     -- 重新查询用户信息
                     local user_ok, user_res, user_err = pcall(function()
                         local user_sql = [[
@@ -372,22 +372,22 @@ function _M.verify_credentials(username, password)
                     ngx.log(ngx.ERR, "verify_credentials: failed to create default admin user: create_ok=", tostring(create_ok), ", create_result=", tostring(create_result))
                 end
             else
-                ngx.log(ngx.WARN, "verify_credentials: database is empty but credentials are not admin/admin123, username: ", username, ", password length: ", tostring(password and #password or 0))
+                ngx.log(ngx.INFO, "verify_credentials: database is empty but credentials are not admin/admin123, username: ", username)
             end
         else
             if check_res and #check_res > 0 then
-                ngx.log(ngx.WARN, "verify_credentials: database is not empty (user_count: ", tostring(check_res[1].user_count), "), but user '", username, "' not found")
+                ngx.log(ngx.INFO, "verify_credentials: database is not empty (user_count: ", tostring(check_res[1].user_count), "), but user '", username, "' not found")
             else
                 ngx.log(ngx.WARN, "verify_credentials: failed to get user count from database, check_res: ", tostring(check_res))
             end
         end
     else
-        ngx.log(ngx.WARN, "verify_credentials: skipping empty database check, ok: ", tostring(ok), ", res: ", tostring(res), ", res count: ", res and tostring(#res) or "N/A")
+        ngx.log(ngx.DEBUG, "verify_credentials: skipping empty database check, ok: ", tostring(ok), ", res: ", tostring(res), ", res count: ", res and tostring(#res) or "N/A")
     end
     
     -- 不再使用硬编码的默认用户，所有用户必须从数据库读取
     -- 如果数据库中没有用户，需要通过安装脚本或API创建初始管理员用户
-    ngx.log(ngx.WARN, "verify_credentials: authentication failed for user: ", username)
+    ngx.log(ngx.INFO, "verify_credentials: authentication failed for user: ", username)
     return false, nil
 end
 

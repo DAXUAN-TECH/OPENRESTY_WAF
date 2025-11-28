@@ -80,7 +80,8 @@ function _M.verify_password(password, hash)
         -- 使用相同的哈希算法和盐值验证密码
         local computed_hash = hash_with_md5(password, salt)
         if computed_hash == hash then
-            ngx.log(ngx.WARN, "Using ", hash_type, "+salt password verification. For better security, use BCrypt.")
+            -- 使用DEBUG级别，减少日志噪音（安全建议已在文档中说明）
+            ngx.log(ngx.DEBUG, "Using ", hash_type, "+salt password verification. For better security, use BCrypt.")
             return true, nil
         else
             return false, "Password mismatch"
@@ -92,6 +93,7 @@ function _M.verify_password(password, hash)
         -- 明文密码比较（不安全，仅用于开发环境）
         local stored_password = hash:sub(7)  -- 去掉 "plain:" 前缀
         if password == stored_password then
+            -- 使用WARN级别，因为这是严重的安全问题
             ngx.log(ngx.WARN, "Using plain password comparison (INSECURE). Please use BCrypt in production.")
             return true, nil
         else

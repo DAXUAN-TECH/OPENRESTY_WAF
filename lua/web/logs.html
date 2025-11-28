@@ -1174,12 +1174,28 @@
             // 时间筛选默认为空，不设置默认时间范围
             // 用户可以根据需要自行设置时间范围进行筛选
             
-            // 强制设置表格宽度
+            // 等待layout-ready类添加后再设置宽度
+            const checkLayoutReady = setInterval(function() {
+                const contentArea = document.querySelector('.content-area.layout-ready');
+                if (contentArea) {
+                    clearInterval(checkLayoutReady);
+                    // layout-ready后立即设置宽度
+                    forceTableWidths();
+                    setTimeout(forceTableWidths, 50);
+                    setTimeout(forceTableWidths, 100);
+                    setTimeout(forceTableWidths, 200);
+                    setTimeout(forceTableWidths, 500);
+                }
+            }, 50);
+            
+            // 强制设置表格宽度（不等待layout-ready）
             forceTableWidths();
             
             // 延迟再次设置，确保所有元素都已渲染
             setTimeout(forceTableWidths, 100);
             setTimeout(forceTableWidths, 300);
+            setTimeout(forceTableWidths, 500);
+            setTimeout(forceTableWidths, 1000);
             
             // 窗口大小改变时重新设置
             window.addEventListener('resize', function() {
@@ -1192,7 +1208,44 @@
         
         // 在layout-ready后也设置一次
         if (document.readyState === 'complete' || document.readyState === 'interactive') {
+            setTimeout(forceTableWidths, 100);
             setTimeout(forceTableWidths, 500);
+        }
+        
+        // 监听layout-ready类的添加
+        if (typeof MutationObserver !== 'undefined') {
+            const layoutObserver = new MutationObserver(function(mutations) {
+                mutations.forEach(function(mutation) {
+                    if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
+                        const target = mutation.target;
+                        if (target.classList && target.classList.contains('layout-ready')) {
+                            // layout-ready类添加后，立即设置宽度
+                            setTimeout(forceTableWidths, 10);
+                            setTimeout(forceTableWidths, 50);
+                            setTimeout(forceTableWidths, 100);
+                        }
+                    }
+                });
+            });
+            
+            // 观察content-area的class变化
+            const contentArea = document.querySelector('.content-area');
+            if (contentArea) {
+                layoutObserver.observe(contentArea, {
+                    attributes: true,
+                    attributeFilter: ['class']
+                });
+            } else {
+                document.addEventListener('DOMContentLoaded', function() {
+                    const contentArea = document.querySelector('.content-area');
+                    if (contentArea) {
+                        layoutObserver.observe(contentArea, {
+                            attributes: true,
+                            attributeFilter: ['class']
+                        });
+                    }
+                });
+            }
         }
     </script>
 </body>

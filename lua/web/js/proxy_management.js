@@ -127,11 +127,19 @@ let currentPage = 1;
         
         function addEditBackend() {
             const list = document.getElementById('edit-backends-list');
+            const proxyType = document.getElementById('edit-proxy-type').value;
             const item = document.createElement('div');
             item.className = 'backend-item';
+            
+            // HTTP/HTTPS代理显示路径字段，TCP/UDP代理不显示
+            const pathField = proxyType === 'http' 
+                ? '<input type="text" placeholder="/path" class="backend-path" title="/path">'
+                : '<input type="text" placeholder="路径（HTTP/HTTPS）" class="backend-path" style="display: none;">';
+            
             item.innerHTML = `
                 <input type="text" placeholder="IP地址" class="backend-address">
                 <input type="number" placeholder="端口" class="backend-port" min="1" max="65535">
+                ${pathField}
                 <input type="number" placeholder="权重" class="backend-weight" value="1" min="1">
                 <button type="button" class="btn btn-danger" onclick="removeBackend(this)">删除</button>
             `;

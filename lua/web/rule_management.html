@@ -225,14 +225,22 @@
         }
         
         /* 当edit-modal显示时，确保使用flex布局居中 */
-        #edit-modal[style*="display: flex"],
-        #edit-modal[style*="display:flex"],
-        #edit-modal[style*="display: block"] {
+        /*#edit-modal[style*="display: flex"],*/
+        /*#edit-modal[style*="display:flex"],*/
+        /*#edit-modal[style*="display: block"] {*/
+        /*    display: flex !important;*/
+        /*    align-items: center !important;*/
+        /*    justify-content: center !important;*/
+        /*    width: 100% !important;*/
+        /*    height: 100% !important;*/
+        /*}*/
+
+        #edit-modal[style*="display: flex"]{
             display: flex !important;
             align-items: center !important;
             justify-content: center !important;
-            width: 100% !important;
-            height: 100% !important;
+            width: 100%;
+            height: 100%;
         }
         
         .modal[style*="display: block"],

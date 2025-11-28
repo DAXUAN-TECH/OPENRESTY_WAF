@@ -300,17 +300,19 @@ function _M.generate_totp(secret_base32, time_step, digits)
     local time_counter = math.floor(current_time / time_step)
     
     -- 将时间计数器转换为 8 字节大端序（RFC 6238要求）
-    -- 使用64位整数，但Lua只支持53位，所以需要特殊处理
+    -- 由于Lua的位运算可能不支持64位整数，使用数学运算来提取每个字节
     local time_bytes = {}
     local time_bytes_hex = {}
-    -- 从高位到低位，提取每个字节
-    for i = 7, 0, -1 do
-        -- 计算当前字节的值（从高位开始）
-        local shift = i * 8
-        local byte_value = bit.band(bit.rshift(time_counter, shift), 0xFF)
-        table.insert(time_bytes, string.char(byte_value))
-        table.insert(time_bytes_hex, string.format("%02X", byte_value))
+    local temp_counter = time_counter
+    
+    -- 从低位到高位提取字节（然后反转顺序得到大端序）
+    for i = 0, 7 do
+        local byte_value = temp_counter % 256  -- 取最低8位（相当于 & 0xFF）
+        temp_counter = math.floor(temp_counter / 256)  -- 右移8位
+        table.insert(time_bytes, 1, string.char(byte_value))  -- 插入到开头，实现大端序
+        table.insert(time_bytes_hex, 1, string.format("%02X", byte_value))
     end
+    
     local time_str = table.concat(time_bytes)
     local time_str_hex = table.concat(time_bytes_hex, " ")
     
@@ -423,13 +425,15 @@ function _M.verify_totp(secret_base32, code, time_step, window)
         local test_counter = current_counter + i
         
         -- 将时间计数器转换为 8 字节大端序（RFC 6238要求）
+        -- 由于Lua的位运算可能不支持64位整数，使用数学运算来提取每个字节
         local time_bytes = {}
-        -- 从高位到低位，提取每个字节
-        for j = 7, 0, -1 do
-            -- 计算当前字节的值（从高位开始）
-            local shift = j * 8
-            local byte_value = bit.band(bit.rshift(test_counter, shift), 0xFF)
-            table.insert(time_bytes, string.char(byte_value))
+        local temp_counter = test_counter
+        
+        -- 从低位到高位提取字节（然后反转顺序得到大端序）
+        for j = 0, 7 do
+            local byte_value = temp_counter % 256  -- 取最低8位（相当于 & 0xFF）
+            temp_counter = math.floor(temp_counter / 256)  -- 右移8位
+            table.insert(time_bytes, 1, string.char(byte_value))  -- 插入到开头，实现大端序
         end
         local time_str = table.concat(time_bytes)
         

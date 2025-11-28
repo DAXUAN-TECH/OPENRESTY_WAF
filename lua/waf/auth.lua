@@ -411,11 +411,22 @@ function _M.get_user(username)
     
     if ok and res and #res > 0 then
         local user = res[1]
+        local cjson = require "cjson"
+        
+        -- 将 cjson.null 转换为 nil（MySQL NULL值可能被转换为cjson.null）
+        local totp_secret = user.totp_secret
+        if totp_secret == cjson.null or totp_secret == nil then
+            totp_secret = nil
+        elseif type(totp_secret) == "string" and totp_secret == "" then
+            -- 空字符串也视为未启用
+            totp_secret = nil
+        end
+        
         return {
             id = user.id,
             username = user.username,
             role = user.role,
-            totp_secret = user.totp_secret,
+            totp_secret = totp_secret,
             status = user.status
         }
     end
@@ -452,9 +463,16 @@ end
 -- 检查用户是否启用了 TOTP
 function _M.user_has_totp(username)
     local user = _M.get_user(username)
-    if user and user.totp_secret and user.totp_secret ~= "" then
+    if not user then
+        return false
+    end
+    
+    -- 检查 totp_secret 是否存在且非空
+    -- get_user() 已经将 cjson.null 和空字符串转换为 nil，所以这里只需要检查是否为 nil
+    if user.totp_secret and type(user.totp_secret) == "string" and user.totp_secret ~= "" then
         return true
     end
+    
     return false
 end
 

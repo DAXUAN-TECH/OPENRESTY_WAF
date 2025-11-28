@@ -124,11 +124,19 @@ function _M.create_proxy(proxy_data)
         return nil, "该端口已被其他启用的代理配置占用"
     end
     
-    -- 验证ip_rule_ids（如果提供，支持多个规则ID，但必须是同类型）
+    -- 验证ip_rule_ids（如果提供，支持多个规则ID，但必须遵守互斥关系）
     local ip_rule_ids = nil
     if proxy_data.ip_rule_ids and type(proxy_data.ip_rule_ids) == "table" and #proxy_data.ip_rule_ids > 0 then
         ip_rule_ids = proxy_data.ip_rule_ids
-        -- 验证所有规则是否存在且为IP相关类型，且类型一致
+        -- 规则互斥关系定义
+        local rule_conflicts = {
+            ip_whitelist = {"ip_blacklist"},
+            ip_blacklist = {"ip_whitelist"},
+            geo_whitelist = {"geo_blacklist"},
+            geo_blacklist = {"geo_whitelist"}
+        }
+        
+        -- 验证所有规则是否存在且为IP相关类型
         local rule_types = {}
         for _, rule_id in ipairs(ip_rule_ids) do
             local rule_check_sql = "SELECT id, rule_type FROM waf_block_rules WHERE id = ? AND status = 1 LIMIT 1"
@@ -143,12 +151,23 @@ function _M.create_proxy(proxy_data)
             end
             table.insert(rule_types, rule_type)
         end
-        -- 检查所有规则类型是否一致
-        if #rule_types > 1 then
-            local first_type = rule_types[1]
-            for i = 2, #rule_types do
-                if rule_types[i] ~= first_type then
-                    return nil, "所有防护规则必须是同类型"
+        
+        -- 检查规则互斥关系
+        for i, rule_type in ipairs(rule_types) do
+            local conflicts = rule_conflicts[rule_type]
+            if conflicts then
+                for _, conflict_type in ipairs(conflicts) do
+                    for j = i + 1, #rule_types do
+                        if rule_types[j] == conflict_type then
+                            local type_names = {
+                                ip_whitelist = "IP白名单",
+                                ip_blacklist = "IP黑名单",
+                                geo_whitelist = "地域白名单",
+                                geo_blacklist = "地域黑名单"
+                            }
+                            return nil, "不能同时选择" .. (type_names[rule_type] or rule_type) .. "和" .. (type_names[conflict_type] or conflict_type)
+                        end
+                    end
                 end
             end
         end

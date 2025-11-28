@@ -175,17 +175,24 @@ local function hmac_sha1(key, message)
         local sha = sha1:new()
         sha:update(key)
         local hashed_key = sha:final()
-        -- resty.sha1 的 final() 可能返回十六进制字符串，需要转换为二进制
+        -- resty.sha1 的 final() 通常返回二进制字符串（20字节），但也可能返回十六进制字符串（40字符）
+        -- 检查是否是十六进制字符串（长度为40，只包含0-9a-fA-F）
         if type(hashed_key) == "string" and #hashed_key == 40 and string.match(hashed_key, "^[0-9a-fA-F]+$") then
             -- 转换为二进制字符串
             local binary_key = ""
             for i = 1, 40, 2 do
                 local hex_byte = string.sub(hashed_key, i, i + 1)
                 local byte_value = tonumber(hex_byte, 16)
-                binary_key = binary_key .. string.char(byte_value)
+                if byte_value then
+                    binary_key = binary_key .. string.char(byte_value)
+                end
             end
             key = binary_key
+        elseif type(hashed_key) == "string" and #hashed_key == 20 then
+            -- 已经是二进制字符串（20字节），直接使用
+            key = hashed_key
         else
+            -- 其他情况，直接使用（可能是其他格式）
             key = hashed_key
         end
     end
@@ -211,8 +218,9 @@ local function hmac_sha1(key, message)
     sha1_obj:update(ipad_str)
     sha1_obj:update(message)
     local hash1 = sha1_obj:final()
+    ngx.log(ngx.DEBUG, "hmac_sha1: hash1 type: ", type(hash1), ", length: ", hash1 and #hash1 or 0)
     
-    -- resty.sha1 的 final() 可能返回十六进制字符串，需要转换为二进制
+    -- resty.sha1 的 final() 通常返回二进制字符串（20字节），但也可能返回十六进制字符串（40字符）
     -- 检查是否是十六进制字符串（长度为40，只包含0-9a-fA-F）
     if type(hash1) == "string" and #hash1 == 40 and string.match(hash1, "^[0-9a-fA-F]+$") then
         -- 转换为二进制字符串
@@ -220,15 +228,21 @@ local function hmac_sha1(key, message)
         for i = 1, 40, 2 do
             local hex_byte = string.sub(hash1, i, i + 1)
             local byte_value = tonumber(hex_byte, 16)
-            binary_hash1 = binary_hash1 .. string.char(byte_value)
+            if byte_value then
+                binary_hash1 = binary_hash1 .. string.char(byte_value)
+            end
         end
         hash1 = binary_hash1
+    elseif type(hash1) == "string" and #hash1 ~= 20 then
+        -- 如果不是20字节，记录警告
+        ngx.log(ngx.WARN, "hmac_sha1: hash1 length is ", #hash1, ", expected 20 bytes (binary) or 40 chars (hex)")
     end
     
     local sha2_obj = sha1:new()
     sha2_obj:update(opad_str)
     sha2_obj:update(hash1)
     local hash2 = sha2_obj:final()
+    ngx.log(ngx.DEBUG, "hmac_sha1: hash2 type: ", type(hash2), ", length: ", hash2 and #hash2 or 0, ", before conversion")
     
     -- 同样检查 hash2 是否是十六进制字符串
     if type(hash2) == "string" and #hash2 == 40 and string.match(hash2, "^[0-9a-fA-F]+$") then
@@ -237,11 +251,23 @@ local function hmac_sha1(key, message)
         for i = 1, 40, 2 do
             local hex_byte = string.sub(hash2, i, i + 1)
             local byte_value = tonumber(hex_byte, 16)
-            binary_hash2 = binary_hash2 .. string.char(byte_value)
+            if byte_value then
+                binary_hash2 = binary_hash2 .. string.char(byte_value)
+            end
         end
         hash2 = binary_hash2
+    elseif type(hash2) == "string" and #hash2 ~= 20 then
+        -- 如果不是20字节，记录警告
+        ngx.log(ngx.WARN, "hmac_sha1: hash2 length is ", #hash2, ", expected 20 bytes (binary) or 40 chars (hex)")
     end
     
+    -- 验证最终结果长度
+    if type(hash2) ~= "string" or (#hash2 ~= 20 and #hash2 ~= 40) then
+        ngx.log(ngx.ERR, "hmac_sha1: invalid hash2 format, type: ", type(hash2), ", length: ", hash2 and #hash2 or 0)
+        return nil, "Invalid HMAC result format"
+    end
+    
+    ngx.log(ngx.DEBUG, "hmac_sha1: final hash2 length: ", #hash2, " bytes")
     return hash2
 end
 

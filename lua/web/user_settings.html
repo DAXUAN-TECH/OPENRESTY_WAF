@@ -249,7 +249,7 @@
                             </div>
                             <div class="form-actions">
                                 <button class="button button-primary" onclick="completeReset()">
-                                    完成重置
+                                    重置
                                 </button>
                                 <button class="button button-secondary" onclick="closeResetModal()">
                                     取消
@@ -667,7 +667,7 @@
                     } else {
                         showError(data.message || '重置失败，请检查验证码是否正确');
                         button.disabled = false;
-                        button.innerHTML = '完成重置';
+                        button.innerHTML = '重置';
                     }
                 })
                 .catch(err => {

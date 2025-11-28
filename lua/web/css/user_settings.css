@@ -354,6 +354,12 @@
             letter-spacing: 4px;
         }
         
+        /* 重置弹出框中的验证码输入框样式 */
+        #oldTotpCode::placeholder,
+        #newTotpCode::placeholder {
+            text-align: center;
+        }
+        
         .form-group select {
             cursor: pointer;
         }

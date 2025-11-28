@@ -229,6 +229,28 @@ function _M.route()
         return serve_html_file("login.html")
     end
     
+    -- 特殊处理 favicon.ico 请求（浏览器会自动请求，缺失是正常情况）
+    if path == "/favicon.ico" then
+        local project_root = get_project_root_smart()
+        if project_root then
+            local file_path = project_root .. "/lua/web/favicon.ico"
+            local file = io.open(file_path, "r")
+            if file then
+                local content = file:read("*all")
+                file:close()
+                if content then
+                    ngx.header.content_type = "image/x-icon"
+                    ngx.say(content)
+                    return
+                end
+            end
+        end
+        -- favicon 不存在时，返回 204 No Content（不记录错误，这是正常情况）
+        ngx.status = 204
+        ngx.exit(204)
+        return
+    end
+    
     -- 静态文件服务（JavaScript、CSS等）- 不需要认证
     -- 支持子目录路径：/css/xxx.css, /js/xxx.js, /image/xxx.png 等
     if path:match("%.js$") or path:match("%.css$") or path:match("%.png$") or path:match("%.jpg$") or path:match("%.jpeg$") or path:match("%.gif$") or path:match("%.svg$") or path:match("%.ico$") then

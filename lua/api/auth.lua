@@ -361,6 +361,13 @@ function _M.enable_totp()
         ngx.log(ngx.WARN, "auth.enable_totp: DEBUG - cleaned_cached_secret (first 20 chars): ", string.sub(cleaned_cached_secret, 1, 20), ", cleaned_provided_secret (first 20 chars): ", string.sub(cleaned_secret, 1, 20))
         ngx.log(ngx.WARN, "auth.enable_totp: DEBUG - secrets match: ", secrets_match, ", exact match: ", cached_secret == secret)
         
+        -- 记录服务器当前时间信息用于调试
+        local server_time = ngx.time()
+        local server_time_str = os.date("!%Y-%m-%d %H:%M:%S", server_time)
+        local time_step = 30
+        local current_counter = math.floor(server_time / time_step)
+        ngx.log(ngx.WARN, "auth.enable_totp: DEBUG - server_time: ", server_time, " (", server_time_str, " UTC), time_step: ", time_step, ", current_counter: ", current_counter)
+        
         -- 使用清理后的缓存的secret生成当前时间的验证码用于对比
         local test_code_cached, test_err_cached = totp.generate_totp(cleaned_cached_secret, 30, 6)
         if test_code_cached then
@@ -376,8 +383,20 @@ function _M.enable_totp()
         else
             ngx.log(ngx.WARN, "auth.enable_totp: DEBUG - failed to generate code from cleaned_provided_secret: ", tostring(test_err_provided))
         end
+        
+        -- 提示用户检查时间同步
+        if test_code_cached and test_code_cached ~= code then
+            ngx.log(ngx.WARN, "auth.enable_totp: DEBUG - WARNING: Generated code (", test_code_cached, ") does not match user input (", code, "). This may indicate a time synchronization issue between server and mobile device.")
+        end
     else
         ngx.log(ngx.WARN, "auth.enable_totp: DEBUG - no cached secret found for user: ", session.username)
+        
+        -- 记录服务器当前时间信息用于调试
+        local server_time = ngx.time()
+        local server_time_str = os.date("!%Y-%m-%d %H:%M:%S", server_time)
+        local time_step = 30
+        local current_counter = math.floor(server_time / time_step)
+        ngx.log(ngx.WARN, "auth.enable_totp: DEBUG - server_time: ", server_time, " (", server_time_str, " UTC), time_step: ", time_step, ", current_counter: ", current_counter)
         
         -- 使用清理后的提供的secret生成当前时间的验证码用于对比
         local test_code_provided, test_err_provided = totp.generate_totp(cleaned_secret, 30, 6)
@@ -385,6 +404,11 @@ function _M.enable_totp()
             ngx.log(ngx.WARN, "auth.enable_totp: DEBUG - generated code from cleaned_provided_secret: ", test_code_provided, ", user input: ", code, ", match: ", test_code_provided == code)
         else
             ngx.log(ngx.WARN, "auth.enable_totp: DEBUG - failed to generate code from cleaned_provided_secret: ", tostring(test_err_provided))
+        end
+        
+        -- 提示用户检查时间同步
+        if test_code_provided and test_code_provided ~= code then
+            ngx.log(ngx.WARN, "auth.enable_totp: DEBUG - WARNING: Generated code (", test_code_provided, ") does not match user input (", code, "). This may indicate a time synchronization issue between server and mobile device.")
         end
     end
     
@@ -431,9 +455,16 @@ function _M.enable_totp()
     
     if not totp_ok then
         ngx.log(ngx.WARN, "auth.enable_totp: TOTP verification failed for user: ", session.username, ", secret_source: ", secret_source, ", error: ", tostring(err))
+        
+        -- 获取服务器时间信息用于错误消息
+        local server_time = ngx.time()
+        local server_time_str = os.date("!%Y-%m-%d %H:%M:%S", server_time)
+        local time_step = 30
+        local current_counter = math.floor(server_time / time_step)
+        
         api_utils.json_response({
             error = "Unauthorized",
-            message = "验证码错误，请重试。请确保时间同步正确，验证码在5分钟内有效。如果时间偏差较大，请检查服务器和手机时间是否准确。"
+            message = "验证码错误，请重试。\n\n可能的原因：\n1. 时间不同步：请确保手机和服务器时间同步（服务器时间：" .. server_time_str .. " UTC）\n2. 验证码过期：验证码每30秒更新一次，请在90秒内输入\n3. 密钥不匹配：请确保扫描的二维码或输入的密钥正确\n\n如果问题持续，请检查：\n- 手机时间是否准确（建议开启自动同步）\n- 服务器时间是否准确（建议使用NTP同步）\n- 时区设置是否正确"
         }, 401)
         return
     end

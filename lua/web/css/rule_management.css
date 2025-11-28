@@ -361,9 +361,9 @@
             max-width: none;
         }
         
-        /* 分组输入框缩短三分之一 */
+        /* 分组输入框拓宽以显示提示信息 */
         #edit-modal #edit-rule-group {
-            max-width: 233px;
+            max-width: 400px;
         }
         
         /* 优先级、生效开始时间、生效结束时间在同一行，输入框长度优化 */

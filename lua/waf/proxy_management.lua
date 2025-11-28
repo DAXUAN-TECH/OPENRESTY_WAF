@@ -689,15 +689,26 @@ function _M.update_proxy(proxy_id, proxy_data)
         if proxy_data[field] ~= nil and proxy_data[field] ~= cjson.null then
             table.insert(update_fields, field .. " = ?")
             -- 对于可能为null的字段，使用null_to_nil处理
-            if field == "server_name" or field == "ssl_cert_path" or 
-               field == "ssl_key_path" or field == "description" then
+            if field == "server_name" then
+                -- TCP/UDP 代理的 server_name 必须为 nil
+                if proxy.proxy_type ~= "http" then
+                    table.insert(update_params, nil)
+                else
+                    table.insert(update_params, null_to_nil(proxy_data[field]))
+                end
+            elseif field == "ssl_cert_path" or field == "ssl_key_path" or field == "description" then
                 table.insert(update_params, null_to_nil(proxy_data[field]))
             else
                 table.insert(update_params, proxy_data[field])
             end
         elseif proxy_data[field] == cjson.null then
             -- 如果明确设置为null，也更新字段
-            table.insert(update_fields, field .. " = NULL")
+            -- 对于 server_name，如果是 TCP/UDP 代理，强制设置为 NULL
+            if field == "server_name" and proxy.proxy_type ~= "http" then
+                table.insert(update_fields, field .. " = NULL")
+            else
+                table.insert(update_fields, field .. " = NULL")
+            end
         end
     end
     

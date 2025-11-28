@@ -773,9 +773,17 @@ function _M.check_ip_allowed(ip_address)
     
     ngx.log(ngx.INFO, "check_ip_allowed: found ", #res, " whitelist entries, checking IP: ", ip_address)
     
+    -- 记录白名单中的具体条目（便于调试）
+    local whitelist_ips = {}
+    for _, row in ipairs(res) do
+        table.insert(whitelist_ips, row.ip_address)
+    end
+    ngx.log(ngx.INFO, "check_ip_allowed: whitelist entries: ", table.concat(whitelist_ips, ", "))
+    
     -- 检查IP是否匹配任何白名单条目
     for _, row in ipairs(res) do
         local whitelist_ip = row.ip_address
+        ngx.log(ngx.DEBUG, "check_ip_allowed: checking against whitelist entry: ", whitelist_ip)
         
         -- 检查是否包含逗号（多个IP）
         if whitelist_ip:match(",") then
@@ -785,19 +793,31 @@ function _M.check_ip_allowed(ip_address)
                 if ip and ip ~= "" then
                     -- 检查是否为CIDR格式
                     if ip:match("/") then
-                        if ip_utils.match_cidr(ip_address, ip) then
+                        local matched = ip_utils.match_cidr(ip_address, ip)
+                        ngx.log(ngx.DEBUG, "check_ip_allowed: CIDR match ", ip_address, " in ", ip, ": ", matched)
+                        if matched then
+                            ngx.log(ngx.INFO, "check_ip_allowed: IP matched CIDR in comma-separated list: ", ip_address, " in ", ip)
                             return true
                         end
                     -- 检查是否为IP范围格式
                     elseif ip:match("-") then
                         local start_ip, end_ip = ip_utils.parse_ip_range(ip)
-                        if start_ip and end_ip and ip_utils.match_ip_range(ip_address, start_ip, end_ip) then
-                            return true
+                        if start_ip and end_ip then
+                            local matched = ip_utils.match_ip_range(ip_address, start_ip, end_ip)
+                            ngx.log(ngx.DEBUG, "check_ip_allowed: IP range match ", ip_address, " in ", ip, " (", start_ip, "-", end_ip, "): ", matched)
+                            if matched then
+                                ngx.log(ngx.INFO, "check_ip_allowed: IP matched range in comma-separated list: ", ip_address, " in ", ip)
+                                return true
+                            end
                         end
                     -- 单个IP，直接比较
-                    elseif ip_address == ip then
-                        ngx.log(ngx.DEBUG, "check_ip_allowed: IP matched in comma-separated list: ", ip_address)
-                        return true
+                    else
+                        local matched = (ip_address == ip)
+                        ngx.log(ngx.DEBUG, "check_ip_allowed: exact match ", ip_address, " == ", ip, ": ", matched)
+                        if matched then
+                            ngx.log(ngx.INFO, "check_ip_allowed: IP matched exactly in comma-separated list: ", ip_address, " == ", ip)
+                            return true
+                        end
                     end
                 end
             end
@@ -805,26 +825,38 @@ function _M.check_ip_allowed(ip_address)
             -- 单个IP或IP段
             -- 检查是否为CIDR格式
             if whitelist_ip:match("/") then
-                if ip_utils.match_cidr(ip_address, whitelist_ip) then
-                    ngx.log(ngx.DEBUG, "check_ip_allowed: IP matched CIDR: ", ip_address, " in ", whitelist_ip)
+                local matched = ip_utils.match_cidr(ip_address, whitelist_ip)
+                ngx.log(ngx.DEBUG, "check_ip_allowed: CIDR match ", ip_address, " in ", whitelist_ip, ": ", matched)
+                if matched then
+                    ngx.log(ngx.INFO, "check_ip_allowed: IP matched CIDR: ", ip_address, " in ", whitelist_ip)
                     return true
                 end
             -- 检查是否为IP范围格式
             elseif whitelist_ip:match("-") then
                 local start_ip, end_ip = ip_utils.parse_ip_range(whitelist_ip)
-                if start_ip and end_ip and ip_utils.match_ip_range(ip_address, start_ip, end_ip) then
-                    ngx.log(ngx.DEBUG, "check_ip_allowed: IP matched range: ", ip_address, " in ", whitelist_ip)
-                    return true
+                if start_ip and end_ip then
+                    local matched = ip_utils.match_ip_range(ip_address, start_ip, end_ip)
+                    ngx.log(ngx.DEBUG, "check_ip_allowed: IP range match ", ip_address, " in ", whitelist_ip, " (", start_ip, "-", end_ip, "): ", matched)
+                    if matched then
+                        ngx.log(ngx.INFO, "check_ip_allowed: IP matched range: ", ip_address, " in ", whitelist_ip)
+                        return true
+                    end
+                else
+                    ngx.log(ngx.DEBUG, "check_ip_allowed: failed to parse IP range: ", whitelist_ip)
                 end
             -- 单个IP，直接比较
-            elseif ip_address == whitelist_ip then
-                ngx.log(ngx.DEBUG, "check_ip_allowed: IP matched exactly: ", ip_address)
-                return true
+            else
+                local matched = (ip_address == whitelist_ip)
+                ngx.log(ngx.DEBUG, "check_ip_allowed: exact match ", ip_address, " == ", whitelist_ip, ": ", matched)
+                if matched then
+                    ngx.log(ngx.INFO, "check_ip_allowed: IP matched exactly: ", ip_address, " == ", whitelist_ip)
+                    return true
+                end
             end
         end
     end
     
-    ngx.log(ngx.WARN, "check_ip_allowed: IP ", ip_address, " not found in whitelist (checked ", #res, " entries)")
+    ngx.log(ngx.WARN, "check_ip_allowed: IP ", ip_address, " not found in whitelist (checked ", #res, " entries: ", table.concat(whitelist_ips, ", "), ")")
     return false
 end
 

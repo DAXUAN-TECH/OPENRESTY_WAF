@@ -115,6 +115,7 @@
         .filter-group {
             flex: 1;
             min-width: 200px;
+            max-width: 300px;
         }
         
         /* 访问日志：使用Grid布局确保对齐 */
@@ -171,10 +172,12 @@
         .filter-group input,
         .filter-group select {
             width: 100%;
+            max-width: 100%;
             padding: 8px 12px;
             border: 1px solid #ddd;
             border-radius: 4px;
             font-size: 14px;
+            box-sizing: border-box;
         }
         .filter-actions {
             display: flex;

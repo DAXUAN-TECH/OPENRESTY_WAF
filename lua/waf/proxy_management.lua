@@ -354,7 +354,7 @@ function _M.list_proxies(params)
                p.health_check_enable, p.health_check_interval, p.health_check_timeout,
                p.max_fails, p.fail_timeout, p.proxy_timeout, p.proxy_connect_timeout,
                p.proxy_send_timeout, p.proxy_read_timeout, p.ssl_enable, p.ssl_cert_path, p.ssl_key_path,
-               p.description, p.ip_rule_id, p.status, p.priority, p.created_at, p.updated_at,
+               p.description, p.ip_rule_id, p.ip_rule_ids, p.status, p.priority, p.created_at, p.updated_at,
                r.rule_name, r.rule_type
         FROM waf_proxy_configs p
         LEFT JOIN waf_block_rules r ON p.ip_rule_id = r.id

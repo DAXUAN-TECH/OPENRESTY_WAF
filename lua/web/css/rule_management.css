@@ -344,10 +344,20 @@
             max-width: 175px;
         }
         
+        /* 规则名称输入框和规则类型输入框一样宽 */
+        #edit-modal #edit-rule-name {
+            max-width: 175px;
+        }
+        
         /* 规则值输入框和描述输入框保持一样宽 */
         #edit-modal .form-group textarea.rule-value-input,
         #edit-modal #edit-description {
             max-width: 500px;
+        }
+        
+        /* 分组输入框缩短三分之一 */
+        #edit-modal #edit-rule-group {
+            max-width: 233px;
         }
         
         /* 优先级、生效开始时间、生效结束时间在同一行，输入框长度优化 */

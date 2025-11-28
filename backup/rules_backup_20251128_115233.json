@@ -1,0 +1,1 @@
+{"datetime":"2025-11-28 03:52:33","whitelist":{},"timestamp":1764301953,"rules":[{"rule_value":"47.239.1.170","rule_type":"ip_whitelist","rule_name":"amos_jump","status":1,"rule_version":1,"end_time":"2025-11-30 00:00:00","start_time":"2025-11-26 11:42:00","description":null,"id":"1","priority":1}]}

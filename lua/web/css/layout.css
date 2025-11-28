@@ -1,0 +1,261 @@
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --sidebar-width: 200px; /* 初始值，JavaScript会立即更新 */
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: #f5f5f5;
+            color: #333;
+            display: grid;
+            grid-template-columns: 0 1fr;
+            grid-template-rows: auto 1fr;
+            grid-template-areas:
+                'sidebar banner'
+                'sidebar content';
+            min-height: 100vh;
+        }
+        /* 左侧菜单栏 */
+        .sidebar {
+            grid-area: sidebar;
+            width: 15%;
+            min-width: 200px;
+            max-width: 300px;
+            background: #2c3e50;
+            color: #ecf0f1;
+            position: fixed;
+            left: 0;
+            top: 0;
+            height: 100vh;
+            overflow-y: auto;
+            box-shadow: 2px 0 4px rgba(0,0,0,0.1);
+            z-index: 1000;
+        }
+        .sidebar-header {
+            padding: 20px;
+            background: #1a252f;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            box-sizing: border-box;
+            min-height: 80px;
+        }
+        .sidebar-header h1 {
+            font-size: 20px;
+            font-weight: 600;
+            color: #fff;
+            line-height: 1.2;
+            margin: 0;
+            text-align: center;
+        }
+        .sidebar-header .divider {
+            width: 90%;
+            max-width: 220px;
+            height: 3px;
+            background: #314659;
+            margin: 8px 0;
+            border-radius: 1px;
+        }
+        .sidebar-header .subtitle {
+            font-size: 12px;
+            color: #95a5a6;
+            margin-top: 0;
+            line-height: 1.2;
+            text-align: center;
+        }
+        .sidebar-menu {
+            padding: 10px 0;
+        }
+        .menu-item {
+            display: block;
+            padding: 12px 20px;
+            color: #bdc3c7;
+            text-decoration: none;
+            transition: all 0.3s;
+            border-left: 3px solid transparent;
+        }
+        .menu-item:hover {
+            background: #34495e;
+            color: #fff;
+            border-left-color: #3498db;
+        }
+        .menu-item.active {
+            background: #34495e;
+            color: #fff;
+            border-left-color: #3498db;
+            font-weight: 500;
+        }
+        .menu-item i {
+            width: 20px;
+            display: inline-block;
+            margin-right: 10px;
+        }
+        .menu-divider {
+            height: 1px;
+            background: #34495e;
+            margin: 10px 20px;
+        }
+        /* 顶部Banner栏 - 高端渐变设计 */
+        .top-banner {
+            grid-area: banner;
+            /* 使用100vw（viewport width）减去sidebar宽度，确保宽度计算正确 */
+            width: calc(100vw - var(--sidebar-width));
+            height: 100%;
+            background: linear-gradient(135deg, #34495e 0%, #2c3e50 100%);
+            border-bottom: 1px solid rgba(52, 73, 94, 0.3);
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08), 
+                        0 1px 0 rgba(255, 255, 255, 0.05) inset;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 2%;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            box-sizing: border-box;
+            /* 确保与sidebar-header完美对齐 */
+            min-height: 80px;
+            /* 紧贴sidebar，无间隙 - 使用CSS变量防止闪烁 */
+            margin-left: var(--sidebar-width);
+            /* 防止闪烁：在JavaScript执行前隐藏，执行后显示 */
+            visibility: hidden;
+        }
+        .top-banner.layout-ready {
+            visibility: visible;
+        }
+        .top-banner::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: linear-gradient(90deg, 
+                transparent 0%, 
+                rgba(255, 255, 255, 0.1) 50%, 
+                transparent 100%);
+        }
+        .banner-title {
+            font-size: 20px;
+            font-weight: 600;
+            color: #fff;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+            letter-spacing: 0.3px;
+        }
+        .banner-actions {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            color: #ecf0f1;
+            font-size: 14px;
+            padding: 6px 12px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 6px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            transition: all 0.3s ease;
+        }
+        .user-info:hover {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: rgba(255, 255, 255, 0.12);
+        }
+        .user-info .username {
+            font-weight: 500;
+            color: #fff;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+        }
+        .logout-btn {
+            padding: 7px 16px;
+            background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+            color: #fff;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            text-decoration: none;
+            display: inline-block;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 6px rgba(231, 76, 60, 0.3);
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+        }
+        .logout-btn:hover {
+            background: linear-gradient(135deg, #c0392b 0%, #a93226 100%);
+            box-shadow: 0 4px 12px rgba(231, 76, 60, 0.4);
+            transform: translateY(-1px);
+        }
+        .logout-btn:active {
+            transform: translateY(0);
+            box-shadow: 0 2px 6px rgba(231, 76, 60, 0.3);
+        }
+        /* 内容显示区域 - 统一内边距 */
+        .content-area {
+            grid-area: content;
+            /* 在grid布局中，content-area占据剩余空间，但由于sidebar是fixed，需要手动设置 */
+            /* 使用100vw（viewport width）减去sidebar宽度，确保子元素的100%能够正确计算 */
+            width: calc(100vw - var(--sidebar-width));
+            height: 100%;
+            padding: 30px;
+            overflow-y: auto;
+            background: #f5f5f5;
+            /* 紧贴sidebar，无间隙 - 使用CSS变量防止闪烁 */
+            margin-left: var(--sidebar-width);
+            /* 防止闪烁：在JavaScript执行前隐藏，执行后显示 */
+            visibility: hidden;
+            /* 确保box-sizing正确，padding不影响子元素宽度计算 */
+            box-sizing: border-box;
+            /* 确保子元素能够正确使用100%宽度 */
+            position: relative;
+        }
+        .content-area.layout-ready {
+            visibility: visible;
+        }
+        /* 确保content-area的所有直接子元素能够正确使用100%宽度 */
+        /* 使用!important确保不被其他样式覆盖 */
+        .content-area > * {
+            box-sizing: border-box !important;
+            width: 100% !important;
+            min-width: 100% !important;
+            max-width: 100% !important;
+        }
+        /* 响应式设计 */
+        @media (max-width: 768px) {
+            body {
+                grid-template-columns: 0 1fr;
+            }
+            .sidebar {
+                width: 200px;
+                min-width: 200px;
+                max-width: 200px;
+            }
+            .top-banner {
+                padding: 0 2%;
+                margin-left: var(--sidebar-width);
+            }
+            .banner-title {
+                font-size: 18px;
+            }
+            .content-area {
+                padding: 20px;
+                margin-left: var(--sidebar-width);
+            }
+        }
+        
+        @media (max-width: 480px) {
+            body {
+                grid-template-columns: 0 100%;
+                grid-template-areas:
+                    'banner'
+                    'content';
+            }
+            .sidebar {
+                display: none;
+            }
+        }
+    

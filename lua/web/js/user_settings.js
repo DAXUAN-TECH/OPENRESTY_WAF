@@ -1,0 +1,439 @@
+let currentSecret = null;
+        let totpEnabled = false;
+        
+        // 检查认证状态
+        function checkAuth() {
+            fetch('/api/auth/check')
+                .then(response => response.json())
+                .then(data => {
+                    if (data && data.authenticated === true) {
+                        document.getElementById('username').textContent = data.username || '用户';
+                        loadTotpStatus();
+                    } else {
+                        window.location.href = '/login?redirect=' + encodeURIComponent(window.location.pathname);
+                    }
+                })
+                .catch(() => {
+                    window.location.href = '/login?redirect=' + encodeURIComponent(window.location.pathname);
+                });
+        }
+        
+        // 加载 TOTP 状态
+        function loadTotpStatus() {
+            fetch('/api/auth/totp/status')
+                .then(response => response.json())
+                .then(data => {
+                    if (data && data.enabled === true) {
+                        totpEnabled = true;
+                        updateStatus(true);
+                    } else {
+                        totpEnabled = false;
+                        updateStatus(false);
+                    }
+                })
+                .catch(err => {
+                    console.error('Failed to load TOTP status:', err);
+                    updateStatus(false);
+                });
+        }
+        
+        // 更新状态显示
+        function updateStatus(enabled) {
+            const statusDiv = document.getElementById('totpStatus');
+            const statusLabel = document.getElementById('statusLabel');
+            const statusText = document.getElementById('statusText');
+            const setupButton = document.getElementById('setupButton');
+            const disableButton = document.getElementById('disableButton');
+            
+            if (enabled) {
+                statusDiv.className = 'totp-status enabled';
+                statusLabel.className = 'status-label enabled';
+                statusLabel.textContent = '已启用';
+                statusText.textContent = '双因素认证已启用，登录时需要输入验证码';
+                setupButton.style.display = 'none';
+                disableButton.style.display = 'inline-block';
+            } else {
+                statusDiv.className = 'totp-status disabled';
+                statusLabel.className = 'status-label disabled';
+                statusLabel.textContent = '未启用';
+                statusText.textContent = '双因素认证未启用，建议启用以提高账户安全性';
+                setupButton.style.display = 'inline-block';
+                disableButton.style.display = 'none';
+            }
+        }
+        
+        // 设置 TOTP
+        function setupTotp() {
+            hideMessages();
+            
+            fetch('/api/auth/totp/setup', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.secret) {
+                        currentSecret = data.secret;
+                        showQrCode(data);
+                        document.getElementById('setupSection').style.display = 'block';
+                        document.getElementById('actionSection').style.display = 'none';
+                        document.getElementById('totpCode').focus();
+                    } else {
+                        showError(data.message || '设置失败，请重试');
+                    }
+                })
+                .catch(err => {
+                    showError('网络错误，请稍后重试');
+                });
+        }
+        
+        // 显示二维码
+        function showQrCode(data) {
+            const qrContainer = document.getElementById('qrContainer');
+            let html = '';
+            
+            // 清空容器
+            qrContainer.innerHTML = '';
+            
+            // 创建二维码容器
+            const qrCanvas = document.createElement('canvas');
+            qrCanvas.id = 'qrCanvas';
+            qrCanvas.style.display = 'block';
+            qrCanvas.style.margin = '0 auto';
+            qrContainer.appendChild(qrCanvas);
+            
+            // 获取 otpauth URL
+            let otpauthUrl = null;
+            if (data.qr_data && typeof data.qr_data === 'object' && data.qr_data.otpauth_url) {
+                // qr_data 是对象，包含 otpauth_url
+                otpauthUrl = data.qr_data.otpauth_url;
+            } else if (data.qr_url) {
+                // 使用外部 QR 码服务（如果配置了）
+                html = '<img src="' + data.qr_url + '" alt="QR Code">';
+                if (data.secret) {
+                    html += '<div class="secret-key">密钥（手动输入）: ' + data.secret + '</div>';
+                }
+                html += '<div style="color: #666; font-size: 12px; margin-top: 10px;">';
+                html += '请使用 Google Authenticator 扫描二维码或手动输入密钥，然后输入生成的6位验证码';
+                html += '</div>';
+                qrContainer.innerHTML = html;
+                return;
+            }
+            
+            // 使用 qrcode.js 生成二维码
+            if (otpauthUrl && typeof QRCode !== 'undefined') {
+                QRCode.toCanvas(qrCanvas, otpauthUrl, {
+                    width: 200,
+                    margin: 2,
+                    color: {
+                        dark: '#000000',
+                        light: '#FFFFFF'
+                    }
+                }, function (error) {
+                    if (error) {
+                        console.error('QR code generation failed:', error);
+                        qrContainer.innerHTML = '<div style="color: #dc3545; padding: 20px;">二维码生成失败，请使用手动输入密钥的方式</div>';
+                    } else {
+                        // 二维码生成成功，继续显示密钥等信息
+                        if (data.secret) {
+                            const secretDiv = document.createElement('div');
+                            secretDiv.className = 'secret-key';
+                            secretDiv.textContent = '密钥（手动输入）: ' + data.secret;
+                            qrContainer.appendChild(secretDiv);
+                        }
+                        
+                        const tipDiv = document.createElement('div');
+                        tipDiv.style.cssText = 'color: #666; font-size: 12px; margin-top: 10px;';
+                        tipDiv.textContent = '请使用 Google Authenticator 扫描二维码或手动输入密钥，然后输入生成的6位验证码';
+                        qrContainer.appendChild(tipDiv);
+                    }
+                });
+            } else {
+                // QRCode 库未加载或 otpauthUrl 不存在
+                console.error('QRCode library not loaded or otpauthUrl missing');
+                qrContainer.innerHTML = '<div style="color: #dc3545; padding: 20px;">二维码生成失败，请使用手动输入密钥的方式</div>';
+                if (data.secret) {
+                    const secretDiv = document.createElement('div');
+                    secretDiv.className = 'secret-key';
+                    secretDiv.textContent = '密钥（手动输入）: ' + data.secret;
+                    qrContainer.appendChild(secretDiv);
+                }
+            }
+        }
+        
+        // 启用 TOTP
+        function enableTotp() {
+            const code = document.getElementById('totpCode').value.trim();
+            
+            if (!code || code.length !== 6) {
+                showError('请输入6位验证码');
+                return;
+            }
+            
+            if (!currentSecret) {
+                showError('请先设置双因素认证');
+                return;
+            }
+            
+            const button = document.getElementById('enableButton');
+            button.disabled = true;
+            button.innerHTML = '<span class="loading"></span>启用中...';
+            
+            fetch('/api/auth/totp/enable', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    secret: currentSecret,
+                    code: code
+                })
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        showSuccess('双因素认证已启用');
+                        currentSecret = null;
+                        document.getElementById('setupSection').style.display = 'none';
+                        document.getElementById('actionSection').style.display = 'block';
+                        loadTotpStatus();
+                    } else {
+                        showError(data.message || '启用失败，请检查验证码是否正确');
+                        button.disabled = false;
+                        button.innerHTML = '启用双因素认证';
+                    }
+                })
+                .catch(err => {
+                    showError('网络错误，请稍后重试');
+                    button.disabled = false;
+                    button.innerHTML = '启用双因素认证';
+                });
+        }
+        
+        // 取消设置
+        function cancelSetup() {
+            currentSecret = null;
+            document.getElementById('setupSection').style.display = 'none';
+            document.getElementById('actionSection').style.display = 'block';
+            document.getElementById('qrContainer').innerHTML = '';
+            document.getElementById('totpCode').value = '';
+        }
+        
+        // 禁用 TOTP
+        function disableTotp() {
+            if (!confirm('确定要禁用双因素认证吗？禁用后您的账户安全性将降低。')) {
+                return;
+            }
+            
+            const code = prompt('请输入当前验证码以确认禁用：');
+            if (!code || code.length !== 6) {
+                showError('请输入6位验证码');
+                return;
+            }
+            
+            const button = document.getElementById('disableButton');
+            button.disabled = true;
+            button.innerHTML = '<span class="loading"></span>禁用中...';
+            
+            fetch('/api/auth/totp/disable', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    code: code
+                })
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        showSuccess('双因素认证已禁用');
+                        loadTotpStatus();
+                    } else {
+                        showError(data.message || '禁用失败，请检查验证码是否正确');
+                        button.disabled = false;
+                        button.innerHTML = '禁用双因素认证';
+                    }
+                })
+                .catch(err => {
+                    showError('网络错误，请稍后重试');
+                    button.disabled = false;
+                    button.innerHTML = '禁用双因素认证';
+                });
+        }
+        
+        // 显示错误信息
+        function showError(message) {
+            const errorDiv = document.getElementById('errorMessage');
+            errorDiv.textContent = message;
+            errorDiv.classList.add('show');
+            setTimeout(() => {
+                errorDiv.classList.remove('show');
+            }, 5000);
+        }
+        
+        // 显示成功信息
+        function showSuccess(message) {
+            const successDiv = document.getElementById('successMessage');
+            successDiv.textContent = message;
+            successDiv.classList.add('show');
+            setTimeout(() => {
+                successDiv.classList.remove('show');
+            }, 3000);
+        }
+        
+        // 隐藏消息
+        function hideMessages() {
+            document.getElementById('errorMessage').classList.remove('show');
+            document.getElementById('successMessage').classList.remove('show');
+        }
+        
+        // 修改密码
+        function changePassword(event) {
+            event.preventDefault();
+            hideMessages();
+            
+            // 去除前后空格
+            const oldPassword = document.getElementById('oldPassword').value.trim();
+            const newPassword = document.getElementById('newPassword').value.trim();
+            const confirmPassword = document.getElementById('confirmPassword').value.trim();
+            
+            // 验证新密码和确认密码是否一致
+            if (newPassword !== confirmPassword) {
+                showError('新密码和确认密码不一致');
+                return;
+            }
+            
+            // 验证新密码强度
+            const strength = checkPasswordStrength(newPassword);
+            if (!strength.valid) {
+                showError(strength.message || '新密码不符合要求');
+                return;
+            }
+            
+            const button = document.getElementById('changePasswordButton');
+            button.disabled = true;
+            button.innerHTML = '<span class="loading"></span>修改中...';
+            
+            fetch('/api/auth/password/change', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    old_password: oldPassword,
+                    new_password: newPassword
+                })
+            })
+                .then(response => {
+                    // 检查响应状态
+                    if (!response.ok) {
+                        // HTTP状态码不是2xx，尝试解析错误信息
+                        return response.json().then(data => {
+                            throw new Error(data.message || data.error || '修改密码失败');
+                        }).catch(() => {
+                            throw new Error('修改密码失败，HTTP状态码: ' + response.status);
+                        });
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.success) {
+                        showSuccess('密码修改成功');
+                        // 清空表单
+                        document.getElementById('changePasswordForm').reset();
+                        document.getElementById('passwordStrength').textContent = '';
+                        document.getElementById('passwordMatch').textContent = '';
+                        // 恢复按钮状态
+                        button.disabled = false;
+                        button.innerHTML = '修改密码';
+                    } else {
+                        showError(data.message || data.error || '修改密码失败');
+                        button.disabled = false;
+                        button.innerHTML = '修改密码';
+                    }
+                })
+                .catch(err => {
+                    showError(err.message || '网络错误，请稍后重试');
+                    button.disabled = false;
+                    button.innerHTML = '修改密码';
+                });
+        }
+        
+        // 检查密码强度
+        function checkPasswordStrength(password) {
+            if (!password) {
+                return { valid: false, message: '密码不能为空' };
+            }
+            
+            const checks = {
+                length: password.length >= 8,
+                hasUpper: /[A-Z]/.test(password),
+                hasLower: /[a-z]/.test(password),
+                hasDigit: /[0-9]/.test(password),
+                hasSpecial: /[^A-Za-z0-9]/.test(password)
+            };
+            
+            const valid = checks.length && checks.hasUpper && checks.hasLower && checks.hasDigit && checks.hasSpecial;
+            
+            if (!valid) {
+                const missing = [];
+                if (!checks.length) missing.push('至少8位');
+                if (!checks.hasUpper) missing.push('大写字母');
+                if (!checks.hasLower) missing.push('小写字母');
+                if (!checks.hasDigit) missing.push('数字');
+                if (!checks.hasSpecial) missing.push('符号');
+                return { valid: false, message: '密码必须包含：' + missing.join('、') };
+            }
+            
+            return { valid: true };
+        }
+        
+        // 页面加载时检查认证状态
+        checkAuth();
+        
+        // 实时检查密码强度
+        (function() {
+            const newPasswordInput = document.getElementById('newPassword');
+            const confirmPasswordInput = document.getElementById('confirmPassword');
+            const passwordStrengthDiv = document.getElementById('passwordStrength');
+            const passwordMatchDiv = document.getElementById('passwordMatch');
+            
+            if (newPasswordInput && passwordStrengthDiv) {
+                newPasswordInput.addEventListener('input', function() {
+                    const password = this.value;
+                    if (password) {
+                        const strength = checkPasswordStrength(password);
+                        if (strength.valid) {
+                            passwordStrengthDiv.textContent = '✓ 密码强度符合要求';
+                            passwordStrengthDiv.style.color = '#4caf50';
+                        } else {
+                            passwordStrengthDiv.textContent = strength.message || '密码不符合要求';
+                            passwordStrengthDiv.style.color = '#dc3545';
+                        }
+                    } else {
+                        passwordStrengthDiv.textContent = '';
+                    }
+                });
+            }
+            
+            if (confirmPasswordInput && newPasswordInput && passwordMatchDiv) {
+                confirmPasswordInput.addEventListener('input', function() {
+                    const newPassword = newPasswordInput.value;
+                    const confirmPassword = this.value;
+                    if (confirmPassword) {
+                        if (newPassword === confirmPassword) {
+                            passwordMatchDiv.textContent = '✓ 密码一致';
+                            passwordMatchDiv.style.color = '#4caf50';
+                        } else {
+                            passwordMatchDiv.textContent = '✗ 密码不一致';
+                            passwordMatchDiv.style.color = '#dc3545';
+                        }
+                    } else {
+                        passwordMatchDiv.textContent = '';
+                    }
+                });
+            }
+        })();

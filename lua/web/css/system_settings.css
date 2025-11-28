@@ -1,0 +1,390 @@
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        /* 统一容器样式 */
+        .container {
+            width: 100%;
+            max-width: 100%;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            padding: 30px;
+            box-sizing: border-box;
+            overflow-x: auto;
+        }
+        
+        /* 标题样式 */
+        h1 {
+            color: #333;
+            font-size: 24px;
+            margin-bottom: 30px;
+            font-weight: 600;
+        }
+        
+        /* 标签页样式 */
+        .tabs {
+            display: flex;
+            border-bottom: 2px solid #e0e0e0;
+            margin-bottom: 20px;
+        }
+        
+        .tab {
+            padding: 12px 24px;
+            cursor: pointer;
+            border: none;
+            background: none;
+            font-size: 16px;
+            color: #666;
+            transition: all 0.3s;
+        }
+        
+        .tab.active {
+            color: #4CAF50;
+            border-bottom: 2px solid #4CAF50;
+            font-weight: bold;
+        }
+        
+        .tab:hover {
+            color: #4CAF50;
+        }
+        
+        .tab-content {
+            display: none;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        /* 工具栏样式 */
+        .toolbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        
+        .filters {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        
+        .filters select,
+        .filters input {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        
+        /* 按钮样式 */
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+        
+        .btn-primary {
+            background: #4CAF50;
+            color: #fff;
+        }
+        
+        .btn-primary:hover {
+            background: #45a049;
+        }
+        
+        .btn-secondary {
+            background: #f0f0f0;
+            color: #333;
+        }
+        
+        .btn-secondary:hover {
+            background: #e0e0e0;
+        }
+        
+        .btn-danger {
+            background: #f44336;
+            color: #fff;
+        }
+        
+        .btn-danger:hover {
+            background: #da190b;
+        }
+        
+        .btn-warning {
+            background: #ff9800;
+            color: #fff;
+        }
+        
+        .btn-warning:hover {
+            background: #e68900;
+        }
+        
+        .btn-info {
+            background: #2196F3;
+            color: #fff;
+        }
+        
+        .btn-info:hover {
+            background: #0b7dda;
+        }
+        
+        .action-buttons {
+            display: flex;
+            gap: 5px;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .action-buttons button {
+            padding: 4px 8px;
+            font-size: 12px;
+        }
+        
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        /* whitelist-tab内容对齐 */
+        #whitelist-tab {
+            display: flex;
+            flex-direction: column;
+            align-items: stretch;
+            width: 100%;
+            position: relative; /* 确保模态框的定位基准正确 */
+        }
+        
+        #whitelist-tab .toolbar {
+            width: 100%;
+            max-width: 100%;
+        }
+        
+        #whitelist-tab #whitelist-table {
+            width: 100%;
+            max-width: 100%;
+        }
+        
+        /* 确保容器不会影响模态框 */
+        .container {
+            position: relative;
+        }
+        
+        /* 确保content-area不会影响模态框的定位 */
+        .content-area {
+            position: relative;
+            overflow: visible; /* 允许模态框超出content-area */
+        }
+        
+        /* 当模态框显示时，确保content-area不会阻止模态框 */
+        .content-area:has(.modal.show) {
+            overflow: visible;
+        }
+        
+        /* 表格样式 */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+        }
+        
+        thead {
+            background: #f5f5f5;
+        }
+        
+        th {
+            padding: 12px;
+            text-align: center;
+            border-bottom: 1px solid #e0e0e0;
+            background-color: #f5f5f5;
+            font-weight: 600;
+            color: #333;
+        }
+        
+        td {
+            padding: 12px;
+            border-bottom: 1px solid #f0f0f0;
+            text-align: center;
+        }
+        
+        tbody tr:hover {
+            background: #f8f9fa;
+        }
+        
+        /* 表单样式 */
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+            color: #333;
+        }
+        
+        .form-group input,
+        .form-group textarea {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        
+        .form-group textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+        
+        .form-actions {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+        }
+        
+        /* 模态框样式 - 修复与layout.html的兼容性 */
+        .modal {
+            display: none;
+            position: fixed !important;
+            z-index: 10000 !important; /* 提高z-index确保在最上层 */
+            left: 0 !important;
+            top: 0 !important;
+            right: 0 !important;
+            bottom: 0 !important;
+            width: 100vw !important;
+            height: 100vh !important;
+            overflow: auto;
+            background-color: rgba(0, 0, 0, 0.5);
+            margin: 0 !important;
+            padding: 0 !important;
+        }
+        
+        .modal.show {
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            flex-direction: row !important;
+            width: 100vw !important;
+            height: 100vh !important;
+        }
+        
+        /* 确保模态框在所有情况下都能正确显示 */
+        .modal[style*="display: flex"],
+        .modal[style*="display:flex"],
+        .modal[style*="display: block"] {
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            position: fixed !important;
+            z-index: 10000 !important;
+            left: 0 !important;
+            top: 0 !important;
+            right: 0 !important;
+            bottom: 0 !important;
+            width: 100vw !important;
+            height: 100vh !important;
+        }
+        
+        .modal-content {
+            background-color: #fefefe;
+            margin: auto;
+            padding: 30px;
+            border: 1px solid #888;
+            border-radius: 8px;
+            width: 90%;
+            max-width: 600px;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            position: relative;
+            z-index: 10001;
+        }
+        
+        .close {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+            line-height: 1;
+            position: absolute;
+            right: 20px;
+            top: 20px;
+            z-index: 10002;
+        }
+        
+        .close:hover,
+        .close:focus {
+            color: #000;
+        }
+        
+        /* 状态标签 */
+        .status-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        
+        .status-enabled {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .status-disabled {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
+        /* 分页样式 */
+        .pagination {
+            padding: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #fff;
+            border-top: 1px solid #e0e0e0;
+        }
+        
+        .pagination-info {
+            color: #666;
+            font-size: 14px;
+        }
+        
+        .pagination-controls {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .pagination-btn {
+            padding: 6px 12px;
+            border: 1px solid #ddd;
+            background: #fff;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        
+        .pagination-btn:hover:not(:disabled) {
+            background: #f0f0f0;
+        }
+        
+        .pagination-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .empty {
+            text-align: center;
+            padding: 40px;
+            color: #999;
+        }
+    

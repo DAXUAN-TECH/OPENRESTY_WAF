@@ -587,8 +587,8 @@ const pageSize = 20;
                 proxyData.server_name = serverName || null;
                 proxyData.location_path = document.getElementById('create-location-path').value || '/';
             } else if (proxyData.proxy_type === 'tcp' || proxyData.proxy_type === 'udp') {
-                const serverName = document.getElementById('create-tcp-udp-server-name').value.trim();
-                proxyData.server_name = serverName || null;
+                // TCP/UDP 代理不支持监听域名，设置为 null
+                proxyData.server_name = null;
             }
             
             // 获取后端服务器列表
@@ -662,7 +662,7 @@ const pageSize = 20;
                     } else if (proxy.proxy_type === 'tcp' || proxy.proxy_type === 'udp') {
                         document.getElementById('edit-tcp-udp-listen-port').value = proxy.listen_port;
                         document.getElementById('edit-tcp-udp-listen-address').value = proxy.listen_address || '0.0.0.0';
-                        document.getElementById('edit-tcp-udp-server-name').value = proxy.server_name || '';
+                        // TCP/UDP 代理不支持监听域名，不需要设置
                     }
                     document.getElementById('edit-load-balance').value = proxy.load_balance || 'round_robin';
                     document.getElementById('edit-proxy-connect-timeout').value = proxy.proxy_connect_timeout || 60;
@@ -824,8 +824,8 @@ const pageSize = 20;
             } else if (proxyType === 'tcp' || proxyType === 'udp') {
                 proxyData.listen_port = parseInt(document.getElementById('edit-tcp-udp-listen-port').value);
                 proxyData.listen_address = document.getElementById('edit-tcp-udp-listen-address').value;
-                const serverName = document.getElementById('edit-tcp-udp-server-name').value.trim();
-                proxyData.server_name = serverName || null;
+                // TCP/UDP 代理不支持监听域名，设置为 null
+                proxyData.server_name = null;
             }
             
             // 获取后端服务器列表

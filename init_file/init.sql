@@ -725,6 +725,11 @@ ORDER BY scheduled_time ASC;
 -- 注意：MySQL 5.7 不支持 IF NOT EXISTS，使用存储过程或手动检查
 -- 这里提供兼容的ALTER语句，如果字段已存在会报错，需要手动处理
 
+-- 反向代理配置表：将backen字段重命名为backend_path（如果存在backen字段）
+-- 注意：如果backen字段不存在或backend_path字段已存在，此语句会失败，需要手动注释或删除
+-- ALTER TABLE waf_proxy_configs 
+-- CHANGE COLUMN backen backend_path VARCHAR(255) DEFAULT NULL COMMENT '后端路径（HTTP代理时使用，代理到后端的特定路径，如/aaa，留空则代理到根路径，注意：后端服务器路径存储在waf_proxy_backends表中）';
+
 -- 访问日志表：添加域名字段（如果不存在）
 -- 注意：如果字段已存在，此语句会失败，需要手动注释或删除
 -- ALTER TABLE waf_access_logs 

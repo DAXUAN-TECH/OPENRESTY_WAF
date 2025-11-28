@@ -874,21 +874,21 @@ const pageSize = 20;
         
         // 启用代理
         async function enableProxy(id) {
-            if (!confirm('确定要启用该代理配置吗？')) return;
-            
-            try {
-                const response = await fetch(`/api/proxy/${id}/enable`, { method: 'POST' });
-                const data = await response.json();
-                
-                if (data.success) {
-                    showAlert('代理配置已启用');
-                    loadProxies();
-                } else {
-                    showAlert(data.error || '操作失败', 'error');
+            showConfirmModal('确认启用', '确定要启用该配置吗？', async function() {
+                try {
+                    const response = await fetch(`/api/proxy/${id}/enable`, { method: 'POST' });
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        showAlert('代理配置已启用');
+                        loadProxies();
+                    } else {
+                        showAlert(data.error || '操作失败', 'error');
+                    }
+                } catch (error) {
+                    showAlert('网络错误: ' + error.message, 'error');
                 }
-            } catch (error) {
-                showAlert('网络错误: ' + error.message, 'error');
-            }
+            });
         }
         
         // 确认对话框相关函数
@@ -933,7 +933,7 @@ const pageSize = 20;
         
         // 禁用代理
         async function disableProxy(id) {
-            showConfirmModal('确认禁用', '确定要禁用该代理配置吗？', async function() {
+            showConfirmModal('确认禁用', '确定要禁用该配置吗？', async function() {
                 try {
                     const response = await fetch(`/api/proxy/${id}/disable`, { method: 'POST' });
                     const data = await response.json();
@@ -952,7 +952,7 @@ const pageSize = 20;
         
         // 删除代理
         async function deleteProxy(id) {
-            showConfirmModal('确认删除', '确定要删除该代理配置吗？此操作不可恢复！', async function() {
+            showConfirmModal('确认删除', '确定要删除该配置吗？此操作不可恢复！', async function() {
                 try {
                     const response = await fetch(`/api/proxy/${id}`, { method: 'DELETE' });
                     const data = await response.json();

@@ -514,22 +514,22 @@ let currentPage = 1;
         
         // 启用规则
         async function enableRule(id) {
-            if (!confirm('确定要启用该规则吗？')) return;
-            
-            try {
-                const response = await fetch(`/api/rules/${id}/enable`, { method: 'POST' });
-                const data = await response.json();
-                
-                if (data.success) {
-                    showAlert('规则已启用');
-                    // 保持当前页码和筛选条件重新加载
-                    loadRules(currentPage);
-                } else {
-                    showAlert(data.error || '操作失败', 'error');
+            showConfirmModal('确认启用', '确定要启用该规则吗？', async function() {
+                try {
+                    const response = await fetch(`/api/rules/${id}/enable`, { method: 'POST' });
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        showAlert('规则已启用');
+                        // 保持当前页码和筛选条件重新加载
+                        loadRules(currentPage);
+                    } else {
+                        showAlert(data.error || '操作失败', 'error');
+                    }
+                } catch (error) {
+                    showAlert('网络错误: ' + error.message, 'error');
                 }
-            } catch (error) {
-                showAlert('网络错误: ' + error.message, 'error');
-            }
+            });
         }
         
         // 确认对话框相关函数

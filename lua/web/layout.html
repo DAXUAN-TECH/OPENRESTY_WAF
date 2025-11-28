@@ -106,8 +106,8 @@
         /* 顶部Banner栏 - 高端渐变设计 */
         .top-banner {
             grid-area: banner;
-            /* 使用calc()计算宽度，避免JavaScript内联样式覆盖 */
-            width: calc(100% - var(--sidebar-width));
+            /* 使用100vw（viewport width）减去sidebar宽度，确保宽度计算正确 */
+            width: calc(100vw - var(--sidebar-width));
             height: 100%;
             background: linear-gradient(135deg, #34495e 0%, #2c3e50 100%);
             border-bottom: 1px solid rgba(52, 73, 94, 0.3);

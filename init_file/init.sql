@@ -559,7 +559,6 @@ CREATE TABLE IF NOT EXISTS waf_proxy_configs (
     ssl_cert_path VARCHAR(512) DEFAULT NULL COMMENT 'SSL证书路径（启用SSL时使用）',
     ssl_key_path VARCHAR(512) DEFAULT NULL COMMENT 'SSL密钥路径（启用SSL时使用）',
     description TEXT DEFAULT NULL COMMENT '配置说明（描述代理配置的用途和来源）',
-    ip_rule_id BIGINT UNSIGNED DEFAULT NULL COMMENT '防护规则ID（关联waf_block_rules表，向后兼容字段，建议使用ip_rule_ids）',
     ip_rule_ids JSON DEFAULT NULL COMMENT '防护规则ID数组（JSON格式，存储多个规则ID，支持IP白名单、IP黑名单、地域白名单、地域黑名单，但必须遵守互斥关系）',
     status TINYINT NOT NULL DEFAULT 1 COMMENT '状态：1-启用（代理生效），0-禁用（代理不生效）',
     priority INT NOT NULL DEFAULT 0 COMMENT '优先级（数字越大优先级越高，用于匹配顺序）',
@@ -570,9 +569,7 @@ CREATE TABLE IF NOT EXISTS waf_proxy_configs (
     KEY idx_status_priority (status, priority) COMMENT '状态和优先级联合索引，用于排序查询',
     KEY idx_proxy_type (proxy_type) COMMENT '代理类型索引，用于按类型查询',
     KEY idx_listen_port (listen_port) COMMENT '监听端口索引，用于快速查找端口配置',
-    KEY idx_server_name (server_name(100)) COMMENT '服务器名称索引，用于HTTP代理匹配',
-    -- 外键约束：关联防护规则表（规则删除时设置为NULL）
-    CONSTRAINT fk_proxy_ip_rule FOREIGN KEY (ip_rule_id) REFERENCES waf_block_rules(id) ON DELETE SET NULL
+    KEY idx_server_name (server_name(100)) COMMENT '服务器名称索引，用于HTTP代理匹配'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci 
 ROW_FORMAT=DYNAMIC COMMENT='反向代理配置表：存储反向代理配置，支持HTTP、TCP、UDP代理';
 

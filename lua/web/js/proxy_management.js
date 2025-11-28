@@ -458,7 +458,6 @@ let currentPage = 1;
                     document.getElementById('edit-proxy-send-timeout').value = proxy.proxy_send_timeout || 60;
                     document.getElementById('edit-proxy-read-timeout').value = proxy.proxy_read_timeout || 60;
                     document.getElementById('edit-description').value = proxy.description || '';
-                    document.getElementById('edit-ip-rule-id').value = proxy.ip_rule_id || '';
                     
                     // 显示/隐藏相关字段，并动态管理required属性
                     const editListenPort = document.getElementById('edit-listen-port');
@@ -539,8 +538,22 @@ let currentPage = 1;
             event.preventDefault();
             
             const id = document.getElementById('edit-id').value;
-            const ipRuleId = document.getElementById('edit-ip-rule-id').value;
             const proxyType = document.getElementById('edit-proxy-type').value;
+            
+            // 获取已选择的规则ID列表
+            const ipRuleIds = [];
+            const editRulesList = document.getElementById('edit-rules-list');
+            if (editRulesList) {
+                const ruleItems = editRulesList.querySelectorAll('.rule-item');
+                ruleItems.forEach(item => {
+                    const typeSelect = item.querySelector('.rule-type');
+                    const ruleIdSelect = item.querySelector('.rule-id');
+                    if (typeSelect && typeSelect.value && ruleIdSelect && ruleIdSelect.value) {
+                        ipRuleIds.push(parseInt(ruleIdSelect.value));
+                    }
+                });
+            }
+            
             const proxyData = {
                 proxy_name: document.getElementById('edit-proxy-name').value,
                 backend_type: 'upstream',
@@ -548,7 +561,7 @@ let currentPage = 1;
                 proxy_connect_timeout: parseInt(document.getElementById('edit-proxy-connect-timeout').value) || 60,
                 proxy_send_timeout: parseInt(document.getElementById('edit-proxy-send-timeout').value) || 60,
                 proxy_read_timeout: parseInt(document.getElementById('edit-proxy-read-timeout').value) || 60,
-                ip_rule_id: ipRuleId ? parseInt(ipRuleId) : null,
+                ip_rule_ids: ipRuleIds.length > 0 ? ipRuleIds : null,
                 status: currentEditingProxy ? currentEditingProxy.status : 1
             };
             
@@ -816,24 +829,6 @@ let currentPage = 1;
                     
                     // 更新所有规则条目的选择框
                     updateAllRuleSelects();
-                    
-                    // 更新编辑表单的规则选择
-                    const editSelect = document.getElementById('edit-ip-rule-id');
-                    if (editSelect) {
-                        editSelect.innerHTML = '<option value="">不选择（不使用防护规则）</option>';
-                        ipRules.forEach(rule => {
-                            const option = document.createElement('option');
-                            option.value = rule.id;
-                            const typeNames = {
-                                'ip_whitelist': 'IP白名单',
-                                'ip_blacklist': 'IP黑名单',
-                                'geo_whitelist': '地域白名单',
-                                'geo_blacklist': '地域黑名单'
-                            };
-                            option.textContent = `${rule.rule_name} (${typeNames[rule.rule_type] || rule.rule_type})`;
-                            editSelect.appendChild(option);
-                        });
-                    }
                 }
             } catch (error) {
                 console.error('加载规则列表失败:', error);

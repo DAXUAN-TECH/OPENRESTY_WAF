@@ -152,10 +152,6 @@ local function generate_http_server_config(proxy, upstream_name)
     
     -- WAF封控检查（如果关联了防护规则）
     local ip_rule_ids = proxy.ip_rule_ids
-    if not ip_rule_ids and proxy.ip_rule_id then
-        -- 向后兼容：如果只有单个ip_rule_id，转换为数组
-        ip_rule_ids = {proxy.ip_rule_id}
-    end
     if ip_rule_ids and type(ip_rule_ids) == "table" and #ip_rule_ids > 0 then
         config = config .. "\n    # WAF封控检查（关联防护规则ID: " .. table.concat(ip_rule_ids, ",") .. "）\n"
         -- 将规则ID数组转换为Lua表字符串
@@ -327,10 +323,6 @@ local function generate_stream_server_config(proxy, upstream_name)
     
     -- WAF封控检查（如果关联了防护规则）
     local ip_rule_ids = proxy.ip_rule_ids
-    if not ip_rule_ids and proxy.ip_rule_id then
-        -- 向后兼容：如果只有单个ip_rule_id，转换为数组
-        ip_rule_ids = {proxy.ip_rule_id}
-    end
     if ip_rule_ids and type(ip_rule_ids) == "table" and #ip_rule_ids > 0 then
         config = config .. "\n    # WAF封控检查（关联防护规则ID: " .. table.concat(ip_rule_ids, ",") .. "）\n"
         -- 将规则ID数组转换为Lua表字符串
@@ -553,7 +545,7 @@ function _M.generate_all_configs()
                backend_type, backend_path, load_balance,
                ssl_enable, ssl_cert_path, ssl_key_path,
                proxy_timeout, proxy_connect_timeout, proxy_send_timeout, proxy_read_timeout,
-               ip_rule_id, status
+               status
             FROM waf_proxy_configs
             WHERE status = 1
             ORDER BY id ASC

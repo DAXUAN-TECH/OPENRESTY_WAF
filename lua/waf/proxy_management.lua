@@ -173,23 +173,6 @@ function _M.create_proxy(proxy_data)
         end
     end
     
-    -- 向后兼容：如果只有ip_rule_id（单个），也支持
-    local ip_rule_id = null_to_nil(proxy_data.ip_rule_id)
-    if ip_rule_id and not ip_rule_ids then
-        ip_rule_ids = {ip_rule_id}
-        -- 验证规则
-        local rule_check_sql = "SELECT id, rule_type FROM waf_block_rules WHERE id = ? AND status = 1 LIMIT 1"
-        local rule_check = mysql_pool.query(rule_check_sql, ip_rule_id)
-        if not rule_check or #rule_check == 0 then
-            return nil, "指定的防护规则不存在或已禁用"
-        end
-        local rule_type = rule_check[1].rule_type
-        if rule_type ~= "ip_whitelist" and rule_type ~= "ip_blacklist" and 
-           rule_type ~= "geo_whitelist" and rule_type ~= "geo_blacklist" then
-            return nil, "防护规则必须是IP白名单、IP黑名单、地域白名单或地域黑名单类型"
-        end
-    end
-    
     -- 构建SQL
     local sql = [[
         INSERT INTO waf_proxy_configs 
@@ -198,8 +181,8 @@ function _M.create_proxy(proxy_data)
          health_check_enable, health_check_interval, health_check_timeout,
          max_fails, fail_timeout, proxy_timeout, proxy_connect_timeout,
          proxy_send_timeout, proxy_read_timeout, ssl_enable, ssl_cert_path, ssl_key_path,
-         description, ip_rule_id, ip_rule_ids, status)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         description, ip_rule_ids, status)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ]]
     
     local listen_address = proxy_data.listen_address or "0.0.0.0"
@@ -223,11 +206,6 @@ function _M.create_proxy(proxy_data)
     local ssl_key_path = null_to_nil(proxy_data.ssl_key_path)
     local description = null_to_nil(proxy_data.description)
     local status = proxy_data.status or 1
-    -- 使用第一个规则ID作为ip_rule_id（向后兼容）
-    local ip_rule_id = nil
-    if ip_rule_ids and #ip_rule_ids > 0 then
-        ip_rule_id = ip_rule_ids[1]
-    end
     
     -- 将规则ID数组转换为JSON字符串
     local ip_rule_ids_json = nil
@@ -259,7 +237,6 @@ function _M.create_proxy(proxy_data)
         ssl_cert_path,
         ssl_key_path,
         description,
-        ip_rule_id,
         ip_rule_ids_json,
         status
     )
@@ -354,10 +331,8 @@ function _M.list_proxies(params)
                p.health_check_enable, p.health_check_interval, p.health_check_timeout,
                p.max_fails, p.fail_timeout, p.proxy_timeout, p.proxy_connect_timeout,
                p.proxy_send_timeout, p.proxy_read_timeout, p.ssl_enable, p.ssl_cert_path, p.ssl_key_path,
-               p.description, p.ip_rule_id, p.ip_rule_ids, p.status, p.priority, p.created_at, p.updated_at,
-               r.rule_name, r.rule_type
+               p.description, p.ip_rule_ids, p.status, p.priority, p.created_at, p.updated_at
         FROM waf_proxy_configs p
-        LEFT JOIN waf_block_rules r ON p.ip_rule_id = r.id
         %s
         ORDER BY p.priority DESC, p.created_at DESC
         LIMIT %d OFFSET %d
@@ -378,16 +353,8 @@ function _M.list_proxies(params)
             if ok and rule_ids and type(rule_ids) == "table" then
                 proxy.ip_rule_ids = rule_ids
             else
-                -- JSON解析失败，尝试从ip_rule_id字段获取（向后兼容）
-                if proxy.ip_rule_id then
-                    proxy.ip_rule_ids = {proxy.ip_rule_id}
-                else
-                    proxy.ip_rule_ids = nil
-                end
+                proxy.ip_rule_ids = nil
             end
-        elseif proxy.ip_rule_id then
-            -- 向后兼容：如果ip_rule_ids为空，使用ip_rule_id
-            proxy.ip_rule_ids = {proxy.ip_rule_id}
         else
             proxy.ip_rule_ids = nil
         end
@@ -426,7 +393,7 @@ function _M.get_proxy(proxy_id)
                health_check_enable, health_check_interval, health_check_timeout,
                max_fails, fail_timeout, proxy_timeout, proxy_connect_timeout,
                proxy_send_timeout, proxy_read_timeout, ssl_enable, ssl_cert_path, ssl_key_path,
-               description, ip_rule_id, ip_rule_ids, status, created_at, updated_at
+               description, ip_rule_ids, status, created_at, updated_at
         FROM waf_proxy_configs
         WHERE id = ?
         LIMIT 1
@@ -451,16 +418,8 @@ function _M.get_proxy(proxy_id)
         if ok and rule_ids and type(rule_ids) == "table" then
             proxy.ip_rule_ids = rule_ids
         else
-            -- JSON解析失败，尝试从ip_rule_id字段获取（向后兼容）
-            if proxy.ip_rule_id then
-                proxy.ip_rule_ids = {proxy.ip_rule_id}
-            else
-                proxy.ip_rule_ids = nil
-            end
+            proxy.ip_rule_ids = nil
         end
-    elseif proxy.ip_rule_id then
-        -- 向后兼容：如果ip_rule_ids为空，使用ip_rule_id
-        proxy.ip_rule_ids = {proxy.ip_rule_id}
     else
         proxy.ip_rule_ids = nil
     end
@@ -592,40 +551,6 @@ function _M.update_proxy(proxy_id, proxy_data)
         end
     end
     
-    -- 向后兼容：如果只有ip_rule_id（单个），也支持
-    local ip_rule_id = null_to_nil(proxy_data.ip_rule_id)
-    if ip_rule_id and not ip_rule_ids then
-        ip_rule_ids = {ip_rule_id}
-        -- 验证规则
-        local rule_check_sql = "SELECT id, rule_type FROM waf_block_rules WHERE id = ? AND status = 1 LIMIT 1"
-        local rule_check = mysql_pool.query(rule_check_sql, ip_rule_id)
-        if not rule_check or #rule_check == 0 then
-            return nil, "指定的防护规则不存在或已禁用"
-        end
-        local rule_type = rule_check[1].rule_type
-        if rule_type ~= "ip_whitelist" and rule_type ~= "ip_blacklist" and 
-           rule_type ~= "geo_whitelist" and rule_type ~= "geo_blacklist" then
-            return nil, "防护规则必须是IP白名单、IP黑名单、地域白名单或地域黑名单类型"
-        end
-    end
-    
-    -- 验证ip_rule_id（向后兼容，如果单独提供）
-    if proxy_data.ip_rule_id ~= nil and not ip_rule_ids then
-        local ip_rule_id = null_to_nil(proxy_data.ip_rule_id)
-        if ip_rule_id then
-            -- 检查规则是否存在且为IP相关类型
-            local rule_check_sql = "SELECT id, rule_type FROM waf_block_rules WHERE id = ? AND status = 1 LIMIT 1"
-            local rule_check = mysql_pool.query(rule_check_sql, ip_rule_id)
-            if not rule_check or #rule_check == 0 then
-                return nil, "指定的防护规则不存在或已禁用"
-            end
-            local rule_type = rule_check[1].rule_type
-            if rule_type ~= "ip_whitelist" and rule_type ~= "ip_blacklist" and 
-               rule_type ~= "geo_whitelist" and rule_type ~= "geo_blacklist" then
-                return nil, "防护规则必须是IP白名单、IP黑名单、地域白名单或地域黑名单类型"
-            end
-        end
-    end
     
     -- 构建更新字段
     local update_fields = {}
@@ -637,7 +562,7 @@ function _M.update_proxy(proxy_id, proxy_data)
         "health_check_enable", "health_check_interval", "health_check_timeout",
         "max_fails", "fail_timeout", "proxy_timeout", "proxy_connect_timeout",
         "proxy_send_timeout", "proxy_read_timeout", "ssl_enable", "ssl_cert_path", "ssl_key_path",
-        "description", "ip_rule_id"
+        "description"
     }
     
     for _, field in ipairs(fields_to_update) do
@@ -645,7 +570,7 @@ function _M.update_proxy(proxy_id, proxy_data)
             table.insert(update_fields, field .. " = ?")
             -- 对于可能为null的字段，使用null_to_nil处理
             if field == "server_name" or field == "ssl_cert_path" or 
-               field == "ssl_key_path" or field == "description" or field == "ip_rule_id" then
+               field == "ssl_key_path" or field == "description" then
                 table.insert(update_params, null_to_nil(proxy_data[field]))
             else
                 table.insert(update_params, proxy_data[field])
@@ -663,11 +588,6 @@ function _M.update_proxy(proxy_id, proxy_data)
             local ip_rule_ids_json = cjson.encode(ip_rule_ids)
             table.insert(update_fields, "ip_rule_ids = ?")
             table.insert(update_params, ip_rule_ids_json)
-            -- 同时更新ip_rule_id（向后兼容）
-            if not proxy_data.ip_rule_id then
-                table.insert(update_fields, "ip_rule_id = ?")
-                table.insert(update_params, ip_rule_ids[1])
-            end
         else
             -- 如果ip_rule_ids为空，设置为NULL
             table.insert(update_fields, "ip_rule_ids = NULL")

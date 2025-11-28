@@ -919,6 +919,16 @@ const pageSize = 20;
                     closeConfirmModal();
                 });
             }
+            
+            // 点击确认模态框外部关闭
+            const confirmModal = document.getElementById('confirm-modal');
+            if (confirmModal) {
+                confirmModal.addEventListener('click', function(event) {
+                    if (event.target === confirmModal) {
+                        closeConfirmModal();
+                    }
+                });
+            }
         });
         
         // 禁用代理

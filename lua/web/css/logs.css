@@ -127,12 +127,17 @@
         }
         #access-tab .filters-row:nth-child(2) {
             display: grid;
-            /* 第一列宽度与第一行第一列相同，第二列宽度与第一行第二列相同 */
-            grid-template-columns: 1fr 1fr;
+            /* 使用和第一排相同的4列Grid，确保列宽一致 */
+            grid-template-columns: repeat(4, 1fr);
             gap: 15px;
         }
-        /* 访问日志：开始时间和客户端IP保持一样宽度 */
-        /* 通过Grid的列宽自动对齐，第一行第一列和第二行第一列宽度相同 */
+        /* 访问日志：开始时间占第1列，结束时间占第2列，与第一排对齐 */
+        #access-tab .filters-row:nth-child(2) .filter-group:first-child {
+            grid-column: 1;
+        }
+        #access-tab .filters-row:nth-child(2) .filter-group:nth-child(2) {
+            grid-column: 2;
+        }
         
         /* 封控日志：使用Grid布局确保对齐 */
         #block-tab .filters-row:first-child {
@@ -142,12 +147,17 @@
         }
         #block-tab .filters-row:nth-child(2) {
             display: grid;
-            /* 第一列宽度与第一行第一列相同，第二列宽度与第一行第二列相同 */
-            grid-template-columns: 1fr 1fr;
+            /* 使用和第一排相同的3列Grid，确保列宽一致 */
+            grid-template-columns: repeat(3, 1fr);
             gap: 15px;
         }
-        /* 封控日志：开始时间和客户端IP保持一样宽度 */
-        /* 通过Grid的列宽自动对齐，第一行第一列和第二行第一列宽度相同 */
+        /* 封控日志：开始时间占第1列，结束时间占第2列，与第一排对齐 */
+        #block-tab .filters-row:nth-child(2) .filter-group:first-child {
+            grid-column: 1;
+        }
+        #block-tab .filters-row:nth-child(2) .filter-group:nth-child(2) {
+            grid-column: 2;
+        }
         
         /* 审计日志：使用Grid布局确保对齐 */
         #audit-tab .filters-row:first-child {
@@ -157,12 +167,17 @@
         }
         #audit-tab .filters-row:nth-child(2) {
             display: grid;
-            /* 第一列宽度与第一行第一列相同，第二列宽度与第一行第二列相同 */
-            grid-template-columns: 1fr 1fr;
+            /* 使用和第一排相同的4列Grid，确保列宽一致 */
+            grid-template-columns: repeat(4, 1fr);
             gap: 15px;
         }
-        /* 审计日志：开始时间和用户名保持一样宽度 */
-        /* 通过Grid的列宽自动对齐，第一行第一列和第二行第一列宽度相同 */
+        /* 审计日志：开始时间占第1列，结束时间占第2列，与第一排对齐 */
+        #audit-tab .filters-row:nth-child(2) .filter-group:first-child {
+            grid-column: 1;
+        }
+        #audit-tab .filters-row:nth-child(2) .filter-group:nth-child(2) {
+            grid-column: 2;
+        }
         .filter-group label {
             display: block;
             margin-bottom: 5px;

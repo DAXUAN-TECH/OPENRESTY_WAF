@@ -408,10 +408,24 @@
             max-width: 250px !important;
         }
         
-        /* 防护规则输入框缩短二分之一 */
+        /* 防护规则筛选框样式 */
+        #create-proxy-modal #create-ip-rule-type {
+            width: 100% !important;
+            max-width: 100% !important;
+        }
+        
         #create-proxy-modal #create-ip-rule-id {
-            width: 50% !important;
-            max-width: 250px !important;
+            width: 100% !important;
+            max-width: 100% !important;
+        }
+        
+        /* 防护规则form-row中的form-group样式 */
+        #create-proxy-modal .form-group .form-row .form-group {
+            flex: 1;
+        }
+        
+        #create-proxy-modal .form-group .form-row .form-group:last-child {
+            flex: 2;
         }
         
         /* 分页样式 */

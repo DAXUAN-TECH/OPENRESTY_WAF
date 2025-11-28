@@ -160,7 +160,7 @@ body {
     padding: 15px;
     border: 2px solid #ddd;
     border-radius: 5px;
-    font-size: 28px;
+    font-size: 30px;
     font-weight: bold;
     text-align: center;
     letter-spacing: 8px;
@@ -170,7 +170,7 @@ body {
 
 .totp-input::placeholder {
     font-weight: bold;
-    font-size: 27px;
+    font-size: 26px;
     color: #999;
     text-align: center;
 }

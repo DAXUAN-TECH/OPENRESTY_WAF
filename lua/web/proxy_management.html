@@ -135,7 +135,7 @@
                         <div class="backend-item">
                             <input type="text" placeholder="IP地址" class="backend-address">
                             <input type="number" placeholder="端口" class="backend-port" min="1" max="65535">
-                            <input type="text" placeholder="路径（HTTP/HTTPS）" class="backend-path" style="display: none;">
+                            <input type="text" placeholder="/path" class="backend-path" title="/path" style="display: none;">
                             <input type="number" placeholder="权重" class="backend-weight" value="1" min="1">
                             <button type="button" class="btn btn-danger" onclick="removeBackend(this)">删除</button>
                         </div>
@@ -173,9 +173,24 @@
                 
                 <div class="form-group">
                     <label>防护规则</label>
-                    <select id="create-ip-rule-id">
-                        <option value="">不选择（不使用防护规则）</option>
-                    </select>
+                    <div class="form-row" style="margin-bottom: 10px;">
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label style="font-size: 12px; color: #666;">规则类型</label>
+                            <select id="create-ip-rule-type" onchange="filterIpRulesByType()">
+                                <option value="">全部类型</option>
+                                <option value="ip_whitelist">IP白名单</option>
+                                <option value="ip_blacklist">IP黑名单</option>
+                                <option value="geo_whitelist">地域白名单</option>
+                                <option value="geo_blacklist">地域黑名单</option>
+                            </select>
+                        </div>
+                        <div class="form-group" style="margin-bottom: 0; flex: 2;">
+                            <label style="font-size: 12px; color: #666;">规则条目</label>
+                            <select id="create-ip-rule-id">
+                                <option value="">不选择（不使用防护规则）</option>
+                            </select>
+                        </div>
+                    </div>
                     <small style="color: #666; display: block; margin-top: 5px;">可以选择多个同类型规则</small>
                 </div>
                 

@@ -112,7 +112,7 @@ let currentPage = 1;
             
             // HTTP/HTTPS代理显示路径字段，TCP/UDP代理不显示
             const pathField = proxyType === 'http' 
-                ? '<input type="text" placeholder="路径" class="backend-path">'
+                ? '<input type="text" placeholder="/path" class="backend-path" title="/path">'
                 : '<input type="text" placeholder="路径（HTTP/HTTPS）" class="backend-path" style="display: none;">';
             
             item.innerHTML = `
@@ -756,41 +756,63 @@ let currentPage = 1;
                         rule.rule_type === 'geo_blacklist'
                     );
                     
-                    // 更新创建表单的规则选择
-                    const createSelect = document.getElementById('create-ip-rule-id');
-                    createSelect.innerHTML = '<option value="">不选择（不使用防护规则）</option>';
-                    ipRules.forEach(rule => {
-                        const option = document.createElement('option');
-                        option.value = rule.id;
-                        const typeNames = {
-                            'ip_whitelist': 'IP白名单',
-                            'ip_blacklist': 'IP黑名单',
-                            'geo_whitelist': '地域白名单',
-                            'geo_blacklist': '地域黑名单'
-                        };
-                        option.textContent = `${rule.rule_name} (${typeNames[rule.rule_type] || rule.rule_type})`;
-                        createSelect.appendChild(option);
-                    });
+                    // 保存所有IP相关规则到全局变量
+                    allIpRules = ipRules;
+                    
+                    // 初始化创建表单的规则选择（显示所有规则）
+                    filterIpRulesByType();
                     
                     // 更新编辑表单的规则选择
                     const editSelect = document.getElementById('edit-ip-rule-id');
-                    editSelect.innerHTML = '<option value="">不选择（不使用防护规则）</option>';
-                    ipRules.forEach(rule => {
-                        const option = document.createElement('option');
-                        option.value = rule.id;
-                        const typeNames = {
-                            'ip_whitelist': 'IP白名单',
-                            'ip_blacklist': 'IP黑名单',
-                            'geo_whitelist': '地域白名单',
-                            'geo_blacklist': '地域黑名单'
-                        };
-                        option.textContent = `${rule.rule_name} (${typeNames[rule.rule_type] || rule.rule_type})`;
-                        editSelect.appendChild(option);
-                    });
+                    if (editSelect) {
+                        editSelect.innerHTML = '<option value="">不选择（不使用防护规则）</option>';
+                        ipRules.forEach(rule => {
+                            const option = document.createElement('option');
+                            option.value = rule.id;
+                            const typeNames = {
+                                'ip_whitelist': 'IP白名单',
+                                'ip_blacklist': 'IP黑名单',
+                                'geo_whitelist': '地域白名单',
+                                'geo_blacklist': '地域黑名单'
+                            };
+                            option.textContent = `${rule.rule_name} (${typeNames[rule.rule_type] || rule.rule_type})`;
+                            editSelect.appendChild(option);
+                        });
+                    }
                 }
             } catch (error) {
                 console.error('加载规则列表失败:', error);
             }
+        }
+        
+        // 全局变量：存储所有IP相关规则
+        let allIpRules = [];
+        
+        // 根据规则类型筛选规则
+        function filterIpRulesByType() {
+            const ruleType = document.getElementById('create-ip-rule-type').value;
+            const createSelect = document.getElementById('create-ip-rule-id');
+            
+            if (!createSelect) return;
+            
+            createSelect.innerHTML = '<option value="">不选择（不使用防护规则）</option>';
+            
+            const filteredRules = ruleType 
+                ? allIpRules.filter(rule => rule.rule_type === ruleType)
+                : allIpRules;
+            
+            filteredRules.forEach(rule => {
+                const option = document.createElement('option');
+                option.value = rule.id;
+                const typeNames = {
+                    'ip_whitelist': 'IP白名单',
+                    'ip_blacklist': 'IP黑名单',
+                    'geo_whitelist': '地域白名单',
+                    'geo_blacklist': '地域黑名单'
+                };
+                option.textContent = `${rule.rule_name} (${typeNames[rule.rule_type] || rule.rule_type})`;
+                createSelect.appendChild(option);
+            });
         }
         
         document.addEventListener('DOMContentLoaded', function() {

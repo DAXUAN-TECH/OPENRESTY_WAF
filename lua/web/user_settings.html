@@ -299,15 +299,36 @@
         
         // 显示设置弹出框
         function showSetupModal() {
+            console.log('showSetupModal called');
             hideMessages();
             const modal = document.getElementById('setupModal');
+            if (!modal) {
+                console.error('setupModal element not found');
+                showError('弹出框元素未找到，请刷新页面重试');
+                return;
+            }
+            
+            console.log('Modal element found, setting display to flex');
+            // 使用多种方式确保弹出框显示
             modal.style.display = 'flex';
+            modal.style.position = 'fixed';
+            modal.style.zIndex = '10000';
+            modal.style.left = '0';
+            modal.style.top = '0';
+            modal.style.right = '0';
+            modal.style.bottom = '0';
+            modal.style.width = '100vw';
+            modal.style.height = '100vh';
+            modal.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+            modal.style.alignItems = 'center';
+            modal.style.justifyContent = 'center';
             modal.classList.add('show');
             
             // 清空内容
             document.getElementById('modalQrContainer').innerHTML = '';
             document.getElementById('modalTotpCode').value = '';
             
+            console.log('Fetching QR code data...');
             // 获取二维码
             fetch('/api/auth/totp/setup', {
                 method: 'POST',
@@ -317,6 +338,7 @@
             })
                 .then(response => response.json())
                 .then(data => {
+                    console.log('QR code data received:', data);
                     if (data.secret) {
                         currentSecret = data.secret;
                         showQrCodeInModal(data);
@@ -327,6 +349,7 @@
                     }
                 })
                 .catch(err => {
+                    console.error('Error fetching QR code:', err);
                     showError('网络错误，请稍后重试');
                     closeSetupModal();
                 });
@@ -335,11 +358,31 @@
         // 关闭设置弹出框
         function closeSetupModal() {
             const modal = document.getElementById('setupModal');
-            modal.style.display = 'none';
-            modal.classList.remove('show');
+            if (modal) {
+                modal.style.display = 'none';
+                modal.classList.remove('show');
+                // 清除所有内联样式
+                modal.style.position = '';
+                modal.style.zIndex = '';
+                modal.style.left = '';
+                modal.style.top = '';
+                modal.style.right = '';
+                modal.style.bottom = '';
+                modal.style.width = '';
+                modal.style.height = '';
+                modal.style.backgroundColor = '';
+                modal.style.alignItems = '';
+                modal.style.justifyContent = '';
+            }
             currentSecret = null;
-            document.getElementById('modalQrContainer').innerHTML = '';
-            document.getElementById('modalTotpCode').value = '';
+            const qrContainer = document.getElementById('modalQrContainer');
+            if (qrContainer) {
+                qrContainer.innerHTML = '';
+            }
+            const codeInput = document.getElementById('modalTotpCode');
+            if (codeInput) {
+                codeInput.value = '';
+            }
         }
         
         // 在弹出框中显示二维码
@@ -397,9 +440,29 @@
         
         // 显示重置弹出框
         function showResetModal() {
+            console.log('showResetModal called');
             hideMessages();
             const modal = document.getElementById('resetModal');
+            if (!modal) {
+                console.error('resetModal element not found');
+                showError('弹出框元素未找到，请刷新页面重试');
+                return;
+            }
+            
+            console.log('Reset modal element found, setting display to flex');
+            // 使用多种方式确保弹出框显示
             modal.style.display = 'flex';
+            modal.style.position = 'fixed';
+            modal.style.zIndex = '10000';
+            modal.style.left = '0';
+            modal.style.top = '0';
+            modal.style.right = '0';
+            modal.style.bottom = '0';
+            modal.style.width = '100vw';
+            modal.style.height = '100vh';
+            modal.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+            modal.style.alignItems = 'center';
+            modal.style.justifyContent = 'center';
             modal.classList.add('show');
             
             // 重置到第一步
@@ -415,13 +478,42 @@
         // 关闭重置弹出框
         function closeResetModal() {
             const modal = document.getElementById('resetModal');
-            modal.style.display = 'none';
-            modal.classList.remove('show');
-            document.getElementById('resetStep1').style.display = 'block';
-            document.getElementById('resetStep2').style.display = 'none';
-            document.getElementById('oldTotpCode').value = '';
-            document.getElementById('newTotpCode').value = '';
-            document.getElementById('resetQrContainer').innerHTML = '';
+            if (modal) {
+                modal.style.display = 'none';
+                modal.classList.remove('show');
+                // 清除所有内联样式
+                modal.style.position = '';
+                modal.style.zIndex = '';
+                modal.style.left = '';
+                modal.style.top = '';
+                modal.style.right = '';
+                modal.style.bottom = '';
+                modal.style.width = '';
+                modal.style.height = '';
+                modal.style.backgroundColor = '';
+                modal.style.alignItems = '';
+                modal.style.justifyContent = '';
+            }
+            const step1 = document.getElementById('resetStep1');
+            if (step1) {
+                step1.style.display = 'block';
+            }
+            const step2 = document.getElementById('resetStep2');
+            if (step2) {
+                step2.style.display = 'none';
+            }
+            const oldCodeInput = document.getElementById('oldTotpCode');
+            if (oldCodeInput) {
+                oldCodeInput.value = '';
+            }
+            const newCodeInput = document.getElementById('newTotpCode');
+            if (newCodeInput) {
+                newCodeInput.value = '';
+            }
+            const qrContainer = document.getElementById('resetQrContainer');
+            if (qrContainer) {
+                qrContainer.innerHTML = '';
+            }
             resetCurrentSecret = null;
         }
         

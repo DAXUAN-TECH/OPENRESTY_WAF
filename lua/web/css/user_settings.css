@@ -244,6 +244,25 @@
             height: 100vh !important;
         }
         
+        /* 强制显示模态框（当通过JavaScript设置display:flex时） */
+        #setupModal[style*="display: flex"],
+        #setupModal[style*="display:flex"],
+        #resetModal[style*="display: flex"],
+        #resetModal[style*="display:flex"] {
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            position: fixed !important;
+            z-index: 10000 !important;
+            left: 0 !important;
+            top: 0 !important;
+            right: 0 !important;
+            bottom: 0 !important;
+            width: 100vw !important;
+            height: 100vh !important;
+            background-color: rgba(0, 0, 0, 0.5) !important;
+        }
+        
         .modal-content {
             background-color: white;
             padding: 30px;

@@ -1069,14 +1069,77 @@
             loadAuditLogs(1);
         }
         
+        // 强制设置表格相关元素的宽度，确保对齐
+        function forceTableWidths() {
+            // 获取content-area的实际宽度
+            const contentArea = document.querySelector('.content-area');
+            if (!contentArea) return;
+            
+            const contentAreaRect = contentArea.getBoundingClientRect();
+            const contentAreaWidth = contentAreaRect.width;
+            
+            // 强制设置container的宽度
+            const container = document.querySelector('.container');
+            if (container) {
+                container.style.width = contentAreaWidth + 'px';
+                container.style.maxWidth = contentAreaWidth + 'px';
+                container.style.minWidth = contentAreaWidth + 'px';
+            }
+            
+            // 强制设置所有tab-content的宽度
+            document.querySelectorAll('.tab-content').forEach(tabContent => {
+                tabContent.style.width = '100%';
+                tabContent.style.maxWidth = '100%';
+                tabContent.style.minWidth = '100%';
+            });
+            
+            // 强制设置所有table-container的宽度
+            document.querySelectorAll('.table-container').forEach(tableContainer => {
+                tableContainer.style.width = '100%';
+                tableContainer.style.maxWidth = '100%';
+                tableContainer.style.minWidth = '100%';
+            });
+            
+            // 强制设置所有table-wrapper的宽度
+            document.querySelectorAll('.table-wrapper').forEach(tableWrapper => {
+                tableWrapper.style.width = '100%';
+                tableWrapper.style.maxWidth = '100%';
+                tableWrapper.style.minWidth = '100%';
+            });
+            
+            // 强制设置所有表格的宽度
+            document.querySelectorAll('#access-table, #block-table, #audit-table').forEach(table => {
+                table.style.width = '100%';
+                table.style.maxWidth = '100%';
+                table.style.minWidth = '100%';
+            });
+        }
+        
         // 页面加载时初始化
         window.addEventListener('DOMContentLoaded', function() {
             // 时间筛选默认为空，不设置默认时间范围
             // 用户可以根据需要自行设置时间范围进行筛选
             
+            // 强制设置表格宽度
+            forceTableWidths();
+            
+            // 延迟再次设置，确保所有元素都已渲染
+            setTimeout(forceTableWidths, 100);
+            setTimeout(forceTableWidths, 300);
+            
+            // 窗口大小改变时重新设置
+            window.addEventListener('resize', function() {
+                setTimeout(forceTableWidths, 100);
+            });
+            
             // 加载访问日志
             loadAccessLogs();
         });
+        
+        // 在layout-ready后也设置一次
+        if (document.readyState === 'complete' || document.readyState === 'interactive') {
+            setTimeout(forceTableWidths, 500);
+        }
     </script>
 </body>
 </html>

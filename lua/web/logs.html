@@ -18,6 +18,7 @@
             color: #333;
         }
         /* 统一容器样式 - 白色背景卡片 */
+        /* 注意：padding会影响内部元素宽度，需要确保table-container等子元素宽度计算正确 */
         .container {
             width: 100%;
             max-width: 100%;
@@ -26,7 +27,8 @@
             box-shadow: 0 2px 8px rgba(0,0,0,0.1);
             padding: 30px;
             box-sizing: border-box;
-            overflow-x: auto;
+            /* 移除overflow-x: auto，避免影响表格对齐 */
+            overflow-x: visible;
         }
         .tabs {
             background: #fff;
@@ -58,16 +60,18 @@
         }
         .tab-content {
             display: none;
-            width: 100%;
-            margin: 0;
-            padding: 0;
+            width: 100% !important;
+            max-width: 100% !important;
+            margin: 0 !important;
+            padding: 0 !important;
             box-sizing: border-box;
         }
         .tab-content.active {
             display: block;
-            width: 100%;
-            margin: 0;
-            padding: 0;
+            width: 100% !important;
+            max-width: 100% !important;
+            margin: 0 !important;
+            padding: 0 !important;
             box-sizing: border-box;
         }
         .filters {
@@ -197,7 +201,7 @@
             color: #333;
         }
         /* 表格容器样式 - 确保表格和table-wrapper左右对齐 */
-        /* 逐级检查：.container -> .tab-content -> .table-container -> .table-wrapper -> table */
+        /* 逐级检查：.content-area (padding: 30px) -> .container (padding: 30px) -> .tab-content -> .table-container -> .table-wrapper -> table */
         .table-container {
             background: #fff;
             border-radius: 4px;
@@ -205,8 +209,8 @@
             overflow: hidden;
             margin: 0;
             padding: 0;
-            width: 100%;
-            max-width: 100%;
+            width: 100% !important;
+            max-width: 100% !important;
             box-sizing: border-box;
             /* 确保与父级对齐 */
             display: block;
@@ -243,16 +247,17 @@
         
         /* 访问日志：access-table和table-wrapper保持一样的宽度，确保左右对齐 */
         #access-tab {
-            width: 100%;
-            margin: 0;
-            padding: 0;
+            width: 100% !important;
+            max-width: 100% !important;
+            margin: 0 !important;
+            padding: 0 !important;
             box-sizing: border-box;
         }
         #access-tab .table-container {
-            width: 100%;
-            max-width: 100%;
-            margin: 0;
-            padding: 0;
+            width: 100% !important;
+            max-width: 100% !important;
+            margin: 0 !important;
+            padding: 0 !important;
             box-sizing: border-box;
             display: block;
         }
@@ -278,16 +283,17 @@
         
         /* 封控日志：block-table和table-wrapper保持一样的宽度，确保左右对齐 */
         #block-tab {
-            width: 100%;
-            margin: 0;
-            padding: 0;
+            width: 100% !important;
+            max-width: 100% !important;
+            margin: 0 !important;
+            padding: 0 !important;
             box-sizing: border-box;
         }
         #block-tab .table-container {
-            width: 100%;
-            max-width: 100%;
-            margin: 0;
-            padding: 0;
+            width: 100% !important;
+            max-width: 100% !important;
+            margin: 0 !important;
+            padding: 0 !important;
             box-sizing: border-box;
             display: block;
         }
@@ -313,16 +319,17 @@
         
         /* 审计日志：audit-table和table-wrapper保持一样的宽度，确保左右对齐 */
         #audit-tab {
-            width: 100%;
-            margin: 0;
-            padding: 0;
+            width: 100% !important;
+            max-width: 100% !important;
+            margin: 0 !important;
+            padding: 0 !important;
             box-sizing: border-box;
         }
         #audit-tab .table-container {
-            width: 100%;
-            max-width: 100%;
-            margin: 0;
-            padding: 0;
+            width: 100% !important;
+            max-width: 100% !important;
+            margin: 0 !important;
+            padding: 0 !important;
             box-sizing: border-box;
             display: block;
         }
@@ -406,7 +413,7 @@
             color: #c33;
             padding: 15px;
             border-radius: 4px;
-            margin: 20px;
+            margin: 20px 0; /* 只设置上下margin，避免影响左右对齐 */
         }
         .empty {
             text-align: center;

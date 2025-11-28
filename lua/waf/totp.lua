@@ -322,8 +322,8 @@ function _M.generate_totp(secret_base32, time_step, digits)
         return nil, "Invalid time string length"
     end
     
-    -- 记录时间步数字节的十六进制表示用于调试
-    ngx.log(ngx.WARN, "totp.generate_totp: DEBUG - time_counter: ", time_counter, ", time_bytes (hex): ", time_str_hex)
+    -- 记录时间步数字节的十六进制表示用于调试（使用DEBUG级别，减少日志噪音）
+    ngx.log(ngx.DEBUG, "totp.generate_totp: time_counter: ", time_counter, ", time_bytes (hex): ", time_str_hex)
     
     -- 计算 HMAC-SHA1
     ngx.log(ngx.WARN, "totp.generate_totp: DEBUG - computing HMAC, secret length: ", #secret, " bytes, time_counter: ", time_counter, ", time_str length: ", #time_str, " bytes")
@@ -376,8 +376,8 @@ function _M.generate_totp(secret_base32, time_step, digits)
     -- 格式化为指定位数
     local result = string.format("%0" .. digits .. "d", otp)
     
-    -- 添加调试信息（使用WARN级别，确保能看到）
-    ngx.log(ngx.WARN, "totp.generate_totp: DEBUG - HMAC length: ", #hmac, ", offset: ", offset, ", byte1: ", byte1, ", byte2: ", byte2, ", byte3: ", byte3, ", byte4: ", byte4, ", binary: ", binary, ", otp: ", result)
+    -- 添加调试信息（使用DEBUG级别，减少日志噪音）
+    ngx.log(ngx.DEBUG, "totp.generate_totp: HMAC length: ", #hmac, ", offset: ", offset, ", byte1: ", byte1, ", byte2: ", byte2, ", byte3: ", byte3, ", byte4: ", byte4, ", binary: ", binary, ", otp: ", result)
     
     return result
 end

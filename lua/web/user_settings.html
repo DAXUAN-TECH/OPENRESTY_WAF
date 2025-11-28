@@ -851,64 +851,6 @@
             }
         }
         
-        // 启用 TOTP
-        function enableTotp() {
-            const code = document.getElementById('totpCode').value.trim();
-            
-            if (!code || code.length !== 6) {
-                showError('请输入6位验证码');
-                return;
-            }
-            
-            if (!currentSecret) {
-                showError('请先设置双因素认证');
-                return;
-            }
-            
-            const button = document.getElementById('enableButton');
-            button.disabled = true;
-            button.innerHTML = '<span class="loading"></span>启用中...';
-            
-            fetch('/api/auth/totp/enable', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    secret: currentSecret,
-                    code: code
-                })
-            })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        showSuccess('双因素认证已启用');
-                        currentSecret = null;
-                        document.getElementById('setupSection').style.display = 'none';
-                        document.getElementById('actionSection').style.display = 'block';
-                        loadTotpStatus();
-                    } else {
-                        showError(data.message || '启用失败，请检查验证码是否正确');
-                        button.disabled = false;
-                        button.innerHTML = '启用双因素认证';
-                    }
-                })
-                .catch(err => {
-                    showError('网络错误，请稍后重试');
-                    button.disabled = false;
-                    button.innerHTML = '启用双因素认证';
-                });
-        }
-        
-        // 取消设置
-        function cancelSetup() {
-            currentSecret = null;
-            document.getElementById('setupSection').style.display = 'none';
-            document.getElementById('actionSection').style.display = 'block';
-            document.getElementById('qrContainer').innerHTML = '';
-            document.getElementById('totpCode').value = '';
-        }
-        
         // 禁用 TOTP
         function disableTotp() {
             if (!confirm('确定要禁用双因素认证吗？禁用后您的账户安全性将降低。')) {

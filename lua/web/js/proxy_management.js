@@ -459,6 +459,33 @@ let currentPage = 1;
                     document.getElementById('edit-proxy-read-timeout').value = proxy.proxy_read_timeout || 60;
                     document.getElementById('edit-description').value = proxy.description || '';
                     
+                    // 加载防护规则列表
+                    const editRulesList = document.getElementById('edit-rules-list');
+                    editRulesList.innerHTML = '';
+                    if (proxy.ip_rule_ids && Array.isArray(proxy.ip_rule_ids) && proxy.ip_rule_ids.length > 0) {
+                        // 如果有规则ID，需要先加载规则列表，然后填充
+                        if (allIpRules.length === 0) {
+                            await loadIpRules();
+                        }
+                        // 填充规则列表
+                        proxy.ip_rule_ids.forEach(ruleId => {
+                            const rule = allIpRules.find(r => r.id == ruleId);
+                            if (rule) {
+                                addEditRule();
+                                const ruleItems = editRulesList.querySelectorAll('.rule-item');
+                                const lastItem = ruleItems[ruleItems.length - 1];
+                                const typeSelect = lastItem.querySelector('.rule-type');
+                                const ruleIdSelect = lastItem.querySelector('.rule-id');
+                                typeSelect.value = rule.rule_type;
+                                filterRulesByType(typeSelect, ruleIdSelect);
+                                ruleIdSelect.value = rule.id;
+                            }
+                        });
+                    } else {
+                        // 如果没有规则，至少添加一个空规则项
+                        addEditRule();
+                    }
+                    
                     // 显示/隐藏相关字段，并动态管理required属性
                     const editListenPort = document.getElementById('edit-listen-port');
                     const editTcpUdpListenPort = document.getElementById('edit-tcp-udp-listen-port');
@@ -846,9 +873,10 @@ let currentPage = 1;
             'geo_blacklist': ['geo_whitelist']
         };
         
-        // 获取已选择规则的所有类型
-        function getSelectedRuleTypes() {
-            const rulesList = document.getElementById('rules-list');
+        // 获取已选择规则的所有类型（支持创建和编辑）
+        function getSelectedRuleTypes(rulesListId) {
+            const listId = rulesListId || 'rules-list';
+            const rulesList = document.getElementById(listId);
             if (!rulesList) return [];
             const ruleItems = rulesList.querySelectorAll('.rule-item');
             const types = [];
@@ -862,15 +890,15 @@ let currentPage = 1;
             return types;
         }
         
-        // 检查规则类型是否冲突
-        function checkRuleConflict(newType) {
+        // 检查规则类型是否冲突（支持创建和编辑）
+        function checkRuleConflict(newType, rulesListId) {
             if (!newType) return false;
-            const selectedTypes = getSelectedRuleTypes();
+            const selectedTypes = getSelectedRuleTypes(rulesListId);
             const conflicts = ruleConflicts[newType] || [];
             return conflicts.some(conflictType => selectedTypes.includes(conflictType));
         }
         
-        // 根据规则类型筛选规则（用于单个规则条目）
+        // 根据规则类型筛选规则（用于单个规则条目，支持创建和编辑）
         function filterRulesByType(ruleTypeSelect, ruleIdSelect) {
             if (!ruleIdSelect) return;
             
@@ -881,8 +909,9 @@ let currentPage = 1;
                 return;
             }
             
-            // 获取已选择的其他规则ID（排除当前规则条目）
-            const rulesList = document.getElementById('rules-list');
+            // 获取当前规则列表容器（创建或编辑）
+            const ruleItem = ruleTypeSelect.closest('.rule-item');
+            const rulesList = ruleItem ? ruleItem.closest('.rules-list') : null;
             const selectedIds = [];
             if (rulesList) {
                 const ruleItems = rulesList.querySelectorAll('.rule-item');
@@ -913,7 +942,7 @@ let currentPage = 1;
             });
         }
         
-        // 规则类型改变事件
+        // 规则类型改变事件（支持创建和编辑）
         function onRuleTypeChange(typeSelect) {
             const ruleItem = typeSelect.closest('.rule-item');
             if (!ruleItem) return;
@@ -923,8 +952,12 @@ let currentPage = 1;
             
             const newType = typeSelect.value;
             
+            // 获取当前规则列表ID（创建或编辑）
+            const rulesList = ruleItem.closest('.rules-list');
+            const rulesListId = rulesList ? rulesList.id : 'rules-list';
+            
             // 检查是否冲突
-            if (checkRuleConflict(newType)) {
+            if (checkRuleConflict(newType, rulesListId)) {
                 const typeNames = {
                     'ip_whitelist': 'IP白名单',
                     'ip_blacklist': 'IP黑名单',
@@ -943,9 +976,10 @@ let currentPage = 1;
             filterRulesByType(typeSelect, ruleIdSelect);
         }
         
-        // 添加规则条目
-        function addRule() {
-            const rulesList = document.getElementById('rules-list');
+        // 添加规则条目（支持创建和编辑）
+        function addRule(rulesListId) {
+            const listId = rulesListId || 'rules-list';
+            const rulesList = document.getElementById(listId);
             if (!rulesList) return;
             
             const ruleItem = document.createElement('div');
@@ -966,19 +1000,21 @@ let currentPage = 1;
             rulesList.appendChild(ruleItem);
         }
         
-        // 删除规则条目
+        // 删除规则条目（支持创建和编辑）
         function removeRule(button) {
             const ruleItem = button.closest('.rule-item');
             if (ruleItem) {
+                const rulesList = ruleItem.closest('.rules-list');
                 ruleItem.remove();
                 // 更新所有规则条目的选择框（移除已删除的规则）
-                updateAllRuleSelects();
+                updateAllRuleSelects(rulesList ? rulesList.id : 'rules-list');
             }
         }
         
-        // 更新所有规则条目的选择框
-        function updateAllRuleSelects() {
-            const rulesList = document.getElementById('rules-list');
+        // 更新所有规则条目的选择框（支持创建和编辑）
+        function updateAllRuleSelects(rulesListId) {
+            const listId = rulesListId || 'rules-list';
+            const rulesList = document.getElementById(listId);
             if (!rulesList) return;
             const ruleItems = rulesList.querySelectorAll('.rule-item');
             ruleItems.forEach(item => {
@@ -993,6 +1029,11 @@ let currentPage = 1;
                     }
                 }
             });
+        }
+        
+        // 添加编辑代理的规则条目
+        function addEditRule() {
+            addRule('edit-rules-list');
         }
         
         document.addEventListener('DOMContentLoaded', function() {

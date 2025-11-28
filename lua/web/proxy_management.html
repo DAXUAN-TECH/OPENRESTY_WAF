@@ -265,7 +265,10 @@
                     <label>后端服务器列表</label>
                     <div class="backends-list" id="edit-backends-list"></div>
                     <button type="button" class="btn btn-primary" onclick="addEditBackend()">添加后端服务器</button>
-                    <div class="form-group" style="margin-top: 10px;">
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
                         <label>负载均衡算法</label>
                         <select id="edit-load-balance">
                             <option value="round_robin">轮询</option>
@@ -273,31 +276,32 @@
                             <option value="ip_hash">IP哈希</option>
                         </select>
                     </div>
-                </div>
-                <div class="form-row">
                     <div class="form-group">
                         <label>连接超时（秒）</label>
-                        <input type="number" id="edit-proxy-connect-timeout" min="1">
+                        <input type="number" id="edit-proxy-connect-timeout" min="1" value="60">
                     </div>
                     <div class="form-group">
                         <label>发送超时（秒）</label>
-                        <input type="number" id="edit-proxy-send-timeout" min="1">
+                        <input type="number" id="edit-proxy-send-timeout" min="1" value="60">
                     </div>
                     <div class="form-group">
                         <label>读取超时（秒）</label>
-                        <input type="number" id="edit-proxy-read-timeout" min="1">
+                        <input type="number" id="edit-proxy-read-timeout" min="1" value="60">
                     </div>
                 </div>
+                
                 <div class="form-group">
                     <label>描述</label>
                     <textarea id="edit-description"></textarea>
                 </div>
+                
                 <div class="form-group">
                     <label>防护规则</label>
-                    <select id="edit-ip-rule-id">
-                        <option value="">不选择（不使用防护规则）</option>
-                    </select>
-                    <small style="color: #666;">只能选择一个IP相关规则（IP白名单、IP黑名单、地域白名单、地域黑名单）作为防护条件</small>
+                    <div class="rules-list" id="edit-rules-list">
+                        <!-- 规则条目将动态添加到这里 -->
+                    </div>
+                    <button type="button" class="btn btn-primary" onclick="addEditRule()">添加防护规则</button>
+                    <small style="color: #666; display: block; margin-top: 5px;">注意：IP白名单和IP黑名单不能同时存在，地域白名单和地域黑名单不能同时存在</small>
                 </div>
                 <div class="form-actions">
                     <button type="button" class="btn btn-secondary" onclick="closeEditModal()">取消</button>

@@ -111,72 +111,34 @@
             flex-wrap: wrap;
             gap: 15px;
             margin-bottom: 15px;
-            max-width: 1400px;
+            max-width: 1800px;
+            align-items: flex-start;
         }
         .filter-group {
-            flex: 1;
+            flex: 0 1 auto;
             min-width: 200px;
-            max-width: 300px;
+            max-width: 280px;
         }
         
-        /* 访问日志：使用Grid布局确保对齐 */
-        #access-tab .filters-row:first-child {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
+        /* 访问日志：6个筛选框在同一行，使用flex布局 */
+        #access-tab .filters-row {
+            display: flex;
+            flex-wrap: wrap;
             gap: 15px;
-        }
-        #access-tab .filters-row:nth-child(2) {
-            display: grid;
-            /* 使用和第一排相同的4列Grid，确保列宽一致 */
-            grid-template-columns: repeat(4, 1fr);
-            gap: 15px;
-        }
-        /* 访问日志：开始时间占第1列，结束时间占第2列，与第一排对齐 */
-        #access-tab .filters-row:nth-child(2) .filter-group:first-child {
-            grid-column: 1;
-        }
-        #access-tab .filters-row:nth-child(2) .filter-group:nth-child(2) {
-            grid-column: 2;
         }
         
-        /* 封控日志：使用Grid布局确保对齐 */
-        #block-tab .filters-row:first-child {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
+        /* 封控日志：5个筛选框在同一行，使用flex布局 */
+        #block-tab .filters-row {
+            display: flex;
+            flex-wrap: wrap;
             gap: 15px;
-        }
-        #block-tab .filters-row:nth-child(2) {
-            display: grid;
-            /* 使用和第一排相同的3列Grid，确保列宽一致 */
-            grid-template-columns: repeat(3, 1fr);
-            gap: 15px;
-        }
-        /* 封控日志：开始时间占第1列，结束时间占第2列，与第一排对齐 */
-        #block-tab .filters-row:nth-child(2) .filter-group:first-child {
-            grid-column: 1;
-        }
-        #block-tab .filters-row:nth-child(2) .filter-group:nth-child(2) {
-            grid-column: 2;
         }
         
-        /* 审计日志：使用Grid布局确保对齐 */
-        #audit-tab .filters-row:first-child {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
+        /* 审计日志：6个筛选框在同一行，使用flex布局 */
+        #audit-tab .filters-row {
+            display: flex;
+            flex-wrap: wrap;
             gap: 15px;
-        }
-        #audit-tab .filters-row:nth-child(2) {
-            display: grid;
-            /* 使用和第一排相同的4列Grid，确保列宽一致 */
-            grid-template-columns: repeat(4, 1fr);
-            gap: 15px;
-        }
-        /* 审计日志：开始时间占第1列，结束时间占第2列，与第一排对齐 */
-        #audit-tab .filters-row:nth-child(2) .filter-group:first-child {
-            grid-column: 1;
-        }
-        #audit-tab .filters-row:nth-child(2) .filter-group:nth-child(2) {
-            grid-column: 2;
         }
         .filter-group label {
             display: block;

@@ -1035,8 +1035,16 @@ let currentPage = 1;
                     groupsArray = data.data;
                 } else if (typeof data.data === 'object' && data.data !== null) {
                     // 如果是对象，尝试转换为数组
-                    console.warn('data.data is not an array, attempting to convert:', data.data);
-                    groupsArray = Object.values(data.data);
+                    // 检查是否是空对象
+                    const keys = Object.keys(data.data);
+                    if (keys.length === 0) {
+                        // 空对象，使用空数组（这是正常情况，不显示警告）
+                        groupsArray = [];
+                    } else {
+                        // 非空对象，尝试转换（这种情况应该很少见）
+                        console.warn('data.data is not an array, attempting to convert:', data.data);
+                        groupsArray = Object.values(data.data);
+                    }
                 } else {
                     console.error('data.data is not an array or object:', typeof data.data, data.data);
                     showAlert('响应数据格式错误：data 字段不是数组', 'error');

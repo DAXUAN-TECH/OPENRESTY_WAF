@@ -585,7 +585,50 @@ function _M.list_rule_groups()
         return nil, err
     end
     
-    return groups or {}, nil
+    -- 确保返回数组格式（即使是空结果也返回空数组[]而不是空对象{}）
+    if not groups then
+        return {}, nil
+    end
+    
+    -- 检查是否是数组格式（有数字索引）
+    local is_array = false
+    local array_length = 0
+    for i, _ in ipairs(groups) do
+        is_array = true
+        array_length = i
+    end
+    
+    -- 如果是数组且有数据，直接返回
+    if is_array and array_length > 0 then
+        return groups, nil
+    end
+    
+    -- 检查是否有数字键（可能是稀疏数组或对象）
+    local has_numeric_keys = false
+    local max_index = 0
+    for k, v in pairs(groups) do
+        if type(k) == "number" and k > 0 then
+            has_numeric_keys = true
+            if k > max_index then
+                max_index = k
+            end
+        end
+    end
+    
+    -- 如果有数字键，转换为数组
+    if has_numeric_keys then
+        local groups_array = {}
+        for i = 1, max_index do
+            if groups[i] then
+                groups_array[i] = groups[i]
+            end
+        end
+        return groups_array, nil
+    end
+    
+    -- 如果没有数字键（空对象{}或nil），返回空数组[]
+    -- 使用明确的数组初始化，确保JSON序列化为[]
+    return {}, nil
 end
 
 -- 获取分组统计信息（每个分组的规则数量）

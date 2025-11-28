@@ -398,32 +398,77 @@ function _M.list_groups()
     local groups_array = {}
     if result then
         if type(result) == "table" then
-            -- 检查是否是数组
+            -- 检查是否是数组（有数字索引）
             local is_array = false
+            local array_length = 0
             for i, _ in ipairs(result) do
                 is_array = true
+                array_length = i
                 groups_array[i] = result[i]
+            end
+            
+            -- 如果 ipairs 没有遍历到任何元素，检查是否是空数组
+            if array_length == 0 then
+                if next(result) == nil then
+                    -- 空数组，保持为空数组
+                    is_array = true
+                else
+                    -- 非空但不是数组，需要转换
+                    is_array = false
+                end
             end
             
             -- 如果不是数组，尝试转换
             if not is_array then
-                local temp_array = {}
+                -- 检查是否有数字键
+                local has_numeric_keys = false
                 for k, v in pairs(result) do
                     if type(k) == "number" and k > 0 then
-                        table.insert(temp_array, {key = k, value = v})
+                        has_numeric_keys = true
+                        table.insert(groups_array, v)
                     end
                 end
-                table.sort(temp_array, function(a, b) return a.key < b.key end)
-                for _, item in ipairs(temp_array) do
-                    table.insert(groups_array, item.value)
+                
+                -- 如果有数字键，对结果进行排序
+                if has_numeric_keys then
+                    table.sort(groups_array, function(a, b)
+                        -- 如果group_name存在，按group_name排序
+                        if a and a.group_name and b and b.group_name then
+                            return a.group_name < b.group_name
+                        end
+                        return false
+                    end)
                 end
             end
         end
     end
+    -- 如果result为nil，groups_array已经是空数组[]，直接使用
+    
+    -- 强制转换为标准数组（确保 JSON 序列化时是数组）
+    -- 创建一个新的数组，只包含数字索引的元素
+    local final_groups = {}
+    if #groups_array > 0 then
+        -- 使用 ipairs 确保只复制数组部分
+        for i = 1, #groups_array do
+            final_groups[i] = groups_array[i]
+        end
+    end
+    
+    -- 测试 JSON 序列化，确保 groups 是数组格式
+    local cjson = require "cjson"
+    local test_json = cjson.encode(final_groups)
+    ngx.log(ngx.DEBUG, "Groups JSON serialization test: ", test_json:sub(1, 100))
+    
+    -- 检查 JSON 字符串是否以 [ 开头（数组）而不是 { 开头（对象）
+    if not test_json:match("^%[") then
+        ngx.log(ngx.WARN, "WARNING: groups JSON does not start with [, it starts with: ", test_json:sub(1, 1))
+        -- 强制设置为空数组
+        final_groups = {}
+    end
     
     api_utils.json_response({
         success = true,
-        data = groups_array
+        data = final_groups
     })
 end
 

@@ -273,6 +273,7 @@
         .form-group select,
         .form-group textarea {
             width: 100%;
+            max-width: 500px;
             padding: 10px;
             border: 1px solid #ddd;
             border-radius: 4px;
@@ -474,11 +475,19 @@
             padding: 20px;
             background: #f9f9f9;
             border-radius: 5px;
+            max-width: 500px;
+            margin-left: auto;
+            margin-right: auto;
         }
         
         .qr-container img {
             max-width: 200px;
             margin-bottom: 10px;
+        }
+        
+        .qr-container canvas {
+            max-width: 200px;
+            height: auto;
         }
         
         .qr-container .secret-key {
@@ -491,6 +500,8 @@
             background: white;
             border: 1px solid #ddd;
             border-radius: 4px;
+            max-width: 100%;
+            overflow-wrap: break-word;
         }
         
         .form-group input:focus {

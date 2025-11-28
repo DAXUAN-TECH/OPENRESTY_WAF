@@ -113,7 +113,7 @@ local function generate_upstream_config(proxy, backends)
 end
 
 -- 生成HTTP server块配置
-local function generate_http_server_config(proxy, upstream_name)
+local function generate_http_server_config(proxy, upstream_name, backends)
     local config = "server {\n"
     
     -- 监听端口
@@ -201,13 +201,37 @@ local function generate_http_server_config(proxy, upstream_name)
     -- 代理到后端
     -- 注意：只支持upstream类型（多个后端服务器），使用upstream配置
     if upstream_name then
-        local backend_path = null_to_nil(proxy.backend_path)
+        -- 检查后端服务器是否有路径配置
+        local backend_path = nil
+        if backends and #backends > 0 then
+            -- 检查所有后端服务器的路径是否相同
+            local first_path = null_to_nil(backends[1].backend_path)
+            local all_same = true
+            if first_path and first_path ~= "" then
+                for i = 2, #backends do
+                    local path = null_to_nil(backends[i].backend_path)
+                    if path ~= first_path then
+                        all_same = false
+                        break
+                    end
+                end
+                if all_same then
+                    backend_path = first_path
+                end
+            end
+        end
+        
+        -- 如果后端服务器有路径，在proxy_pass中添加路径
         if backend_path and backend_path ~= "" then
-            -- 如果指定了后端路径，需要在upstream名称后添加路径
-            -- 注意：使用upstream时，路径需要添加到proxy_pass中
             config = config .. "        proxy_pass http://" .. upstream_name .. escape_nginx_value(backend_path) .. ";\n"
+        -- 如果后端服务器没有路径，使用代理级别的路径（兼容旧配置）
         else
-            config = config .. "        proxy_pass http://" .. upstream_name .. ";\n"
+            local proxy_backend_path = null_to_nil(proxy.backend_path)
+            if proxy_backend_path and proxy_backend_path ~= "" then
+                config = config .. "        proxy_pass http://" .. upstream_name .. escape_nginx_value(proxy_backend_path) .. ";\n"
+            else
+                config = config .. "        proxy_pass http://" .. upstream_name .. ";\n"
+            end
         end
     else
         -- 如果没有upstream配置，记录错误（不应该发生，因为现在只支持upstream类型）
@@ -390,7 +414,7 @@ local function generate_http_proxy_file(proxy, upstream_name)
     config = config .. "# ============================================\n\n"
     
     -- 写入server配置（upstream配置已单独生成）
-    config = config .. generate_http_server_config(proxy, upstream_name)
+    config = config .. generate_http_server_config(proxy, upstream_name, backends)
     
     return config
 end

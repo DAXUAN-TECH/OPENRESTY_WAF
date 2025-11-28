@@ -376,16 +376,40 @@ function _M.list_proxies(params)
     -- 查询每个代理的后端服务器和防护规则（如果是upstream类型）
     for _, proxy in ipairs(proxies or {}) do
         -- 从ip_rule_ids字段读取规则ID数组（JSON格式）
+        local rule_ids = nil
         if proxy.ip_rule_ids then
             local cjson = require "cjson"
-            local ok, rule_ids = pcall(cjson.decode, proxy.ip_rule_ids)
-            if ok and rule_ids and type(rule_ids) == "table" then
-                proxy.ip_rule_ids = rule_ids
+            local ok, decoded_rule_ids = pcall(cjson.decode, proxy.ip_rule_ids)
+            if ok and decoded_rule_ids and type(decoded_rule_ids) == "table" then
+                rule_ids = decoded_rule_ids
+                proxy.ip_rule_ids = decoded_rule_ids
             else
                 proxy.ip_rule_ids = nil
             end
         else
             proxy.ip_rule_ids = nil
+        end
+        
+        -- 根据ip_rule_ids查询规则信息（用于列表显示）
+        if rule_ids and #rule_ids > 0 then
+            -- 查询第一个规则的名称和类型（用于列表显示）
+            local rule_info_sql = [[
+                SELECT rule_name, rule_type 
+                FROM waf_block_rules 
+                WHERE id = ? AND status = 1 
+                LIMIT 1
+            ]]
+            local rule_info = mysql_pool.query(rule_info_sql, rule_ids[1])
+            if rule_info and #rule_info > 0 then
+                proxy.rule_name = rule_info[1].rule_name
+                proxy.rule_type = rule_info[1].rule_type
+            else
+                proxy.rule_name = nil
+                proxy.rule_type = nil
+            end
+        else
+            proxy.rule_name = nil
+            proxy.rule_type = nil
         end
         
         if proxy.backend_type == "upstream" then

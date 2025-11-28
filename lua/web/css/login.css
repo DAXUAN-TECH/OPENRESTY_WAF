@@ -167,9 +167,8 @@ body {
     letter-spacing: 8px;
     transition: border-color 0.3s;
     font-family: 'Courier New', monospace;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    height: auto;
+    box-sizing: border-box;
 }
 
 .totp-input::placeholder {

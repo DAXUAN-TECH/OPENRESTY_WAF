@@ -205,11 +205,24 @@ local function generate_http_server_config(proxy, upstream_name, backends)
         local backend_path = nil
         if backends and #backends > 0 then
             -- 检查所有后端服务器的路径是否相同
-            local first_path = null_to_nil(backends[1].backend_path)
+            -- 处理可能的空字符串、nil、cjson.null等情况
+            local first_path = backends[1].backend_path
+            if first_path == nil or first_path == cjson.null then
+                first_path = nil
+            elseif type(first_path) == "string" and first_path:match("^%s*$") then
+                -- 空字符串或只包含空白字符
+                first_path = nil
+            end
+            
             local all_same = true
             if first_path and first_path ~= "" then
                 for i = 2, #backends do
-                    local path = null_to_nil(backends[i].backend_path)
+                    local path = backends[i].backend_path
+                    if path == nil or path == cjson.null then
+                        path = nil
+                    elseif type(path) == "string" and path:match("^%s*$") then
+                        path = nil
+                    end
                     if path ~= first_path then
                         all_same = false
                         break

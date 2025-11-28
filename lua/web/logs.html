@@ -7,6 +7,19 @@
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         
+        /* 强制覆盖所有可能的样式冲突 - 确保content-area子元素的宽度正确 */
+        /* 这个样式必须在最前面，确保优先级最高 */
+        .content-area .container,
+        .content-area .tab-content,
+        .content-area .table-container,
+        .content-area .table-wrapper,
+        .content-area table {
+            box-sizing: border-box !important;
+            width: 100% !important;
+            min-width: 100% !important;
+            max-width: 100% !important;
+        }
+        
         /* 统一容器样式 */
         /* 注意：padding会影响内部元素宽度，需要确保table-container等子元素宽度计算正确 */
         /* 层级：content-area (padding: 30px) -> container (padding: 30px) -> tab-content -> table-container -> table-wrapper -> table */

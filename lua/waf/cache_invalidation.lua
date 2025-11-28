@@ -62,10 +62,13 @@ function _M.invalidate_rule_list_cache()
     cache:delete("rule_list:ip_range:block")
     cache:delete("rule_list:ip_range:whitelist")
     
-    -- 清除Redis缓存
+    -- 清除Redis缓存（失败不影响主流程）
     if redis_cache.is_available() then
-        redis_cache.delete("rule_list:ip_range:block")
-        redis_cache.delete("rule_list:ip_range:whitelist")
+        local ok1 = redis_cache.delete("rule_list:ip_range:block")
+        local ok2 = redis_cache.delete("rule_list:ip_range:whitelist")
+        if not ok1 or not ok2 then
+            ngx.log(ngx.WARN, "Redis cache delete failed, but continuing with operation")
+        end
     end
     
     ngx.log(ngx.INFO, "rule list cache invalidated")

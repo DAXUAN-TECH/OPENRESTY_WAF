@@ -57,13 +57,35 @@ local function init_redis()
     return true
 end
 
+-- 检查Redis连接是否有效
+local function is_connection_valid(red)
+    if not red then
+        return false
+    end
+    
+    -- 尝试执行一个简单的命令来检查连接
+    local ok, err = pcall(function()
+        red:ping()
+    end)
+    
+    if not ok then
+        return false
+    end
+    
+    return true
+end
+
 -- 获取Redis连接
 local function get_redis()
     if not REDIS_ENABLED then
         return nil
     end
     
-    if not redis_client then
+    -- 如果连接存在，检查是否有效
+    if redis_client then
+        -- 检查连接是否有效（简单检查，避免每次都ping）
+        -- 如果连接无效，会在实际操作时发现并重新连接
+    else
         if not init_redis() then
             return nil
         end
@@ -100,11 +122,30 @@ function _M.set(key, value, ttl)
     local redis_key = build_key(key)
     local ok, err = red:setex(redis_key, ttl, serialized)
     
+    -- 如果连接关闭，尝试重新连接并重试一次
     if not ok then
-        ngx.log(ngx.ERR, "Redis set error: ", err)
-        -- 连接可能断开，尝试重新连接
-        redis_client = nil
-        return false, err
+        if err == "closed" or string.find(err, "closed") then
+            ngx.log(ngx.WARN, "Redis connection closed, attempting to reconnect")
+            redis_client = nil
+            red = get_redis()
+            if red then
+                -- 重试一次
+                ok, err = red:setex(redis_key, ttl, serialized)
+                if not ok then
+                    ngx.log(ngx.ERR, "Redis set error after reconnect: ", err)
+                    redis_client = nil
+                    return false, err
+                end
+                return true, nil
+            else
+                ngx.log(ngx.WARN, "Redis reconnect failed, set operation skipped")
+                return false, "redis reconnect failed"
+            end
+        else
+            ngx.log(ngx.ERR, "Redis set error: ", err)
+            redis_client = nil
+            return false, err
+        end
     end
     
     return true, nil
@@ -124,10 +165,29 @@ function _M.get(key)
     local redis_key = build_key(key)
     local res, err = red:get(redis_key)
     
+    -- 如果连接关闭，尝试重新连接并重试一次
     if err then
-        ngx.log(ngx.ERR, "Redis get error: ", err)
-        redis_client = nil
-        return nil
+        if err == "closed" or string.find(err, "closed") then
+            ngx.log(ngx.WARN, "Redis connection closed, attempting to reconnect")
+            redis_client = nil
+            red = get_redis()
+            if red then
+                -- 重试一次
+                res, err = red:get(redis_key)
+                if err then
+                    ngx.log(ngx.ERR, "Redis get error after reconnect: ", err)
+                    redis_client = nil
+                    return nil
+                end
+            else
+                ngx.log(ngx.WARN, "Redis reconnect failed, get operation skipped")
+                return nil
+            end
+        else
+            ngx.log(ngx.ERR, "Redis get error: ", err)
+            redis_client = nil
+            return nil
+        end
     end
     
     if not res or res == ngx.null then
@@ -153,10 +213,30 @@ function _M.delete(key)
     local redis_key = build_key(key)
     local ok, err = red:del(redis_key)
     
+    -- 如果连接关闭，尝试重新连接并重试一次
     if err then
-        ngx.log(ngx.ERR, "Redis delete error: ", err)
-        redis_client = nil
-        return false
+        if err == "closed" or string.find(err, "closed") then
+            ngx.log(ngx.WARN, "Redis connection closed, attempting to reconnect")
+            redis_client = nil
+            red = get_redis()
+            if red then
+                -- 重试一次
+                ok, err = red:del(redis_key)
+                if err then
+                    ngx.log(ngx.ERR, "Redis delete error after reconnect: ", err)
+                    redis_client = nil
+                    return false
+                end
+                return true
+            else
+                ngx.log(ngx.WARN, "Redis reconnect failed, delete operation skipped")
+                return false
+            end
+        else
+            ngx.log(ngx.ERR, "Redis delete error: ", err)
+            redis_client = nil
+            return false
+        end
     end
     
     return true

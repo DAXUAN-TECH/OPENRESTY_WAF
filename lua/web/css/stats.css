@@ -37,17 +37,45 @@
             border: 1px solid #ddd;
             border-radius: 4px;
             margin-right: 15px;
+            background-color: #fff;
+            color: #333;
+            cursor: pointer;
+            transition: border-color 0.3s;
+        }
+        
+        .filters select:hover {
+            border-color: #4CAF50;
+        }
+        
+        .filters select:focus {
+            outline: none;
+            border-color: #4CAF50;
+            box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.2);
+        }
+        .filters {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .filters > div {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
         }
         .filters button {
             padding: 8px 20px;
-            background: #0066cc;
+            background: #4CAF50;
             color: #fff;
             border: none;
             border-radius: 4px;
             cursor: pointer;
+            margin-left: auto;
         }
         .filters button:hover {
-            background: #0052a3;
+            background: #45a049;
         }
         .stats-grid {
             display: grid;

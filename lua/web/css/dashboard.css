@@ -105,7 +105,9 @@
     }
     
     .auto-refresh {
-        text-align: right;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
         margin-bottom: 20px;
         padding: 15px;
         background: #fff;
@@ -113,13 +115,11 @@
         box-shadow: 0 2px 8px rgba(0,0,0,0.1);
     }
     .auto-refresh label {
-        margin-right: 10px;
         color: #666;
         font-size: 14px;
         cursor: pointer;
         display: flex;
         align-items: center;
-        justify-content: flex-end;
         gap: 8px;
     }
     .auto-refresh input[type="checkbox"] {

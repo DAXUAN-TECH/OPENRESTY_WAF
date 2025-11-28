@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WAF代理管理界面</title>
+    <title>代理管理 - WAF管理</title>
     <link rel="stylesheet" href="/css/proxy_management.css">
     <script src="/common.js"></script>
     <script src="/js/proxy_management.js"></script>
     </head>
     <body>
     <div class="container">
-        <h1>WAF代理管理界面</h1>
+        <h1>代理管理</h1>
         
         <div class="tabs">
             <button class="tab active" onclick="switchTab('proxies')">代理列表</button>
@@ -36,7 +36,7 @@
                     </select>
                 </div>
                 <div style="display: flex; gap: 10px;">
-                    <button class="btn btn-primary" onclick="applyFilters()">筛选</button>
+                    <button class="btn btn-primary" onclick="applyFilters()">查询</button>
                     <button class="btn btn-secondary" onclick="resetFilters()">重置</button>
                     <button class="btn btn-primary" onclick="loadProxies()">刷新</button>
                 </div>

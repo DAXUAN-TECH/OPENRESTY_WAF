@@ -368,6 +368,44 @@
             margin-top: 20px;
         }
         
+        /* 创建代理弹出框特定样式 */
+        #create-proxy-modal .form-group input,
+        #create-proxy-modal .form-group select,
+        #create-proxy-modal .form-group textarea {
+            width: 100%;
+            max-width: 500px;
+        }
+        
+        /* 代理名称输入框缩短二分之一 */
+        #create-proxy-modal #create-proxy-name {
+            width: 50% !important;
+            max-width: 250px !important;
+        }
+        
+        /* 代理类型输入框缩短二分之一 */
+        #create-proxy-modal #create-proxy-type {
+            width: 50% !important;
+            max-width: 250px !important;
+        }
+        
+        /* 监听端口输入框缩短二分之一（在form-row中） */
+        #create-proxy-modal #create-listen-port {
+            max-width: 250px !important;
+        }
+        
+        /* 连接超时、发送超时、读取超时输入框缩短二分之一（在form-row中） */
+        #create-proxy-modal #create-proxy-connect-timeout,
+        #create-proxy-modal #create-proxy-send-timeout,
+        #create-proxy-modal #create-proxy-read-timeout {
+            max-width: 250px !important;
+        }
+        
+        /* 防护规则输入框缩短二分之一 */
+        #create-proxy-modal #create-ip-rule-id {
+            width: 50% !important;
+            max-width: 250px !important;
+        }
+        
         /* 分页样式 */
         .pagination {
             display: flex;

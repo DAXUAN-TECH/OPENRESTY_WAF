@@ -714,18 +714,61 @@ function _M.check_ip_allowed(ip_address)
     
     if not ok or err then
         ngx.log(ngx.ERR, "check_ip_allowed: failed to query whitelist: ", tostring(err))
-        -- 查询失败时，为了安全，拒绝访问
-        return false
+        -- 数据库查询失败时，采用降级策略：允许访问（避免锁死系统）
+        -- 同时尝试自动禁用系统白名单（异步，不阻塞）
+        ngx.timer.at(0, function()
+            local disable_ok, disable_err = pcall(function()
+                local disable_sql = [[
+                    UPDATE waf_system_config 
+                    SET config_value = '0'
+                    WHERE config_key = 'system_access_whitelist_enabled'
+                ]]
+                return mysql_pool.query(disable_sql)
+            end)
+            if disable_ok and not disable_err then
+                ngx.log(ngx.WARN, "check_ip_allowed: 数据库查询失败，已自动禁用系统白名单以避免锁死系统")
+                -- 清除配置缓存
+                local config_manager = require "waf.config_manager"
+                if config_manager and config_manager.clear_cache then
+                    config_manager.clear_cache("system_access_whitelist_enabled")
+                end
+            end
+        end)
+        -- 降级策略：允许访问（避免锁死系统）
+        ngx.log(ngx.WARN, "check_ip_allowed: 数据库查询失败，采用降级策略：允许访问 IP: ", ip_address)
+        return true
     end
     
     -- 严格检查：res必须是非nil的表，且长度大于0
     -- 使用type检查确保res是table类型，使用#res检查数组长度
     -- 如果res不是table，或者res是空数组，都视为白名单为空
     if not res or type(res) ~= "table" or #res == 0 then
-        -- 白名单为空，拒绝所有访问
-        ngx.log(ngx.WARN, "check_ip_allowed: whitelist enabled but empty, denying access for IP: ", ip_address, 
+        -- 白名单为空时，自动禁用系统白名单（避免锁死系统）
+        ngx.log(ngx.WARN, "check_ip_allowed: whitelist enabled but empty, auto-disabling whitelist to prevent lockout for IP: ", ip_address, 
             " (res type: ", type(res), ", res length: ", res and #res or "nil", ")")
-        return false
+        -- 异步禁用系统白名单（不阻塞当前请求）
+        ngx.timer.at(0, function()
+            local disable_ok, disable_err = pcall(function()
+                local disable_sql = [[
+                    UPDATE waf_system_config 
+                    SET config_value = '0'
+                    WHERE config_key = 'system_access_whitelist_enabled'
+                ]]
+                return mysql_pool.query(disable_sql)
+            end)
+            if disable_ok and not disable_err then
+                ngx.log(ngx.INFO, "check_ip_allowed: 白名单为空，已自动禁用系统白名单")
+                -- 清除配置缓存
+                local config_manager = require "waf.config_manager"
+                if config_manager and config_manager.clear_cache then
+                    config_manager.clear_cache("system_access_whitelist_enabled")
+                end
+            else
+                ngx.log(ngx.ERR, "check_ip_allowed: 自动禁用系统白名单失败: ", tostring(disable_err))
+            end
+        end)
+        -- 降级策略：允许访问（避免锁死系统）
+        return true
     end
     
     ngx.log(ngx.INFO, "check_ip_allowed: found ", #res, " whitelist entries, checking IP: ", ip_address)

@@ -313,7 +313,8 @@
         
         /* 弹出框中的label居中 */
         #setupModal .form-group label,
-        #resetModal .form-group label {
+        #resetModal .form-group label,
+        #disableModal .form-group label {
             text-align: center;
         }
         
@@ -358,6 +359,19 @@
         #oldTotpCode::placeholder,
         #newTotpCode::placeholder {
             text-align: center;
+        }
+        
+        /* 禁用弹出框中的验证码输入框样式 */
+        #disableTotpCode::placeholder {
+            text-align: center;
+        }
+        
+        /* 确保重置和禁用弹出框中的输入框宽度不被覆盖 */
+        #resetModal #oldTotpCode,
+        #resetModal #newTotpCode,
+        #disableModal #disableTotpCode {
+            width: auto !important;
+            max-width: none !important;
         }
         
         .form-group select {

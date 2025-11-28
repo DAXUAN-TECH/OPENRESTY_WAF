@@ -133,13 +133,15 @@
             </div>
             
             <!-- 操作按钮 -->
-            <div id="actionSection">
-                <button class="button button-primary" id="setupButton" onclick="showSetupModal()" style="display: none;">
-                    设置双因素认证
-                </button>
-                <button class="button button-warning" id="resetButton" onclick="showResetModal()" style="display: none;">
-                    重置双因素认证
-                </button>
+            <div id="actionSection" style="display: flex; justify-content: space-between; align-items: center;">
+                <div style="display: flex; gap: 10px;">
+                    <button class="button button-primary" id="setupButton" onclick="showSetupModal()" style="display: none;">
+                        设置双因素认证
+                    </button>
+                    <button class="button button-warning" id="resetButton" onclick="showResetModal()" style="display: none;">
+                        重置双因素认证
+                    </button>
+                </div>
                 <button class="button button-danger" id="disableButton" onclick="disableTotp()" style="display: none;">
                     禁用双因素认证
                 </button>

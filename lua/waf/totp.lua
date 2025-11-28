@@ -254,13 +254,22 @@ function _M.verify_totp(secret_base32, code, time_step, window)
     time_step = time_step or 30
     window = window or 1  -- 默认允许前后 1 个时间窗口
     
+    -- 确保 code 是字符串类型
+    if type(code) == "number" then
+        code = tostring(code)
+    end
+    code = tostring(code)
+    
     -- 生成当前时间窗口的代码
     local current_code = _M.generate_totp(secret_base32, time_step, 6)
     if not current_code then
         return false, "Failed to generate TOTP"
     end
     
-    -- 检查当前代码
+    -- 确保 current_code 是字符串
+    current_code = tostring(current_code)
+    
+    -- 检查当前代码（字符串比较）
     if current_code == code then
         return true
     end
@@ -295,6 +304,8 @@ function _M.verify_totp(secret_base32, code, time_step, window)
                                bit.band(string.byte(hmac, offset + 3), 0xFF))
                 
                 local test_code = string.format("%06d", binary % 1000000)
+                -- 确保 test_code 是字符串
+                test_code = tostring(test_code)
                 if test_code == code then
                     return true
                 end

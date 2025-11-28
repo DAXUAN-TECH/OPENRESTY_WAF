@@ -281,12 +281,15 @@ function _M.enable_totp()
         return
     end
     
-    -- 清理验证码：只保留数字
-    code = string.gsub(code, "%D", "")
+    -- 清理验证码：只保留数字，并确保是字符串类型
+    if type(code) == "number" then
+        code = tostring(code)
+    end
+    code = string.gsub(tostring(code), "%D", "")
     
     -- 验证验证码格式
     if not code or #code ~= 6 then
-        ngx.log(ngx.WARN, "auth.enable_totp: invalid code format, code length: ", code and #code or 0)
+        ngx.log(ngx.WARN, "auth.enable_totp: invalid code format, code length: ", code and #code or 0, ", code type: ", type(code))
         api_utils.json_response({
             error = "Bad Request",
             message = "验证码必须是6位数字"
@@ -295,8 +298,8 @@ function _M.enable_totp()
     end
     
     -- 验证 secret 格式（Base32）
-    if not secret or #secret < 16 then
-        ngx.log(ngx.WARN, "auth.enable_totp: invalid secret format, secret length: ", secret and #secret or 0)
+    if not secret or type(secret) ~= "string" or #secret < 16 then
+        ngx.log(ngx.WARN, "auth.enable_totp: invalid secret format, secret length: ", secret and #secret or 0, ", secret type: ", type(secret))
         api_utils.json_response({
             error = "Bad Request",
             message = "密钥格式无效"
@@ -304,21 +307,24 @@ function _M.enable_totp()
         return
     end
     
-    ngx.log(ngx.INFO, "auth.enable_totp: verifying TOTP for user: ", session.username, ", secret prefix: ", string.sub(secret, 1, 8), "...")
+    ngx.log(ngx.INFO, "auth.enable_totp: verifying TOTP for user: ", session.username, ", secret prefix: ", string.sub(secret, 1, 8), "...", ", code: ", code, ", code type: ", type(code))
     
-    -- 验证 TOTP 代码（增加时间窗口到2，允许前后2个时间窗口，即60秒）
-    local totp_ok, err = totp.verify_totp(secret, code, 30, 2)
+    -- 先尝试生成当前代码用于调试
+    local expected_code = totp.generate_totp(secret)
+    ngx.log(ngx.INFO, "auth.enable_totp: expected current code: ", expected_code or "failed to generate", ", received code: ", code)
+    
+    -- 验证 TOTP 代码（增加时间窗口到3，允许前后3个时间窗口，即90秒）
+    local totp_ok, err = totp.verify_totp(secret, code, 30, 3)
     if not totp_ok then
         ngx.log(ngx.WARN, "auth.enable_totp: TOTP verification failed for user: ", session.username, ", error: ", tostring(err))
-        -- 尝试生成当前代码用于调试
-        local test_code = totp.generate_totp(secret)
-        ngx.log(ngx.INFO, "auth.enable_totp: expected code: ", test_code or "failed to generate", ", received code: ", code)
         api_utils.json_response({
             error = "Unauthorized",
-            message = "验证码错误，请重试"
+            message = "验证码错误，请重试。请确保时间同步正确，验证码在90秒内有效"
         }, 401)
         return
     end
+    
+    ngx.log(ngx.INFO, "auth.enable_totp: TOTP verification successful for user: ", session.username)
     
     -- 保存 TOTP 密钥
     local ok = auth.set_user_totp_secret(session.username, secret)

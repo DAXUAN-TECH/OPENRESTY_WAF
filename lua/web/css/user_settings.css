@@ -379,9 +379,15 @@
         
         .form-actions {
             display: flex;
-            justify-content: flex-end;
+            justify-content: center;
             gap: 10px;
             margin-top: 20px;
+        }
+        
+        /* 弹出框中的按钮居中 */
+        #setupModal .form-actions,
+        #resetModal .form-actions {
+            justify-content: center;
         }
         
         /* 分页样式 */

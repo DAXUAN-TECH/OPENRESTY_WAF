@@ -1115,67 +1115,70 @@
                 return;
             }
             
-            // 获取container，计算其实际可用宽度（减去padding）
+            // 获取container
             const container = document.querySelector('.container');
-            if (container) {
-                const containerPadding = 30 * 2; // 左右各30px
-                const containerWidth = contentAreaWidth - containerPadding;
-                
-                // 先清除可能存在的内联样式
-                container.style.removeProperty('width');
-                container.style.removeProperty('max-width');
-                container.style.removeProperty('min-width');
-                // 使用固定像素值设置宽度，确保对齐
-                container.style.setProperty('width', containerWidth + 'px', 'important');
-                container.style.setProperty('max-width', containerWidth + 'px', 'important');
-                container.style.setProperty('min-width', containerWidth + 'px', 'important');
+            if (!container) {
+                setTimeout(forceTableWidths, 100);
+                return;
             }
             
-            // 获取container的实际宽度（用于子元素计算）
-            let containerActualWidth = contentAreaWidth;
-            if (container) {
-                const containerRect = container.getBoundingClientRect();
-                containerActualWidth = containerRect.width;
-            }
+            // container使用box-sizing: border-box，所以宽度已经包含padding
+            // container的宽度应该是contentAreaWidth（100%相对于content-area）
+            // 先清除可能存在的内联样式
+            container.style.removeProperty('width');
+            container.style.removeProperty('max-width');
+            container.style.removeProperty('min-width');
+            // container使用100%宽度，让CSS来处理
+            container.style.setProperty('width', '100%', 'important');
+            container.style.setProperty('max-width', '100%', 'important');
+            container.style.setProperty('min-width', '100%', 'important');
             
-            // 强制设置所有tab-content的宽度（相对于container）
+            // 获取container的实际内容宽度（减去padding，因为box-sizing: border-box）
+            // container的实际宽度 = contentAreaWidth（因为100%）
+            // container的内容宽度 = container实际宽度 - padding（左右各30px）
+            const containerRect = container.getBoundingClientRect();
+            const containerActualWidth = containerRect.width;
+            const containerPadding = 30 * 2; // 左右各30px
+            const containerContentWidth = containerActualWidth - containerPadding;
+            
+            // 强制设置所有tab-content的宽度（使用container的内容宽度，不包含padding）
             document.querySelectorAll('.tab-content').forEach(tabContent => {
                 tabContent.style.removeProperty('width');
                 tabContent.style.removeProperty('max-width');
                 tabContent.style.removeProperty('min-width');
-                tabContent.style.setProperty('width', containerActualWidth + 'px', 'important');
-                tabContent.style.setProperty('max-width', containerActualWidth + 'px', 'important');
-                tabContent.style.setProperty('min-width', containerActualWidth + 'px', 'important');
+                tabContent.style.setProperty('width', containerContentWidth + 'px', 'important');
+                tabContent.style.setProperty('max-width', containerContentWidth + 'px', 'important');
+                tabContent.style.setProperty('min-width', containerContentWidth + 'px', 'important');
             });
             
-            // 强制设置所有table-container的宽度（相对于container）
+            // 强制设置所有table-container的宽度（使用container的内容宽度）
             document.querySelectorAll('.table-container').forEach(tableContainer => {
                 tableContainer.style.removeProperty('width');
                 tableContainer.style.removeProperty('max-width');
                 tableContainer.style.removeProperty('min-width');
-                tableContainer.style.setProperty('width', containerActualWidth + 'px', 'important');
-                tableContainer.style.setProperty('max-width', containerActualWidth + 'px', 'important');
-                tableContainer.style.setProperty('min-width', containerActualWidth + 'px', 'important');
+                tableContainer.style.setProperty('width', containerContentWidth + 'px', 'important');
+                tableContainer.style.setProperty('max-width', containerContentWidth + 'px', 'important');
+                tableContainer.style.setProperty('min-width', containerContentWidth + 'px', 'important');
             });
             
-            // 强制设置所有table-wrapper的宽度（相对于container）
+            // 强制设置所有table-wrapper的宽度（使用container的内容宽度）
             document.querySelectorAll('.table-wrapper').forEach(tableWrapper => {
                 tableWrapper.style.removeProperty('width');
                 tableWrapper.style.removeProperty('max-width');
                 tableWrapper.style.removeProperty('min-width');
-                tableWrapper.style.setProperty('width', containerActualWidth + 'px', 'important');
-                tableWrapper.style.setProperty('max-width', containerActualWidth + 'px', 'important');
-                tableWrapper.style.setProperty('min-width', containerActualWidth + 'px', 'important');
+                tableWrapper.style.setProperty('width', containerContentWidth + 'px', 'important');
+                tableWrapper.style.setProperty('max-width', containerContentWidth + 'px', 'important');
+                tableWrapper.style.setProperty('min-width', containerContentWidth + 'px', 'important');
             });
             
-            // 强制设置所有表格的宽度（相对于container）
+            // 强制设置所有表格的宽度（使用container的内容宽度）
             document.querySelectorAll('#access-table, #block-table, #audit-table').forEach(table => {
                 table.style.removeProperty('width');
                 table.style.removeProperty('max-width');
                 table.style.removeProperty('min-width');
-                table.style.setProperty('width', containerActualWidth + 'px', 'important');
-                table.style.setProperty('max-width', containerActualWidth + 'px', 'important');
-                table.style.setProperty('min-width', containerActualWidth + 'px', 'important');
+                table.style.setProperty('width', containerContentWidth + 'px', 'important');
+                table.style.setProperty('max-width', containerContentWidth + 'px', 'important');
+                table.style.setProperty('min-width', containerContentWidth + 'px', 'important');
             });
         }
         

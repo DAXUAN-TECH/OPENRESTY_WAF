@@ -283,8 +283,16 @@ function _M.generate_totp(secret_base32, time_step, digits)
         return nil, err or "Failed to decode secret"
     end
     
-    -- 记录解码后的secret信息用于调试
-    ngx.log(ngx.DEBUG, "totp.generate_totp: secret_base32 length: ", #secret_base32, ", decoded secret length: ", #secret, " bytes")
+    -- 记录解码后的secret信息用于调试（转换为十六进制字符串以便对比）
+    local secret_hex = ""
+    for i = 1, math.min(#secret, 20) do  -- 只记录前20字节，避免日志过长
+        local byte = string.byte(secret, i)
+        secret_hex = secret_hex .. string.format("%02X", byte)
+    end
+    if #secret > 20 then
+        secret_hex = secret_hex .. "..."
+    end
+    ngx.log(ngx.WARN, "totp.generate_totp: DEBUG - secret_base32: ", string.sub(secret_base32, 1, 20), "...", ", decoded secret length: ", #secret, " bytes, secret_hex (first 20 bytes): ", secret_hex)
     
     -- 计算时间步数
     local current_time = ngx.time()
@@ -298,14 +306,19 @@ function _M.generate_totp(secret_base32, time_step, digits)
     local time_str = table.concat(time_bytes)
     
     -- 计算 HMAC-SHA1
-    ngx.log(ngx.DEBUG, "totp.generate_totp: computing HMAC, secret length: ", #secret, " bytes, time_counter: ", time_counter, ", time_str length: ", #time_str, " bytes")
+    ngx.log(ngx.WARN, "totp.generate_totp: DEBUG - computing HMAC, secret length: ", #secret, " bytes, time_counter: ", time_counter, ", time_str length: ", #time_str, " bytes")
     local hmac, err = hmac_sha1(secret, time_str)
     if not hmac then
         return nil, err or "Failed to compute HMAC"
     end
     
-    -- 记录HMAC信息用于调试
-    ngx.log(ngx.DEBUG, "totp.generate_totp: HMAC computed, length: ", #hmac, " bytes")
+    -- 记录HMAC信息用于调试（转换为十六进制字符串以便对比）
+    local hmac_hex = ""
+    for i = 1, #hmac do
+        local byte = string.byte(hmac, i)
+        hmac_hex = hmac_hex .. string.format("%02X", byte)
+    end
+    ngx.log(ngx.WARN, "totp.generate_totp: DEBUG - HMAC computed, length: ", #hmac, " bytes, hmac_hex: ", hmac_hex)
     
     -- 动态截取（RFC 6238）
     -- 检查HMAC长度，确保有足够的字节

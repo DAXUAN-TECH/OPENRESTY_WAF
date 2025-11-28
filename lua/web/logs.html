@@ -202,21 +202,35 @@
             width: 100%;
             border-collapse: collapse;
         }
-        /* 封控日志：block-table和table-wrapper保持一样的宽度 */
+        /* 访问日志：access-table和table-wrapper保持一样的宽度，确保左右对齐 */
+        #access-table {
+            width: 100%;
+            min-width: 100%;
+            box-sizing: border-box;
+        }
+        #access-tab .table-wrapper {
+            width: 100%;
+            box-sizing: border-box;
+        }
+        /* 封控日志：block-table和table-wrapper保持一样的宽度，确保左右对齐 */
         #block-table {
             width: 100%;
             min-width: 100%;
+            box-sizing: border-box;
         }
         #block-tab .table-wrapper {
             width: 100%;
+            box-sizing: border-box;
         }
-        /* 审计日志：audit-table和table-wrapper保持一样的宽度 */
+        /* 审计日志：audit-table和table-wrapper保持一样的宽度，确保左右对齐 */
         #audit-table {
             width: 100%;
             min-width: 100%;
+            box-sizing: border-box;
         }
         #audit-tab .table-wrapper {
             width: 100%;
+            box-sizing: border-box;
         }
         thead {
             background: #f8f9fa;

@@ -266,12 +266,32 @@
         }
         
         .form-group input,
+        .form-group select,
         .form-group textarea {
             width: 100%;
+            max-width: 500px;
             padding: 8px 12px;
             border: 1px solid #ddd;
             border-radius: 4px;
             font-size: 14px;
+            box-sizing: border-box;
+            background-color: #fff;
+            color: #333;
+            transition: border-color 0.3s;
+        }
+        
+        .form-group select {
+            cursor: pointer;
+        }
+        
+        .form-group select:hover {
+            border-color: #4CAF50;
+        }
+        
+        .form-group select:focus {
+            outline: none;
+            border-color: #4CAF50;
+            box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.2);
         }
         
         .form-group textarea {

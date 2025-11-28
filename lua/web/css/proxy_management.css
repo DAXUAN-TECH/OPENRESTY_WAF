@@ -394,6 +394,18 @@
             max-width: 250px !important;
         }
         
+        /* TCP/UDP代理：监听端口输入框同代理名称输入框一样宽 */
+        #create-proxy-modal #tcp-udp-fields #create-tcp-udp-listen-port {
+            width: 50% !important;
+            max-width: 250px !important;
+        }
+        
+        /* TCP/UDP代理：监听地址输入框同代理类型输入框一样宽 */
+        #create-proxy-modal #tcp-udp-fields #create-tcp-udp-listen-address {
+            width: 50% !important;
+            max-width: 250px !important;
+        }
+        
         /* 负载均衡算法输入框宽度（在form-row中，50%宽度） */
         #create-proxy-modal .form-row #create-load-balance {
             width: 50% !important;
@@ -451,6 +463,22 @@
         /* 监听端口输入框缩短二分之一（在form-row中） */
         #edit-modal #edit-listen-port,
         #edit-modal #edit-tcp-udp-listen-port {
+            width: 50% !important;
+            max-width: 250px !important;
+        }
+        
+        /* 编辑代理HTTP：监听域名、监听端口、路径匹配、监听地址在同一水平线，间距平均 */
+        #edit-modal #edit-http-fields {
+            display: flex;
+            gap: 15px;
+        }
+        
+        #edit-modal #edit-http-fields .form-group {
+            flex: 1;
+        }
+        
+        /* 编辑代理TCP/UDP：监听地址输入框同代理类型输入框一样宽 */
+        #edit-modal #edit-tcp-udp-fields #edit-tcp-udp-listen-address {
             width: 50% !important;
             max-width: 250px !important;
         }
@@ -567,10 +595,18 @@
         }
         
         .rule-item select.rule-id {
-            flex: 2;
+            flex: 1;
             padding: 8px;
             border: 1px solid #ddd;
             border-radius: 4px;
+            width: 50% !important;
+            max-width: 250px !important;
+        }
+        
+        /* 编辑代理防护规则：请选择规则条目下拉框缩短二分之一 */
+        #edit-modal .rule-item select.rule-id {
+            width: 50% !important;
+            max-width: 250px !important;
         }
         
         .rule-item .btn {

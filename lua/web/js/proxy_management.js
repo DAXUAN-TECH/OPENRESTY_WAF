@@ -891,42 +891,72 @@ const pageSize = 20;
             }
         }
         
+        // 确认对话框相关函数
+        let confirmCallback = null;
+        
+        function showConfirmModal(title, message, callback) {
+            document.getElementById('confirm-title').textContent = title;
+            document.getElementById('confirm-message').textContent = message;
+            confirmCallback = callback;
+            const modal = document.getElementById('confirm-modal');
+            modal.style.display = 'flex';
+        }
+        
+        function closeConfirmModal() {
+            const modal = document.getElementById('confirm-modal');
+            modal.style.display = 'none';
+            confirmCallback = null;
+        }
+        
+        // 确认对话框确定按钮
+        document.addEventListener('DOMContentLoaded', function() {
+            const confirmOkBtn = document.getElementById('confirm-ok-btn');
+            if (confirmOkBtn) {
+                confirmOkBtn.addEventListener('click', function() {
+                    if (confirmCallback) {
+                        confirmCallback();
+                    }
+                    closeConfirmModal();
+                });
+            }
+        });
+        
         // 禁用代理
         async function disableProxy(id) {
-            if (!confirm('确定要禁用该代理配置吗？')) return;
-            
-            try {
-                const response = await fetch(`/api/proxy/${id}/disable`, { method: 'POST' });
-                const data = await response.json();
-                
-                if (data.success) {
-                    showAlert('代理配置已禁用');
-                    loadProxies();
-                } else {
-                    showAlert(data.error || '操作失败', 'error');
+            showConfirmModal('确认禁用', '确定要禁用该代理配置吗？', async function() {
+                try {
+                    const response = await fetch(`/api/proxy/${id}/disable`, { method: 'POST' });
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        showAlert('代理配置已禁用');
+                        loadProxies();
+                    } else {
+                        showAlert(data.error || '操作失败', 'error');
+                    }
+                } catch (error) {
+                    showAlert('网络错误: ' + error.message, 'error');
                 }
-            } catch (error) {
-                showAlert('网络错误: ' + error.message, 'error');
-            }
+            });
         }
         
         // 删除代理
         async function deleteProxy(id) {
-            if (!confirm('确定要删除该代理配置吗？此操作不可恢复！')) return;
-            
-            try {
-                const response = await fetch(`/api/proxy/${id}`, { method: 'DELETE' });
-                const data = await response.json();
-                
-                if (data.success) {
-                    showAlert('代理配置已删除');
-                    loadProxies();
-                } else {
-                    showAlert(data.error || '删除失败', 'error');
+            showConfirmModal('确认删除', '确定要删除该代理配置吗？此操作不可恢复！', async function() {
+                try {
+                    const response = await fetch(`/api/proxy/${id}`, { method: 'DELETE' });
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        showAlert('代理配置已删除');
+                        loadProxies();
+                    } else {
+                        showAlert(data.error || '删除失败', 'error');
+                    }
+                } catch (error) {
+                    showAlert('网络错误: ' + error.message, 'error');
                 }
-            } catch (error) {
-                showAlert('网络错误: ' + error.message, 'error');
-            }
+            });
         }
         
         // 关闭编辑模态框

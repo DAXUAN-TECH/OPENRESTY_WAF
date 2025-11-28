@@ -106,7 +106,8 @@
         /* 顶部Banner栏 - 高端渐变设计 */
         .top-banner {
             grid-area: banner;
-            width: 100%;
+            /* 使用calc()计算宽度，避免JavaScript内联样式覆盖 */
+            width: calc(100% - var(--sidebar-width));
             height: 100%;
             background: linear-gradient(135deg, #34495e 0%, #2c3e50 100%);
             border-bottom: 1px solid rgba(52, 73, 94, 0.3);
@@ -202,7 +203,8 @@
         /* 内容显示区域 - 统一内边距 */
         .content-area {
             grid-area: content;
-            width: 100%;
+            /* 使用calc()计算宽度，避免JavaScript内联样式覆盖 */
+            width: calc(100% - var(--sidebar-width));
             height: 100%;
             padding: 30px;
             overflow-y: auto;
@@ -222,7 +224,8 @@
         /* 确保content-area的所有直接子元素能够正确使用100%宽度 */
         .content-area > * {
             box-sizing: border-box;
-            max-width: 100%;
+            width: 100% !important;
+            max-width: 100% !important;
         }
         /* 响应式设计 */
         @media (max-width: 768px) {
@@ -279,14 +282,17 @@
                     // 更新CSS变量
                     document.documentElement.style.setProperty('--sidebar-width', sidebarWidth + 'px');
                     
-                    // 同时设置内联样式作为备用
+                    // 只设置margin-left，不设置width，让CSS的calc()来处理宽度
+                    // 这样可以避免内联样式覆盖CSS样式，确保子元素的width: 100%能够正确工作
                     if (topBanner) {
                         topBanner.style.marginLeft = sidebarWidth + 'px';
-                        topBanner.style.width = availableWidth + 'px';
+                        // 移除width设置，使用CSS calc()
+                        topBanner.style.width = '';
                     }
                     if (contentArea) {
                         contentArea.style.marginLeft = sidebarWidth + 'px';
-                        contentArea.style.width = availableWidth + 'px';
+                        // 移除width设置，使用CSS calc()，确保子元素的width: 100%能够正确工作
+                        contentArea.style.width = '';
                     }
                     
                     // 显示元素（防止闪烁）
@@ -471,10 +477,12 @@
                     
                     // 设置top-banner和content-area的左边距等于sidebar宽度
                     // 这样它们就会紧贴sidebar的右边，无间隙
+                    // 不设置width，使用CSS calc()来处理宽度，避免内联样式覆盖CSS样式
                     topBanner.style.marginLeft = sidebarWidth + 'px';
-                    topBanner.style.width = availableWidth + 'px';
+                    topBanner.style.width = '';
                     contentArea.style.marginLeft = sidebarWidth + 'px';
-                    contentArea.style.width = availableWidth + 'px';
+                    // 移除width设置，使用CSS calc()，确保子元素的width: 100%能够正确工作
+                    contentArea.style.width = '';
                 }
             }
             

@@ -41,8 +41,15 @@ local function validate_proxy_config(proxy_data)
         return false, "监听端口必须在1-65535之间"
     end
     
-    -- 注意：server_name（监听域名）可以为空，nginx配置生成器会正确处理
-    -- 如果server_name为空，nginx会使用默认的server块
+    -- 验证 server_name（监听域名）
+    -- HTTP/HTTPS 代理：server_name 可以为空（使用默认server块）
+    -- TCP/UDP 代理：server_name 必须为空（TCP/UDP 代理不支持域名）
+    local server_name = null_to_nil(proxy_data.server_name)
+    if proxy_data.proxy_type ~= "http" then
+        if server_name and server_name ~= "" then
+            return false, "TCP/UDP 代理不支持监听域名配置"
+        end
+    end
     
     -- 验证后端服务器列表（只支持upstream类型）
     if not proxy_data.backends or type(proxy_data.backends) ~= "table" or #proxy_data.backends == 0 then
@@ -215,7 +222,11 @@ function _M.create_proxy(proxy_data)
     ]]
     
     local listen_address = proxy_data.listen_address or "0.0.0.0"
-    local server_name = null_to_nil(proxy_data.server_name)
+    -- 对于 TCP/UDP 代理，server_name 必须为 nil
+    local server_name = nil
+    if proxy_data.proxy_type == "http" then
+        server_name = null_to_nil(proxy_data.server_name)
+    end
     local location_path = proxy_data.location_path or "/"
     -- 只支持多个后端（负载均衡），不再支持单个后端
     local backend_type = "upstream"

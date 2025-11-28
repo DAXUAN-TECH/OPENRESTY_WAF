@@ -457,12 +457,11 @@ function _M.list_groups()
     -- 测试 JSON 序列化，确保 groups 是数组格式
     local cjson = require "cjson"
     local test_json = cjson.encode(final_groups)
-    ngx.log(ngx.DEBUG, "Groups JSON serialization test: ", test_json:sub(1, 100))
     
     -- 检查 JSON 字符串是否以 [ 开头（数组）而不是 { 开头（对象）
     if not test_json:match("^%[") then
-        ngx.log(ngx.WARN, "WARNING: groups JSON does not start with [, it starts with: ", test_json:sub(1, 1))
-        -- 强制设置为空数组
+        -- 如果不是数组格式，强制转换为空数组
+        ngx.log(ngx.DEBUG, "Groups JSON is not array format, converting to empty array. JSON: ", test_json:sub(1, 50))
         final_groups = {}
     end
     

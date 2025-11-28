@@ -345,7 +345,11 @@ function _M.enable_totp()
     local cached_secret = cache:get(totp_setup_key)
     
     if cached_secret then
-        ngx.log(ngx.INFO, "auth.enable_totp: found cached secret for user: ", session.username, ", cached_secret length: ", #cached_secret, ", cached_secret prefix: ", string.sub(cached_secret, 1, 12), "...", ", matches provided: ", cached_secret == secret)
+        -- 清理缓存的secret（移除空格，转换为大写）
+        local cleaned_cached_secret = string.upper(string.gsub(cached_secret, "%s", ""))
+        local cleaned_provided_secret = string.upper(string.gsub(secret, "%s", ""))
+        local secrets_match = cleaned_cached_secret == cleaned_provided_secret
+        ngx.log(ngx.INFO, "auth.enable_totp: found cached secret for user: ", session.username, ", cached_secret length: ", #cached_secret, ", cached_secret prefix: ", string.sub(cached_secret, 1, 12), "...", ", provided_secret prefix: ", string.sub(secret, 1, 12), "...", ", secrets match: ", secrets_match)
     else
         ngx.log(ngx.INFO, "auth.enable_totp: no cached secret found for user: ", session.username)
     end

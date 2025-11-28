@@ -1,22 +1,13 @@
 <!DOCTYPE html>
-<html>
+<html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>日志查看 - WAF管理</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        /* body样式会被handler.lua移除，这里保留用于文档说明 */
         
-        /* 标题样式 - 与其他页面保持一致 */
-        h1 {
-            color: #333;
-            font-size: 24px;
-            margin-bottom: 30px;
-            font-weight: 600;
-        }
-        
-        /* 统一容器样式 - 白色背景卡片 */
+        /* 统一容器样式 */
         /* 注意：padding会影响内部元素宽度，需要确保table-container等子元素宽度计算正确 */
         /* 层级：content-area (padding: 30px) -> container (padding: 30px) -> tab-content -> table-container -> table-wrapper -> table */
         .container {
@@ -37,6 +28,15 @@
             /* 确保子元素能够正确使用100%宽度 */
             position: relative;
         }
+        
+        /* 标题样式 */
+        h1 {
+            color: #333;
+            font-size: 24px;
+            margin-bottom: 30px;
+            font-weight: 600;
+        }
+        
         .tabs {
             background: #fff;
             padding: 0;

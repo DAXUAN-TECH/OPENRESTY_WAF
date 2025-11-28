@@ -101,15 +101,6 @@ const pageSize = 20;
                 document.querySelectorAll('#backends-list .backend-path').forEach(field => {
                     field.classList.remove('backend-path-error');
                 });
-                // 移除错误提示
-                const errorDiv = document.getElementById('backends-list')?.querySelector('.backend-path-error');
-                if (errorDiv) {
-                    errorDiv.remove();
-                }
-                // 移除错误样式
-                document.querySelectorAll('#backends-list .backend-path').forEach(field => {
-                    field.classList.remove('backend-path-error');
-                });
                 // 同步监听端口和监听地址的值
                 document.getElementById('create-listen-port').value = document.getElementById('create-tcp-udp-listen-port').value;
                 document.getElementById('create-listen-address').value = document.getElementById('create-tcp-udp-listen-address').value;

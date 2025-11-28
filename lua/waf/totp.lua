@@ -218,7 +218,7 @@ local function hmac_sha1(key, message)
     sha1_obj:update(ipad_str)
     sha1_obj:update(message)
     local hash1 = sha1_obj:final()
-    ngx.log(ngx.DEBUG, "hmac_sha1: hash1 type: ", type(hash1), ", length: ", hash1 and #hash1 or 0)
+    ngx.log(ngx.INFO, "hmac_sha1: hash1 type: ", type(hash1), ", length: ", hash1 and #hash1 or 0)
     
     -- resty.sha1 的 final() 通常返回二进制字符串（20字节），但也可能返回十六进制字符串（40字符）
     -- 检查是否是十六进制字符串（长度为40，只包含0-9a-fA-F）
@@ -242,7 +242,7 @@ local function hmac_sha1(key, message)
     sha2_obj:update(opad_str)
     sha2_obj:update(hash1)
     local hash2 = sha2_obj:final()
-    ngx.log(ngx.DEBUG, "hmac_sha1: hash2 type: ", type(hash2), ", length: ", hash2 and #hash2 or 0, ", before conversion")
+    ngx.log(ngx.INFO, "hmac_sha1: hash2 type: ", type(hash2), ", length: ", hash2 and #hash2 or 0, ", before conversion")
     
     -- 同样检查 hash2 是否是十六进制字符串
     if type(hash2) == "string" and #hash2 == 40 and string.match(hash2, "^[0-9a-fA-F]+$") then
@@ -267,7 +267,7 @@ local function hmac_sha1(key, message)
         return nil, "Invalid HMAC result format"
     end
     
-    ngx.log(ngx.DEBUG, "hmac_sha1: final hash2 length: ", #hash2, " bytes")
+    ngx.log(ngx.INFO, "hmac_sha1: final hash2 length: ", #hash2, " bytes")
     return hash2
 end
 

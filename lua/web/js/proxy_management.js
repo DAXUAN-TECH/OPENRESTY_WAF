@@ -854,8 +854,9 @@ let currentPage = 1;
                     // 保存所有IP相关规则到全局变量
                     allIpRules = ipRules;
                     
-                    // 更新所有规则条目的选择框
-                    updateAllRuleSelects();
+                    // 更新所有规则条目的选择框（创建和编辑）
+                    updateAllRuleSelects('rules-list');
+                    updateAllRuleSelects('edit-rules-list');
                 }
             } catch (error) {
                 console.error('加载规则列表失败:', error);

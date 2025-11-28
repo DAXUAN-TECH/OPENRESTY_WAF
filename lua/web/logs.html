@@ -1089,13 +1089,15 @@
         }
         
         // 强制设置表格相关元素的宽度，确保对齐
+        // 使用MutationObserver监听DOM变化，确保在元素创建后立即设置宽度
         function forceTableWidths() {
-            // 获取content-area的实际宽度（包括padding）
+            // 获取content-area
             const contentArea = document.querySelector('.content-area');
-            if (!contentArea) return;
-            
-            const contentAreaRect = contentArea.getBoundingClientRect();
-            const contentAreaWidth = contentAreaRect.width;
+            if (!contentArea) {
+                // 如果content-area还没加载，延迟重试
+                setTimeout(forceTableWidths, 100);
+                return;
+            }
             
             // 强制设置container的宽度（使用100%，相对于content-area）
             const container = document.querySelector('.container');
@@ -1133,6 +1135,38 @@
                 table.style.setProperty('max-width', '100%', 'important');
                 table.style.setProperty('min-width', '100%', 'important');
             });
+        }
+        
+        // 使用MutationObserver监听DOM变化，确保新创建的元素也能正确设置宽度
+        if (typeof MutationObserver !== 'undefined') {
+            const observer = new MutationObserver(function(mutations) {
+                // 检查是否有新的表格元素被创建
+                const hasNewTables = document.querySelectorAll('#access-table, #block-table, #audit-table').length > 0;
+                const hasTableContainers = document.querySelectorAll('.table-container').length > 0;
+                if (hasNewTables || hasTableContainers) {
+                    setTimeout(forceTableWidths, 50);
+                }
+            });
+            
+            // 观察content-area的变化
+            const contentArea = document.querySelector('.content-area');
+            if (contentArea) {
+                observer.observe(contentArea, {
+                    childList: true,
+                    subtree: true
+                });
+            } else {
+                // 如果content-area还没加载，等待DOMContentLoaded
+                document.addEventListener('DOMContentLoaded', function() {
+                    const contentArea = document.querySelector('.content-area');
+                    if (contentArea) {
+                        observer.observe(contentArea, {
+                            childList: true,
+                            subtree: true
+                        });
+                    }
+                });
+            }
         }
         
         // 页面加载时初始化

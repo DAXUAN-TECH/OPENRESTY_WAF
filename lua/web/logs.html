@@ -7,16 +7,6 @@
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         /* body样式会被handler.lua移除，这里保留用于文档说明 */
-        .header {
-            background: #fff;
-            padding: 2%;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            margin-bottom: 2%;
-        }
-        .header h1 {
-            font-size: 24px;
-            color: #333;
-        }
         /* 统一容器样式 - 白色背景卡片 */
         /* 注意：padding会影响内部元素宽度，需要确保table-container等子元素宽度计算正确 */
         /* 层级：content-area (padding: 30px) -> container (padding: 30px) -> tab-content -> table-container -> table-wrapper -> table */
@@ -494,10 +484,6 @@
     </style>
 </head>
 <body>
-    <div class="header">
-        <h1>日志查看</h1>
-    </div>
-    
     <div class="container">
         <div class="tabs">
             <button class="tab active" data-tab="access">访问日志</button>

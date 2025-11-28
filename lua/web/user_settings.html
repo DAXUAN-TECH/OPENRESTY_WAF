@@ -5,44 +5,56 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>用户设置 - WAF 管理后台</title>
     <link rel="stylesheet" href="/css/user_settings.css">
-    <!-- 引入 QR 码生成库（用于生成 TOTP 二维码）- 优先使用本地文件，支持离线模式 -->
-    <script src="/js/qrcode.min.js" onerror="loadQRCodeFallback()"></script>
+    <!-- 引入 QR 码生成库（用于生成 TOTP 二维码）- 优先使用在线CDN，离线模式使用本地文件 -->
     <script>
-        function loadQRCodeFallback() {
-            console.log('Local QRCode library failed, trying CDN fallback...');
-            // 尝试使用 CDN 作为备用方案（在线模式）
-            const script = document.createElement('script');
-            script.src = 'https://cdn.jsdelivr.net/gh/davidshimjs/qrcodejs@master/qrcode.min.js';
-            script.onerror = function() {
-                console.error('All QRCode sources failed. Please check network connection or ensure /js/qrcode.min.js exists.');
-            };
-            script.onload = function() {
-                // 适配 qrcodejs API 到 QRCode.toCanvas
-                if (typeof QRCode !== 'undefined' && !QRCode.toCanvas) {
-                    QRCode.toCanvas = function(canvas, text, options, callback) {
-                        const qr = new QRCode({
-                            text: text,
-                            width: options.width || 200,
-                            height: options.width || 200,
-                            colorDark: options.color.dark || '#000000',
-                            colorLight: options.color.light || '#FFFFFF',
-                            correctLevel: QRCode.CorrectLevel.M
-                        });
-                        const ctx = canvas.getContext('2d');
-                        const img = new Image();
-                        img.onload = function() {
-                            ctx.drawImage(img, 0, 0);
-                            if (callback) callback(null);
-                        };
-                        img.onerror = function(err) {
-                            if (callback) callback(err);
-                        };
-                        img.src = qr._elImage.src;
-                    };
+        (function() {
+            // 优先使用在线 CDN，如果失败则使用本地文件（离线模式）
+            const cdnUrls = [
+                'https://cdn.jsdelivr.net/gh/davidshimjs/qrcodejs/qrcode.min.js',
+                'https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js'
+            ];
+            const localUrl = '/js/qrcode.min.js';
+            let currentIndex = 0;
+            
+            function tryLoadCDN(index) {
+                if (index >= cdnUrls.length) {
+                    // 所有 CDN 都失败，尝试本地文件（离线模式）
+                    console.log('All CDN sources failed, trying local file (offline mode)...');
+                    loadLocalFile();
+                    return;
                 }
-            };
-            document.head.appendChild(script);
-        }
+                
+                const script = document.createElement('script');
+                script.src = cdnUrls[index];
+                script.onload = function() {
+                    console.log('QRCode library loaded from CDN:', cdnUrls[index]);
+                    // CDN 加载成功，适配 qrcodejs API
+                    if (typeof QRCode !== 'undefined' && !QRCode.toCanvas) {
+                        // qrcodejs 使用构造函数，不需要适配，直接使用
+                    }
+                };
+                script.onerror = function() {
+                    console.log('CDN failed:', cdnUrls[index], ', trying next...');
+                    tryLoadCDN(index + 1);
+                };
+                document.head.appendChild(script);
+            }
+            
+            function loadLocalFile() {
+                const script = document.createElement('script');
+                script.src = localUrl;
+                script.onload = function() {
+                    console.log('QRCode library loaded from local file (offline mode)');
+                };
+                script.onerror = function() {
+                    console.error('All QRCode sources failed (CDN and local file). Please check network connection or ensure /js/qrcode.min.js exists.');
+                };
+                document.head.appendChild(script);
+            }
+            
+            // 开始尝试加载 CDN
+            tryLoadCDN(0);
+        })();
     </script>
     <script src="/common.js"></script>
     </head>

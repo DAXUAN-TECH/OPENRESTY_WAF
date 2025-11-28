@@ -8,13 +8,14 @@ local cjson = require "cjson"
 local audit_log = require "waf.audit_log"
 local ip_utils = require "waf.ip_utils"
 local system_api = require "api.system"
+local config_manager = require "waf.config_manager"
 
 local _M = {}
 
 -- 获取白名单开关状态
 function _M.get_config()
     local ok, res, err = pcall(function()
-        local sql = "SELECT enabled, updated_at, updated_by FROM waf_system_access_whitelist_config WHERE id = 1 LIMIT 1"
+        local sql = "SELECT config_value, updated_at FROM waf_system_config WHERE config_key = 'system_access_whitelist_enabled' LIMIT 1"
         return mysql_pool.query(sql)
     end)
     
@@ -30,10 +31,16 @@ function _M.get_config()
         return
     end
     
-    if not res or #res == 0 then
+    local enabled = 0
+    local updated_at = nil
+    
+    if res and #res > 0 then
+        enabled = tonumber(res[1].config_value) or 0
+        updated_at = res[1].updated_at
+    else
         -- 如果配置不存在，创建默认配置（关闭状态）
         local insert_ok, insert_err = pcall(function()
-            local insert_sql = "INSERT INTO waf_system_access_whitelist_config (id, enabled) VALUES (1, 0)"
+            local insert_sql = "INSERT INTO waf_system_config (config_key, config_value, description) VALUES ('system_access_whitelist_enabled', '0', '是否启用系统访问白名单（1-启用，0-禁用）')"
             return mysql_pool.query(insert_sql)
         end)
         
@@ -42,24 +49,14 @@ function _M.get_config()
             api_utils.json_response({error = "创建默认配置失败"}, 500)
             return
         end
-        
-        api_utils.json_response({
-            success = true,
-            data = {
-                enabled = 0,
-                updated_at = nil,
-                updated_by = nil
-            }
-        })
-        return
     end
     
     api_utils.json_response({
         success = true,
         data = {
-            enabled = res[1].enabled,
-            updated_at = res[1].updated_at,
-            updated_by = res[1].updated_by
+            enabled = enabled,
+            updated_at = updated_at,
+            updated_by = nil  -- 不再存储updated_by，因为waf_system_config表没有此字段
         }
     })
 end
@@ -85,18 +82,13 @@ function _M.update_config()
         return
     end
     
-    -- 获取当前用户信息（从session）
-    local auth = require "waf.auth"
-    local authenticated, session = auth.is_authenticated()
-    local updated_by = authenticated and session.username or "system"
-    
     local ok, res, err = pcall(function()
         local sql = [[
-            UPDATE waf_system_access_whitelist_config 
-            SET enabled = ?, updated_by = ?
-            WHERE id = 1
+            UPDATE waf_system_config 
+            SET config_value = ?
+            WHERE config_key = 'system_access_whitelist_enabled'
         ]]
-        return mysql_pool.query(sql, enabled, updated_by)
+        return mysql_pool.query(sql, tostring(enabled))
     end)
     
     if not ok then
@@ -112,7 +104,7 @@ function _M.update_config()
     end
     
     -- 记录审计日志
-    audit_log.log("update", "system_access_whitelist_config", "1", 
+    audit_log.log("update", "system_config", "system_access_whitelist_enabled", 
         "更新系统访问白名单开关: " .. (enabled == 1 and "启用" or "禁用"), "success")
     
     -- 触发nginx重载（异步，不阻塞响应）
@@ -295,16 +287,16 @@ function _M.create()
     if is_first_entry then
         local update_config_ok, update_config_res, update_config_err = pcall(function()
             local update_sql = [[
-                UPDATE waf_system_access_whitelist_config 
-                SET enabled = 1, updated_by = ?
-                WHERE id = 1
+                UPDATE waf_system_config 
+                SET config_value = '1'
+                WHERE config_key = 'system_access_whitelist_enabled'
             ]]
-            return mysql_pool.query(update_sql, username)
+            return mysql_pool.query(update_sql)
         end)
         
         if update_config_ok and not update_config_err then
             ngx.log(ngx.INFO, "create: 第一条白名单条目已创建，自动开启系统白名单")
-            audit_log.log("update", "system_access_whitelist_config", "1", 
+            audit_log.log("update", "system_config", "system_access_whitelist_enabled", 
                 "添加第一条白名单条目，自动开启系统白名单", "success")
         else
             ngx.log(ngx.WARN, "create: 第一条白名单条目已创建，但自动开启系统白名单失败: ", tostring(update_config_err))
@@ -503,16 +495,16 @@ function _M.delete()
     if is_last_entry then
         local update_config_ok, update_config_res, update_config_err = pcall(function()
             local update_sql = [[
-                UPDATE waf_system_access_whitelist_config 
-                SET enabled = 0, updated_by = ?
-                WHERE id = 1
+                UPDATE waf_system_config 
+                SET config_value = '0'
+                WHERE config_key = 'system_access_whitelist_enabled'
             ]]
-            return mysql_pool.query(update_sql, username)
+            return mysql_pool.query(update_sql)
         end)
         
         if update_config_ok and not update_config_err then
             ngx.log(ngx.INFO, "delete: 最后一条白名单条目已删除，自动关闭系统白名单")
-            audit_log.log("update", "system_access_whitelist_config", "1", 
+            audit_log.log("update", "system_config", "system_access_whitelist_enabled", 
                 "删除最后一条白名单条目，自动关闭系统白名单", "success")
         else
             ngx.log(ngx.WARN, "delete: 最后一条白名单条目已删除，但自动关闭系统白名单失败: ", tostring(update_config_err))
@@ -621,25 +613,9 @@ function _M.check_ip_allowed(ip_address)
         return false
     end
     
-    -- 先检查开关是否启用
-    local ok, res, err = pcall(function()
-        local sql = "SELECT enabled FROM waf_system_access_whitelist_config WHERE id = 1 LIMIT 1"
-        return mysql_pool.query(sql)
-    end)
+    -- 先检查开关是否启用（使用config_manager，带缓存）
+    local enabled = config_manager.get_config("system_access_whitelist_enabled", 0, "number")
     
-    if not ok or err then
-        ngx.log(ngx.ERR, "check_ip_allowed: failed to query config: ", tostring(err))
-        -- 如果查询失败，为了安全，拒绝访问（防止配置错误导致安全漏洞）
-        return false
-    end
-    
-    if not res or #res == 0 then
-        -- 如果配置不存在，默认允许访问（安全起见，不启用白名单）
-        ngx.log(ngx.INFO, "check_ip_allowed: config not found, allowing access")
-        return true
-    end
-    
-    local enabled = res[1].enabled
     if enabled == 0 or enabled == nil then
         -- 白名单未启用，允许所有IP访问
         ngx.log(ngx.DEBUG, "check_ip_allowed: whitelist disabled, allowing access for IP: ", ip_address)

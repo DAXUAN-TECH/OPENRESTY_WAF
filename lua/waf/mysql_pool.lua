@@ -195,7 +195,11 @@ function _M.batch_insert(table_name, fields, values_list)
         ["waf_trusted_proxies"] = true,
         ["waf_feature_switches"] = true,
         ["waf_rule_templates"] = true,
-        ["waf_cache_versions"] = true,
+        ["waf_proxy_configs"] = true,
+        ["waf_proxy_backends"] = true,
+        ["waf_audit_logs"] = true,
+        ["waf_csrf_tokens"] = true,
+        ["waf_system_access_whitelist"] = true,
     }
     
     if not allowed_tables[table_name] then

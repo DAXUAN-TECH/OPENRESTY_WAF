@@ -309,7 +309,14 @@ INSERT INTO waf_system_config (config_key, config_value, description) VALUES
 ('shared_memory_redis_fallback_enable', '1', '是否启用Redis回退机制（Redis失败时回退到共享内存，1-启用，0-禁用）'),
 -- 网络优化配置
 ('http2_enable', '0', '是否启用HTTP/2支持（需要SSL/TLS，1-启用，0-禁用）'),
-('brotli_enable', '0', '是否启用Brotli压缩（需要ngx_brotli模块，1-启用，0-禁用）')
+('brotli_enable', '0', '是否启用Brotli压缩（需要ngx_brotli模块，1-启用，0-禁用）'),
+-- 系统访问白名单配置（从waf_system_access_whitelist_config表合并）
+('system_access_whitelist_enabled', '0', '是否启用系统访问白名单（1-启用，0-禁用，开启时只有白名单内的IP才能访问管理系统）'),
+-- 缓存版本控制配置（从waf_cache_versions表合并）
+('cache_version_rules', '1', '规则缓存版本号（用于缓存失效）'),
+('cache_version_whitelist', '1', '白名单缓存版本号（用于缓存失效）'),
+('cache_version_geo', '1', '地域缓存版本号（用于缓存失效）'),
+('cache_version_frequency', '1', '频率统计缓存版本号（用于缓存失效）')
 ON DUPLICATE KEY UPDATE config_value = VALUES(config_value);
 
 -- ============================================
@@ -520,25 +527,10 @@ CREATE TABLE IF NOT EXISTS waf_auto_unblock_tasks (
 ROW_FORMAT=DYNAMIC COMMENT='自动解封任务表';
 
 -- ============================================
--- 15. 缓存版本控制表（低频更新表）
+-- 15. 缓存版本控制（已合并到waf_system_config表）
 -- ============================================
-CREATE TABLE IF NOT EXISTS waf_cache_versions (
-    id INT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '主键ID',
-    cache_type VARCHAR(50) NOT NULL COMMENT '缓存类型：rules-规则缓存, whitelist-白名单缓存, geo-地域缓存等',
-    version INT UNSIGNED NOT NULL DEFAULT 1 COMMENT '版本号',
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-    PRIMARY KEY (id),
-    UNIQUE KEY uk_cache_type (cache_type)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci 
-ROW_FORMAT=DYNAMIC COMMENT='缓存版本控制表';
-
--- 插入默认缓存版本
-INSERT INTO waf_cache_versions (cache_type, version) VALUES
-('rules', 1),
-('whitelist', 1),
-('geo', 1),
-('frequency', 1)
-ON DUPLICATE KEY UPDATE version = version;
+-- 注意：缓存版本控制已合并到waf_system_config表中，使用config_key存储
+-- 例如：cache_version_rules, cache_version_whitelist, cache_version_geo, cache_version_frequency
 
 -- ============================================
 -- 16. 反向代理配置表（低频更新表）
@@ -773,19 +765,9 @@ CREATE TABLE IF NOT EXISTS waf_system_access_whitelist (
 ROW_FORMAT=DYNAMIC COMMENT='系统访问白名单表：存储允许访问WAF管理系统的IP地址，开启时只有白名单内的IP才能访问';
 
 -- ============================================
--- 22. 系统访问白名单开关配置表（低频更新表）
+-- 22. 系统访问白名单开关配置（已合并到waf_system_config表）
 -- ============================================
-CREATE TABLE IF NOT EXISTS waf_system_access_whitelist_config (
-    id INT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '主键ID，自增',
-    enabled TINYINT NOT NULL DEFAULT 0 COMMENT '是否启用：1-启用（白名单生效），0-禁用（白名单不生效，所有IP可访问）',
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '配置最后更新时间',
-    updated_by VARCHAR(50) DEFAULT NULL COMMENT '最后更新人（用户名）',
-    PRIMARY KEY (id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci 
-ROW_FORMAT=DYNAMIC COMMENT='系统访问白名单开关配置表：控制白名单功能是否启用';
-
--- 初始化系统访问白名单开关配置（默认关闭）
-INSERT IGNORE INTO waf_system_access_whitelist_config (id, enabled) VALUES (1, 0);
+-- 注意：系统访问白名单开关配置已合并到waf_system_config表中，使用config_key='system_access_whitelist_enabled'存储
 
 -- IP频率统计表：添加统计字段（如果不存在）
 -- ALTER TABLE waf_ip_frequency

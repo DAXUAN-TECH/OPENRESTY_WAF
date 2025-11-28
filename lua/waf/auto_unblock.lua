@@ -194,9 +194,9 @@ function _M.invalidate_rule_cache(rule_id, rule_value, rule_type)
     end
     
     -- 更新规则版本号以触发缓存失效
-    local cache_versions = require "waf.cache_invalidation"
-    if cache_versions and cache_versions.increment_version then
-        cache_versions.increment_version("rules")
+    local cache_invalidation = require "waf.cache_invalidation"
+    if cache_invalidation and cache_invalidation.increment_rule_version then
+        cache_invalidation.increment_rule_version()
     end
 end
 

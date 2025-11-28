@@ -250,7 +250,7 @@
                 fetchCsrfToken();
             }
             
-            // 重写 fetch 函数，自动添加 CSRF Token
+            // 重写 fetch 函数，自动添加 CSRF Token 和处理 401 错误
             const originalFetch = window.fetch;
             window.fetch = function(url, options = {}) {
                 // 检查是否需要 CSRF Token（POST、PUT、DELETE、PATCH）
@@ -275,7 +275,25 @@
                     }
                 }
                 
-                return originalFetch.call(this, url, options);
+                // 调用原始 fetch
+                const fetchPromise = originalFetch.call(this, url, options);
+                
+                // 返回一个包装的 Promise，用于处理 401 错误
+                return fetchPromise.then(response => {
+                    // 检查响应状态码，如果是 401，自动刷新页面
+                    if (response.status === 401) {
+                        // 401 Unauthorized，自动刷新页面
+                        window.location.reload();
+                        // 返回一个永远不会 resolve 的 Promise，防止后续处理
+                        return new Promise(() => {});
+                    }
+                    
+                    // 返回原始响应
+                    return response;
+                }).catch(error => {
+                    // 网络错误等其他错误，正常抛出
+                    throw error;
+                });
             };
         })();
         

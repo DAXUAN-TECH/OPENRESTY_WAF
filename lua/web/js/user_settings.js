@@ -526,8 +526,25 @@ if (typeof window.totpEnabled === 'undefined') {
                 .then(response => {
                     // 检查响应状态
                     if (!response.ok) {
+                        // 如果是 401 错误，自动刷新页面
+                        if (response.status === 401) {
+                            window.location.reload();
+                            return Promise.reject(new Error('Unauthorized')); // 阻止后续处理
+                        }
+                        
                         // HTTP状态码不是2xx，尝试解析错误信息
                         return response.json().then(data => {
+                            // 检查是否是 Unauthorized 错误
+                            if (data && (
+                                data.error === 'Unauthorized' || 
+                                data.message === '请先登录' ||
+                                (typeof data.error === 'string' && data.error.toLowerCase().includes('unauthorized')) ||
+                                (typeof data.message === 'string' && data.message.includes('请先登录'))
+                            )) {
+                                // 自动刷新页面，不显示错误信息
+                                window.location.reload();
+                                return Promise.reject(new Error('Unauthorized')); // 阻止后续处理
+                            }
                             throw new Error(data.message || data.error || '修改密码失败');
                         }).catch(() => {
                             throw new Error('修改密码失败，HTTP状态码: ' + response.status);

@@ -79,10 +79,27 @@ let currentPage = 1;
                 
                 // 检查响应状态
                 if (!response.ok) {
+                    // 如果是 401 错误，自动刷新页面
+                    if (response.status === 401) {
+                        window.location.reload();
+                        return; // 不继续执行
+                    }
+                    
                     const errorText = await response.text();
                     let errorData;
                     try {
                         errorData = JSON.parse(errorText);
+                        // 检查是否是 Unauthorized 错误
+                        if (errorData && (
+                            errorData.error === 'Unauthorized' || 
+                            errorData.message === '请先登录' ||
+                            (typeof errorData.error === 'string' && errorData.error.toLowerCase().includes('unauthorized')) ||
+                            (typeof errorData.message === 'string' && errorData.message.includes('请先登录'))
+                        )) {
+                            // 自动刷新页面，不显示错误信息
+                            window.location.reload();
+                            return; // 不继续执行
+                        }
                     } catch (e) {
                         errorData = { error: errorText || `HTTP ${response.status}: ${response.statusText}` };
                     }
@@ -1000,10 +1017,27 @@ let currentPage = 1;
                 
                 // 检查响应状态
                 if (!response.ok) {
+                    // 如果是 401 错误，自动刷新页面
+                    if (response.status === 401) {
+                        window.location.reload();
+                        return; // 不继续执行
+                    }
+                    
                     const errorText = await response.text();
                     let errorData;
                     try {
                         errorData = JSON.parse(errorText);
+                        // 检查是否是 Unauthorized 错误
+                        if (errorData && (
+                            errorData.error === 'Unauthorized' || 
+                            errorData.message === '请先登录' ||
+                            (typeof errorData.error === 'string' && errorData.error.toLowerCase().includes('unauthorized')) ||
+                            (typeof errorData.message === 'string' && errorData.message.includes('请先登录'))
+                        )) {
+                            // 自动刷新页面，不显示错误信息
+                            window.location.reload();
+                            return; // 不继续执行
+                        }
                     } catch (e) {
                         errorData = { error: errorText || `HTTP ${response.status}: ${response.statusText}` };
                     }

@@ -218,11 +218,13 @@ const pageSize = 20;
                 const firstPath = paths[0];
                 const allSame = paths.every(path => path === firstPath);
                 
-                // 移除之前的错误提示
-                const existingError = list.querySelector('.backend-path-error');
-                if (existingError && existingError.tagName === 'DIV') {
-                    existingError.remove();
-                }
+                // 移除之前所有的错误提示div（只移除div元素，不包含input元素）
+                const existingErrors = list.querySelectorAll('.backend-path-error');
+                existingErrors.forEach(el => {
+                    if (el.tagName === 'DIV') {
+                        el.remove();
+                    }
+                });
                 
                 // 更新所有路径输入框的样式
                 pathInputs.forEach(input => {
@@ -235,15 +237,19 @@ const pageSize = 20;
                     }
                 });
                 
-                // 如果路径不一致，显示错误提示
+                // 如果路径不一致，显示错误提示（只显示一条）
                 if (!allSame && paths.length > 1 && paths.some(p => p !== '')) {
-                    const errorDiv = document.createElement('div');
-                    errorDiv.className = 'backend-path-error';
-                    errorDiv.style.color = 'red';
-                    errorDiv.style.fontSize = '12px';
-                    errorDiv.style.marginTop = '5px';
-                    errorDiv.textContent = '请保持所有服务器被代理路径一致';
-                    list.appendChild(errorDiv);
+                    // 再次检查是否已有错误提示div，避免重复添加
+                    const hasErrorDiv = Array.from(list.querySelectorAll('.backend-path-error')).some(el => el.tagName === 'DIV');
+                    if (!hasErrorDiv) {
+                        const errorDiv = document.createElement('div');
+                        errorDiv.className = 'backend-path-error';
+                        errorDiv.style.color = 'red';
+                        errorDiv.style.fontSize = '12px';
+                        errorDiv.style.marginTop = '5px';
+                        errorDiv.textContent = '请保持所有服务器被代理路径一致';
+                        list.appendChild(errorDiv);
+                    }
                 }
             } catch (e) {
                 // 忽略错误，避免影响其他功能
@@ -276,11 +282,13 @@ const pageSize = 20;
                 const firstPath = paths[0];
                 const allSame = paths.every(path => path === firstPath);
                 
-                // 移除之前的错误提示
-                const existingError = list.querySelector('.backend-path-error');
-                if (existingError && existingError.tagName === 'DIV') {
-                    existingError.remove();
-                }
+                // 移除之前所有的错误提示div（只移除div元素，不包含input元素）
+                const existingErrors = list.querySelectorAll('.backend-path-error');
+                existingErrors.forEach(el => {
+                    if (el.tagName === 'DIV') {
+                        el.remove();
+                    }
+                });
                 
                 // 更新所有路径输入框的样式
                 pathInputs.forEach(input => {
@@ -293,15 +301,19 @@ const pageSize = 20;
                     }
                 });
                 
-                // 如果路径不一致，显示错误提示
+                // 如果路径不一致，显示错误提示（只显示一条）
                 if (!allSame && paths.length > 1 && paths.some(p => p !== '')) {
-                    const errorDiv = document.createElement('div');
-                    errorDiv.className = 'backend-path-error';
-                    errorDiv.style.color = 'red';
-                    errorDiv.style.fontSize = '12px';
-                    errorDiv.style.marginTop = '5px';
-                    errorDiv.textContent = '请保持所有服务器被代理路径一致';
-                    list.appendChild(errorDiv);
+                    // 再次检查是否已有错误提示div，避免重复添加
+                    const hasErrorDiv = Array.from(list.querySelectorAll('.backend-path-error')).some(el => el.tagName === 'DIV');
+                    if (!hasErrorDiv) {
+                        const errorDiv = document.createElement('div');
+                        errorDiv.className = 'backend-path-error';
+                        errorDiv.style.color = 'red';
+                        errorDiv.style.fontSize = '12px';
+                        errorDiv.style.marginTop = '5px';
+                        errorDiv.textContent = '请保持所有服务器被代理路径一致';
+                        list.appendChild(errorDiv);
+                    }
                 }
             } catch (e) {
                 // 忽略错误，避免影响其他功能

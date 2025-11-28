@@ -416,6 +416,49 @@
             margin-top: 20px;
         }
         
+        /* 创建规则弹出框特定样式 */
+        #create-rule-modal .form-group input,
+        #create-rule-modal .form-group select,
+        #create-rule-modal .form-group textarea {
+            width: 100%;
+            max-width: 400px;
+        }
+        
+        /* 规则名称输入框缩短二分之一 */
+        #create-rule-modal #create-rule-name {
+            width: 50% !important;
+            max-width: 200px !important;
+        }
+        
+        /* 规则值输入框和描述输入框保持一样的宽度 */
+        #create-rule-modal #create-rule-value,
+        #create-rule-modal #create-description {
+            width: 100% !important;
+            max-width: 100% !important;
+        }
+        
+        /* 分组输入框缩短二分之一 */
+        #create-rule-modal #create-rule-group {
+            width: 50% !important;
+            max-width: 200px !important;
+        }
+        
+        /* 优先级、生效开始时间、生效结束时间在同一行，输入框宽度优化 */
+        #create-rule-modal .form-row .form-group {
+            flex: 1;
+        }
+        
+        /* 优先级输入框宽度优化 */
+        #create-rule-modal .form-row #create-priority {
+            max-width: 120px;
+        }
+        
+        /* 开始时间和结束时间输入框宽度优化 */
+        #create-rule-modal .form-row #create-start-time,
+        #create-rule-modal .form-row #create-end-time {
+            max-width: 250px;
+        }
+        
         /* 分页样式 */
         .pagination {
             display: flex;

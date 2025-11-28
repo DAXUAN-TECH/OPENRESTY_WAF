@@ -467,7 +467,17 @@
             max-width: 250px !important;
         }
         
-        /* 编辑代理HTTP：监听域名、监听端口、路径匹配、监听地址在同一水平线，间距平均 */
+        /* 创建代理HTTP：监听域名、监听端口、路径匹配、监听地址在同一水平线，间距一致 */
+        #create-proxy-modal #http-fields {
+            display: flex;
+            gap: 15px;
+        }
+        
+        #create-proxy-modal #http-fields .form-group {
+            flex: 1;
+        }
+        
+        /* 编辑代理HTTP：监听域名、监听端口、路径匹配、监听地址在同一水平线，间距一致 */
         #edit-modal #edit-http-fields {
             display: flex;
             gap: 15px;
@@ -592,6 +602,8 @@
             padding: 8px;
             border: 1px solid #ddd;
             border-radius: 4px;
+            width: 50% !important;
+            max-width: 250px !important;
         }
         
         .rule-item select.rule-id {
@@ -605,6 +617,18 @@
         
         /* 编辑代理防护规则：请选择规则条目下拉框缩短二分之一 */
         #edit-modal .rule-item select.rule-id {
+            width: 50% !important;
+            max-width: 250px !important;
+        }
+        
+        /* 创建代理防护规则：请选择规则类型下拉框缩短二分之一 */
+        #create-proxy-modal .rule-item select.rule-type {
+            width: 50% !important;
+            max-width: 250px !important;
+        }
+        
+        /* 编辑代理防护规则：请选择规则类型下拉框缩短二分之一 */
+        #edit-modal .rule-item select.rule-type {
             width: 50% !important;
             max-width: 250px !important;
         }

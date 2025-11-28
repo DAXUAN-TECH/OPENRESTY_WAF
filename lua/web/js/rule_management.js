@@ -532,43 +532,60 @@ let currentPage = 1;
             }
         }
         
+        // 确认对话框相关函数
+        let confirmCallback = null;
+        
+        function showConfirmModal(title, message, callback) {
+            document.getElementById('confirm-title').textContent = title;
+            document.getElementById('confirm-message').textContent = message;
+            confirmCallback = callback;
+            const modal = document.getElementById('confirm-modal');
+            modal.style.display = 'flex';
+        }
+        
+        function closeConfirmModal() {
+            const modal = document.getElementById('confirm-modal');
+            modal.style.display = 'none';
+            confirmCallback = null;
+        }
+        
         // 禁用规则
         async function disableRule(id) {
-            if (!confirm('确定要禁用该规则吗？')) return;
-            
-            try {
-                const response = await fetch(`/api/rules/${id}/disable`, { method: 'POST' });
-                const data = await response.json();
-                
-                if (data.success) {
-                    showAlert('规则已禁用');
-                    // 保持当前页码和筛选条件重新加载
-                    loadRules(currentPage);
-                } else {
-                    showAlert(data.error || '操作失败', 'error');
+            showConfirmModal('确认禁用', '确定要禁用该规则吗？', async function() {
+                try {
+                    const response = await fetch(`/api/rules/${id}/disable`, { method: 'POST' });
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        showAlert('规则已禁用');
+                        // 保持当前页码和筛选条件重新加载
+                        loadRules(currentPage);
+                    } else {
+                        showAlert(data.error || '操作失败', 'error');
+                    }
+                } catch (error) {
+                    showAlert('网络错误: ' + error.message, 'error');
                 }
-            } catch (error) {
-                showAlert('网络错误: ' + error.message, 'error');
-            }
+            });
         }
         
         // 删除规则
         async function deleteRule(id) {
-            if (!confirm('确定要删除该规则吗？此操作不可恢复！')) return;
-            
-            try {
-                const response = await fetch(`/api/rules/${id}`, { method: 'DELETE' });
-                const data = await response.json();
-                
-                if (data.success) {
-                    showAlert('规则已删除');
-                    loadRules();
-                } else {
-                    showAlert(data.error || '删除失败', 'error');
+            showConfirmModal('确认删除', '确定要删除该规则吗？此操作不可恢复！', async function() {
+                try {
+                    const response = await fetch(`/api/rules/${id}`, { method: 'DELETE' });
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        showAlert('规则已删除');
+                        loadRules();
+                    } else {
+                        showAlert(data.error || '删除失败', 'error');
+                    }
+                } catch (error) {
+                    showAlert('网络错误: ' + error.message, 'error');
                 }
-            } catch (error) {
-                showAlert('网络错误: ' + error.message, 'error');
-            }
+            });
         }
         
         // 关闭编辑模态框
@@ -1205,5 +1222,23 @@ let currentPage = 1;
                 if (event.target == successModal) {
                     confirmCreateRule();
                 }
+                
+                const confirmModal = document.getElementById('confirm-modal');
+                if (event.target == confirmModal) {
+                    closeConfirmModal();
+                }
+            }
+        });
+        
+        // 确认对话框确定按钮
+        document.addEventListener('DOMContentLoaded', function() {
+            const confirmOkBtn = document.getElementById('confirm-ok-btn');
+            if (confirmOkBtn) {
+                confirmOkBtn.addEventListener('click', function() {
+                    if (confirmCallback) {
+                        confirmCallback();
+                    }
+                    closeConfirmModal();
+                });
             }
         });

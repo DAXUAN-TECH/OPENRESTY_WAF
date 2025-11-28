@@ -239,6 +239,22 @@
         </div>
     </div>
     
+    <!-- 确认对话框模态框 -->
+    <div id="confirm-modal" class="modal">
+        <div class="modal-content" style="max-width: 400px;">
+            <div class="modal-header">
+                <h2 id="confirm-title">确认操作</h2>
+            </div>
+            <div style="padding: 20px;">
+                <p id="confirm-message">确定要执行此操作吗？</p>
+            </div>
+            <div class="form-actions">
+                <button type="button" class="btn btn-secondary" onclick="closeConfirmModal()">取消</button>
+                <button type="button" class="btn btn-primary" id="confirm-ok-btn">确定</button>
+            </div>
+        </div>
+    </div>
+    
     <script src="/common.js"></script>
     <script src="/js/rule_management.js"></script>
 </body>

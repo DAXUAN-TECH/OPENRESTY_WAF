@@ -61,7 +61,11 @@ function _M.notify_rule_update(update_type, details)
     -- 因为 increment_rule_version() 会调用 notify_rule_update()，导致循环调用
     -- 版本号应该在规则变更时由调用者直接调用 increment_rule_version()
     -- 这里只清除缓存，不更新版本号
-    cache_invalidation.invalidate_rule_list_cache()
+    -- 注意：缓存清除失败不影响主流程，只记录警告
+    local ok, err = pcall(cache_invalidation.invalidate_rule_list_cache)
+    if not ok then
+        ngx.log(ngx.WARN, "cache invalidation failed, but continuing: ", tostring(err))
+    end
     ngx.log(ngx.INFO, "rule update notification via cache invalidation")
     return true, nil
 end

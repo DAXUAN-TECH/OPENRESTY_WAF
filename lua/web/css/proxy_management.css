@@ -656,4 +656,9 @@
             flex: 0 0 25%;
             max-width: 25%;
         }
+        
+        /* 确认对话框消息文本居中显示 */
+        #confirm-modal #confirm-message {
+            text-align: center;
+        }
     

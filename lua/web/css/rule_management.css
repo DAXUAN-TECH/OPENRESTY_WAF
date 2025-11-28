@@ -730,4 +730,9 @@
             text-align: center;
             margin: 20px;
         }
+        
+        /* 确认对话框消息文本居中显示 */
+        #confirm-modal #confirm-message {
+            text-align: center;
+        }
     

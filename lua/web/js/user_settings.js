@@ -146,49 +146,210 @@ let currentSecret = null;
             qrContainer.appendChild(qrCanvas);
             
             // 使用 qrcode.js 生成二维码
-            try {
-                QRCode.toCanvas(qrCanvas, otpauthUrl, {
-                    width: 200,
-                    margin: 2,
-                    color: {
-                        dark: '#000000',
-                        light: '#FFFFFF'
-                    },
-                    errorCorrectionLevel: 'M'
-                }, function (error) {
-                    if (error) {
-                        console.error('QR code generation failed:', error);
-                        qrContainer.innerHTML = '<div style="color: #dc3545; padding: 20px;">二维码生成失败: ' + (error.message || error) + '，请使用手动输入密钥的方式</div>';
-                        if (data.secret) {
-                            const secretDiv = document.createElement('div');
-                            secretDiv.className = 'secret-key';
-                            secretDiv.textContent = '密钥（手动输入）: ' + data.secret;
-                            qrContainer.appendChild(secretDiv);
+            // 检查是否使用 qrcodejs（本地文件或 CDN 备用）- 支持离线模式
+            if (typeof QRCode !== 'undefined' && !QRCode.toCanvas && QRCode.prototype && QRCode.prototype.makeCode) {
+                // 使用 qrcodejs API（本地文件，支持离线模式）
+                try {
+                    // qrcodejs 需要一个容器元素，我们使用一个隐藏的 div
+                    const tempDiv = document.createElement('div');
+                    tempDiv.style.position = 'absolute';
+                    tempDiv.style.left = '-9999px';
+                    tempDiv.style.width = '200px';
+                    tempDiv.style.height = '200px';
+                    document.body.appendChild(tempDiv);
+                    
+                    const qr = new QRCode(tempDiv, {
+                        text: otpauthUrl,
+                        width: 200,
+                        height: 200,
+                        colorDark: '#000000',
+                        colorLight: '#FFFFFF',
+                        correctLevel: QRCode.CorrectLevel.M
+                    });
+                    
+                    // 等待 QRCode 生成完成
+                    setTimeout(function() {
+                        try {
+                            const ctx = qrCanvas.getContext('2d');
+                            qrCanvas.width = 200;
+                            qrCanvas.height = 200;
+                            
+                            // qrcodejs 可能使用 canvas 或 image 渲染
+                            if (qr._elCanvas) {
+                                // 如果使用 canvas，直接复制
+                                const img = new Image();
+                                img.onload = function() {
+                                    ctx.drawImage(img, 0, 0, 200, 200);
+                                    document.body.removeChild(tempDiv);
+                                    
+                                    // 二维码生成成功，继续显示密钥等信息
+                                    if (data.secret) {
+                                        const secretDiv = document.createElement('div');
+                                        secretDiv.className = 'secret-key';
+                                        secretDiv.textContent = '密钥（手动输入）: ' + data.secret;
+                                        qrContainer.appendChild(secretDiv);
+                                    }
+                                    
+                                    const tipDiv = document.createElement('div');
+                                    tipDiv.style.cssText = 'color: #666; font-size: 12px; margin-top: 10px;';
+                                    tipDiv.textContent = '请使用 Google Authenticator 扫描二维码或手动输入密钥，然后输入生成的6位验证码';
+                                    qrContainer.appendChild(tipDiv);
+                                };
+                                img.onerror = function(err) {
+                                    console.error('QR code image load failed:', err);
+                                    document.body.removeChild(tempDiv);
+                                    qrContainer.innerHTML = '<div style="color: #dc3545; padding: 20px;">二维码生成失败，请使用手动输入密钥的方式</div>';
+                                    if (data.secret) {
+                                        const secretDiv = document.createElement('div');
+                                        secretDiv.className = 'secret-key';
+                                        secretDiv.textContent = '密钥（手动输入）: ' + data.secret;
+                                        qrContainer.appendChild(secretDiv);
+                                    }
+                                };
+                                img.src = qr._elCanvas.toDataURL('image/png');
+                            } else if (qr._elImage && qr._elImage.src) {
+                                // 如果使用 image，直接绘制
+                                const img = new Image();
+                                img.onload = function() {
+                                    ctx.drawImage(img, 0, 0, 200, 200);
+                                    document.body.removeChild(tempDiv);
+                                    
+                                    if (data.secret) {
+                                        const secretDiv = document.createElement('div');
+                                        secretDiv.className = 'secret-key';
+                                        secretDiv.textContent = '密钥（手动输入）: ' + data.secret;
+                                        qrContainer.appendChild(secretDiv);
+                                    }
+                                    
+                                    const tipDiv = document.createElement('div');
+                                    tipDiv.style.cssText = 'color: #666; font-size: 12px; margin-top: 10px;';
+                                    tipDiv.textContent = '请使用 Google Authenticator 扫描二维码或手动输入密钥，然后输入生成的6位验证码';
+                                    qrContainer.appendChild(tipDiv);
+                                };
+                                img.onerror = function(err) {
+                                    console.error('QR code image load failed:', err);
+                                    document.body.removeChild(tempDiv);
+                                    qrContainer.innerHTML = '<div style="color: #dc3545; padding: 20px;">二维码生成失败，请使用手动输入密钥的方式</div>';
+                                    if (data.secret) {
+                                        const secretDiv = document.createElement('div');
+                                        secretDiv.className = 'secret-key';
+                                        secretDiv.textContent = '密钥（手动输入）: ' + data.secret;
+                                        qrContainer.appendChild(secretDiv);
+                                    }
+                                };
+                                img.src = qr._elImage.src;
+                            } else {
+                                // 如果都没有，尝试从 tempDiv 中获取
+                                const img = tempDiv.querySelector('img');
+                                if (img && img.src) {
+                                    const loadImg = new Image();
+                                    loadImg.onload = function() {
+                                        ctx.drawImage(loadImg, 0, 0, 200, 200);
+                                        document.body.removeChild(tempDiv);
+                                        
+                                        if (data.secret) {
+                                            const secretDiv = document.createElement('div');
+                                            secretDiv.className = 'secret-key';
+                                            secretDiv.textContent = '密钥（手动输入）: ' + data.secret;
+                                            qrContainer.appendChild(secretDiv);
+                                        }
+                                        
+                                        const tipDiv = document.createElement('div');
+                                        tipDiv.style.cssText = 'color: #666; font-size: 12px; margin-top: 10px;';
+                                        tipDiv.textContent = '请使用 Google Authenticator 扫描二维码或手动输入密钥，然后输入生成的6位验证码';
+                                        qrContainer.appendChild(tipDiv);
+                                    };
+                                    loadImg.onerror = function(err) {
+                                        console.error('QR code image load failed:', err);
+                                        document.body.removeChild(tempDiv);
+                                        qrContainer.innerHTML = '<div style="color: #dc3545; padding: 20px;">二维码生成失败，请使用手动输入密钥的方式</div>';
+                                        if (data.secret) {
+                                            const secretDiv = document.createElement('div');
+                                            secretDiv.className = 'secret-key';
+                                            secretDiv.textContent = '密钥（手动输入）: ' + data.secret;
+                                            qrContainer.appendChild(secretDiv);
+                                        }
+                                    };
+                                    loadImg.src = img.src;
+                                } else {
+                                    throw new Error('QRCode generation failed: unable to get QR code image');
+                                }
+                            }
+                        } catch (err) {
+                            console.error('QR code generation exception:', err);
+                            if (tempDiv.parentNode) {
+                                document.body.removeChild(tempDiv);
+                            }
+                            qrContainer.innerHTML = '<div style="color: #dc3545; padding: 20px;">二维码生成失败: ' + (err.message || err) + '，请使用手动输入密钥的方式</div>';
+                            if (data.secret) {
+                                const secretDiv = document.createElement('div');
+                                secretDiv.className = 'secret-key';
+                                secretDiv.textContent = '密钥（手动输入）: ' + data.secret;
+                                qrContainer.appendChild(secretDiv);
+                            }
                         }
-                    } else {
-                        // 二维码生成成功，继续显示密钥等信息
-                        if (data.secret) {
-                            const secretDiv = document.createElement('div');
-                            secretDiv.className = 'secret-key';
-                            secretDiv.textContent = '密钥（手动输入）: ' + data.secret;
-                            qrContainer.appendChild(secretDiv);
-                        }
-                        
-                        const tipDiv = document.createElement('div');
-                        tipDiv.style.cssText = 'color: #666; font-size: 12px; margin-top: 10px;';
-                        tipDiv.textContent = '请使用 Google Authenticator 扫描二维码或手动输入密钥，然后输入生成的6位验证码';
-                        qrContainer.appendChild(tipDiv);
+                    }, 100);
+                } catch (err) {
+                    console.error('QR code generation exception:', err);
+                    qrContainer.innerHTML = '<div style="color: #dc3545; padding: 20px;">二维码生成失败: ' + (err.message || err) + '，请使用手动输入密钥的方式</div>';
+                    if (data.secret) {
+                        const secretDiv = document.createElement('div');
+                        secretDiv.className = 'secret-key';
+                        secretDiv.textContent = '密钥（手动输入）: ' + data.secret;
+                        qrContainer.appendChild(secretDiv);
                     }
-                });
-            } catch (err) {
-                console.error('QR code generation exception:', err);
-                qrContainer.innerHTML = '<div style="color: #dc3545; padding: 20px;">二维码生成失败: ' + (err.message || err) + '，请使用手动输入密钥的方式</div>';
-                if (data.secret) {
-                    const secretDiv = document.createElement('div');
-                    secretDiv.className = 'secret-key';
-                    secretDiv.textContent = '密钥（手动输入）: ' + data.secret;
-                    qrContainer.appendChild(secretDiv);
                 }
+            } else if (typeof QRCode !== 'undefined' && QRCode.toCanvas) {
+                // 使用 qrcode npm 包的 API（如果 CDN 加载成功）
+                try {
+                    QRCode.toCanvas(qrCanvas, otpauthUrl, {
+                        width: 200,
+                        margin: 2,
+                        color: {
+                            dark: '#000000',
+                            light: '#FFFFFF'
+                        },
+                        errorCorrectionLevel: 'M'
+                    }, function (error) {
+                        if (error) {
+                            console.error('QR code generation failed:', error);
+                            qrContainer.innerHTML = '<div style="color: #dc3545; padding: 20px;">二维码生成失败: ' + (error.message || error) + '，请使用手动输入密钥的方式</div>';
+                            if (data.secret) {
+                                const secretDiv = document.createElement('div');
+                                secretDiv.className = 'secret-key';
+                                secretDiv.textContent = '密钥（手动输入）: ' + data.secret;
+                                qrContainer.appendChild(secretDiv);
+                            }
+                        } else {
+                            // 二维码生成成功，继续显示密钥等信息
+                            if (data.secret) {
+                                const secretDiv = document.createElement('div');
+                                secretDiv.className = 'secret-key';
+                                secretDiv.textContent = '密钥（手动输入）: ' + data.secret;
+                                qrContainer.appendChild(secretDiv);
+                            }
+                            
+                            const tipDiv = document.createElement('div');
+                            tipDiv.style.cssText = 'color: #666; font-size: 12px; margin-top: 10px;';
+                            tipDiv.textContent = '请使用 Google Authenticator 扫描二维码或手动输入密钥，然后输入生成的6位验证码';
+                            qrContainer.appendChild(tipDiv);
+                        }
+                    });
+                } catch (err) {
+                    console.error('QR code generation exception:', err);
+                    qrContainer.innerHTML = '<div style="color: #dc3545; padding: 20px;">二维码生成失败: ' + (err.message || err) + '，请使用手动输入密钥的方式</div>';
+                    if (data.secret) {
+                        const secretDiv = document.createElement('div');
+                        secretDiv.className = 'secret-key';
+                        secretDiv.textContent = '密钥（手动输入）: ' + data.secret;
+                        qrContainer.appendChild(secretDiv);
+                    }
+                }
+            } else {
+                // QRCode 库未加载
+                console.error('QRCode library not loaded');
+                qrContainer.innerHTML = '<div style="color: #dc3545; padding: 20px;">二维码生成失败：QRCode 库未加载，请检查网络连接或刷新页面</div>' +
+                    (data.secret ? '<div class="secret-key">密钥（手动输入）: ' + data.secret + '</div>' : '');
             }
         }
         

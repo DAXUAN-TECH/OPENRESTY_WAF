@@ -174,7 +174,20 @@ local function hmac_sha1(key, message)
     if #key > block_size then
         local sha = sha1:new()
         sha:update(key)
-        key = sha:final()
+        local hashed_key = sha:final()
+        -- resty.sha1 的 final() 可能返回十六进制字符串，需要转换为二进制
+        if type(hashed_key) == "string" and #hashed_key == 40 and string.match(hashed_key, "^[0-9a-f]+$") then
+            -- 转换为二进制字符串
+            local binary_key = ""
+            for i = 1, 40, 2 do
+                local hex_byte = string.sub(hashed_key, i, i + 1)
+                local byte_value = tonumber(hex_byte, 16)
+                binary_key = binary_key .. string.char(byte_value)
+            end
+            key = binary_key
+        else
+            key = hashed_key
+        end
     end
     
     -- 填充密钥到块大小
@@ -199,10 +212,35 @@ local function hmac_sha1(key, message)
     sha1_obj:update(message)
     local hash1 = sha1_obj:final()
     
+    -- resty.sha1 的 final() 可能返回十六进制字符串，需要转换为二进制
+    -- 检查是否是十六进制字符串（长度为40，只包含0-9a-f）
+    if type(hash1) == "string" and #hash1 == 40 and string.match(hash1, "^[0-9a-f]+$") then
+        -- 转换为二进制字符串
+        local binary_hash1 = ""
+        for i = 1, 40, 2 do
+            local hex_byte = string.sub(hash1, i, i + 1)
+            local byte_value = tonumber(hex_byte, 16)
+            binary_hash1 = binary_hash1 .. string.char(byte_value)
+        end
+        hash1 = binary_hash1
+    end
+    
     local sha2_obj = sha1:new()
     sha2_obj:update(opad_str)
     sha2_obj:update(hash1)
     local hash2 = sha2_obj:final()
+    
+    -- 同样检查 hash2 是否是十六进制字符串
+    if type(hash2) == "string" and #hash2 == 40 and string.match(hash2, "^[0-9a-f]+$") then
+        -- 转换为二进制字符串
+        local binary_hash2 = ""
+        for i = 1, 40, 2 do
+            local hex_byte = string.sub(hash2, i, i + 1)
+            local byte_value = tonumber(hex_byte, 16)
+            binary_hash2 = binary_hash2 .. string.char(byte_value)
+        end
+        hash2 = binary_hash2
+    end
     
     return hash2
 end

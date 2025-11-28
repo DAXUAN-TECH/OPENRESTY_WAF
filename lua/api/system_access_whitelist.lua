@@ -119,6 +119,12 @@ function _M.update_config()
         return
     end
     
+    -- 清除配置缓存，确保立即生效
+    if config_manager and config_manager.clear_cache then
+        config_manager.clear_cache("system_access_whitelist_enabled")
+        ngx.log(ngx.INFO, "update_config: 已清除系统白名单配置缓存")
+    end
+    
     -- 记录审计日志
     audit_log.log("update", "system_config", "system_access_whitelist_enabled", 
         "更新系统访问白名单开关: " .. (enabled == 1 and "启用" or "禁用"), "success")

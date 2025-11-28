@@ -186,6 +186,20 @@ let currentPage = 1;
         // 删除后端服务器
         function removeBackend(btn) {
             btn.parentElement.remove();
+            // 删除后重新检查路径一致性（如果列表存在）
+            try {
+                const createList = document.getElementById('backends-list');
+                if (createList) {
+                    checkBackendPaths();
+                }
+                const editList = document.getElementById('edit-backends-list');
+                if (editList) {
+                    checkEditBackendPaths();
+                }
+            } catch (e) {
+                // 忽略错误，避免影响其他功能
+                console.debug('checkBackendPaths error:', e);
+            }
         }
         
         // 加载代理列表
@@ -895,17 +909,20 @@ let currentPage = 1;
         // 加载IP相关规则列表（用于防护规则选择）
         async function loadIpRules() {
             try {
-                // 获取所有IP相关的规则（ip_whitelist, ip_blacklist, geo_whitelist, geo_blacklist）
-                const response = await fetch('/api/rules?page=1&page_size=1000');
+                // 获取所有已启用的IP相关的规则（ip_whitelist, ip_blacklist, geo_whitelist, geo_blacklist）
+                // 只获取status=1（已启用）的规则
+                const response = await fetch('/api/rules?page=1&page_size=1000&status=1');
                 const data = await response.json();
                 
                 if (data.success && data.data && data.data.rules) {
                     const rules = data.data.rules;
+                    // 过滤：只保留IP相关类型且已启用的规则
                     const ipRules = rules.filter(rule => 
-                        rule.rule_type === 'ip_whitelist' || 
-                        rule.rule_type === 'ip_blacklist' || 
-                        rule.rule_type === 'geo_whitelist' || 
-                        rule.rule_type === 'geo_blacklist'
+                        (rule.rule_type === 'ip_whitelist' || 
+                         rule.rule_type === 'ip_blacklist' || 
+                         rule.rule_type === 'geo_whitelist' || 
+                         rule.rule_type === 'geo_blacklist') &&
+                        rule.status == 1  // 只保留已启用的规则
                     );
                     
                     // 保存所有IP相关规则到全局变量

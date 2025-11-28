@@ -230,6 +230,18 @@ function _M.setup_totp()
     -- 生成新的 TOTP 密钥
     local secret = totp.generate_secret(16)
     
+    -- 将 secret 临时保存到共享内存（5分钟有效期）
+    -- 这样即使用户多次打开设置弹窗，也能使用最近生成的 secret 进行验证
+    local cache = ngx.shared.waf_cache
+    local totp_setup_key = "totp_setup:" .. username
+    local totp_setup_ttl = 300  -- 5分钟
+    local ok, err = cache:set(totp_setup_key, secret, totp_setup_ttl)
+    if not ok then
+        ngx.log(ngx.WARN, "auth.setup_totp: failed to cache secret for user: ", username, ", error: ", tostring(err))
+    else
+        ngx.log(ngx.INFO, "auth.setup_totp: cached secret for user: ", username, ", will expire in ", totp_setup_ttl, " seconds")
+    end
+    
     -- 生成 QR 码数据
     local qr_data = totp.generate_qr_data(secret, username, "WAF Management")
     
@@ -240,9 +252,6 @@ function _M.setup_totp()
     if qr_generator == "external" then
         qr_url, _ = totp.generate_qr_url(secret, username, "WAF Management")
     end
-    
-    -- 保存密钥（临时，需要用户验证后才能正式启用）
-    -- 这里可以存储到临时缓存，用户验证后正式保存
     
     local response = {
         secret = secret,
@@ -330,23 +339,45 @@ function _M.enable_totp()
     
     ngx.log(ngx.INFO, "auth.enable_totp: verifying TOTP for user: ", session.username, ", secret length: ", #secret, ", secret prefix: ", string.sub(secret, 1, 12), "...", ", code: ", code)
     
-    -- 先尝试生成当前代码用于调试
-    local expected_code, gen_err = totp.generate_totp(secret)
-    if expected_code then
-        ngx.log(ngx.INFO, "auth.enable_totp: expected current code: ", expected_code, ", received code: ", code, ", match: ", expected_code == code)
-    else
-        ngx.log(ngx.WARN, "auth.enable_totp: failed to generate expected code, error: ", tostring(gen_err))
+    -- 先尝试使用提供的 secret 验证
+    local totp_ok, err = totp.verify_totp(secret, code, 30, 3)
+    local secret_source = "provided"
+    
+    -- 如果验证失败，尝试使用缓存的 secret（解决多次打开设置弹窗导致 secret 不一致的问题）
+    if not totp_ok then
+        local cache = ngx.shared.waf_cache
+        local totp_setup_key = "totp_setup:" .. session.username
+        local cached_secret = cache:get(totp_setup_key)
+        
+        if cached_secret and cached_secret ~= secret then
+            ngx.log(ngx.INFO, "auth.enable_totp: provided secret verification failed, trying cached secret for user: ", session.username)
+            totp_ok, err = totp.verify_totp(cached_secret, code, 30, 3)
+            if totp_ok then
+                -- 使用缓存的 secret 验证成功，更新 secret
+                secret = cached_secret
+                secret_source = "cached"
+                ngx.log(ngx.INFO, "auth.enable_totp: cached secret verification successful for user: ", session.username)
+            else
+                ngx.log(ngx.WARN, "auth.enable_totp: both provided and cached secret verification failed for user: ", session.username)
+            end
+        end
     end
     
-    -- 验证 TOTP 代码（增加时间窗口到3，允许前后3个时间窗口，即90秒）
-    local totp_ok, err = totp.verify_totp(secret, code, 30, 3)
     if not totp_ok then
-        ngx.log(ngx.WARN, "auth.enable_totp: TOTP verification failed for user: ", session.username, ", error: ", tostring(err))
+        ngx.log(ngx.WARN, "auth.enable_totp: TOTP verification failed for user: ", session.username, ", secret_source: ", secret_source, ", error: ", tostring(err))
         api_utils.json_response({
             error = "Unauthorized",
             message = "验证码错误，请重试。请确保时间同步正确，验证码在90秒内有效"
         }, 401)
         return
+    end
+    
+    -- 验证成功，清除缓存的 secret
+    if secret_source == "cached" then
+        local cache = ngx.shared.waf_cache
+        local totp_setup_key = "totp_setup:" .. session.username
+        cache:delete(totp_setup_key)
+        ngx.log(ngx.INFO, "auth.enable_totp: cleared cached secret for user: ", session.username)
     end
     
     ngx.log(ngx.INFO, "auth.enable_totp: TOTP verification successful for user: ", session.username)

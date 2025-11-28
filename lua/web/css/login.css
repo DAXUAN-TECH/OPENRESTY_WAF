@@ -160,19 +160,24 @@ body {
     padding: 15px;
     border: 2px solid #ddd;
     border-radius: 5px;
-    font-size: 30px;
+    font-size: 32px;
     font-weight: bold;
     text-align: center;
+    line-height: 1.5;
     letter-spacing: 8px;
     transition: border-color 0.3s;
     font-family: 'Courier New', monospace;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .totp-input::placeholder {
     font-weight: bold;
-    font-size: 26px;
+    font-size: 25px;
     color: #999;
     text-align: center;
+    line-height: 1.5;
 }
 
 .totp-input:focus {

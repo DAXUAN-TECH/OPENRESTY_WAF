@@ -349,10 +349,16 @@
             max-width: 175px;
         }
         
-        /* 规则值输入框和描述输入框保持一样宽 */
-        #edit-modal .form-group textarea.rule-value-input,
+        /* 规则值输入框设置为50%宽度 */
+        #edit-modal #edit-rule-value {
+            width: 50% !important;
+            max-width: none;
+        }
+        
+        /* 描述输入框保持一样宽 */
         #edit-modal #edit-description {
-            max-width: 500px;
+            width: 50% !important;
+            max-width: none;
         }
         
         /* 分组输入框缩短三分之一 */

@@ -438,26 +438,45 @@ end
 -- 设置用户的 TOTP 密钥（优先保存到数据库）
 function _M.set_user_totp_secret(username, secret)
     if not username then
+        ngx.log(ngx.ERR, "set_user_totp_secret: username is nil")
         return false
     end
     
     -- 优先保存到数据库
     local mysql_pool = require "waf.mysql_pool"
-    local ok, err = pcall(function()
+    local ok, res, query_err = pcall(function()
         local sql = [[
             UPDATE waf_users
             SET totp_secret = ?
             WHERE username = ?
         ]]
+        -- mysql_pool.query 返回 (res, err)，pcall 会传递所有返回值
         return mysql_pool.query(sql, secret or nil, username)
     end)
     
-    if ok and not err then
-        return true
+    -- 记录数据库更新结果
+    if not ok then
+        -- pcall 失败，res 是错误信息
+        ngx.log(ngx.ERR, "set_user_totp_secret: database update failed (pcall error): ", tostring(res), ", username: ", username)
+        return false
     end
     
-    -- 不再使用硬编码的默认用户
-    return false
+    -- pcall 成功，res 是查询结果，query_err 是错误信息（如果有）
+    if query_err then
+        ngx.log(ngx.ERR, "set_user_totp_secret: database update error: ", tostring(query_err), ", username: ", username)
+        return false
+    end
+    
+    -- 如果查询返回 nil（可能是连接失败）
+    if not res then
+        ngx.log(ngx.ERR, "set_user_totp_secret: database update returned nil (connection failed?), username: ", username)
+        return false
+    end
+    
+    -- UPDATE 语句成功执行（res 可能是空表或包含受影响行数的表）
+    -- 对于 UPDATE，只要没有错误就认为成功
+    ngx.log(ngx.INFO, "set_user_totp_secret: TOTP secret updated successfully for user: ", username)
+    return true
 end
 
 -- 检查用户是否启用了 TOTP

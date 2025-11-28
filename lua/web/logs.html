@@ -1084,20 +1084,13 @@
             const contentAreaRect = contentArea.getBoundingClientRect();
             const contentAreaWidth = contentAreaRect.width;
             
-            // 强制设置container的宽度（使用content-area的实际宽度）
+            // 强制设置container的宽度（使用100%，相对于content-area）
             const container = document.querySelector('.container');
             if (container) {
                 // 使用内联样式强制设置，优先级最高
-                container.style.setProperty('width', contentAreaWidth + 'px', 'important');
-                container.style.setProperty('max-width', contentAreaWidth + 'px', 'important');
-                container.style.setProperty('min-width', contentAreaWidth + 'px', 'important');
-            }
-            
-            // 获取container的实际宽度（减去padding）
-            let containerWidth = contentAreaWidth;
-            if (container) {
-                const containerRect = container.getBoundingClientRect();
-                containerWidth = containerRect.width;
+                container.style.setProperty('width', '100%', 'important');
+                container.style.setProperty('max-width', '100%', 'important');
+                container.style.setProperty('min-width', '100%', 'important');
             }
             
             // 强制设置所有tab-content的宽度

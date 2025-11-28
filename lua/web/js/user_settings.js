@@ -120,7 +120,7 @@ if (typeof window.totpEnabled === 'undefined') {
                 const html = '<img src="' + data.qr_url + '" alt="QR Code" style="max-width: 200px; height: auto; display: block; margin: 0 auto;">' +
                     (data.secret ? '<div class="secret-key">密钥（手动输入）: ' + data.secret + '</div>' : '') +
                     '<div style="color: #666; font-size: 12px; margin-top: 10px;">' +
-                    '请使用 Google Authenticator 扫描二维码或手动输入密钥，然后输入生成的6位验证码' +
+                    '请使用 Google Authenticator 扫描二维码或手动输入密钥' +
                     '</div>';
                 qrContainer.innerHTML = html;
                 return;
@@ -198,7 +198,7 @@ if (typeof window.totpEnabled === 'undefined') {
                                     
                                     const tipDiv = document.createElement('div');
                                     tipDiv.style.cssText = 'color: #666; font-size: 12px; margin-top: 10px;';
-                                    tipDiv.textContent = '请使用 Google Authenticator 扫描二维码或手动输入密钥，然后输入生成的6位验证码';
+                                    tipDiv.textContent = '请使用 Google Authenticator 扫描二维码或手动输入密钥';
                                     qrContainer.appendChild(tipDiv);
                                 };
                                 img.onerror = function(err) {
@@ -229,7 +229,7 @@ if (typeof window.totpEnabled === 'undefined') {
                                     
                                     const tipDiv = document.createElement('div');
                                     tipDiv.style.cssText = 'color: #666; font-size: 12px; margin-top: 10px;';
-                                    tipDiv.textContent = '请使用 Google Authenticator 扫描二维码或手动输入密钥，然后输入生成的6位验证码';
+                                    tipDiv.textContent = '请使用 Google Authenticator 扫描二维码或手动输入密钥';
                                     qrContainer.appendChild(tipDiv);
                                 };
                                 img.onerror = function(err) {
@@ -262,7 +262,7 @@ if (typeof window.totpEnabled === 'undefined') {
                                         
                                         const tipDiv = document.createElement('div');
                                         tipDiv.style.cssText = 'color: #666; font-size: 12px; margin-top: 10px;';
-                                        tipDiv.textContent = '请使用 Google Authenticator 扫描二维码或手动输入密钥，然后输入生成的6位验证码';
+                                        tipDiv.textContent = '请使用 Google Authenticator 扫描二维码或手动输入密钥';
                                         qrContainer.appendChild(tipDiv);
                                     };
                                     loadImg.onerror = function(err) {
@@ -337,7 +337,7 @@ if (typeof window.totpEnabled === 'undefined') {
                             
                             const tipDiv = document.createElement('div');
                             tipDiv.style.cssText = 'color: #666; font-size: 12px; margin-top: 10px;';
-                            tipDiv.textContent = '请使用 Google Authenticator 扫描二维码或手动输入密钥，然后输入生成的6位验证码';
+                            tipDiv.textContent = '请使用 Google Authenticator 扫描二维码或手动输入密钥';
                             qrContainer.appendChild(tipDiv);
                         }
                     });

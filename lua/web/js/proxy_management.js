@@ -1,5 +1,5 @@
 let currentPage = 1;
-        const pageSize = 20;
+const pageSize = 20;
         
         // 切换标签页
         function switchTab(tab) {
@@ -329,6 +329,11 @@ let currentPage = 1;
             if (status) url += `&status=${status}`;
             
             const tbody = document.getElementById('proxies-tbody');
+            if (!tbody) {
+                console.error('proxies-tbody element not found');
+                return;
+            }
+            
             // 防御性检查：确保 escapeHtml 函数可用
             const escapeHtmlFn = window.escapeHtml || function(text) {
                 if (!text) return '';

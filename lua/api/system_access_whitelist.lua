@@ -496,6 +496,7 @@ function _M.delete()
     
     local entry_status = tonumber(entry_res[1].status) or 0
     local is_enabled_entry = (entry_status == 1)  -- 要删除的条目是否是启用的
+    ngx.log(ngx.INFO, "delete: entry_id=", id, ", entry_status=", entry_status, ", is_enabled_entry=", is_enabled_entry)
     
     -- 删除前检查当前启用的白名单条目数量（只统计status=1的条目）
     -- 因为系统白名单检查时只检查status=1的启用条目
@@ -505,11 +506,19 @@ function _M.delete()
     end)
     
     local is_last_enabled_entry = false
-    if count_before_ok and not count_before_err and count_before_res and count_before_res[1] then
+    if not count_before_ok then
+        ngx.log(ngx.ERR, "delete: failed to query count (pcall error): ", tostring(count_before_res))
+    elseif count_before_err then
+        ngx.log(ngx.ERR, "delete: failed to query count (database error): ", tostring(count_before_err))
+    elseif not count_before_res then
+        ngx.log(ngx.ERR, "delete: query count returned nil result")
+    elseif not count_before_res[1] then
+        ngx.log(ngx.ERR, "delete: query count returned empty result")
+    else
         local count_before = tonumber(count_before_res[1].total) or 0
         -- 如果删除前只有1条启用的条目，且要删除的这条也是启用的，删除后就没有启用的条目了
         is_last_enabled_entry = (count_before == 1 and is_enabled_entry)
-        ngx.log(ngx.DEBUG, "delete: count_before=", count_before, ", is_enabled_entry=", is_enabled_entry, ", is_last_enabled_entry=", is_last_enabled_entry)
+        ngx.log(ngx.INFO, "delete: count_before=", count_before, ", is_enabled_entry=", is_enabled_entry, ", is_last_enabled_entry=", is_last_enabled_entry)
     end
     
     local ok, res, err = pcall(function()
@@ -530,6 +539,7 @@ function _M.delete()
     
     -- 如果删除的是最后一条启用的白名单条目，自动关闭系统白名单
     if is_last_enabled_entry then
+        ngx.log(ngx.INFO, "delete: 检测到是最后一条启用的白名单条目，开始自动关闭系统白名单")
         local update_config_ok, update_config_res, update_config_err = pcall(function()
             local update_sql = [[
                 UPDATE waf_system_config 
@@ -539,13 +549,25 @@ function _M.delete()
             return mysql_pool.query(update_sql)
         end)
         
-        if update_config_ok and not update_config_err then
-            ngx.log(ngx.INFO, "delete: 最后一条启用的白名单条目已删除，自动关闭系统白名单")
+        if not update_config_ok then
+            ngx.log(ngx.ERR, "delete: 自动关闭系统白名单失败 (pcall error): ", tostring(update_config_res))
+        elseif update_config_err then
+            ngx.log(ngx.ERR, "delete: 自动关闭系统白名单失败 (database error): ", tostring(update_config_err))
+        else
+            -- 验证更新是否成功（检查受影响的行数）
+            ngx.log(ngx.INFO, "delete: 最后一条启用的白名单条目已删除，自动关闭系统白名单成功")
             audit_log.log("update", "system_config", "system_access_whitelist_enabled", 
                 "删除最后一条启用的白名单条目，自动关闭系统白名单", "success")
-        else
-            ngx.log(ngx.WARN, "delete: 最后一条启用的白名单条目已删除，但自动关闭系统白名单失败: ", tostring(update_config_err))
+            
+            -- 清除配置缓存，确保立即生效
+            local config_manager = require "waf.config_manager"
+            if config_manager and config_manager.clear_cache then
+                config_manager.clear_cache("system_access_whitelist_enabled")
+                ngx.log(ngx.INFO, "delete: 已清除系统白名单配置缓存")
+            end
         end
+    else
+        ngx.log(ngx.INFO, "delete: 不是最后一条启用的白名单条目，无需关闭系统白名单 (is_last_enabled_entry=", is_last_enabled_entry, ")")
     end
     
     -- 记录审计日志

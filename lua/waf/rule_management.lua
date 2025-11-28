@@ -514,14 +514,16 @@ function _M.delete_rule(rule_id)
         return nil, err
     end
     
-    -- 检查是否有代理引用该规则
+    -- 检查是否有代理引用该规则（从ip_rule_ids JSON字段中查找）
+    local cjson = require "cjson"
     local check_proxy_sql = [[
         SELECT id, proxy_name, proxy_type, listen_port
         FROM waf_proxy_configs
-        WHERE ip_rule_id = ?
+        WHERE JSON_CONTAINS(ip_rule_ids, ?)
         ORDER BY id ASC
     ]]
-    local proxies, err = mysql_pool.query(check_proxy_sql, rule_id)
+    local rule_id_json = cjson.encode(rule_id)
+    local proxies, err = mysql_pool.query(check_proxy_sql, rule_id_json)
     if err then
         ngx.log(ngx.ERR, "check proxy references error: ", err)
         return nil, "检查代理引用时出错: " .. (err or "unknown error")

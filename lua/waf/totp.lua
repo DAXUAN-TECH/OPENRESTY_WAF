@@ -280,7 +280,10 @@ function _M.verify_totp(secret_base32, code, time_step, window)
     local current_time = ngx.time()
     local current_counter = math.floor(current_time / time_step)
     
-    ngx.log(ngx.DEBUG, "totp.verify_totp: current_time: ", current_time, ", time_step: ", time_step, ", current_counter: ", current_counter, ", window: ", window, ", code: ", code)
+    ngx.log(ngx.INFO, "totp.verify_totp: current_time: ", current_time, ", time_step: ", time_step, ", current_counter: ", current_counter, ", window: ", window, ", input_code: ", code)
+    
+    -- 收集所有窗口的代码用于调试
+    local all_codes = {}
     
     -- 检查所有时间窗口（包括当前窗口和前后窗口）
     for i = -window, window do
@@ -297,6 +300,7 @@ function _M.verify_totp(secret_base32, code, time_step, window)
         local hmac, hmac_err = hmac_sha1(secret, time_str)
         if not hmac then
             ngx.log(ngx.WARN, "totp.verify_totp: failed to compute HMAC for counter ", test_counter, ", error: ", tostring(hmac_err))
+            table.insert(all_codes, string.format("counter[%d]=ERROR", test_counter))
             -- 继续检查下一个窗口
         else
             -- 动态截取（RFC 6238）
@@ -311,7 +315,9 @@ function _M.verify_totp(secret_base32, code, time_step, window)
             -- 确保 test_code 是字符串
             test_code = tostring(test_code)
             
-            ngx.log(ngx.DEBUG, "totp.verify_totp: counter: ", test_counter, ", test_code: ", test_code, ", input_code: ", code, ", match: ", test_code == code)
+            -- 记录每个窗口的代码
+            table.insert(all_codes, string.format("counter[%d]=%s", test_counter, test_code))
+            ngx.log(ngx.INFO, "totp.verify_totp: window[", i, "] counter: ", test_counter, ", generated_code: ", test_code, ", input_code: ", code, ", match: ", test_code == code)
             
             if test_code == code then
                 ngx.log(ngx.INFO, "totp.verify_totp: TOTP code verified successfully, counter: ", test_counter, ", window offset: ", i)
@@ -320,7 +326,8 @@ function _M.verify_totp(secret_base32, code, time_step, window)
         end
     end
     
-    ngx.log(ngx.WARN, "totp.verify_totp: TOTP code verification failed, code: ", code, ", checked windows: ", -window, " to ", window)
+    -- 输出所有窗口的代码用于调试
+    ngx.log(ngx.WARN, "totp.verify_totp: TOTP code verification failed, input_code: ", code, ", checked windows: ", -window, " to ", window, ", all_codes: ", table.concat(all_codes, ", "))
     return false, "Invalid TOTP code"
 end
 

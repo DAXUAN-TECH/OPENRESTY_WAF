@@ -297,8 +297,18 @@ function _M.enable_totp()
         return
     end
     
+    -- 清理和验证 secret 格式（Base32）
+    if type(secret) == "number" then
+        secret = tostring(secret)
+    end
+    secret = tostring(secret)
+    -- 移除空格和换行符（Base32 编码可能包含空格用于格式化）
+    secret = string.gsub(secret, "%s", "")
+    -- 转换为大写（Base32 标准使用大写字母）
+    secret = string.upper(secret)
+    
     -- 验证 secret 格式（Base32）
-    if not secret or type(secret) ~= "string" or #secret < 16 then
+    if not secret or #secret < 16 then
         ngx.log(ngx.WARN, "auth.enable_totp: invalid secret format, secret length: ", secret and #secret or 0, ", secret type: ", type(secret))
         api_utils.json_response({
             error = "Bad Request",
@@ -307,7 +317,18 @@ function _M.enable_totp()
         return
     end
     
-    ngx.log(ngx.INFO, "auth.enable_totp: verifying TOTP for user: ", session.username, ", secret length: ", #secret, ", secret prefix: ", string.sub(secret, 1, 8), "...", ", code: ", code, ", code type: ", type(code))
+    -- 验证 Base32 字符集（只允许 A-Z 和 2-7）
+    local base32_pattern = "^[A-Z2-7]+$"
+    if not string.match(secret, base32_pattern) then
+        ngx.log(ngx.WARN, "auth.enable_totp: secret contains invalid Base32 characters, secret: ", string.sub(secret, 1, 20), "...")
+        api_utils.json_response({
+            error = "Bad Request",
+            message = "密钥包含无效字符，必须是Base32格式（A-Z, 2-7）"
+        }, 400)
+        return
+    end
+    
+    ngx.log(ngx.INFO, "auth.enable_totp: verifying TOTP for user: ", session.username, ", secret length: ", #secret, ", secret prefix: ", string.sub(secret, 1, 12), "...", ", code: ", code)
     
     -- 先尝试生成当前代码用于调试
     local expected_code, gen_err = totp.generate_totp(secret)

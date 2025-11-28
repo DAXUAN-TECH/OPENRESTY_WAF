@@ -294,16 +294,34 @@ function _M.generate_totp(secret_base32, time_step, digits)
     end
     ngx.log(ngx.WARN, "totp.generate_totp: DEBUG - secret_base32: ", string.sub(secret_base32, 1, 20), "...", ", decoded secret length: ", #secret, " bytes, secret_hex (first 20 bytes): ", secret_hex)
     
-    -- 计算时间步数
+    -- 计算时间步数（RFC 6238: T = floor((T - T0) / X)）
+    -- T0 = 0 (Unix epoch), X = time_step (default 30 seconds)
     local current_time = ngx.time()
     local time_counter = math.floor(current_time / time_step)
     
-    -- 将时间计数器转换为 8 字节大端序
+    -- 将时间计数器转换为 8 字节大端序（RFC 6238要求）
+    -- 使用64位整数，但Lua只支持53位，所以需要特殊处理
     local time_bytes = {}
+    local time_bytes_hex = {}
+    -- 从高位到低位，提取每个字节
     for i = 7, 0, -1 do
-        table.insert(time_bytes, string.char(bit.band(bit.rshift(time_counter, i * 8), 0xFF)))
+        -- 计算当前字节的值（从高位开始）
+        local shift = i * 8
+        local byte_value = bit.band(bit.rshift(time_counter, shift), 0xFF)
+        table.insert(time_bytes, string.char(byte_value))
+        table.insert(time_bytes_hex, string.format("%02X", byte_value))
     end
     local time_str = table.concat(time_bytes)
+    local time_str_hex = table.concat(time_bytes_hex, " ")
+    
+    -- 验证时间字符串长度（应该是8字节）
+    if #time_str ~= 8 then
+        ngx.log(ngx.ERR, "totp.generate_totp: time_str length is ", #time_str, ", expected 8 bytes")
+        return nil, "Invalid time string length"
+    end
+    
+    -- 记录时间步数字节的十六进制表示用于调试
+    ngx.log(ngx.WARN, "totp.generate_totp: DEBUG - time_counter: ", time_counter, ", time_bytes (hex): ", time_str_hex)
     
     -- 计算 HMAC-SHA1
     ngx.log(ngx.WARN, "totp.generate_totp: DEBUG - computing HMAC, secret length: ", #secret, " bytes, time_counter: ", time_counter, ", time_str length: ", #time_str, " bytes")
@@ -404,12 +422,23 @@ function _M.verify_totp(secret_base32, code, time_step, window)
     for i = -window, window do
         local test_counter = current_counter + i
         
-        -- 计算时间步数
+        -- 将时间计数器转换为 8 字节大端序（RFC 6238要求）
         local time_bytes = {}
+        -- 从高位到低位，提取每个字节
         for j = 7, 0, -1 do
-            table.insert(time_bytes, string.char(bit.band(bit.rshift(test_counter, j * 8), 0xFF)))
+            -- 计算当前字节的值（从高位开始）
+            local shift = j * 8
+            local byte_value = bit.band(bit.rshift(test_counter, shift), 0xFF)
+            table.insert(time_bytes, string.char(byte_value))
         end
         local time_str = table.concat(time_bytes)
+        
+        -- 验证时间字符串长度（应该是8字节）
+        if #time_str ~= 8 then
+            ngx.log(ngx.WARN, "totp.verify_totp: time_str length is ", #time_str, ", expected 8 bytes for counter ", test_counter)
+            table.insert(all_codes, string.format("counter[%d]=ERROR_TIME_STR_LENGTH", test_counter))
+            -- 继续检查下一个窗口
+        end
         
         -- 计算 HMAC
         local hmac, hmac_err = hmac_sha1(secret, time_str)

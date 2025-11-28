@@ -430,11 +430,11 @@
             max-width: 200px !important;
         }
         
-        /* 规则值输入框和描述输入框保持一样的宽度 */
+        /* 规则值输入框和描述输入框缩短二分之一 */
         #create-rule-modal #create-rule-value,
         #create-rule-modal #create-description {
-            width: 100% !important;
-            max-width: 100% !important;
+            width: 50% !important;
+            max-width: 400px !important;
         }
         
         /* 分组输入框缩短二分之一 */

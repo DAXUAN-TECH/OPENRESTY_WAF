@@ -336,16 +336,15 @@ const pageSize = 20;
                     console.error('proxies-tbody element not found');
                     return;
                 }
-            
-            // 防御性检查：确保 escapeHtml 函数可用
-            const escapeHtmlFn = window.escapeHtml || function(text) {
-                if (!text) return '';
-                const div = document.createElement('div');
-                div.textContent = text;
-                return div.innerHTML;
-            };
-            
-            try {
+                
+                // 防御性检查：确保 escapeHtml 函数可用
+                const escapeHtmlFn = window.escapeHtml || function(text) {
+                    if (!text) return '';
+                    const div = document.createElement('div');
+                    div.textContent = text;
+                    return div.innerHTML;
+                };
+                
                 // 显示加载状态
                 tbody.innerHTML = '<tr><td colspan="11" style="text-align: center; padding: 20px;">加载中...</td></tr>';
                 

@@ -664,6 +664,10 @@
                         showSuccess('双因素认证已重置并启用');
                         closeResetModal();
                         loadTotpStatus();
+                        // 刷新页面
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 1000);
                     } else {
                         showError(data.message || '重置失败，请检查验证码是否正确');
                         button.disabled = false;
@@ -673,7 +677,7 @@
                 .catch(err => {
                     showError('网络错误，请稍后重试');
                     button.disabled = false;
-                    button.innerHTML = '完成重置';
+                    button.innerHTML = '重置';
                 });
         }
         
@@ -1111,6 +1115,10 @@
                         showSuccess('禁用双因素认证成功');
                         closeDisableModal();
                         loadTotpStatus();
+                        // 刷新页面
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 1000);
                     } else {
                         showError(data.message || '禁用失败，请检查验证码是否正确');
                         button.disabled = false;

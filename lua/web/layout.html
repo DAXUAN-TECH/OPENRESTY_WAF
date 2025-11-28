@@ -211,9 +211,18 @@
             margin-left: var(--sidebar-width);
             /* 防止闪烁：在JavaScript执行前隐藏，执行后显示 */
             visibility: hidden;
+            /* 确保box-sizing正确，padding不影响子元素宽度计算 */
+            box-sizing: border-box;
+            /* 确保子元素能够正确使用100%宽度 */
+            position: relative;
         }
         .content-area.layout-ready {
             visibility: visible;
+        }
+        /* 确保content-area的所有直接子元素能够正确使用100%宽度 */
+        .content-area > * {
+            box-sizing: border-box;
+            max-width: 100%;
         }
         /* 响应式设计 */
         @media (max-width: 768px) {

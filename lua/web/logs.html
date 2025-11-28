@@ -19,9 +19,11 @@
         }
         /* 统一容器样式 - 白色背景卡片 */
         /* 注意：padding会影响内部元素宽度，需要确保table-container等子元素宽度计算正确 */
+        /* 层级：content-area (padding: 30px) -> container (padding: 30px) -> tab-content -> table-container -> table-wrapper -> table */
         .container {
-            width: 100%;
-            max-width: 100%;
+            width: 100% !important;
+            min-width: 100% !important;
+            max-width: 100% !important;
             background: white;
             border-radius: 8px;
             box-shadow: 0 2px 8px rgba(0,0,0,0.1);
@@ -33,6 +35,8 @@
             * {
                 box-sizing: border-box;
             }
+            /* 确保子元素能够正确使用100%宽度 */
+            position: relative;
         }
         .tabs {
             background: #fff;
@@ -223,13 +227,15 @@
             border-radius: 4px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
             overflow: hidden;
-            margin: 0;
-            padding: 0;
+            margin: 0 !important;
+            padding: 0 !important;
             width: 100% !important;
+            min-width: 100% !important;
             max-width: 100% !important;
             box-sizing: border-box;
             /* 确保与父级对齐 */
             display: block;
+            position: relative;
             /* 确保与.filters对齐：.filters的内容区域 = 100% - 40px (左右各20px padding) */
             /* 但为了表格能够完全展开，table-container保持padding: 0，表格本身使用100%宽度 */
         }
@@ -238,6 +244,7 @@
         .table-wrapper {
             overflow-x: auto;
             width: 100% !important;
+            min-width: 100% !important;
             max-width: 100% !important;
             margin: 0 !important;
             padding: 0 !important;

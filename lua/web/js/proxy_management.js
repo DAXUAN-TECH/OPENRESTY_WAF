@@ -202,6 +202,122 @@ let currentPage = 1;
             }
         }
         
+        // 检查创建代理时后端服务器路径是否一致
+        function checkBackendPaths() {
+            try {
+                const list = document.getElementById('backends-list');
+                if (!list) return;
+                
+                const proxyType = document.getElementById('create-proxy-type');
+                if (!proxyType || proxyType.value !== 'http') return;
+                
+                const pathInputs = list.querySelectorAll('.backend-path');
+                if (pathInputs.length === 0) return;
+                
+                // 收集所有路径值（去除空白）
+                const paths = [];
+                pathInputs.forEach(input => {
+                    if (input.style.display !== 'none') {
+                        const path = input.value.trim();
+                        paths.push(path);
+                    }
+                });
+                
+                // 检查路径是否一致
+                const firstPath = paths[0];
+                const allSame = paths.every(path => path === firstPath);
+                
+                // 移除之前的错误提示
+                const existingError = list.querySelector('.backend-path-error');
+                if (existingError && existingError.tagName === 'DIV') {
+                    existingError.remove();
+                }
+                
+                // 更新所有路径输入框的样式
+                pathInputs.forEach(input => {
+                    if (input.style.display !== 'none') {
+                        if (!allSame && paths.length > 1 && paths.some(p => p !== '')) {
+                            input.classList.add('backend-path-error');
+                        } else {
+                            input.classList.remove('backend-path-error');
+                        }
+                    }
+                });
+                
+                // 如果路径不一致，显示错误提示
+                if (!allSame && paths.length > 1 && paths.some(p => p !== '')) {
+                    const errorDiv = document.createElement('div');
+                    errorDiv.className = 'backend-path-error';
+                    errorDiv.style.color = 'red';
+                    errorDiv.style.fontSize = '12px';
+                    errorDiv.style.marginTop = '5px';
+                    errorDiv.textContent = '请保持所有服务器被代理路径一致';
+                    list.appendChild(errorDiv);
+                }
+            } catch (e) {
+                // 忽略错误，避免影响其他功能
+                console.debug('checkBackendPaths error:', e);
+            }
+        }
+        
+        // 检查编辑代理时后端服务器路径是否一致
+        function checkEditBackendPaths() {
+            try {
+                const list = document.getElementById('edit-backends-list');
+                if (!list) return;
+                
+                const proxyType = document.getElementById('edit-proxy-type');
+                if (!proxyType || proxyType.value !== 'http') return;
+                
+                const pathInputs = list.querySelectorAll('.backend-path');
+                if (pathInputs.length === 0) return;
+                
+                // 收集所有路径值（去除空白）
+                const paths = [];
+                pathInputs.forEach(input => {
+                    if (input.style.display !== 'none') {
+                        const path = input.value.trim();
+                        paths.push(path);
+                    }
+                });
+                
+                // 检查路径是否一致
+                const firstPath = paths[0];
+                const allSame = paths.every(path => path === firstPath);
+                
+                // 移除之前的错误提示
+                const existingError = list.querySelector('.backend-path-error');
+                if (existingError && existingError.tagName === 'DIV') {
+                    existingError.remove();
+                }
+                
+                // 更新所有路径输入框的样式
+                pathInputs.forEach(input => {
+                    if (input.style.display !== 'none') {
+                        if (!allSame && paths.length > 1 && paths.some(p => p !== '')) {
+                            input.classList.add('backend-path-error');
+                        } else {
+                            input.classList.remove('backend-path-error');
+                        }
+                    }
+                });
+                
+                // 如果路径不一致，显示错误提示
+                if (!allSame && paths.length > 1 && paths.some(p => p !== '')) {
+                    const errorDiv = document.createElement('div');
+                    errorDiv.className = 'backend-path-error';
+                    errorDiv.style.color = 'red';
+                    errorDiv.style.fontSize = '12px';
+                    errorDiv.style.marginTop = '5px';
+                    errorDiv.textContent = '请保持所有服务器被代理路径一致';
+                    list.appendChild(errorDiv);
+                }
+            } catch (e) {
+                // 忽略错误，避免影响其他功能
+                console.debug('checkEditBackendPaths error:', e);
+            }
+        }
+        
         // 加载代理列表
         async function loadProxies(page = 1) {
             currentPage = page;
@@ -998,9 +1114,11 @@ let currentPage = 1;
                 });
             }
             
-            // 筛选同类型的规则
+            // 筛选同类型的规则，且只保留已启用的规则
             const filteredRules = allIpRules.filter(rule => 
-                rule.rule_type === ruleType && !selectedIds.includes(rule.id)
+                rule.rule_type === ruleType && 
+                !selectedIds.includes(rule.id) &&
+                rule.status == 1  // 只保留已启用的规则
             );
             
             filteredRules.forEach(rule => {

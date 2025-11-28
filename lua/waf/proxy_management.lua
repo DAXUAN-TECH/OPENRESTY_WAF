@@ -114,14 +114,43 @@ function _M.create_proxy(proxy_data)
     end
     
     -- 检查端口是否已被占用（相同类型的代理）
-    local port_check_sql = [[
-        SELECT id FROM waf_proxy_configs 
-        WHERE proxy_type = ? AND listen_port = ? AND status = 1
-        LIMIT 1
-    ]]
-    local port_conflict = mysql_pool.query(port_check_sql, proxy_data.proxy_type, listen_port)
-    if port_conflict and #port_conflict > 0 then
-        return nil, "该端口已被其他启用的代理配置占用"
+    -- 对于HTTP/HTTPS代理，如果使用server_name（域名），可以共享端口
+    local server_name = null_to_nil(proxy_data.server_name)
+    local port_check_sql
+    if proxy_data.proxy_type == "http" and server_name and server_name ~= "" then
+        -- HTTP/HTTPS代理且有域名：检查是否有相同域名的代理占用端口，或是否有无域名的代理占用端口
+        port_check_sql = [[
+            SELECT id FROM waf_proxy_configs 
+            WHERE proxy_type = ? AND listen_port = ? AND status = 1
+            AND (server_name = ? OR server_name IS NULL OR server_name = '')
+            LIMIT 1
+        ]]
+        local port_conflict = mysql_pool.query(port_check_sql, proxy_data.proxy_type, listen_port, server_name)
+        if port_conflict and #port_conflict > 0 then
+            return nil, "该端口已被其他启用的代理配置占用（相同域名或无域名的代理不能共享端口）"
+        end
+    elseif proxy_data.proxy_type == "http" then
+        -- HTTP/HTTPS代理但无域名：不能与任何其他代理共享端口
+        port_check_sql = [[
+            SELECT id FROM waf_proxy_configs 
+            WHERE proxy_type = ? AND listen_port = ? AND status = 1
+            LIMIT 1
+        ]]
+        local port_conflict = mysql_pool.query(port_check_sql, proxy_data.proxy_type, listen_port)
+        if port_conflict and #port_conflict > 0 then
+            return nil, "该端口已被其他启用的代理配置占用（无域名的代理不能与其他代理共享端口）"
+        end
+    else
+        -- TCP/UDP代理：严格的端口占用检查
+        port_check_sql = [[
+            SELECT id FROM waf_proxy_configs 
+            WHERE proxy_type = ? AND listen_port = ? AND status = 1
+            LIMIT 1
+        ]]
+        local port_conflict = mysql_pool.query(port_check_sql, proxy_data.proxy_type, listen_port)
+        if port_conflict and #port_conflict > 0 then
+            return nil, "该端口已被其他启用的代理配置占用"
+        end
     end
     
     -- 验证ip_rule_ids（如果提供，支持多个规则ID，但必须遵守互斥关系）
@@ -485,19 +514,77 @@ function _M.update_proxy(proxy_id, proxy_data)
         return value
     end
     
-    -- 检查端口冲突（确保 listen_port 是数字）
-    if proxy_data.listen_port then
-        local listen_port = tonumber(proxy_data.listen_port)
-        if listen_port and listen_port ~= tonumber(proxy.listen_port) then
-            local port_check_sql = [[
+    -- 检查端口冲突
+    -- 需要检查的情况：
+    -- 1. 端口改变了
+    -- 2. HTTP/HTTPS代理的server_name改变了（从有域名改为无域名，或从无域名改为有域名）
+    local listen_port = proxy_data.listen_port and tonumber(proxy_data.listen_port) or tonumber(proxy.listen_port)
+    local proxy_type = proxy_data.proxy_type or proxy.proxy_type
+    local new_server_name = null_to_nil(proxy_data.server_name)
+    local old_server_name = null_to_nil(proxy.server_name)
+    
+    -- 判断是否需要检查端口占用
+    local port_changed = proxy_data.listen_port and listen_port ~= tonumber(proxy.listen_port)
+    local server_name_changed = false
+    if proxy_type == "http" then
+        -- 检查server_name是否改变（包括从有域名改为无域名，或从无域名改为有域名）
+        if proxy_data.server_name ~= nil then
+            -- 如果更新数据中有server_name，检查是否与现有值不同
+            local new_sn = new_server_name or ""
+            local old_sn = old_server_name or ""
+            if new_sn ~= old_sn then
+                server_name_changed = true
+            end
+        end
+    end
+    
+    if port_changed or server_name_changed then
+        if not listen_port then
+            return nil, "监听端口必须是有效的数字"
+        end
+        
+        -- 确定要使用的server_name（优先使用新的，如果没有则使用旧的）
+        local server_name = new_server_name
+        if not server_name then
+            server_name = old_server_name
+        end
+        
+        local port_check_sql
+        if proxy_type == "http" and server_name and server_name ~= "" then
+            -- HTTP/HTTPS代理且有域名：检查是否有相同域名的代理占用端口，或是否有无域名的代理占用端口
+            port_check_sql = [[
+                SELECT id FROM waf_proxy_configs 
+                WHERE proxy_type = ? AND listen_port = ? AND status = 1 AND id != ?
+                AND (server_name = ? OR server_name IS NULL OR server_name = '')
+                LIMIT 1
+            ]]
+            local port_conflict = mysql_pool.query(port_check_sql, proxy_type, listen_port, proxy_id, server_name)
+            if port_conflict and #port_conflict > 0 then
+                return nil, "该端口已被其他启用的代理配置占用（相同域名或无域名的代理不能共享端口）"
+            end
+        elseif proxy_type == "http" then
+            -- HTTP/HTTPS代理但无域名：不能与任何其他代理共享端口
+            port_check_sql = [[
                 SELECT id FROM waf_proxy_configs 
                 WHERE proxy_type = ? AND listen_port = ? AND status = 1 AND id != ?
                 LIMIT 1
             ]]
-            local proxy_type = proxy_data.proxy_type or proxy.proxy_type
             local port_conflict = mysql_pool.query(port_check_sql, proxy_type, listen_port, proxy_id)
             if port_conflict and #port_conflict > 0 then
-                return nil, "该端口已被其他启用的代理配置占用"
+                return nil, "该端口已被其他启用的代理配置占用（无域名的代理不能与其他代理共享端口）"
+            end
+        else
+            -- TCP/UDP代理：严格的端口占用检查（只在端口改变时检查）
+            if port_changed then
+                port_check_sql = [[
+                    SELECT id FROM waf_proxy_configs 
+                    WHERE proxy_type = ? AND listen_port = ? AND status = 1 AND id != ?
+                    LIMIT 1
+                ]]
+                local port_conflict = mysql_pool.query(port_check_sql, proxy_type, listen_port, proxy_id)
+                if port_conflict and #port_conflict > 0 then
+                    return nil, "该端口已被其他启用的代理配置占用"
+                end
             end
         end
     end

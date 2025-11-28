@@ -205,17 +205,19 @@
                     <datalist id="group-list-edit"></datalist>
                     <small style="color: #666;">可选，用于按业务、地区等维度分组管理规则</small>
                 </div>
-                <div class="form-group">
-                    <label>优先级</label>
-                    <input type="number" id="edit-priority" min="0" max="100">
-                </div>
-                <div class="form-group">
-                    <label>生效开始时间</label>
-                    <input type="datetime-local" id="edit-start-time">
-                </div>
-                <div class="form-group">
-                    <label>生效结束时间</label>
-                    <input type="datetime-local" id="edit-end-time">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>优先级</label>
+                        <input type="number" id="edit-priority" min="0" max="100">
+                    </div>
+                    <div class="form-group">
+                        <label>生效开始时间</label>
+                        <input type="datetime-local" id="edit-start-time">
+                    </div>
+                    <div class="form-group">
+                        <label>生效结束时间</label>
+                        <input type="datetime-local" id="edit-end-time">
+                    </div>
                 </div>
                 <div class="form-actions">
                     <button type="button" class="btn btn-secondary" onclick="closeEditModal()">取消</button>

@@ -339,9 +339,29 @@
             max-width: 350px;
         }
         
-        /* 规则值输入框保持较宽，因为可能需要输入多个IP */
-        #edit-modal .form-group textarea.rule-value-input {
+        /* 规则类型输入框缩短二分之一 */
+        #edit-modal #edit-rule-type {
+            max-width: 175px;
+        }
+        
+        /* 规则值输入框和描述输入框保持一样宽 */
+        #edit-modal .form-group textarea.rule-value-input,
+        #edit-modal #edit-description {
             max-width: 500px;
+        }
+        
+        /* 优先级、生效开始时间、生效结束时间在同一行，输入框长度优化 */
+        #edit-modal .form-row .form-group {
+            flex: 1;
+        }
+        
+        #edit-modal .form-row #edit-priority {
+            max-width: 120px;
+        }
+        
+        #edit-modal .form-row #edit-start-time,
+        #edit-modal .form-row #edit-end-time {
+            max-width: 200px;
         }
         
         .form-group select {

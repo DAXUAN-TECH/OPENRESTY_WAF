@@ -441,7 +441,15 @@
                     code: code
                 })
             })
-                .then(response => response.json())
+                .then(response => {
+                    if (!response.ok) {
+                        return response.json().then(data => {
+                            console.error('API error:', data);
+                            throw new Error(data.message || '验证失败');
+                        });
+                    }
+                    return response.json();
+                })
                 .then(data => {
                     if (data.success) {
                         showSuccess('双因素认证已启用');
@@ -454,9 +462,10 @@
                     }
                 })
                 .catch(err => {
-                    showError('网络错误，请稍后重试');
+                    console.error('Error enabling TOTP:', err);
+                    showError(err.message || '网络错误，请稍后重试');
                     button.disabled = false;
-                    button.innerHTML = '启用双因素认证';
+                    button.innerHTML = '启用';
                 });
         }
         

@@ -183,28 +183,49 @@
             color: white;
         }
         
-        /* 模态框样式 */
-        .content-area {
-            position: relative;
-        }
+        /* 模态框样式 - 修复与layout.html的兼容性 */
+        /* 注意：不要重新定义.content-area，避免覆盖layout.html的样式 */
         
         .modal {
             display: none;
-            position: absolute;
-            z-index: 1000;
-            left: 0;
-            top: 0;
-            width: 100% !important;
-            height: 100% !important;
+            position: fixed !important;
+            z-index: 10000 !important; /* 提高z-index确保在最上层 */
+            left: 0 !important;
+            top: 0 !important;
+            right: 0 !important;
+            bottom: 0 !important;
+            width: 100vw !important;
+            height: 100vh !important;
             overflow: auto;
-            background-color: rgba(0,0,0,0.5);
+            background-color: rgba(0, 0, 0, 0.5);
+            margin: 0 !important;
+            padding: 0 !important;
         }
         
-        .modal[style*="display: block"],
-        .modal[style*="display:flex"] {
+        .modal.show {
             display: flex !important;
-            align-items: center;
-            justify-content: center;
+            align-items: center !important;
+            justify-content: center !important;
+            flex-direction: row !important;
+            width: 100vw !important;
+            height: 100vh !important;
+        }
+        
+        /* 确保模态框在所有情况下都能正确显示 */
+        .modal[style*="display: flex"],
+        .modal[style*="display:flex"],
+        .modal[style*="display: block"] {
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            position: fixed !important;
+            z-index: 10000 !important;
+            left: 0 !important;
+            top: 0 !important;
+            right: 0 !important;
+            bottom: 0 !important;
+            width: 100vw !important;
+            height: 100vh !important;
         }
         
         .modal-content {
@@ -216,6 +237,7 @@
             max-height: 90vh;
             overflow-y: auto;
             position: relative;
+            z-index: 10001;
         }
         
         .modal-header {
@@ -230,6 +252,11 @@
             font-size: 28px;
             font-weight: bold;
             cursor: pointer;
+            line-height: 1;
+            position: absolute;
+            right: 20px;
+            top: 20px;
+            z-index: 10001;
         }
         
         .close:hover {

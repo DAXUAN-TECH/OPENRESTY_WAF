@@ -437,10 +437,9 @@
             max-width: 400px !important;
         }
         
-        /* 分组输入框缩短二分之一 */
+        /* 分组输入框与编辑规则保持一致 */
         #create-rule-modal #create-rule-group {
-            width: 50% !important;
-            max-width: 200px !important;
+            max-width: 267px !important;
         }
         
         /* 优先级、生效开始时间、生效结束时间在同一行，输入框宽度优化 */

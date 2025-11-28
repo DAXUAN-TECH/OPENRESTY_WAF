@@ -176,7 +176,7 @@ local function hmac_sha1(key, message)
         sha:update(key)
         local hashed_key = sha:final()
         -- resty.sha1 的 final() 可能返回十六进制字符串，需要转换为二进制
-        if type(hashed_key) == "string" and #hashed_key == 40 and string.match(hashed_key, "^[0-9a-f]+$") then
+        if type(hashed_key) == "string" and #hashed_key == 40 and string.match(hashed_key, "^[0-9a-fA-F]+$") then
             -- 转换为二进制字符串
             local binary_key = ""
             for i = 1, 40, 2 do
@@ -213,8 +213,8 @@ local function hmac_sha1(key, message)
     local hash1 = sha1_obj:final()
     
     -- resty.sha1 的 final() 可能返回十六进制字符串，需要转换为二进制
-    -- 检查是否是十六进制字符串（长度为40，只包含0-9a-f）
-    if type(hash1) == "string" and #hash1 == 40 and string.match(hash1, "^[0-9a-f]+$") then
+    -- 检查是否是十六进制字符串（长度为40，只包含0-9a-fA-F）
+    if type(hash1) == "string" and #hash1 == 40 and string.match(hash1, "^[0-9a-fA-F]+$") then
         -- 转换为二进制字符串
         local binary_hash1 = ""
         for i = 1, 40, 2 do
@@ -231,7 +231,7 @@ local function hmac_sha1(key, message)
     local hash2 = sha2_obj:final()
     
     -- 同样检查 hash2 是否是十六进制字符串
-    if type(hash2) == "string" and #hash2 == 40 and string.match(hash2, "^[0-9a-f]+$") then
+    if type(hash2) == "string" and #hash2 == 40 and string.match(hash2, "^[0-9a-fA-F]+$") then
         -- 转换为二进制字符串
         local binary_hash2 = ""
         for i = 1, 40, 2 do

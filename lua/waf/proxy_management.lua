@@ -206,12 +206,12 @@ function _M.create_proxy(proxy_data)
     local sql = [[
         INSERT INTO waf_proxy_configs 
         (proxy_name, proxy_type, listen_port, listen_address, server_name, location_path,
-         backend_type, backend_path, load_balance,
+         backend_type, load_balance,
          health_check_enable, health_check_interval, health_check_timeout,
          max_fails, fail_timeout, proxy_timeout, proxy_connect_timeout,
          proxy_send_timeout, proxy_read_timeout, ssl_enable, ssl_cert_path, ssl_key_path,
          description, ip_rule_ids, status)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ]]
     
     local listen_address = proxy_data.listen_address or "0.0.0.0"
@@ -219,7 +219,6 @@ function _M.create_proxy(proxy_data)
     local location_path = proxy_data.location_path or "/"
     -- 只支持多个后端（负载均衡），不再支持单个后端
     local backend_type = "upstream"
-    local backend_path = null_to_nil(proxy_data.backend_path)
     local load_balance = proxy_data.load_balance or "round_robin"
     local health_check_enable = proxy_data.health_check_enable ~= nil and proxy_data.health_check_enable ~= cjson.null and proxy_data.health_check_enable or 1
     local health_check_interval = proxy_data.health_check_interval or 10
@@ -251,7 +250,6 @@ function _M.create_proxy(proxy_data)
         server_name,
         location_path,
         backend_type,
-        backend_path,
         load_balance,
         health_check_enable,
         health_check_interval,

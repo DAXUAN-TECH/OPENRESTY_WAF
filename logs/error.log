@@ -1,2 +1,10 @@
 
-2025/11/28 18:07:07 [warn] 202106#202106: *158342 [lua] auth.lua:312: route(): auth.enable_totp: TOTP verification failed for user: admin, error: Invalid TOTP code, client: 182.2.4.191, server: localhost, request: "POST /api/auth/totp/enable HTTP/1.1", host: "47.237.7.51", referrer: "http://47.237.7.51/admin/settings"
+2025/11/29 03:34:29 [warn] 326594#326594: *1301 [lua] system.lua:166: reload_nginx_internal(): OpenResty配置语法正确，但可能存在权限警告: nginx: the configuration file /usr/local/openresty/nginx/conf/nginx.conf syntax is ok
+nginx: configuration file /usr/local/openresty/nginx/conf/nginx.conf test is successful
+, context: ngx.timer, client: 182.2.4.43, server: 0.0.0.0:80
+2025/11/29 03:35:49 [warn] 328753#328753: *1574 [lua] system.lua:166: reload_nginx_internal(): OpenResty配置语法正确，但可能存在权限警告: nginx: the configuration file /usr/local/openresty/nginx/conf/nginx.conf syntax is ok
+nginx: configuration file /usr/local/openresty/nginx/conf/nginx.conf test is successful
+, context: ngx.timer, client: 182.2.4.43, server: 0.0.0.0:80
+2025/11/29 03:36:22 [warn] 329343#329343: *1704 [lua] system.lua:166: reload_nginx_internal(): OpenResty配置语法正确，但可能存在权限警告: nginx: the configuration file /usr/local/openresty/nginx/conf/nginx.conf syntax is ok
+nginx: configuration file /usr/local/openresty/nginx/conf/nginx.conf test is successful
+, context: ngx.timer, client: 182.2.4.43, server: 0.0.0.0:80

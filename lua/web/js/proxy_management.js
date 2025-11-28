@@ -74,7 +74,10 @@ let currentPage = 1;
                 // 显示所有后端服务器列表中的路径字段
                 document.querySelectorAll('#backends-list .backend-path').forEach(field => {
                     field.style.display = 'block';
+                    field.addEventListener('input', checkBackendPaths);
                 });
+                // 重新检查路径一致性
+                checkBackendPaths();
                 // 同步监听端口和监听地址的值
                 document.getElementById('create-tcp-udp-listen-port').value = document.getElementById('create-listen-port').value;
                 document.getElementById('create-tcp-udp-listen-address').value = document.getElementById('create-listen-address').value;
@@ -88,6 +91,15 @@ let currentPage = 1;
                 // 隐藏所有后端服务器列表中的路径字段
                 document.querySelectorAll('#backends-list .backend-path').forEach(field => {
                     field.style.display = 'none';
+                });
+                // 移除错误提示
+                const errorDiv = document.getElementById('backends-list')?.querySelector('.backend-path-error');
+                if (errorDiv) {
+                    errorDiv.remove();
+                }
+                // 移除错误样式
+                document.querySelectorAll('#backends-list .backend-path').forEach(field => {
+                    field.classList.remove('backend-path-error');
                 });
                 // 移除错误提示
                 const errorDiv = document.getElementById('backends-list')?.querySelector('.backend-path-error');
@@ -571,10 +583,22 @@ let currentPage = 1;
                     if (proxy.proxy_type === 'http') {
                         document.querySelectorAll('#edit-backends-list .backend-path').forEach(field => {
                             field.style.display = 'block';
+                            field.addEventListener('input', checkEditBackendPaths);
                         });
+                        // 重新检查路径一致性
+                        checkEditBackendPaths();
                     } else {
                         document.querySelectorAll('#edit-backends-list .backend-path').forEach(field => {
                             field.style.display = 'none';
+                        });
+                        // 移除错误提示
+                        const errorDiv = document.getElementById('edit-backends-list')?.querySelector('.backend-path-error');
+                        if (errorDiv) {
+                            errorDiv.remove();
+                        }
+                        // 移除错误样式
+                        document.querySelectorAll('#edit-backends-list .backend-path').forEach(field => {
+                            field.classList.remove('backend-path-error');
                         });
                     }
                     

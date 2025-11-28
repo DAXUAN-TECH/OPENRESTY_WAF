@@ -548,6 +548,8 @@
             to { transform: rotate(360deg); }
         }
     </style>
+    <!-- 引入 QR 码生成库（用于生成 TOTP 二维码） -->
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
     <script src="/common.js"></script>
     </head>
     <body>
@@ -756,23 +758,73 @@
             const qrContainer = document.getElementById('qrContainer');
             let html = '';
             
-            if (data.qr_data) {
-                // 使用本地 QR 码生成（如果可用）
-                html += '<img src="data:image/png;base64,' + data.qr_data + '" alt="QR Code">';
+            // 清空容器
+            qrContainer.innerHTML = '';
+            
+            // 创建二维码容器
+            const qrCanvas = document.createElement('canvas');
+            qrCanvas.id = 'qrCanvas';
+            qrCanvas.style.display = 'block';
+            qrCanvas.style.margin = '0 auto';
+            qrContainer.appendChild(qrCanvas);
+            
+            // 获取 otpauth URL
+            let otpauthUrl = null;
+            if (data.qr_data && typeof data.qr_data === 'object' && data.qr_data.otpauth_url) {
+                // qr_data 是对象，包含 otpauth_url
+                otpauthUrl = data.qr_data.otpauth_url;
             } else if (data.qr_url) {
-                // 使用外部 QR 码服务
-                html += '<img src="' + data.qr_url + '" alt="QR Code">';
+                // 使用外部 QR 码服务（如果配置了）
+                html = '<img src="' + data.qr_url + '" alt="QR Code">';
+                if (data.secret) {
+                    html += '<div class="secret-key">密钥（手动输入）: ' + data.secret + '</div>';
+                }
+                html += '<div style="color: #666; font-size: 12px; margin-top: 10px;">';
+                html += '请使用 Google Authenticator 扫描二维码或手动输入密钥，然后输入生成的6位验证码';
+                html += '</div>';
+                qrContainer.innerHTML = html;
+                return;
             }
             
-            if (data.secret) {
-                html += '<div class="secret-key">密钥（手动输入）: ' + data.secret + '</div>';
+            // 使用 qrcode.js 生成二维码
+            if (otpauthUrl && typeof QRCode !== 'undefined') {
+                QRCode.toCanvas(qrCanvas, otpauthUrl, {
+                    width: 200,
+                    margin: 2,
+                    color: {
+                        dark: '#000000',
+                        light: '#FFFFFF'
+                    }
+                }, function (error) {
+                    if (error) {
+                        console.error('QR code generation failed:', error);
+                        qrContainer.innerHTML = '<div style="color: #dc3545; padding: 20px;">二维码生成失败，请使用手动输入密钥的方式</div>';
+                    } else {
+                        // 二维码生成成功，继续显示密钥等信息
+                        if (data.secret) {
+                            const secretDiv = document.createElement('div');
+                            secretDiv.className = 'secret-key';
+                            secretDiv.textContent = '密钥（手动输入）: ' + data.secret;
+                            qrContainer.appendChild(secretDiv);
+                        }
+                        
+                        const tipDiv = document.createElement('div');
+                        tipDiv.style.cssText = 'color: #666; font-size: 12px; margin-top: 10px;';
+                        tipDiv.textContent = '请使用 Google Authenticator 扫描二维码或手动输入密钥，然后输入生成的6位验证码';
+                        qrContainer.appendChild(tipDiv);
+                    }
+                });
+            } else {
+                // QRCode 库未加载或 otpauthUrl 不存在
+                console.error('QRCode library not loaded or otpauthUrl missing');
+                qrContainer.innerHTML = '<div style="color: #dc3545; padding: 20px;">二维码生成失败，请使用手动输入密钥的方式</div>';
+                if (data.secret) {
+                    const secretDiv = document.createElement('div');
+                    secretDiv.className = 'secret-key';
+                    secretDiv.textContent = '密钥（手动输入）: ' + data.secret;
+                    qrContainer.appendChild(secretDiv);
+                }
             }
-            
-            html += '<div style="color: #666; font-size: 12px; margin-top: 10px;">';
-            html += '请使用 Google Authenticator 扫描二维码或手动输入密钥，然后输入生成的6位验证码';
-            html += '</div>';
-            
-            qrContainer.innerHTML = html;
         }
         
         // 启用 TOTP

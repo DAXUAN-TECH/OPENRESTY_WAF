@@ -1099,9 +1099,23 @@
                 return;
             }
             
+            // 获取content-area的实际宽度（用于验证）
+            const contentAreaRect = contentArea.getBoundingClientRect();
+            const contentAreaWidth = contentAreaRect.width;
+            
+            // 如果content-area宽度为0或无效，延迟重试
+            if (contentAreaWidth <= 0) {
+                setTimeout(forceTableWidths, 100);
+                return;
+            }
+            
             // 强制设置container的宽度（使用100%，相对于content-area）
             const container = document.querySelector('.container');
             if (container) {
+                // 先清除可能存在的内联样式
+                container.style.removeProperty('width');
+                container.style.removeProperty('max-width');
+                container.style.removeProperty('min-width');
                 // 使用内联样式强制设置，优先级最高
                 container.style.setProperty('width', '100%', 'important');
                 container.style.setProperty('max-width', '100%', 'important');
@@ -1110,6 +1124,9 @@
             
             // 强制设置所有tab-content的宽度
             document.querySelectorAll('.tab-content').forEach(tabContent => {
+                tabContent.style.removeProperty('width');
+                tabContent.style.removeProperty('max-width');
+                tabContent.style.removeProperty('min-width');
                 tabContent.style.setProperty('width', '100%', 'important');
                 tabContent.style.setProperty('max-width', '100%', 'important');
                 tabContent.style.setProperty('min-width', '100%', 'important');
@@ -1117,6 +1134,9 @@
             
             // 强制设置所有table-container的宽度
             document.querySelectorAll('.table-container').forEach(tableContainer => {
+                tableContainer.style.removeProperty('width');
+                tableContainer.style.removeProperty('max-width');
+                tableContainer.style.removeProperty('min-width');
                 tableContainer.style.setProperty('width', '100%', 'important');
                 tableContainer.style.setProperty('max-width', '100%', 'important');
                 tableContainer.style.setProperty('min-width', '100%', 'important');
@@ -1124,6 +1144,9 @@
             
             // 强制设置所有table-wrapper的宽度
             document.querySelectorAll('.table-wrapper').forEach(tableWrapper => {
+                tableWrapper.style.removeProperty('width');
+                tableWrapper.style.removeProperty('max-width');
+                tableWrapper.style.removeProperty('min-width');
                 tableWrapper.style.setProperty('width', '100%', 'important');
                 tableWrapper.style.setProperty('max-width', '100%', 'important');
                 tableWrapper.style.setProperty('min-width', '100%', 'important');
@@ -1131,6 +1154,9 @@
             
             // 强制设置所有表格的宽度
             document.querySelectorAll('#access-table, #block-table, #audit-table').forEach(table => {
+                table.style.removeProperty('width');
+                table.style.removeProperty('max-width');
+                table.style.removeProperty('min-width');
                 table.style.setProperty('width', '100%', 'important');
                 table.style.setProperty('max-width', '100%', 'important');
                 table.style.setProperty('min-width', '100%', 'important');

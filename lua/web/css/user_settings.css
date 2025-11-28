@@ -334,7 +334,7 @@
         
         /* 密码输入框进一步缩短 */
         #changePasswordForm .form-group input[type="password"] {
-            max-width: 350px;
+            max-width: 230px;
         }
         
         /* 弹出框中的验证码输入框样式 */

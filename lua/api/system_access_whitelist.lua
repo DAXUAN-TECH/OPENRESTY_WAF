@@ -479,16 +479,34 @@ function _M.delete()
     
     local id = tonumber(id_match)
     
-    -- 删除前检查当前白名单条目数量
+    -- 先查询要删除的条目信息（检查状态）
+    local entry_ok, entry_res, entry_err = pcall(function()
+        local entry_sql = "SELECT id, ip_address, status FROM waf_system_access_whitelist WHERE id = ? LIMIT 1"
+        return mysql_pool.query(entry_sql, id)
+    end)
+    
+    if not entry_ok or entry_err or not entry_res or #entry_res == 0 then
+        ngx.log(ngx.ERR, "delete: failed to query entry or entry not found: ", tostring(entry_err))
+        api_utils.json_response({error = "白名单条目不存在"}, 404)
+        return
+    end
+    
+    local entry_status = tonumber(entry_res[1].status) or 0
+    local is_enabled_entry = (entry_status == 1)  -- 要删除的条目是否是启用的
+    
+    -- 删除前检查当前启用的白名单条目数量（只统计status=1的条目）
+    -- 因为系统白名单检查时只检查status=1的启用条目
     local count_before_ok, count_before_res, count_before_err = pcall(function()
-        local count_sql = "SELECT COUNT(*) as total FROM waf_system_access_whitelist"
+        local count_sql = "SELECT COUNT(*) as total FROM waf_system_access_whitelist WHERE status = 1"
         return mysql_pool.query(count_sql)
     end)
     
-    local is_last_entry = false
+    local is_last_enabled_entry = false
     if count_before_ok and not count_before_err and count_before_res and count_before_res[1] then
         local count_before = tonumber(count_before_res[1].total) or 0
-        is_last_entry = (count_before == 1)  -- 如果删除前只有1条，删除后就是0条
+        -- 如果删除前只有1条启用的条目，且要删除的这条也是启用的，删除后就没有启用的条目了
+        is_last_enabled_entry = (count_before == 1 and is_enabled_entry)
+        ngx.log(ngx.DEBUG, "delete: count_before=", count_before, ", is_enabled_entry=", is_enabled_entry, ", is_last_enabled_entry=", is_last_enabled_entry)
     end
     
     local ok, res, err = pcall(function()
@@ -507,8 +525,8 @@ function _M.delete()
     local authenticated, session = auth.is_authenticated()
     local username = authenticated and session.username or "system"
     
-    -- 如果是最后一条白名单条目，自动关闭系统白名单
-    if is_last_entry then
+    -- 如果删除的是最后一条启用的白名单条目，自动关闭系统白名单
+    if is_last_enabled_entry then
         local update_config_ok, update_config_res, update_config_err = pcall(function()
             local update_sql = [[
                 UPDATE waf_system_config 
@@ -519,11 +537,11 @@ function _M.delete()
         end)
         
         if update_config_ok and not update_config_err then
-            ngx.log(ngx.INFO, "delete: 最后一条白名单条目已删除，自动关闭系统白名单")
+            ngx.log(ngx.INFO, "delete: 最后一条启用的白名单条目已删除，自动关闭系统白名单")
             audit_log.log("update", "system_config", "system_access_whitelist_enabled", 
-                "删除最后一条白名单条目，自动关闭系统白名单", "success")
+                "删除最后一条启用的白名单条目，自动关闭系统白名单", "success")
         else
-            ngx.log(ngx.WARN, "delete: 最后一条白名单条目已删除，但自动关闭系统白名单失败: ", tostring(update_config_err))
+            ngx.log(ngx.WARN, "delete: 最后一条启用的白名单条目已删除，但自动关闭系统白名单失败: ", tostring(update_config_err))
         end
     end
     
@@ -543,8 +561,8 @@ function _M.delete()
     end)
     
     local message = "删除成功，nginx配置正在重新加载"
-    if is_last_entry then
-        message = "删除成功，系统白名单已自动关闭，nginx配置正在重新加载"
+    if is_last_enabled_entry then
+        message = "删除成功，系统白名单已自动关闭（已无启用的白名单条目），nginx配置正在重新加载"
     end
     
     api_utils.json_response({

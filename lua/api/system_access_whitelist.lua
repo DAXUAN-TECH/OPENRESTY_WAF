@@ -273,16 +273,19 @@ function _M.create()
     local authenticated, session = auth.is_authenticated()
     local username = authenticated and session.username or "system"
     
-    -- 检查当前白名单条目数量（在插入前）
+    -- 检查当前启用的白名单条目数量（在插入前）
+    -- 因为系统白名单检查时只检查status=1的启用条目，所以这里也只检查启用的条目数量
     local count_ok, count_res, count_err = pcall(function()
-        local count_sql = "SELECT COUNT(*) as total FROM waf_system_access_whitelist"
+        local count_sql = "SELECT COUNT(*) as total FROM waf_system_access_whitelist WHERE status = 1"
         return mysql_pool.query(count_sql)
     end)
     
-    local is_first_entry = false
+    local is_first_enabled_entry = false
     if count_ok and not count_err and count_res and count_res[1] then
         local current_count = tonumber(count_res[1].total) or 0
-        is_first_entry = (current_count == 0)
+        -- 如果当前没有启用的条目，且新创建的条目是启用的（status=1），则是第一条启用的条目
+        is_first_enabled_entry = (current_count == 0 and status == 1)
+        ngx.log(ngx.DEBUG, "create: current_enabled_count=", current_count, ", new_entry_status=", status, ", is_first_enabled_entry=", is_first_enabled_entry)
     end
     
     local ok, res, err = pcall(function()
@@ -299,8 +302,8 @@ function _M.create()
         return
     end
     
-    -- 如果是第一条白名单条目，自动开启系统白名单
-    if is_first_entry then
+    -- 如果是第一条启用的白名单条目，自动开启系统白名单
+    if is_first_enabled_entry then
         local update_config_ok, update_config_res, update_config_err = pcall(function()
             local update_sql = [[
                 UPDATE waf_system_config 
@@ -311,11 +314,11 @@ function _M.create()
         end)
         
         if update_config_ok and not update_config_err then
-            ngx.log(ngx.INFO, "create: 第一条白名单条目已创建，自动开启系统白名单")
+            ngx.log(ngx.INFO, "create: 第一条启用的白名单条目已创建，自动开启系统白名单")
             audit_log.log("update", "system_config", "system_access_whitelist_enabled", 
-                "添加第一条白名单条目，自动开启系统白名单", "success")
+                "添加第一条启用的白名单条目，自动开启系统白名单", "success")
         else
-            ngx.log(ngx.WARN, "create: 第一条白名单条目已创建，但自动开启系统白名单失败: ", tostring(update_config_err))
+            ngx.log(ngx.WARN, "create: 第一条启用的白名单条目已创建，但自动开启系统白名单失败: ", tostring(update_config_err))
         end
     end
     
@@ -334,8 +337,8 @@ function _M.create()
     end)
     
     local message = "创建成功，nginx配置正在重新加载"
-    if is_first_entry then
-        message = "创建成功，系统白名单已自动开启，nginx配置正在重新加载"
+    if is_first_enabled_entry then
+        message = "创建成功，系统白名单已自动开启（已添加第一条启用的白名单条目），nginx配置正在重新加载"
     end
     
     api_utils.json_response({

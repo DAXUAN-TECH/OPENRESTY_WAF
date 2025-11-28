@@ -203,8 +203,9 @@
         /* 内容显示区域 - 统一内边距 */
         .content-area {
             grid-area: content;
-            /* 使用calc()计算宽度，避免JavaScript内联样式覆盖 */
-            width: calc(100% - var(--sidebar-width));
+            /* 在grid布局中，content-area占据剩余空间，但由于sidebar是fixed，需要手动设置 */
+            /* 使用100vw（viewport width）减去sidebar宽度，确保子元素的100%能够正确计算 */
+            width: calc(100vw - var(--sidebar-width));
             height: 100%;
             padding: 30px;
             overflow-y: auto;
@@ -222,9 +223,11 @@
             visibility: visible;
         }
         /* 确保content-area的所有直接子元素能够正确使用100%宽度 */
+        /* 使用!important确保不被其他样式覆盖 */
         .content-area > * {
-            box-sizing: border-box;
+            box-sizing: border-box !important;
             width: 100% !important;
+            min-width: 100% !important;
             max-width: 100% !important;
         }
         /* 响应式设计 */

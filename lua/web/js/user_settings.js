@@ -423,7 +423,7 @@ if (typeof window.totpEnabled === 'undefined') {
                 return;
             }
             
-            const code = prompt('请输入当前验证码以确认禁用：');
+            const code = prompt('请输入双因素认证验证码：');
             if (!code || code.length !== 6) {
                 showError('请输入6位验证码');
                 return;

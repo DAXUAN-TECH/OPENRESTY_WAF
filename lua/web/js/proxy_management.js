@@ -401,8 +401,11 @@ let currentPage = 1;
                 
                 if (data.success) {
                     showAlert('代理配置创建成功');
+                    // 关闭创建代理弹出框
+                    closeCreateProxyModal();
+                    // 重置表单
                     resetCreateForm();
-                    switchTab('proxies');
+                    // 刷新代理列表
                     loadProxies();
                 } else {
                     showAlert(data.error || '创建失败', 'error');
@@ -664,6 +667,26 @@ let currentPage = 1;
                 : '<input type="text" placeholder="路径（HTTP/HTTPS）" class="backend-path" style="display: none;">';
             document.getElementById('backends-list').innerHTML = `<div class="backend-item"><input type="text" placeholder="IP地址" class="backend-address"><input type="number" placeholder="端口" class="backend-port" min="1" max="65535">${pathField}<input type="number" placeholder="权重" class="backend-weight" value="1" min="1"><button type="button" class="btn btn-danger" onclick="removeBackend(this)">删除</button></div>`;
             toggleProxyFields();
+        }
+        
+        // 显示创建代理弹出框
+        function showCreateProxyModal() {
+            const modal = document.getElementById('create-proxy-modal');
+            if (modal) {
+                modal.style.display = 'flex';
+                modal.classList.add('show');
+            }
+        }
+        
+        // 关闭创建代理弹出框
+        function closeCreateProxyModal() {
+            const modal = document.getElementById('create-proxy-modal');
+            if (modal) {
+                modal.style.display = 'none';
+                modal.classList.remove('show');
+                // 重置表单
+                resetCreateForm();
+            }
         }
         
         // 工具函数

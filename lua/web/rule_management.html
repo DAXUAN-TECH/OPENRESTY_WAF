@@ -12,7 +12,7 @@
         
         <div class="tabs">
             <button class="tab active" onclick="switchTab('rules')">规则列表</button>
-            <button class="tab" onclick="switchTab('create')">创建规则</button>
+            <button class="tab" onclick="showCreateRuleModal()" style="display: none;">创建规则</button>
         </div>
         
         <div id="alert-container"></div>
@@ -41,7 +41,7 @@
                 <div style="display: flex; gap: 10px;">
                     <button class="btn btn-primary" onclick="applyFilters()">查询</button>
                     <button class="btn btn-secondary" onclick="resetFilters()">重置</button>
-                    <button class="btn btn-primary" onclick="switchTab('create')">创建规则</button>
+                    <button class="btn btn-primary" onclick="showCreateRuleModal()">创建规则</button>
                     <button class="btn btn-primary" onclick="loadRules()">刷新</button>
                 </div>
             </div>
@@ -70,9 +70,14 @@
             <div class="pagination" id="pagination"></div>
         </div>
         
-        <!-- 创建规则 -->
-        <div id="create-tab" class="tab-content">
-            <form id="create-form" onsubmit="createRule(event)">
+        <!-- 创建规则弹出框 -->
+        <div id="create-rule-modal" class="modal">
+            <div class="modal-content" style="max-width: 900px; max-height: 90vh; overflow-y: auto;">
+                <div class="modal-header">
+                    <h2>创建规则</h2>
+                    <span class="close" onclick="closeCreateRuleModal()">&times;</span>
+                </div>
+                <form id="create-form" onsubmit="createRule(event)">
                 <div class="form-group">
                     <label>规则名称 *</label>
                     <input type="text" id="create-rule-name" required>
@@ -153,10 +158,16 @@
                 </div>
                 
                 <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeCreateRuleModal()">取消</button>
                     <button type="button" class="btn btn-secondary" onclick="resetCreateForm()">重置</button>
                     <button type="submit" class="btn btn-primary">创建规则</button>
                 </div>
             </form>
+            </div>
+        </div>
+        
+        <!-- 创建规则标签页（已废弃，保留用于兼容） -->
+        <div id="create-tab" class="tab-content" style="display: none;">
         </div>
     </div>
     

@@ -366,6 +366,8 @@ let currentPage = 1;
                 if (data.success) {
                     // 显示创建成功提示框
                     showCreateSuccessModal();
+                    // 关闭创建规则弹出框
+                    closeCreateRuleModal();
                     // 刷新分组列表和规则列表
                     loadGroups();
                     loadRules();
@@ -1119,19 +1121,34 @@ let currentPage = 1;
             modal.classList.add('show');
         }
         
-        // 确定（关闭提示框并返回创建规则页面）
+        // 确定（关闭提示框）
         function confirmCreateRule() {
             // 关闭提示框
             const modal = document.getElementById('create-success-modal');
             modal.classList.remove('show');
             // 重置表单
             resetCreateForm();
-            // 切换到创建规则标签页
-            switchTab('create');
-            // 滚动到表单顶部
-            const createTab = document.getElementById('create-tab');
-            if (createTab) {
-                createTab.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+        
+        // 显示创建规则弹出框
+        function showCreateRuleModal() {
+            const modal = document.getElementById('create-rule-modal');
+            if (modal) {
+                modal.style.display = 'flex';
+                modal.classList.add('show');
+                // 设置默认日期
+                setDefaultDates();
+            }
+        }
+        
+        // 关闭创建规则弹出框
+        function closeCreateRuleModal() {
+            const modal = document.getElementById('create-rule-modal');
+            if (modal) {
+                modal.style.display = 'none';
+                modal.classList.remove('show');
+                // 重置表单
+                resetCreateForm();
             }
         }
         

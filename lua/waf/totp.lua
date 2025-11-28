@@ -215,6 +215,7 @@ function _M.generate_totp(secret_base32, time_step, digits)
     -- 解码 Base32 密钥
     local secret, err = base32_decode(secret_base32)
     if not secret then
+        ngx.log(ngx.WARN, "totp.generate_totp: failed to decode secret_base32, error: ", tostring(err), ", secret_base32: ", string.sub(secret_base32, 1, 20), "...")
         return nil, err or "Failed to decode secret"
     end
     
@@ -270,11 +271,13 @@ function _M.verify_totp(secret_base32, code, time_step, window)
     end
     
     -- 解码密钥（只解码一次，避免重复解码）
+    ngx.log(ngx.INFO, "totp.verify_totp: decoding secret_base32, length: ", #secret_base32, ", prefix: ", string.sub(secret_base32, 1, 12), "...")
     local secret, err = base32_decode(secret_base32)
     if not secret then
-        ngx.log(ngx.WARN, "totp.verify_totp: failed to decode secret, error: ", tostring(err))
+        ngx.log(ngx.WARN, "totp.verify_totp: failed to decode secret, error: ", tostring(err), ", secret_base32: ", string.sub(secret_base32, 1, 20), "...")
         return false, "Invalid secret format"
     end
+    ngx.log(ngx.INFO, "totp.verify_totp: secret decoded successfully, decoded length: ", #secret, " bytes")
     
     -- 计算当前时间计数器
     local current_time = ngx.time()

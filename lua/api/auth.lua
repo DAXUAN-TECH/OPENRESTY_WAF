@@ -339,28 +339,45 @@ function _M.enable_totp()
     
     ngx.log(ngx.INFO, "auth.enable_totp: verifying TOTP for user: ", session.username, ", secret length: ", #secret, ", secret prefix: ", string.sub(secret, 1, 12), "...", ", code: ", code)
     
-    -- 先尝试使用提供的 secret 验证
-    local totp_ok, err = totp.verify_totp(secret, code, 30, 3)
+    -- 检查缓存的 secret
+    local cache = ngx.shared.waf_cache
+    local totp_setup_key = "totp_setup:" .. session.username
+    local cached_secret = cache:get(totp_setup_key)
+    
+    if cached_secret then
+        ngx.log(ngx.INFO, "auth.enable_totp: found cached secret for user: ", session.username, ", cached_secret length: ", #cached_secret, ", cached_secret prefix: ", string.sub(cached_secret, 1, 12), "...", ", matches provided: ", cached_secret == secret)
+    else
+        ngx.log(ngx.INFO, "auth.enable_totp: no cached secret found for user: ", session.username)
+    end
+    
+    -- 优先使用缓存的 secret 验证（如果存在），因为缓存的 secret 是服务器生成的，更可靠
+    local totp_ok, err = false, "Not verified yet"
     local secret_source = "provided"
     
-    -- 如果验证失败，尝试使用缓存的 secret（解决多次打开设置弹窗导致 secret 不一致的问题）
-    if not totp_ok then
-        local cache = ngx.shared.waf_cache
-        local totp_setup_key = "totp_setup:" .. session.username
-        local cached_secret = cache:get(totp_setup_key)
-        
-        if cached_secret and cached_secret ~= secret then
-            ngx.log(ngx.INFO, "auth.enable_totp: provided secret verification failed, trying cached secret for user: ", session.username)
-            totp_ok, err = totp.verify_totp(cached_secret, code, 30, 3)
+    if cached_secret then
+        -- 先尝试使用缓存的 secret（服务器生成的，更可靠）
+        ngx.log(ngx.INFO, "auth.enable_totp: trying cached secret first for user: ", session.username)
+        totp_ok, err = totp.verify_totp(cached_secret, code, 30, 3)
+        if totp_ok then
+            secret = cached_secret
+            secret_source = "cached"
+            ngx.log(ngx.INFO, "auth.enable_totp: cached secret verification successful for user: ", session.username)
+        else
+            ngx.log(ngx.INFO, "auth.enable_totp: cached secret verification failed, trying provided secret for user: ", session.username)
+            -- 如果缓存的 secret 验证失败，尝试提供的 secret
+            totp_ok, err = totp.verify_totp(secret, code, 30, 3)
             if totp_ok then
-                -- 使用缓存的 secret 验证成功，更新 secret
-                secret = cached_secret
-                secret_source = "cached"
-                ngx.log(ngx.INFO, "auth.enable_totp: cached secret verification successful for user: ", session.username)
+                secret_source = "provided"
+                ngx.log(ngx.INFO, "auth.enable_totp: provided secret verification successful for user: ", session.username)
             else
-                ngx.log(ngx.WARN, "auth.enable_totp: both provided and cached secret verification failed for user: ", session.username)
+                ngx.log(ngx.WARN, "auth.enable_totp: both cached and provided secret verification failed for user: ", session.username)
             end
         end
+    else
+        -- 没有缓存的 secret，直接使用提供的 secret
+        ngx.log(ngx.INFO, "auth.enable_totp: no cached secret, using provided secret for user: ", session.username)
+        totp_ok, err = totp.verify_totp(secret, code, 30, 3)
+        secret_source = "provided"
     end
     
     if not totp_ok then

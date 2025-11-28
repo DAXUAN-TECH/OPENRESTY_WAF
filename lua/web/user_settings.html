@@ -6,7 +6,47 @@
     <title>用户设置 - WAF 管理后台</title>
     <link rel="stylesheet" href="/css/user_settings.css">
     <!-- 引入 QR 码生成库（用于生成 TOTP 二维码） -->
-    <script src="https://unpkg.com/qrcode@1.5.3/build/qrcode.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js" onerror="loadQRCodeFallback()"></script>
+    <script>
+        function loadQRCodeFallback() {
+            console.log('Primary CDN failed, trying fallback...');
+            const script = document.createElement('script');
+            script.src = 'https://unpkg.com/qrcode@1.5.3/build/qrcode.min.js';
+            script.onerror = function() {
+                console.error('All CDN sources failed. Using alternative library...');
+                // 使用 qrcodejs 作为备用方案
+                const fallbackScript = document.createElement('script');
+                fallbackScript.src = 'https://cdn.jsdelivr.net/gh/davidshimjs/qrcodejs@master/qrcode.min.js';
+                fallbackScript.onload = function() {
+                    // 适配 qrcodejs API 到 QRCode.toCanvas
+                    if (typeof QRCode !== 'undefined' && !QRCode.toCanvas) {
+                        QRCode.toCanvas = function(canvas, text, options, callback) {
+                            const qr = new QRCode({
+                                text: text,
+                                width: options.width || 200,
+                                height: options.width || 200,
+                                colorDark: options.color.dark || '#000000',
+                                colorLight: options.color.light || '#FFFFFF',
+                                correctLevel: QRCode.CorrectLevel.M
+                            });
+                            const ctx = canvas.getContext('2d');
+                            const img = new Image();
+                            img.onload = function() {
+                                ctx.drawImage(img, 0, 0);
+                                if (callback) callback(null);
+                            };
+                            img.onerror = function(err) {
+                                if (callback) callback(err);
+                            };
+                            img.src = qr._elImage.src;
+                        };
+                    }
+                };
+                document.head.appendChild(fallbackScript);
+            };
+            document.head.appendChild(script);
+        }
+    </script>
     <script src="/common.js"></script>
     </head>
     <body>

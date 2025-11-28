@@ -392,14 +392,13 @@
             }
             window.currentSecret = null;
             currentSecret = null;
-            const qrContainer = document.getElementById('modalQrContainer');
-            const qrContainer = document.getElementById('modalQrContainer');
-            if (qrContainer) {
-                qrContainer.innerHTML = '';
+            const modalQrContainer = document.getElementById('modalQrContainer');
+            if (modalQrContainer) {
+                modalQrContainer.innerHTML = '';
             }
-            const codeInput = document.getElementById('modalTotpCode');
-            if (codeInput) {
-                codeInput.value = '';
+            const modalCodeInput = document.getElementById('modalTotpCode');
+            if (modalCodeInput) {
+                modalCodeInput.value = '';
             }
         }
         

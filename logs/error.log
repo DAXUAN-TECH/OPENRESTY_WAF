@@ -1,1 +1,4 @@
 
+2025/11/28 17:26:03 [error] 189429#189429: *150780 [lua] mysql_pool.lua:69: build_sql(): build_sql: warning - unplaced placeholders remain in SQL:         INSERT INTO waf_block_logs (client_ip, rule_id, rule_name, block_time, request_path, user_agent, block_reason)
+        VALUES ('90.151.171.106', '1', 'amos_jump', NOW(), '?Z77203604080Q1', 'Mozilla/5.0 (Windows NT 6.1; rv:16.0) Gecko/20100101 Firefox/16.0 (+https://best-proxies.ru/faq/#from)', 'manual')
+    , client: 90.151.171.106, server: userdata:, request: "GET http://whatismyip.akamai.com?Z77203604080Q1 HTTP/1.1", host: "whatismyip.akamai.com", referrer: "https://google.com/"

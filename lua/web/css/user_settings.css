@@ -442,6 +442,7 @@
             border-radius: 5px;
             padding: 20px;
             margin-bottom: 20px;
+            text-align: center;
         }
         
         .totp-status.enabled {
@@ -461,6 +462,10 @@
             font-size: 12px;
             font-weight: 500;
             margin-bottom: 10px;
+        }
+        
+        .totp-status #statusText {
+            text-align: center;
         }
         
         .status-label.enabled {
@@ -504,6 +509,15 @@
         .button-danger {
             background: #dc3545;
             color: white;
+        }
+        
+        .button-warning {
+            background: #ff9800;
+            color: white;
+        }
+        
+        .button-warning:hover {
+            opacity: 0.9;
         }
         
         .button-secondary {

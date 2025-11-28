@@ -371,6 +371,167 @@ function _M.disable_totp()
     }, 200)
 end
 
+-- 重置 TOTP（验证旧验证码 -> 生成新密钥 -> 验证新验证码）
+function _M.reset_totp()
+    local session = auth.require_auth()
+    if not session then
+        return
+    end
+    
+    local args = api_utils.get_args()
+    local old_code = args.old_code  -- 旧验证码
+    local new_code = args.new_code   -- 新验证码（可选，用于立即启用）
+    local secret = args.secret        -- 新密钥（可选，如果前端已经生成）
+    
+    -- 获取用户信息
+    local user_info = auth.get_user(session.username)
+    if not user_info or not user_info.totp_secret then
+        api_utils.json_response({
+            error = "Bad Request",
+            message = "未启用双因素认证，无法重置"
+        }, 400)
+        return
+    end
+    
+    -- 第一步：验证旧验证码
+    if not old_code then
+        api_utils.json_response({
+            error = "Bad Request",
+            message = "请输入当前验证码以确认重置"
+        }, 400)
+        return
+    end
+    
+    local totp_ok, err = totp.verify_totp(user_info.totp_secret, old_code)
+    if not totp_ok then
+        -- 记录审计日志（失败）
+        audit_log.log_totp_action("reset", session.username, false, "旧验证码错误")
+        api_utils.json_response({
+            error = "Unauthorized",
+            message = "当前验证码错误"
+        }, 401)
+        return
+    end
+    
+    -- 第二步：生成新密钥和QR码
+    local config = require "config"
+    local new_secret = secret or totp.generate_secret(16)
+    local qr_data = totp.generate_qr_data(new_secret, session.username, "WAF Management")
+    
+    -- 根据配置决定是否生成外部 QR 码 URL
+    local qr_generator = config.totp and config.totp.qr_generator or "local"
+    local qr_url = nil
+    
+    if qr_generator == "external" then
+        qr_url, _ = totp.generate_qr_url(new_secret, session.username, "WAF Management")
+    end
+    
+    local response = {
+        success = true,
+        secret = new_secret,
+        qr_data = qr_data,
+        qr_generator = qr_generator,
+        allow_manual_entry = config.totp and config.totp.allow_manual_entry ~= false,
+        message = "旧验证码验证成功，请使用 Google Authenticator 扫描新二维码或手动输入新密钥，然后输入新的6位验证码完成重置"
+    }
+    
+    if qr_url then
+        response.qr_url = qr_url
+    end
+    
+    -- 如果提供了新验证码，直接验证并启用
+    if new_code and new_code ~= "" then
+        local new_totp_ok, new_err = totp.verify_totp(new_secret, new_code)
+        if not new_totp_ok then
+            -- 记录审计日志（失败）
+            audit_log.log_totp_action("reset", session.username, false, "新验证码错误")
+            api_utils.json_response({
+                error = "Unauthorized",
+                message = "新验证码错误，请重试"
+            }, 401)
+            return
+        end
+        
+        -- 保存新密钥
+        local ok = auth.set_user_totp_secret(session.username, new_secret)
+        if not ok then
+            -- 记录审计日志（失败）
+            audit_log.log_totp_action("reset", session.username, false, "保存新密钥失败")
+            api_utils.json_response({
+                error = "Internal Server Error",
+                message = "保存新密钥失败"
+            }, 500)
+            return
+        end
+        
+        -- 记录审计日志（成功）
+        audit_log.log_totp_action("reset", session.username, true, nil)
+        
+        response.success = true
+        response.message = "双因素认证已重置并启用"
+        response.enabled = true
+    else
+        -- 只返回新密钥和QR码，等待前端验证新验证码
+        -- 注意：此时旧密钥仍然有效，需要用户验证新验证码后才能替换
+        -- 这里我们暂时不清除旧密钥，等待用户验证新验证码后再清除
+        response.requires_new_code = true
+    end
+    
+    api_utils.json_response(response, 200)
+end
+
+-- 完成重置 TOTP（验证新验证码并保存新密钥）
+function _M.complete_reset_totp()
+    local session = auth.require_auth()
+    if not session then
+        return
+    end
+    
+    local args = api_utils.get_args()
+    local secret = args.secret  -- 新密钥
+    local code = args.code      -- 新验证码
+    
+    if not secret or not code then
+        api_utils.json_response({
+            error = "Bad Request",
+            message = "密钥和验证码不能为空"
+        }, 400)
+        return
+    end
+    
+    -- 验证新验证码
+    local totp_ok, err = totp.verify_totp(secret, code)
+    if not totp_ok then
+        -- 记录审计日志（失败）
+        audit_log.log_totp_action("reset", session.username, false, "新验证码错误")
+        api_utils.json_response({
+            error = "Unauthorized",
+            message = "新验证码错误，请重试"
+        }, 401)
+        return
+    end
+    
+    -- 保存新密钥（替换旧密钥）
+    local ok = auth.set_user_totp_secret(session.username, secret)
+    if not ok then
+        -- 记录审计日志（失败）
+        audit_log.log_totp_action("reset", session.username, false, "保存新密钥失败")
+        api_utils.json_response({
+            error = "Internal Server Error",
+            message = "保存新密钥失败"
+        }, 500)
+        return
+    end
+    
+    -- 记录审计日志（成功）
+    audit_log.log_totp_action("reset", session.username, true, nil)
+    
+    api_utils.json_response({
+        success = true,
+        message = "双因素认证已重置并启用"
+    }, 200)
+end
+
 -- 生成密码哈希（管理员工具）
 function _M.hash_password()
     local session = auth.require_auth()

@@ -744,6 +744,10 @@ function _M.route_auth(path, method)
         return auth_api.enable_totp()
     elseif path == "/api/auth/totp/disable" then
         return auth_api.disable_totp()
+    elseif path == "/api/auth/totp/reset" then
+        return auth_api.reset_totp()
+    elseif path == "/api/auth/totp/complete-reset" then
+        return auth_api.complete_reset_totp()
     elseif path == "/api/auth/password/hash" then
         return auth_api.hash_password()
     elseif path == "/api/auth/password/check" then

@@ -354,7 +354,7 @@ function _M.list_proxies(params)
     local offset = (page - 1) * page_size
     local sql = string.format([[
         SELECT p.id, p.proxy_name, p.proxy_type, p.listen_port, p.listen_address, p.server_name, p.location_path,
-               p.backend_type, p.backend_path, p.load_balance,
+               p.backend_type, p.load_balance,
                p.health_check_enable, p.health_check_interval, p.health_check_timeout,
                p.max_fails, p.fail_timeout, p.proxy_timeout, p.proxy_connect_timeout,
                p.proxy_send_timeout, p.proxy_read_timeout, p.ssl_enable, p.ssl_cert_path, p.ssl_key_path,
@@ -440,7 +440,7 @@ function _M.get_proxy(proxy_id)
     
     local sql = [[
         SELECT id, proxy_name, proxy_type, listen_port, listen_address, server_name, location_path,
-               backend_type, backend_path, load_balance,
+               backend_type, load_balance,
                health_check_enable, health_check_interval, health_check_timeout,
                max_fails, fail_timeout, proxy_timeout, proxy_connect_timeout,
                proxy_send_timeout, proxy_read_timeout, ssl_enable, ssl_cert_path, ssl_key_path,

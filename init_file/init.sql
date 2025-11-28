@@ -544,7 +544,6 @@ CREATE TABLE IF NOT EXISTS waf_proxy_configs (
     server_name VARCHAR(255) DEFAULT NULL COMMENT '服务器名称（HTTP代理时使用，支持多个域名，用空格分隔）',
     location_path VARCHAR(255) DEFAULT '/' COMMENT '路径匹配（HTTP代理时使用，如/、/api/等）',
     backend_type VARCHAR(20) NOT NULL DEFAULT 'upstream' COMMENT '后端类型：upstream-多个后端服务器（负载均衡，只支持此类型）',
-    backend_path VARCHAR(255) DEFAULT NULL COMMENT '后端路径（HTTP代理时使用，代理到后端的特定路径，如/aaa，留空则代理到根路径，注意：后端服务器路径存储在waf_proxy_backends表中）',
     load_balance VARCHAR(20) DEFAULT 'round_robin' COMMENT '负载均衡算法：round_robin-轮询, least_conn-最少连接, ip_hash-IP哈希',
     health_check_enable TINYINT NOT NULL DEFAULT 1 COMMENT '是否启用健康检查：1-启用，0-禁用',
     health_check_interval INT DEFAULT 10 COMMENT '健康检查间隔（秒）',

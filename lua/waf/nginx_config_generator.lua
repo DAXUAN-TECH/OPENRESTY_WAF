@@ -237,14 +237,9 @@ local function generate_http_server_config(proxy, upstream_name, backends)
         -- 如果后端服务器有路径，在proxy_pass中添加路径
         if backend_path and backend_path ~= "" then
             config = config .. "        proxy_pass http://" .. upstream_name .. escape_nginx_value(backend_path) .. ";\n"
-        -- 如果后端服务器没有路径，使用代理级别的路径（兼容旧配置）
         else
-            local proxy_backend_path = null_to_nil(proxy.backend_path)
-            if proxy_backend_path and proxy_backend_path ~= "" then
-                config = config .. "        proxy_pass http://" .. upstream_name .. escape_nginx_value(proxy_backend_path) .. ";\n"
-            else
-                config = config .. "        proxy_pass http://" .. upstream_name .. ";\n"
-            end
+            -- 如果后端服务器没有路径，直接代理到根路径
+            config = config .. "        proxy_pass http://" .. upstream_name .. ";\n"
         end
     else
         -- 如果没有upstream配置，记录错误（不应该发生，因为现在只支持upstream类型）
@@ -579,7 +574,7 @@ function _M.generate_all_configs()
     -- 禁用的代理的配置文件会在 cleanup_orphaned_files() 中被清理
         local sql = [[
             SELECT id, proxy_name, proxy_type, listen_port, listen_address, server_name, location_path,
-               backend_type, backend_path, load_balance,
+               backend_type, load_balance,
                ssl_enable, ssl_cert_path, ssl_key_path,
                proxy_timeout, proxy_connect_timeout, proxy_send_timeout, proxy_read_timeout,
                status

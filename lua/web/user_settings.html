@@ -230,8 +230,21 @@
     </div>
     
     <script>
-        let currentSecret = null;
-        let totpEnabled = false;
+        // 变量声明（避免与外部JS文件冲突）
+        // 如果外部JS文件已声明，则使用外部声明的；否则在此声明
+        if (typeof window.currentSecret === 'undefined') {
+            window.currentSecret = null;
+        }
+        if (typeof window.totpEnabled === 'undefined') {
+            window.totpEnabled = false;
+        }
+        
+        // 创建局部变量引用（使用 var 避免重复声明错误）
+        var currentSecret = window.currentSecret;
+        var totpEnabled = window.totpEnabled;
+        
+        // 重置相关的变量
+        var resetCurrentSecret = null;
         
         // 检查认证状态
         function checkAuth() {
@@ -256,9 +269,11 @@
                 .then(response => response.json())
                 .then(data => {
                     if (data && data.enabled === true) {
+                        window.totpEnabled = true;
                         totpEnabled = true;
                         updateStatus(true);
                     } else {
+                        window.totpEnabled = false;
                         totpEnabled = false;
                         updateStatus(false);
                     }
@@ -340,6 +355,7 @@
                 .then(data => {
                     console.log('QR code data received:', data);
                     if (data.secret) {
+                        window.currentSecret = data.secret;
                         currentSecret = data.secret;
                         showQrCodeInModal(data);
                         document.getElementById('modalTotpCode').focus();
@@ -374,7 +390,9 @@
                 modal.style.alignItems = '';
                 modal.style.justifyContent = '';
             }
+            window.currentSecret = null;
             currentSecret = null;
+            const qrContainer = document.getElementById('modalQrContainer');
             const qrContainer = document.getElementById('modalQrContainer');
             if (qrContainer) {
                 qrContainer.innerHTML = '';
@@ -471,6 +489,7 @@
             document.getElementById('oldTotpCode').value = '';
             document.getElementById('newTotpCode').value = '';
             document.getElementById('resetQrContainer').innerHTML = '';
+            window.resetCurrentSecret = null;
             resetCurrentSecret = null;
             document.getElementById('oldTotpCode').focus();
         }
@@ -514,11 +533,11 @@
             if (qrContainer) {
                 qrContainer.innerHTML = '';
             }
+            window.resetCurrentSecret = null;
             resetCurrentSecret = null;
         }
         
         // 验证旧验证码并生成新密钥
-        let resetCurrentSecret = null;
         function verifyOldCode() {
             const oldCode = document.getElementById('oldTotpCode').value.trim();
             
@@ -543,6 +562,7 @@
                 .then(response => response.json())
                 .then(data => {
                     if (data.success && data.secret) {
+                        window.resetCurrentSecret = data.secret;
                         resetCurrentSecret = data.secret;
                         // 显示第二步
                         document.getElementById('resetStep1').style.display = 'none';
@@ -571,10 +591,12 @@
                 return;
             }
             
-            if (!resetCurrentSecret) {
+            if (!resetCurrentSecret && !window.resetCurrentSecret) {
                 showError('请先验证旧验证码');
                 return;
             }
+            
+            const secretToUse = resetCurrentSecret || window.resetCurrentSecret;
             
             const button = event.target;
             button.disabled = true;
@@ -586,7 +608,7 @@
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    secret: resetCurrentSecret,
+                    secret: secretToUse,
                     code: newCode
                 })
             })

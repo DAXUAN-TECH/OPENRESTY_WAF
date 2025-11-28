@@ -1,5 +1,11 @@
-let currentSecret = null;
-        let totpEnabled = false;
+// 注意：变量声明已移至 user_settings.html 中，避免重复声明
+// 如果HTML中未声明，则在此声明
+if (typeof window.currentSecret === 'undefined') {
+    window.currentSecret = null;
+}
+if (typeof window.totpEnabled === 'undefined') {
+    window.totpEnabled = false;
+}
         
         // 检查认证状态
         function checkAuth() {

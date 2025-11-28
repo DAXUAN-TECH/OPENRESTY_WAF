@@ -215,8 +215,8 @@
         /* 表格包装器 - 确保与表格左右对齐 */
         .table-wrapper {
             overflow-x: auto;
-            width: 100%;
-            max-width: 100%;
+            width: 100% !important;
+            max-width: 100% !important;
             margin: 0;
             padding: 0;
             box-sizing: border-box;
@@ -228,15 +228,15 @@
         
         /* 基础表格样式 - 确保与table-wrapper对齐 */
         table {
-            width: 100%;
-            max-width: 100%;
+            width: 100% !important;
+            max-width: 100% !important;
             border-collapse: collapse;
             margin: 0;
             padding: 0;
             box-sizing: border-box;
             /* 确保表格与wrapper对齐 */
             display: table;
-            table-layout: auto;
+            table-layout: fixed !important; /* 固定表格布局，确保宽度为100% */
             /* 确保没有额外的边框或间距影响对齐 */
             border-spacing: 0;
         }
@@ -257,8 +257,8 @@
             display: block;
         }
         #access-tab .table-wrapper {
-            width: 100%;
-            max-width: 100%;
+            width: 100% !important;
+            max-width: 100% !important;
             margin: 0;
             padding: 0;
             box-sizing: border-box;
@@ -266,14 +266,13 @@
             border: none;
         }
         #access-table {
-            width: 100%;
-            max-width: 100%;
-            min-width: 100%;
+            width: 100% !important;
+            max-width: 100% !important;
             margin: 0;
             padding: 0;
             box-sizing: border-box;
             display: table;
-            table-layout: auto;
+            table-layout: fixed !important; /* 固定表格布局，确保宽度为100% */
             border-spacing: 0;
         }
         
@@ -293,8 +292,8 @@
             display: block;
         }
         #block-tab .table-wrapper {
-            width: 100%;
-            max-width: 100%;
+            width: 100% !important;
+            max-width: 100% !important;
             margin: 0;
             padding: 0;
             box-sizing: border-box;
@@ -302,14 +301,13 @@
             border: none;
         }
         #block-table {
-            width: 100%;
-            max-width: 100%;
-            min-width: 100%;
+            width: 100% !important;
+            max-width: 100% !important;
             margin: 0;
             padding: 0;
             box-sizing: border-box;
             display: table;
-            table-layout: auto;
+            table-layout: fixed !important; /* 固定表格布局，确保宽度为100% */
             border-spacing: 0;
         }
         
@@ -329,8 +327,8 @@
             display: block;
         }
         #audit-tab .table-wrapper {
-            width: 100%;
-            max-width: 100%;
+            width: 100% !important;
+            max-width: 100% !important;
             margin: 0;
             padding: 0;
             box-sizing: border-box;
@@ -338,14 +336,13 @@
             border: none;
         }
         #audit-table {
-            width: 100%;
-            max-width: 100%;
-            min-width: 100%;
+            width: 100% !important;
+            max-width: 100% !important;
             margin: 0;
             padding: 0;
             box-sizing: border-box;
             display: table;
-            table-layout: auto;
+            table-layout: fixed !important; /* 固定表格布局，确保宽度为100% */
             border-spacing: 0;
         }
         thead {

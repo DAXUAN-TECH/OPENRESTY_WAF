@@ -89,6 +89,15 @@ let currentPage = 1;
                 document.querySelectorAll('#backends-list .backend-path').forEach(field => {
                     field.style.display = 'none';
                 });
+                // 移除错误提示
+                const errorDiv = document.getElementById('backends-list')?.querySelector('.backend-path-error');
+                if (errorDiv) {
+                    errorDiv.remove();
+                }
+                // 移除错误样式
+                document.querySelectorAll('#backends-list .backend-path').forEach(field => {
+                    field.classList.remove('backend-path-error');
+                });
                 // 同步监听端口和监听地址的值
                 document.getElementById('create-listen-port').value = document.getElementById('create-tcp-udp-listen-port').value;
                 document.getElementById('create-listen-address').value = document.getElementById('create-tcp-udp-listen-address').value;
@@ -113,7 +122,7 @@ let currentPage = 1;
             // HTTP/HTTPS代理显示路径字段，TCP/UDP代理不显示
             const pathField = proxyType === 'http' 
                 ? '<input type="text" placeholder="/path" class="backend-path" title="/path">'
-                : '<input type="text" placeholder="路径（HTTP/HTTPS）" class="backend-path" style="display: none;">';
+                : '<input type="text" placeholder="/path" class="backend-path" style="display: none;">';
             
             item.innerHTML = `
                 <input type="text" placeholder="IP地址" class="backend-address">
@@ -123,6 +132,14 @@ let currentPage = 1;
                 <button type="button" class="btn btn-danger" onclick="removeBackend(this)">删除</button>
             `;
             list.appendChild(item);
+            
+            // 如果是HTTP代理，添加路径输入框的事件监听
+            if (proxyType === 'http') {
+                const pathInput = item.querySelector('.backend-path');
+                if (pathInput) {
+                    pathInput.addEventListener('input', checkBackendPaths);
+                }
+            }
         }
         
         function addEditBackend() {
@@ -134,7 +151,7 @@ let currentPage = 1;
             // HTTP/HTTPS代理显示路径字段，TCP/UDP代理不显示
             const pathField = proxyType === 'http' 
                 ? '<input type="text" placeholder="/path" class="backend-path" title="/path">'
-                : '<input type="text" placeholder="路径（HTTP/HTTPS）" class="backend-path" style="display: none;">';
+                : '<input type="text" placeholder="/path" class="backend-path" style="display: none;">';
             
             item.innerHTML = `
                 <input type="text" placeholder="IP地址" class="backend-address">
@@ -144,6 +161,14 @@ let currentPage = 1;
                 <button type="button" class="btn btn-danger" onclick="removeBackend(this)">删除</button>
             `;
             list.appendChild(item);
+            
+            // 如果是HTTP代理，添加路径输入框的事件监听
+            if (proxyType === 'http') {
+                const pathInput = item.querySelector('.backend-path');
+                if (pathInput) {
+                    pathInput.addEventListener('input', checkEditBackendPaths);
+                }
+            }
         }
         
         // 删除后端服务器

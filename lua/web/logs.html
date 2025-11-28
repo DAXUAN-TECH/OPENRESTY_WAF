@@ -29,6 +29,10 @@
             box-sizing: border-box;
             /* 移除overflow-x: auto，避免影响表格对齐 */
             overflow-x: visible;
+            /* 确保子元素继承box-sizing */
+            * {
+                box-sizing: border-box;
+            }
         }
         .tabs {
             background: #fff;
@@ -62,17 +66,25 @@
             display: none;
             width: 100% !important;
             max-width: 100% !important;
+            min-width: 100% !important;
             margin: 0 !important;
             padding: 0 !important;
             box-sizing: border-box;
+            /* 确保没有浮动或其他布局影响 */
+            position: relative;
+            clear: both;
         }
         .tab-content.active {
             display: block;
             width: 100% !important;
             max-width: 100% !important;
+            min-width: 100% !important;
             margin: 0 !important;
             padding: 0 !important;
             box-sizing: border-box;
+            /* 确保没有浮动或其他布局影响 */
+            position: relative;
+            clear: both;
         }
         .filters {
             background: #fff;
@@ -80,6 +92,9 @@
             margin-bottom: 20px;
             border-radius: 4px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            width: 100% !important;
+            max-width: 100% !important;
+            box-sizing: border-box;
         }
         .filters-row {
             display: flex;
@@ -202,6 +217,7 @@
         }
         /* 表格容器样式 - 确保表格和table-wrapper左右对齐 */
         /* 逐级检查：.content-area (padding: 30px) -> .container (padding: 30px) -> .tab-content -> .table-container -> .table-wrapper -> table */
+        /* 注意：.filters 有 padding: 20px，.table-container 有 padding: 0，为了对齐，需要确保它们的内容区域宽度一致 */
         .table-container {
             background: #fff;
             border-radius: 4px;
@@ -214,6 +230,8 @@
             box-sizing: border-box;
             /* 确保与父级对齐 */
             display: block;
+            /* 确保与.filters对齐：.filters的内容区域 = 100% - 40px (左右各20px padding) */
+            /* 但为了表格能够完全展开，table-container保持padding: 0，表格本身使用100%宽度 */
         }
         
         /* 表格包装器 - 确保与表格左右对齐 */
@@ -221,136 +239,171 @@
             overflow-x: auto;
             width: 100% !important;
             max-width: 100% !important;
-            margin: 0;
-            padding: 0;
+            margin: 0 !important;
+            padding: 0 !important;
             box-sizing: border-box;
             /* 确保与表格对齐 */
             display: block;
             /* 确保没有额外的边框或间距影响对齐 */
             border: none;
+            /* 确保没有负边距影响对齐 */
+            position: relative;
         }
         
         /* 基础表格样式 - 确保与table-wrapper对齐 */
         table {
             width: 100% !important;
             max-width: 100% !important;
+            min-width: 100% !important;
             border-collapse: collapse;
-            margin: 0;
-            padding: 0;
+            margin: 0 !important;
+            padding: 0 !important;
             box-sizing: border-box;
             /* 确保表格与wrapper对齐 */
             display: table;
             table-layout: fixed !important; /* 固定表格布局，确保宽度为100% */
             /* 确保没有额外的边框或间距影响对齐 */
             border-spacing: 0;
+            /* 确保表格不会因为内容而缩小 */
+            position: relative;
         }
         
         /* 访问日志：access-table和table-wrapper保持一样的宽度，确保左右对齐 */
         #access-tab {
             width: 100% !important;
             max-width: 100% !important;
+            min-width: 100% !important;
             margin: 0 !important;
             padding: 0 !important;
             box-sizing: border-box;
+            position: relative;
+            clear: both;
         }
         #access-tab .table-container {
             width: 100% !important;
             max-width: 100% !important;
+            min-width: 100% !important;
             margin: 0 !important;
             padding: 0 !important;
             box-sizing: border-box;
             display: block;
+            position: relative;
+            clear: both;
         }
         #access-tab .table-wrapper {
             width: 100% !important;
             max-width: 100% !important;
-            margin: 0;
-            padding: 0;
+            min-width: 100% !important;
+            margin: 0 !important;
+            padding: 0 !important;
             box-sizing: border-box;
             display: block;
             border: none;
+            position: relative;
         }
         #access-table {
             width: 100% !important;
             max-width: 100% !important;
-            margin: 0;
-            padding: 0;
+            min-width: 100% !important;
+            margin: 0 !important;
+            padding: 0 !important;
             box-sizing: border-box;
             display: table;
             table-layout: fixed !important; /* 固定表格布局，确保宽度为100% */
             border-spacing: 0;
+            position: relative;
         }
         
         /* 封控日志：block-table和table-wrapper保持一样的宽度，确保左右对齐 */
         #block-tab {
             width: 100% !important;
             max-width: 100% !important;
+            min-width: 100% !important;
             margin: 0 !important;
             padding: 0 !important;
             box-sizing: border-box;
+            position: relative;
+            clear: both;
         }
         #block-tab .table-container {
             width: 100% !important;
             max-width: 100% !important;
+            min-width: 100% !important;
             margin: 0 !important;
             padding: 0 !important;
             box-sizing: border-box;
             display: block;
+            position: relative;
+            clear: both;
         }
         #block-tab .table-wrapper {
             width: 100% !important;
             max-width: 100% !important;
-            margin: 0;
-            padding: 0;
+            min-width: 100% !important;
+            margin: 0 !important;
+            padding: 0 !important;
             box-sizing: border-box;
             display: block;
             border: none;
+            position: relative;
         }
         #block-table {
             width: 100% !important;
             max-width: 100% !important;
-            margin: 0;
-            padding: 0;
+            min-width: 100% !important;
+            margin: 0 !important;
+            padding: 0 !important;
             box-sizing: border-box;
             display: table;
             table-layout: fixed !important; /* 固定表格布局，确保宽度为100% */
             border-spacing: 0;
+            position: relative;
         }
         
         /* 审计日志：audit-table和table-wrapper保持一样的宽度，确保左右对齐 */
         #audit-tab {
             width: 100% !important;
             max-width: 100% !important;
+            min-width: 100% !important;
             margin: 0 !important;
             padding: 0 !important;
             box-sizing: border-box;
+            position: relative;
+            clear: both;
         }
         #audit-tab .table-container {
             width: 100% !important;
             max-width: 100% !important;
+            min-width: 100% !important;
             margin: 0 !important;
             padding: 0 !important;
             box-sizing: border-box;
             display: block;
+            position: relative;
+            clear: both;
         }
         #audit-tab .table-wrapper {
             width: 100% !important;
             max-width: 100% !important;
-            margin: 0;
-            padding: 0;
+            min-width: 100% !important;
+            margin: 0 !important;
+            padding: 0 !important;
             box-sizing: border-box;
             display: block;
             border: none;
+            position: relative;
         }
         #audit-table {
             width: 100% !important;
             max-width: 100% !important;
-            margin: 0;
-            padding: 0;
+            min-width: 100% !important;
+            margin: 0 !important;
+            padding: 0 !important;
             box-sizing: border-box;
             display: table;
             table-layout: fixed !important; /* 固定表格布局，确保宽度为100% */
             border-spacing: 0;
+            position: relative;
         }
         thead {
             background: #f8f9fa;

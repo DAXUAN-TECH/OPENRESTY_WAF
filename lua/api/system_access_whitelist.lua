@@ -39,15 +39,31 @@ function _M.get_config()
         updated_at = res[1].updated_at
     else
         -- 如果配置不存在，创建默认配置（关闭状态）
+        -- 使用INSERT IGNORE或ON DUPLICATE KEY UPDATE避免并发问题
         local insert_ok, insert_err = pcall(function()
-            local insert_sql = "INSERT INTO waf_system_config (config_key, config_value, description) VALUES ('system_access_whitelist_enabled', '0', '是否启用系统访问白名单（1-启用，0-禁用）')"
+            local insert_sql = [[
+                INSERT INTO waf_system_config (config_key, config_value, description) 
+                VALUES ('system_access_whitelist_enabled', '0', '是否启用系统访问白名单（1-启用，0-禁用，开启时只有白名单内的IP才能访问管理系统）')
+                ON DUPLICATE KEY UPDATE config_value = VALUES(config_value)
+            ]]
             return mysql_pool.query(insert_sql)
         end)
         
         if not insert_ok or insert_err then
-            ngx.log(ngx.ERR, "get_config: failed to create default config")
-            api_utils.json_response({error = "创建默认配置失败"}, 500)
+            ngx.log(ngx.ERR, "get_config: failed to create default config: ", tostring(insert_err))
+            api_utils.json_response({error = "创建默认配置失败: " .. tostring(insert_err)}, 500)
             return
+        end
+        
+        -- 重新查询获取创建后的值
+        local retry_ok, retry_res, retry_err = pcall(function()
+            local retry_sql = "SELECT config_value, updated_at FROM waf_system_config WHERE config_key = 'system_access_whitelist_enabled' LIMIT 1"
+            return mysql_pool.query(retry_sql)
+        end)
+        
+        if retry_ok and retry_res and #retry_res > 0 then
+            enabled = tonumber(retry_res[1].config_value) or 0
+            updated_at = retry_res[1].updated_at
         end
     end
     
@@ -614,9 +630,29 @@ function _M.check_ip_allowed(ip_address)
     end
     
     -- 先检查开关是否启用（使用config_manager，带缓存）
+    -- 如果配置不存在，config_manager会返回默认值0（未启用）
     local enabled = config_manager.get_config("system_access_whitelist_enabled", 0, "number")
     
-    if enabled == 0 or enabled == nil then
+    -- 如果配置不存在，尝试创建默认配置（异步，不阻塞）
+    if enabled == nil then
+        ngx.log(ngx.WARN, "check_ip_allowed: config not found, creating default config")
+        ngx.timer.at(0, function()
+            local ok, err = pcall(function()
+                local insert_sql = [[
+                    INSERT INTO waf_system_config (config_key, config_value, description) 
+                    VALUES ('system_access_whitelist_enabled', '0', '是否启用系统访问白名单（1-启用，0-禁用，开启时只有白名单内的IP才能访问管理系统）')
+                    ON DUPLICATE KEY UPDATE config_value = VALUES(config_value)
+                ]]
+                return mysql_pool.query(insert_sql)
+            end)
+            if not ok or err then
+                ngx.log(ngx.ERR, "check_ip_allowed: failed to create default config: ", tostring(err))
+            end
+        end)
+        enabled = 0  -- 默认未启用
+    end
+    
+    if enabled == 0 then
         -- 白名单未启用，允许所有IP访问
         ngx.log(ngx.DEBUG, "check_ip_allowed: whitelist disabled, allowing access for IP: ", ip_address)
         return true

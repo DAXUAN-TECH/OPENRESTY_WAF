@@ -328,7 +328,8 @@ let currentPage = 1;
         async function createProxy(event) {
             event.preventDefault();
             
-            const ipRuleId = document.getElementById('create-ip-rule-id').value;
+            // 获取已选择的规则ID列表（必须是同类型）
+            const ipRuleIds = selectedIpRules.map(r => parseInt(r.id));
             const proxyType = document.getElementById('create-proxy-type').value;
             
             // 根据代理类型获取监听端口和监听地址
@@ -355,7 +356,7 @@ let currentPage = 1;
                 proxy_connect_timeout: parseInt(document.getElementById('create-proxy-connect-timeout').value) || 60,
                 proxy_send_timeout: parseInt(document.getElementById('create-proxy-send-timeout').value) || 60,
                 proxy_read_timeout: parseInt(document.getElementById('create-proxy-read-timeout').value) || 60,
-                ip_rule_id: ipRuleId ? parseInt(ipRuleId) : null
+                ip_rule_ids: ipRuleIds.length > 0 ? ipRuleIds : null
             };
             
             if (proxyData.proxy_type === 'http') {
@@ -663,10 +664,15 @@ let currentPage = 1;
             document.getElementById('create-form').reset();
             const proxyType = document.getElementById('create-proxy-type').value;
             const pathField = proxyType === 'http' 
-                ? '<input type="text" placeholder="路径" class="backend-path">'
+                ? '<input type="text" placeholder="/path" class="backend-path" title="/path">'
                 : '<input type="text" placeholder="路径（HTTP/HTTPS）" class="backend-path" style="display: none;">';
             document.getElementById('backends-list').innerHTML = `<div class="backend-item"><input type="text" placeholder="IP地址" class="backend-address"><input type="number" placeholder="端口" class="backend-port" min="1" max="65535">${pathField}<input type="number" placeholder="权重" class="backend-weight" value="1" min="1"><button type="button" class="btn btn-danger" onclick="removeBackend(this)">删除</button></div>`;
             toggleProxyFields();
+            // 清空已选择的规则
+            selectedIpRules = [];
+            selectedRuleType = null;
+            renderSelectedRules();
+            filterIpRulesByType();
         }
         
         // 显示创建代理弹出框
@@ -787,6 +793,9 @@ let currentPage = 1;
         
         // 全局变量：存储所有IP相关规则
         let allIpRules = [];
+        // 全局变量：存储已选择的规则（必须是同类型）
+        let selectedIpRules = [];
+        let selectedRuleType = null;
         
         // 根据规则类型筛选规则
         function filterIpRulesByType() {
@@ -795,13 +804,17 @@ let currentPage = 1;
             
             if (!createSelect) return;
             
-            createSelect.innerHTML = '<option value="">不选择（不使用防护规则）</option>';
+            createSelect.innerHTML = '<option value="">请选择规则</option>';
             
             const filteredRules = ruleType 
                 ? allIpRules.filter(rule => rule.rule_type === ruleType)
                 : allIpRules;
             
-            filteredRules.forEach(rule => {
+            // 过滤掉已选择的规则
+            const selectedIds = selectedIpRules.map(r => r.id);
+            const availableRules = filteredRules.filter(rule => !selectedIds.includes(rule.id));
+            
+            availableRules.forEach(rule => {
                 const option = document.createElement('option');
                 option.value = rule.id;
                 const typeNames = {
@@ -813,6 +826,85 @@ let currentPage = 1;
                 option.textContent = `${rule.rule_name} (${typeNames[rule.rule_type] || rule.rule_type})`;
                 createSelect.appendChild(option);
             });
+        }
+        
+        // 添加选中的规则到列表
+        function addSelectedRule() {
+            const ruleSelect = document.getElementById('create-ip-rule-id');
+            const ruleTypeSelect = document.getElementById('create-ip-rule-type');
+            const selectedRuleId = ruleSelect.value;
+            
+            if (!selectedRuleId) {
+                return;
+            }
+            
+            // 查找规则信息
+            const rule = allIpRules.find(r => r.id == selectedRuleId);
+            if (!rule) {
+                return;
+            }
+            
+            // 检查规则类型是否一致
+            const currentRuleType = ruleTypeSelect.value || rule.rule_type;
+            if (selectedIpRules.length > 0 && selectedRuleType !== currentRuleType) {
+                showAlert('只能选择同类型的规则', 'error');
+                return;
+            }
+            
+            // 检查是否已添加
+            if (selectedIpRules.find(r => r.id == rule.id)) {
+                showAlert('该规则已添加', 'error');
+                return;
+            }
+            
+            // 添加到列表
+            selectedIpRules.push(rule);
+            selectedRuleType = currentRuleType;
+            
+            // 更新显示
+            renderSelectedRules();
+            
+            // 清空选择框
+            ruleSelect.value = '';
+        }
+        
+        // 从列表中移除规则
+        function removeSelectedRule(ruleId) {
+            selectedIpRules = selectedIpRules.filter(r => r.id != ruleId);
+            if (selectedIpRules.length === 0) {
+                selectedRuleType = null;
+            }
+            renderSelectedRules();
+            // 重新筛选规则列表
+            filterIpRulesByType();
+        }
+        
+        // 渲染已选择的规则列表
+        function renderSelectedRules() {
+            const listContainer = document.getElementById('selected-rules-list');
+            if (!listContainer) return;
+            
+            if (selectedIpRules.length === 0) {
+                listContainer.innerHTML = '';
+                return;
+            }
+            
+            const typeNames = {
+                'ip_whitelist': 'IP白名单',
+                'ip_blacklist': 'IP黑名单',
+                'geo_whitelist': '地域白名单',
+                'geo_blacklist': '地域黑名单'
+            };
+            
+            let html = '<div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 5px;">';
+            selectedIpRules.forEach(rule => {
+                html += `<span style="display: inline-flex; align-items: center; padding: 4px 8px; background: #e3f2fd; border: 1px solid #90caf9; border-radius: 4px; font-size: 12px;">
+                    ${rule.rule_name} (${typeNames[rule.rule_type] || rule.rule_type})
+                    <button type="button" onclick="removeSelectedRule(${rule.id})" style="margin-left: 6px; background: #f44336; color: white; border: none; border-radius: 3px; cursor: pointer; padding: 2px 6px; font-size: 11px;">×</button>
+                </span>`;
+            });
+            html += '</div>';
+            listContainer.innerHTML = html;
         }
         
         document.addEventListener('DOMContentLoaded', function() {

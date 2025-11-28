@@ -599,6 +599,25 @@ CREATE TABLE IF NOT EXISTS waf_proxy_backends (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci 
 ROW_FORMAT=DYNAMIC COMMENT='反向代理后端服务器表：存储upstream类型的多个后端服务器配置';
 
+-- ============================================
+-- 18. 反向代理防护规则关联表（支持多个同类型规则）
+-- ============================================
+CREATE TABLE IF NOT EXISTS waf_proxy_rules (
+    id INT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '主键ID，自增',
+    proxy_id INT UNSIGNED NOT NULL COMMENT '代理配置ID（关联waf_proxy_configs表）',
+    rule_id BIGINT UNSIGNED NOT NULL COMMENT '防护规则ID（关联waf_block_rules表）',
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '关联创建时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_proxy_rule (proxy_id, rule_id) COMMENT '代理和规则唯一索引，确保同一规则不会重复关联',
+    KEY idx_proxy_id (proxy_id) COMMENT '代理ID索引，用于查询代理的所有规则',
+    KEY idx_rule_id (rule_id) COMMENT '规则ID索引，用于查询规则被哪些代理使用',
+    -- 外键约束：代理配置删除时自动删除其所有规则关联
+    FOREIGN KEY (proxy_id) REFERENCES waf_proxy_configs(id) ON DELETE CASCADE,
+    -- 外键约束：规则删除时自动删除关联关系
+    FOREIGN KEY (rule_id) REFERENCES waf_block_rules(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci 
+ROW_FORMAT=DYNAMIC COMMENT='反向代理防护规则关联表：存储代理配置与防护规则的关联关系，支持一个代理关联多个同类型规则';
+
 -- 插入反向代理功能开关
 INSERT INTO waf_feature_switches (feature_key, feature_name, description, enable, config_source) VALUES
 ('proxy_management', '反向代理管理', '反向代理配置管理功能，支持HTTP、TCP、UDP代理配置', 1, 'database')

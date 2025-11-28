@@ -394,18 +394,18 @@
             max-width: 250px !important;
         }
         
-        /* 负载均衡算法输入框缩短二分之一（在form-row中，25%宽度） */
+        /* 负载均衡算法输入框宽度（在form-row中，50%宽度） */
         #create-proxy-modal .form-row #create-load-balance {
-            width: 25% !important;
-            max-width: 150px !important;
+            width: 50% !important;
+            max-width: 300px !important;
         }
         
-        /* 连接超时、发送超时、读取超时输入框优化宽度（在form-row中） */
+        /* 连接超时、发送超时、读取超时输入框宽度（在form-row中） */
         #create-proxy-modal .form-row #create-proxy-connect-timeout,
         #create-proxy-modal .form-row #create-proxy-send-timeout,
         #create-proxy-modal .form-row #create-proxy-read-timeout {
-            width: 25% !important;
-            max-width: 150px !important;
+            width: 50% !important;
+            max-width: 300px !important;
         }
         
         /* 防护规则筛选框样式 */
@@ -415,8 +415,8 @@
         }
         
         #create-proxy-modal #create-ip-rule-id {
-            width: 100% !important;
-            max-width: 100% !important;
+            width: 50% !important;
+            max-width: 250px !important;
         }
         
         /* 防护规则form-row中的form-group样式 */

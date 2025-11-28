@@ -124,10 +124,41 @@ function _M.create_proxy(proxy_data)
         return nil, "该端口已被其他启用的代理配置占用"
     end
     
-    -- 验证ip_rule_id（如果提供）
+    -- 验证ip_rule_ids（如果提供，支持多个规则ID，但必须是同类型）
+    local ip_rule_ids = nil
+    if proxy_data.ip_rule_ids and type(proxy_data.ip_rule_ids) == "table" and #proxy_data.ip_rule_ids > 0 then
+        ip_rule_ids = proxy_data.ip_rule_ids
+        -- 验证所有规则是否存在且为IP相关类型，且类型一致
+        local rule_types = {}
+        for _, rule_id in ipairs(ip_rule_ids) do
+            local rule_check_sql = "SELECT id, rule_type FROM waf_block_rules WHERE id = ? AND status = 1 LIMIT 1"
+            local rule_check = mysql_pool.query(rule_check_sql, rule_id)
+            if not rule_check or #rule_check == 0 then
+                return nil, "指定的防护规则不存在或已禁用: " .. tostring(rule_id)
+            end
+            local rule_type = rule_check[1].rule_type
+            if rule_type ~= "ip_whitelist" and rule_type ~= "ip_blacklist" and 
+               rule_type ~= "geo_whitelist" and rule_type ~= "geo_blacklist" then
+                return nil, "防护规则必须是IP白名单、IP黑名单、地域白名单或地域黑名单类型: " .. tostring(rule_id)
+            end
+            table.insert(rule_types, rule_type)
+        end
+        -- 检查所有规则类型是否一致
+        if #rule_types > 1 then
+            local first_type = rule_types[1]
+            for i = 2, #rule_types do
+                if rule_types[i] ~= first_type then
+                    return nil, "所有防护规则必须是同类型"
+                end
+            end
+        end
+    end
+    
+    -- 向后兼容：如果只有ip_rule_id（单个），也支持
     local ip_rule_id = null_to_nil(proxy_data.ip_rule_id)
-    if ip_rule_id then
-        -- 检查规则是否存在且为IP相关类型
+    if ip_rule_id and not ip_rule_ids then
+        ip_rule_ids = {ip_rule_id}
+        -- 验证规则
         local rule_check_sql = "SELECT id, rule_type FROM waf_block_rules WHERE id = ? AND status = 1 LIMIT 1"
         local rule_check = mysql_pool.query(rule_check_sql, ip_rule_id)
         if not rule_check or #rule_check == 0 then
@@ -173,7 +204,11 @@ function _M.create_proxy(proxy_data)
     local ssl_key_path = null_to_nil(proxy_data.ssl_key_path)
     local description = null_to_nil(proxy_data.description)
     local status = proxy_data.status or 1
-    local ip_rule_id = null_to_nil(proxy_data.ip_rule_id)
+    -- 使用第一个规则ID作为ip_rule_id（向后兼容）
+    local ip_rule_id = nil
+    if ip_rule_ids and #ip_rule_ids > 0 then
+        ip_rule_id = ip_rule_ids[1]
+    end
     
     local insert_id, err = mysql_pool.insert(sql,
         proxy_data.proxy_name,
@@ -205,6 +240,18 @@ function _M.create_proxy(proxy_data)
     if err then
         ngx.log(ngx.ERR, "create proxy error: ", err)
         return nil, err
+    end
+    
+    -- 添加防护规则关联（支持多个规则）
+    if ip_rule_ids and #ip_rule_ids > 0 then
+        local rule_sql = "INSERT INTO waf_proxy_rules (proxy_id, rule_id) VALUES (?, ?)"
+        for _, rule_id in ipairs(ip_rule_ids) do
+            local rule_insert_id, rule_err = mysql_pool.insert(rule_sql, insert_id, rule_id)
+            if rule_err then
+                ngx.log(ngx.ERR, "create proxy rule association error: ", rule_err, ", proxy_id: ", insert_id, ", rule_id: ", rule_id)
+                -- 不中断流程，继续执行
+            end
+        end
     end
     
     -- 添加后端服务器（只支持upstream类型）

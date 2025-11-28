@@ -410,7 +410,10 @@
         
         // 从弹出框启用TOTP
         function enableTotpFromModal() {
-            const code = document.getElementById('modalTotpCode').value.trim();
+            let code = document.getElementById('modalTotpCode').value.trim();
+            
+            // 确保验证码是纯数字
+            code = code.replace(/\D/g, '');
             
             if (!code || code.length !== 6) {
                 showError('请输入6位验证码');
@@ -421,6 +424,8 @@
                 showError('请先设置双因素认证');
                 return;
             }
+            
+            console.log('Enabling TOTP with secret:', currentSecret.substring(0, 8) + '...', 'code:', code);
             
             const button = document.getElementById('modalEnableButton');
             button.disabled = true;

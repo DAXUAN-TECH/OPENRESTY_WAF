@@ -281,9 +281,38 @@ function _M.enable_totp()
         return
     end
     
-    -- 验证 TOTP 代码
-    local totp_ok, err = totp.verify_totp(secret, code)
+    -- 清理验证码：只保留数字
+    code = string.gsub(code, "%D", "")
+    
+    -- 验证验证码格式
+    if not code or #code ~= 6 then
+        ngx.log(ngx.WARN, "auth.enable_totp: invalid code format, code length: ", code and #code or 0)
+        api_utils.json_response({
+            error = "Bad Request",
+            message = "验证码必须是6位数字"
+        }, 400)
+        return
+    end
+    
+    -- 验证 secret 格式（Base32）
+    if not secret or #secret < 16 then
+        ngx.log(ngx.WARN, "auth.enable_totp: invalid secret format, secret length: ", secret and #secret or 0)
+        api_utils.json_response({
+            error = "Bad Request",
+            message = "密钥格式无效"
+        }, 400)
+        return
+    end
+    
+    ngx.log(ngx.INFO, "auth.enable_totp: verifying TOTP for user: ", session.username, ", secret prefix: ", string.sub(secret, 1, 8), "...")
+    
+    -- 验证 TOTP 代码（增加时间窗口到2，允许前后2个时间窗口，即60秒）
+    local totp_ok, err = totp.verify_totp(secret, code, 30, 2)
     if not totp_ok then
+        ngx.log(ngx.WARN, "auth.enable_totp: TOTP verification failed for user: ", session.username, ", error: ", tostring(err))
+        -- 尝试生成当前代码用于调试
+        local test_code = totp.generate_totp(secret)
+        ngx.log(ngx.INFO, "auth.enable_totp: expected code: ", test_code or "failed to generate", ", received code: ", code)
         api_utils.json_response({
             error = "Unauthorized",
             message = "验证码错误，请重试"

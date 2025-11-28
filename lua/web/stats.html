@@ -9,16 +9,15 @@
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         /* body样式会被handler.lua移除，这里保留用于文档说明 */
-        .header {
-            background: #fff;
-            padding: 2%;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            margin-bottom: 2%;
-        }
-        .header h1 {
-            font-size: 24px;
+        
+        /* 标题样式 - 与其他页面保持一致 */
+        h1 {
             color: #333;
+            font-size: 24px;
+            margin-bottom: 30px;
+            font-weight: 600;
         }
+        
         /* 统一容器样式 - 白色背景卡片 */
         .container {
             width: 100%;
@@ -131,11 +130,8 @@
     </style>
 </head>
 <body>
-    <div class="header">
-        <h1>封控统计报表</h1>
-    </div>
-    
     <div class="container">
+        <h1>封控统计报表</h1>
         <div class="filters">
             <label>开始时间：</label>
             <input type="datetime-local" id="startTime" />

@@ -275,6 +275,7 @@
             const statusLabel = document.getElementById('statusLabel');
             const statusText = document.getElementById('statusText');
             const setupButton = document.getElementById('setupButton');
+            const resetButton = document.getElementById('resetButton');
             const disableButton = document.getElementById('disableButton');
             
             if (enabled) {
@@ -283,6 +284,7 @@
                 statusLabel.textContent = '已启用';
                 statusText.textContent = '双因素认证已启用，登录时需要输入验证码';
                 setupButton.style.display = 'none';
+                resetButton.style.display = 'inline-block';
                 disableButton.style.display = 'inline-block';
             } else {
                 statusDiv.className = 'totp-status disabled';
@@ -290,6 +292,7 @@
                 statusLabel.textContent = '未启用';
                 statusText.textContent = '双因素认证未启用，建议启用以提高账户安全性';
                 setupButton.style.display = 'inline-block';
+                resetButton.style.display = 'none';
                 disableButton.style.display = 'none';
             }
         }

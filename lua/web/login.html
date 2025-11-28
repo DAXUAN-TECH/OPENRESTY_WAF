@@ -64,26 +64,29 @@
                 </div>
             </div>
             
-            <div class="form-group" id="totpGroup" style="display: none;">
-                <label for="totp_code">双因素认证代码</label>
-                <input 
-                    type="text" 
-                    id="totp_code" 
-                    name="totp_code" 
-                    placeholder="请输入6位验证码" 
-                    maxlength="6"
-                    pattern="[0-9]{6}"
-                    autocomplete="one-time-code"
-                >
-                <small style="color: #666; font-size: 12px; display: block; margin-top: 5px;">
-                    请输入 Google Authenticator 显示的6位验证码
-                </small>
-            </div>
-            
             <button type="submit" class="login-button" id="loginButton">
                 登录
             </button>
         </form>
+    </div>
+    
+    <!-- 2FA 弹出框 -->
+    <div id="totpModal" class="totp-modal" style="display: none;">
+        <div class="totp-modal-content">
+            <h2>请输入2FA双因素验证码</h2>
+            <div class="form-group">
+                <input 
+                    type="text" 
+                    id="totpCodeInput" 
+                    placeholder="000000" 
+                    maxlength="6"
+                    pattern="[0-9]{6}"
+                    autocomplete="one-time-code"
+                    class="totp-input"
+                >
+                <div class="totp-error-message" id="totpErrorMessage"></div>
+            </div>
+        </div>
     </div>
     
     <script src="/js/login.js"></script>

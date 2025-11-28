@@ -125,3 +125,69 @@ body {
     to { transform: rotate(360deg); }
 }
 
+/* 2FA 弹出框样式 */
+.totp-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 10000;
+}
+
+.totp-modal-content {
+    background: white;
+    border-radius: 10px;
+    padding: 30px;
+    width: 90%;
+    max-width: 400px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+    text-align: center;
+}
+
+.totp-modal-content h2 {
+    color: #333;
+    font-size: 20px;
+    margin-bottom: 20px;
+}
+
+.totp-input {
+    width: 100%;
+    padding: 15px;
+    border: 2px solid #ddd;
+    border-radius: 5px;
+    font-size: 24px;
+    text-align: center;
+    letter-spacing: 8px;
+    transition: border-color 0.3s;
+    font-family: 'Courier New', monospace;
+}
+
+.totp-input:focus {
+    outline: none;
+    border-color: #667eea;
+}
+
+.totp-input.error {
+    border-color: #c33;
+    animation: shake 0.5s;
+}
+
+@keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    10%, 30%, 50%, 70%, 90% { transform: translateX(-10px); }
+    20%, 40%, 60%, 80% { transform: translateX(10px); }
+}
+
+.totp-error-message {
+    color: #c33;
+    font-size: 12px;
+    margin-top: 8px;
+    min-height: 16px;
+    text-align: center;
+}
+

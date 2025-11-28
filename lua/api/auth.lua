@@ -396,26 +396,26 @@ function _M.enable_totp()
             ngx.log(ngx.WARN, "auth.enable_totp: WARNING: Generated code (", test_code_cached, ") does not match user input (", code, "). This may indicate a time synchronization issue between server and mobile device.")
         end
     else
-        ngx.log(ngx.WARN, "auth.enable_totp: DEBUG - no cached secret found for user: ", session.username)
+        ngx.log(ngx.DEBUG, "auth.enable_totp: no cached secret found for user: ", session.username)
         
         -- 记录服务器当前时间信息用于调试
         local server_time = ngx.time()
         local server_time_str = os.date("!%Y-%m-%d %H:%M:%S", server_time)
         local time_step = 30
         local current_counter = math.floor(server_time / time_step)
-        ngx.log(ngx.WARN, "auth.enable_totp: DEBUG - server_time: ", server_time, " (", server_time_str, " UTC), time_step: ", time_step, ", current_counter: ", current_counter)
+        ngx.log(ngx.DEBUG, "auth.enable_totp: server_time: ", server_time, " (", server_time_str, " UTC), time_step: ", time_step, ", current_counter: ", current_counter)
         
         -- 使用清理后的提供的secret生成当前时间的验证码用于对比
         local test_code_provided, test_err_provided = totp.generate_totp(cleaned_secret, 30, 6)
         if test_code_provided then
-            ngx.log(ngx.WARN, "auth.enable_totp: DEBUG - generated code from cleaned_provided_secret: ", test_code_provided, ", user input: ", code, ", match: ", test_code_provided == code)
+            ngx.log(ngx.DEBUG, "auth.enable_totp: generated code from cleaned_provided_secret: ", test_code_provided, ", user input: ", code, ", match: ", test_code_provided == code)
         else
-            ngx.log(ngx.WARN, "auth.enable_totp: DEBUG - failed to generate code from cleaned_provided_secret: ", tostring(test_err_provided))
+            ngx.log(ngx.WARN, "auth.enable_totp: failed to generate code from cleaned_provided_secret: ", tostring(test_err_provided))
         end
         
-        -- 提示用户检查时间同步
+        -- 提示用户检查时间同步（只有在不匹配时才记录WARN）
         if test_code_provided and test_code_provided ~= code then
-            ngx.log(ngx.WARN, "auth.enable_totp: DEBUG - WARNING: Generated code (", test_code_provided, ") does not match user input (", code, "). This may indicate a time synchronization issue between server and mobile device.")
+            ngx.log(ngx.WARN, "auth.enable_totp: WARNING: Generated code (", test_code_provided, ") does not match user input (", code, "). This may indicate a time synchronization issue between server and mobile device.")
         end
     end
     

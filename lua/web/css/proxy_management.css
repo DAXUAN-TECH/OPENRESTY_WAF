@@ -491,6 +491,39 @@
             border-radius: 4px;
         }
         
+        /* 防护规则列表样式（参考后端服务器列表） */
+        .rules-list {
+            margin-bottom: 10px;
+        }
+        
+        .rule-item {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            margin-bottom: 10px;
+            padding: 10px;
+            background: #f9f9f9;
+            border-radius: 4px;
+        }
+        
+        .rule-item select.rule-type {
+            flex: 1;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        
+        .rule-item select.rule-id {
+            flex: 2;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        
+        .rule-item .btn {
+            padding: 8px 16px;
+        }
+        
         .backend-item {
             display: flex;
             gap: 10px;

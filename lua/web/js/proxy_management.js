@@ -328,8 +328,20 @@ let currentPage = 1;
         async function createProxy(event) {
             event.preventDefault();
             
-            // 获取已选择的规则ID列表（必须是同类型）
-            const ipRuleIds = selectedIpRules.map(r => parseInt(r.id));
+            // 获取已选择的规则ID列表
+            const ipRuleIds = [];
+            const rulesList = document.getElementById('rules-list');
+            if (rulesList) {
+                const ruleItems = rulesList.querySelectorAll('.rule-item');
+                ruleItems.forEach(item => {
+                    const typeSelect = item.querySelector('.rule-type');
+                    const ruleIdSelect = item.querySelector('.rule-id');
+                    if (typeSelect && typeSelect.value && ruleIdSelect && ruleIdSelect.value) {
+                        ipRuleIds.push(parseInt(ruleIdSelect.value));
+                    }
+                });
+            }
+            
             const proxyType = document.getElementById('create-proxy-type').value;
             
             // 根据代理类型获取监听端口和监听地址
@@ -668,11 +680,25 @@ let currentPage = 1;
                 : '<input type="text" placeholder="路径（HTTP/HTTPS）" class="backend-path" style="display: none;">';
             document.getElementById('backends-list').innerHTML = `<div class="backend-item"><input type="text" placeholder="IP地址" class="backend-address"><input type="number" placeholder="端口" class="backend-port" min="1" max="65535">${pathField}<input type="number" placeholder="权重" class="backend-weight" value="1" min="1"><button type="button" class="btn btn-danger" onclick="removeBackend(this)">删除</button></div>`;
             toggleProxyFields();
-            // 清空已选择的规则
-            selectedIpRules = [];
-            selectedRuleType = null;
-            renderSelectedRules();
-            filterIpRulesByType();
+            // 清空规则列表，只保留一个空规则条目
+            const rulesList = document.getElementById('rules-list');
+            if (rulesList) {
+                rulesList.innerHTML = `
+                    <div class="rule-item">
+                        <select class="rule-type" onchange="onRuleTypeChange(this)">
+                            <option value="">请选择规则类型</option>
+                            <option value="ip_whitelist">IP白名单</option>
+                            <option value="ip_blacklist">IP黑名单</option>
+                            <option value="geo_whitelist">地域白名单</option>
+                            <option value="geo_blacklist">地域黑名单</option>
+                        </select>
+                        <select class="rule-id">
+                            <option value="">请选择规则条目</option>
+                        </select>
+                        <button type="button" class="btn btn-danger" onclick="removeRule(this)">删除</button>
+                    </div>
+                `;
+            }
         }
         
         // 显示创建代理弹出框
@@ -681,15 +707,28 @@ let currentPage = 1;
             if (modal) {
                 modal.style.display = 'flex';
                 modal.classList.add('show');
-                // 清空已选择的规则
-                selectedIpRules = [];
-                selectedRuleType = null;
-                renderSelectedRules();
+                // 清空规则列表，只保留一个空规则条目
+                const rulesList = document.getElementById('rules-list');
+                if (rulesList) {
+                    rulesList.innerHTML = `
+                        <div class="rule-item">
+                            <select class="rule-type" onchange="onRuleTypeChange(this)">
+                                <option value="">请选择规则类型</option>
+                                <option value="ip_whitelist">IP白名单</option>
+                                <option value="ip_blacklist">IP黑名单</option>
+                                <option value="geo_whitelist">地域白名单</option>
+                                <option value="geo_blacklist">地域黑名单</option>
+                            </select>
+                            <select class="rule-id">
+                                <option value="">请选择规则条目</option>
+                            </select>
+                            <button type="button" class="btn btn-danger" onclick="removeRule(this)">删除</button>
+                        </div>
+                    `;
+                }
                 // 如果规则列表未加载，先加载
                 if (allIpRules.length === 0) {
                     loadIpRules();
-                } else {
-                    filterIpRulesByType();
                 }
             }
         }
@@ -775,8 +814,8 @@ let currentPage = 1;
                     // 保存所有IP相关规则到全局变量
                     allIpRules = ipRules;
                     
-                    // 初始化创建表单的规则选择（显示所有规则）
-                    filterIpRulesByType();
+                    // 更新所有规则条目的选择框
+                    updateAllRuleSelects();
                     
                     // 更新编辑表单的规则选择
                     const editSelect = document.getElementById('edit-ip-rule-id');
@@ -803,28 +842,69 @@ let currentPage = 1;
         
         // 全局变量：存储所有IP相关规则
         let allIpRules = [];
-        // 全局变量：存储已选择的规则（必须是同类型）
-        let selectedIpRules = [];
-        let selectedRuleType = null;
         
-        // 根据规则类型筛选规则
-        function filterIpRulesByType() {
-            const ruleType = document.getElementById('create-ip-rule-type').value;
-            const createSelect = document.getElementById('create-ip-rule-id');
+        // 规则互斥关系定义
+        const ruleConflicts = {
+            'ip_whitelist': ['ip_blacklist'],
+            'ip_blacklist': ['ip_whitelist'],
+            'geo_whitelist': ['geo_blacklist'],
+            'geo_blacklist': ['geo_whitelist']
+        };
+        
+        // 获取已选择规则的所有类型
+        function getSelectedRuleTypes() {
+            const rulesList = document.getElementById('rules-list');
+            if (!rulesList) return [];
+            const ruleItems = rulesList.querySelectorAll('.rule-item');
+            const types = [];
+            ruleItems.forEach(item => {
+                const typeSelect = item.querySelector('.rule-type');
+                const ruleIdSelect = item.querySelector('.rule-id');
+                if (typeSelect && typeSelect.value && ruleIdSelect && ruleIdSelect.value) {
+                    types.push(typeSelect.value);
+                }
+            });
+            return types;
+        }
+        
+        // 检查规则类型是否冲突
+        function checkRuleConflict(newType) {
+            if (!newType) return false;
+            const selectedTypes = getSelectedRuleTypes();
+            const conflicts = ruleConflicts[newType] || [];
+            return conflicts.some(conflictType => selectedTypes.includes(conflictType));
+        }
+        
+        // 根据规则类型筛选规则（用于单个规则条目）
+        function filterRulesByType(ruleTypeSelect, ruleIdSelect) {
+            if (!ruleIdSelect) return;
             
-            if (!createSelect) return;
+            const ruleType = ruleTypeSelect.value;
+            ruleIdSelect.innerHTML = '<option value="">请选择规则条目</option>';
             
-            createSelect.innerHTML = '<option value="">请选择规则</option>';
+            if (!ruleType) {
+                return;
+            }
             
-            const filteredRules = ruleType 
-                ? allIpRules.filter(rule => rule.rule_type === ruleType)
-                : allIpRules;
+            // 获取已选择的其他规则ID（排除当前规则条目）
+            const rulesList = document.getElementById('rules-list');
+            const selectedIds = [];
+            if (rulesList) {
+                const ruleItems = rulesList.querySelectorAll('.rule-item');
+                ruleItems.forEach(item => {
+                    const idSelect = item.querySelector('.rule-id');
+                    if (idSelect && idSelect !== ruleIdSelect && idSelect.value) {
+                        selectedIds.push(parseInt(idSelect.value));
+                    }
+                });
+            }
             
-            // 过滤掉已选择的规则
-            const selectedIds = selectedIpRules.map(r => r.id);
-            const availableRules = filteredRules.filter(rule => !selectedIds.includes(rule.id));
+            // 筛选同类型的规则
+            const filteredRules = allIpRules.filter(rule => 
+                rule.rule_type === ruleType && !selectedIds.includes(rule.id)
+            );
             
-            availableRules.forEach(rule => {
+            filteredRules.forEach(rule => {
                 const option = document.createElement('option');
                 option.value = rule.id;
                 const typeNames = {
@@ -834,87 +914,90 @@ let currentPage = 1;
                     'geo_blacklist': '地域黑名单'
                 };
                 option.textContent = `${rule.rule_name} (${typeNames[rule.rule_type] || rule.rule_type})`;
-                createSelect.appendChild(option);
+                ruleIdSelect.appendChild(option);
             });
         }
         
-        // 添加选中的规则到列表
-        function addSelectedRule() {
-            const ruleSelect = document.getElementById('create-ip-rule-id');
-            const ruleTypeSelect = document.getElementById('create-ip-rule-type');
-            const selectedRuleId = ruleSelect.value;
+        // 规则类型改变事件
+        function onRuleTypeChange(typeSelect) {
+            const ruleItem = typeSelect.closest('.rule-item');
+            if (!ruleItem) return;
             
-            if (!selectedRuleId) {
+            const ruleIdSelect = ruleItem.querySelector('.rule-id');
+            if (!ruleIdSelect) return;
+            
+            const newType = typeSelect.value;
+            
+            // 检查是否冲突
+            if (checkRuleConflict(newType)) {
+                const typeNames = {
+                    'ip_whitelist': 'IP白名单',
+                    'ip_blacklist': 'IP黑名单',
+                    'geo_whitelist': '地域白名单',
+                    'geo_blacklist': '地域黑名单'
+                };
+                const conflicts = ruleConflicts[newType] || [];
+                const conflictNames = conflicts.map(t => typeNames[t] || t).join('、');
+                showAlert(`不能同时选择${typeNames[newType] || newType}和${conflictNames}`, 'error');
+                typeSelect.value = '';
+                ruleIdSelect.innerHTML = '<option value="">请选择规则条目</option>';
                 return;
             }
             
-            // 查找规则信息
-            const rule = allIpRules.find(r => r.id == selectedRuleId);
-            if (!rule) {
-                return;
-            }
-            
-            // 检查规则类型是否一致
-            const currentRuleType = ruleTypeSelect.value || rule.rule_type;
-            if (selectedIpRules.length > 0 && selectedRuleType !== currentRuleType) {
-                showAlert('只能选择同类型的规则', 'error');
-                return;
-            }
-            
-            // 检查是否已添加
-            if (selectedIpRules.find(r => r.id == rule.id)) {
-                showAlert('该规则已添加', 'error');
-                return;
-            }
-            
-            // 添加到列表
-            selectedIpRules.push(rule);
-            selectedRuleType = currentRuleType;
-            
-            // 更新显示
-            renderSelectedRules();
-            
-            // 清空选择框
-            ruleSelect.value = '';
+            // 更新规则条目选择框
+            filterRulesByType(typeSelect, ruleIdSelect);
         }
         
-        // 从列表中移除规则
-        function removeSelectedRule(ruleId) {
-            selectedIpRules = selectedIpRules.filter(r => r.id != ruleId);
-            if (selectedIpRules.length === 0) {
-                selectedRuleType = null;
-            }
-            renderSelectedRules();
-            // 重新筛选规则列表
-            filterIpRulesByType();
+        // 添加规则条目
+        function addRule() {
+            const rulesList = document.getElementById('rules-list');
+            if (!rulesList) return;
+            
+            const ruleItem = document.createElement('div');
+            ruleItem.className = 'rule-item';
+            ruleItem.innerHTML = `
+                <select class="rule-type" onchange="onRuleTypeChange(this)">
+                    <option value="">请选择规则类型</option>
+                    <option value="ip_whitelist">IP白名单</option>
+                    <option value="ip_blacklist">IP黑名单</option>
+                    <option value="geo_whitelist">地域白名单</option>
+                    <option value="geo_blacklist">地域黑名单</option>
+                </select>
+                <select class="rule-id">
+                    <option value="">请选择规则条目</option>
+                </select>
+                <button type="button" class="btn btn-danger" onclick="removeRule(this)">删除</button>
+            `;
+            rulesList.appendChild(ruleItem);
         }
         
-        // 渲染已选择的规则列表
-        function renderSelectedRules() {
-            const listContainer = document.getElementById('selected-rules-list');
-            if (!listContainer) return;
-            
-            if (selectedIpRules.length === 0) {
-                listContainer.innerHTML = '';
-                return;
+        // 删除规则条目
+        function removeRule(button) {
+            const ruleItem = button.closest('.rule-item');
+            if (ruleItem) {
+                ruleItem.remove();
+                // 更新所有规则条目的选择框（移除已删除的规则）
+                updateAllRuleSelects();
             }
-            
-            const typeNames = {
-                'ip_whitelist': 'IP白名单',
-                'ip_blacklist': 'IP黑名单',
-                'geo_whitelist': '地域白名单',
-                'geo_blacklist': '地域黑名单'
-            };
-            
-            let html = '<div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 5px;">';
-            selectedIpRules.forEach(rule => {
-                html += `<span style="display: inline-flex; align-items: center; padding: 4px 8px; background: #e3f2fd; border: 1px solid #90caf9; border-radius: 4px; font-size: 12px;">
-                    ${rule.rule_name} (${typeNames[rule.rule_type] || rule.rule_type})
-                    <button type="button" onclick="removeSelectedRule(${rule.id})" style="margin-left: 6px; background: #f44336; color: white; border: none; border-radius: 3px; cursor: pointer; padding: 2px 6px; font-size: 11px;">×</button>
-                </span>`;
+        }
+        
+        // 更新所有规则条目的选择框
+        function updateAllRuleSelects() {
+            const rulesList = document.getElementById('rules-list');
+            if (!rulesList) return;
+            const ruleItems = rulesList.querySelectorAll('.rule-item');
+            ruleItems.forEach(item => {
+                const typeSelect = item.querySelector('.rule-type');
+                const ruleIdSelect = item.querySelector('.rule-id');
+                if (typeSelect && ruleIdSelect) {
+                    const currentType = typeSelect.value;
+                    const currentId = ruleIdSelect.value;
+                    filterRulesByType(typeSelect, ruleIdSelect);
+                    if (currentType && currentId) {
+                        ruleIdSelect.value = currentId;
+                    }
+                }
             });
-            html += '</div>';
-            listContainer.innerHTML = html;
         }
         
         document.addEventListener('DOMContentLoaded', function() {

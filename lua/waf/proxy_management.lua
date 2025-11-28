@@ -354,8 +354,26 @@ function _M.list_proxies(params)
         return nil, err
     end
     
-    -- 查询每个代理的后端服务器（如果是upstream类型）
+    -- 查询每个代理的后端服务器和防护规则（如果是upstream类型）
     for _, proxy in ipairs(proxies or {}) do
+        -- 查询代理的防护规则（从waf_proxy_rules表）
+        local rules_sql = [[
+            SELECT pr.rule_id, r.rule_name, r.rule_type
+            FROM waf_proxy_rules pr
+            LEFT JOIN waf_block_rules r ON pr.rule_id = r.id
+            WHERE pr.proxy_id = ?
+            ORDER BY pr.id ASC
+        ]]
+        local proxy_rules, rules_err = mysql_pool.query(rules_sql, proxy.id)
+        if not rules_err and proxy_rules and #proxy_rules > 0 then
+            proxy.ip_rule_ids = {}
+            for _, rule in ipairs(proxy_rules) do
+                table.insert(proxy.ip_rule_ids, rule.rule_id)
+            end
+        else
+            proxy.ip_rule_ids = nil
+        end
+        
         if proxy.backend_type == "upstream" then
             local backends_sql = [[
                 SELECT id, backend_address, backend_port, backend_path, weight, max_fails, fail_timeout,
@@ -407,6 +425,24 @@ function _M.get_proxy(proxy_id)
     end
     
     local proxy = proxies[1]
+    
+    -- 查询代理的防护规则（从waf_proxy_rules表）
+    local rules_sql = [[
+        SELECT pr.rule_id, r.rule_name, r.rule_type
+        FROM waf_proxy_rules pr
+        LEFT JOIN waf_block_rules r ON pr.rule_id = r.id
+        WHERE pr.proxy_id = ?
+        ORDER BY pr.id ASC
+    ]]
+    local proxy_rules, rules_err = mysql_pool.query(rules_sql, proxy_id)
+    if not rules_err and proxy_rules and #proxy_rules > 0 then
+        proxy.ip_rule_ids = {}
+        for _, rule in ipairs(proxy_rules) do
+            table.insert(proxy.ip_rule_ids, rule.rule_id)
+        end
+    else
+        proxy.ip_rule_ids = nil
+    end
     
     -- 查询后端服务器（只支持upstream类型）
     if proxy.backend_type == "upstream" then

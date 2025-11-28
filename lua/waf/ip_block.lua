@@ -944,6 +944,242 @@ function _M.check(rule_id)
     return
 end
 
+-- 检查多个规则ID（用于反向代理关联的多个规则）
+-- @param rule_ids 规则ID数组
+function _M.check_multiple(rule_ids)
+    if not rule_ids or type(rule_ids) ~= "table" or #rule_ids == 0 then
+        return
+    end
+    
+    -- 检查IP封控功能是否启用（优先从数据库读取）
+    local ip_block_enabled = feature_switches.is_enabled("ip_block")
+    if not ip_block_enabled or not config.block.enable then
+        return
+    end
+    
+    -- 检查规则版本号（用于缓存失效）
+    check_rule_version()
+    
+    -- 获取客户端IP
+    local client_ip = ip_utils.get_real_ip() or ngx.var.remote_addr
+    if not client_ip or client_ip == "" then
+        return
+    end
+    
+    -- 验证IP格式
+    if not ip_utils.is_valid_ip(client_ip) then
+        ngx.log(ngx.WARN, "invalid client IP: ", client_ip)
+        return
+    end
+    
+    -- 先检查白名单（如果存在白名单规则，直接允许通过）
+    for _, rule_id in ipairs(rule_ids) do
+        local rule_id_num = tonumber(rule_id)
+        if rule_id_num then
+            local is_whitelisted, matched_rule = check_specific_rule(client_ip, rule_id_num)
+            if is_whitelisted and matched_rule and matched_rule.rule_type == "ip_whitelist" then
+                -- 在白名单中，直接允许通过
+                return
+            end
+        end
+    end
+    
+    -- 检查黑名单（如果存在黑名单规则，拒绝访问）
+    for _, rule_id in ipairs(rule_ids) do
+        local rule_id_num = tonumber(rule_id)
+        if rule_id_num then
+            local is_blocked, matched_rule = check_specific_rule(client_ip, rule_id_num)
+            if is_blocked and matched_rule and matched_rule.rule_type == "ip_blacklist" then
+                -- 记录封控日志
+                log_block(client_ip, matched_rule, "manual")
+                
+                -- 记录监控指标
+                if config.metrics and config.metrics.enable then
+                    metrics.record_block("manual")
+                end
+                
+                -- 返回403错误
+                ngx.status = 403
+                ngx.header.content_type = "text/html; charset=utf-8"
+                local ip_display = client_ip or "unknown"
+                local path_utils = require "waf.path_utils"
+                local project_root = path_utils.get_project_root()
+                if project_root then
+                    local html_file_path = project_root .. "/conf.d/web/403_waf.html"
+                    local html_file = io.open(html_file_path, "r")
+                    if html_file then
+                        local html_content = html_file:read("*all")
+                        html_file:close()
+                        if html_content then
+                            html_content = html_content:gsub("{{IP_ADDRESS}}", ip_display)
+                            ngx.say(html_content)
+                            ngx.exit(403)
+                            return
+                        end
+                    end
+                end
+                ngx.say("<!DOCTYPE html><html><head><meta charset='UTF-8'><title>访问被拒绝</title></head><body><h1>403 Forbidden</h1><p>您的IP地址（" .. ip_display .. "）已被封控。</p></body></html>")
+                ngx.exit(403)
+                return
+            end
+        end
+    end
+    
+    -- 检查地域规则（如果存在地域规则）
+    for _, rule_id in ipairs(rule_ids) do
+        local rule_id_num = tonumber(rule_id)
+        if rule_id_num then
+            local is_blocked, matched_rule = check_specific_rule(client_ip, rule_id_num)
+            if matched_rule and (matched_rule.rule_type == "geo_whitelist" or matched_rule.rule_type == "geo_blacklist") then
+                -- 地域规则检查（由geo_block模块处理）
+                local geo_block = require "waf.geo_block"
+                if matched_rule.rule_type == "geo_whitelist" then
+                    local is_allowed = geo_block.check_whitelist(client_ip, rule_id_num)
+                    if is_allowed then
+                        return  -- 在地域白名单中，允许通过
+                    end
+                elseif matched_rule.rule_type == "geo_blacklist" then
+                    local is_blocked_geo = geo_block.check_blacklist(client_ip, rule_id_num)
+                    if is_blocked_geo then
+                        -- 记录封控日志
+                        log_block(client_ip, matched_rule, "manual")
+                        
+                        -- 记录监控指标
+                        if config.metrics and config.metrics.enable then
+                            metrics.record_block("manual")
+                        end
+                        
+                        -- 返回403错误
+                        ngx.status = 403
+                        ngx.header.content_type = "text/html; charset=utf-8"
+                        local ip_display = client_ip or "unknown"
+                        local path_utils = require "waf.path_utils"
+                        local project_root = path_utils.get_project_root()
+                        if project_root then
+                            local html_file_path = project_root .. "/conf.d/web/403_waf.html"
+                            local html_file = io.open(html_file_path, "r")
+                            if html_file then
+                                local html_content = html_file:read("*all")
+                                html_file:close()
+                                if html_content then
+                                    html_content = html_content:gsub("{{IP_ADDRESS}}", ip_display)
+                                    ngx.say(html_content)
+                                    ngx.exit(403)
+                                    return
+                                end
+                            end
+                        end
+                        ngx.say("<!DOCTYPE html><html><head><meta charset='UTF-8'><title>访问被拒绝</title></head><body><h1>403 Forbidden</h1><p>您的IP地址（" .. ip_display .. "）已被封控。</p></body></html>")
+                        ngx.exit(403)
+                        return
+                    end
+                end
+            end
+        end
+    end
+    
+    -- 未匹配任何规则，允许通过
+    return
+end
+
+-- Stream专用检查多个规则ID函数（用于TCP/UDP代理）
+-- @param rule_ids 规则ID数组
+function _M.check_stream_multiple(rule_ids)
+    if not rule_ids or type(rule_ids) ~= "table" or #rule_ids == 0 then
+        return
+    end
+    
+    -- 检查IP封控功能是否启用（优先从数据库读取）
+    local ip_block_enabled = feature_switches.is_enabled("ip_block")
+    if not ip_block_enabled or not config.block.enable then
+        return
+    end
+    
+    -- 检查规则版本号（用于缓存失效）
+    check_rule_version()
+    
+    -- 在Stream块中，直接使用ngx.var.remote_addr获取客户端IP（没有HTTP头）
+    local client_ip = ngx.var.remote_addr
+    if not client_ip or client_ip == "" then
+        return
+    end
+    
+    -- 验证IP格式
+    if not ip_utils.is_valid_ip(client_ip) then
+        ngx.log(ngx.WARN, "invalid client IP in stream: ", client_ip)
+        return
+    end
+    
+    -- 先检查白名单（如果存在白名单规则，直接允许通过）
+    for _, rule_id in ipairs(rule_ids) do
+        local rule_id_num = tonumber(rule_id)
+        if rule_id_num then
+            local is_whitelisted, matched_rule = check_specific_rule(client_ip, rule_id_num)
+            if is_whitelisted and matched_rule and matched_rule.rule_type == "ip_whitelist" then
+                -- 在白名单中，直接允许通过
+                return
+            end
+        end
+    end
+    
+    -- 检查黑名单（如果存在黑名单规则，拒绝连接）
+    for _, rule_id in ipairs(rule_ids) do
+        local rule_id_num = tonumber(rule_id)
+        if rule_id_num then
+            local is_blocked, matched_rule = check_specific_rule(client_ip, rule_id_num)
+            if is_blocked and matched_rule and matched_rule.rule_type == "ip_blacklist" then
+                -- 记录封控日志
+                log_block(client_ip, matched_rule, "manual")
+                
+                -- 记录监控指标
+                if config.metrics and config.metrics.enable then
+                    metrics.record_block("manual")
+                end
+                
+                -- Stream块中拒绝连接（使用ngx.exit()）
+                ngx.log(ngx.INFO, "Stream connection blocked by IP rule: ", client_ip, ", rule_id: ", rule_id_num)
+                ngx.exit(1)  -- 拒绝连接
+            end
+        end
+    end
+    
+    -- 检查地域规则（如果存在地域规则）
+    for _, rule_id in ipairs(rule_ids) do
+        local rule_id_num = tonumber(rule_id)
+        if rule_id_num then
+            local is_blocked, matched_rule = check_specific_rule(client_ip, rule_id_num)
+            if matched_rule and (matched_rule.rule_type == "geo_whitelist" or matched_rule.rule_type == "geo_blacklist") then
+                -- 地域规则检查（由geo_block模块处理）
+                local geo_block = require "waf.geo_block"
+                if matched_rule.rule_type == "geo_whitelist" then
+                    local is_allowed = geo_block.check_whitelist(client_ip, rule_id_num)
+                    if is_allowed then
+                        return  -- 在地域白名单中，允许通过
+                    end
+                elseif matched_rule.rule_type == "geo_blacklist" then
+                    local is_blocked_geo = geo_block.check_blacklist(client_ip, rule_id_num)
+                    if is_blocked_geo then
+                        -- 记录封控日志
+                        log_block(client_ip, matched_rule, "manual")
+                        
+                        -- 记录监控指标
+                        if config.metrics and config.metrics.enable then
+                            metrics.record_block("manual")
+                        end
+                        
+                        -- Stream块中拒绝连接（使用ngx.exit()）
+                        ngx.log(ngx.INFO, "Stream connection blocked by geo rule: ", client_ip, ", rule_id: ", rule_id_num)
+                        ngx.exit(1)  -- 拒绝连接
+                    end
+                end
+            end
+        end
+    end
+    
+    -- 未匹配任何规则，允许通过
+    return
+end
+
 return _M
 
 

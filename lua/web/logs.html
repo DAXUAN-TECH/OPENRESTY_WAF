@@ -188,6 +188,7 @@
             font-weight: bold;
             color: #333;
         }
+        /* 表格容器样式 - 确保表格和table-wrapper左右对齐 */
         .table-container {
             background: #fff;
             border-radius: 4px;
@@ -195,25 +196,36 @@
             overflow: hidden;
             margin: 0;
             padding: 0;
+            width: 100%;
+            box-sizing: border-box;
         }
+        
+        /* 表格包装器 - 确保与表格左右对齐 */
         .table-wrapper {
             overflow-x: auto;
             width: 100%;
             margin: 0;
             padding: 0;
             box-sizing: border-box;
+            /* 确保与表格对齐 */
+            display: block;
         }
+        
+        /* 基础表格样式 - 确保与table-wrapper对齐 */
         table {
             width: 100%;
             border-collapse: collapse;
             margin: 0;
             padding: 0;
             box-sizing: border-box;
+            /* 确保表格与wrapper对齐 */
+            display: table;
+            table-layout: auto;
         }
+        
         /* 访问日志：access-table和table-wrapper保持一样的宽度，确保左右对齐 */
-        #access-table {
+        #access-tab .table-container {
             width: 100%;
-            min-width: 100%;
             margin: 0;
             padding: 0;
             box-sizing: border-box;
@@ -223,11 +235,21 @@
             margin: 0;
             padding: 0;
             box-sizing: border-box;
+            display: block;
         }
-        /* 封控日志：block-table和table-wrapper保持一样的宽度，确保左右对齐 */
-        #block-table {
+        #access-table {
             width: 100%;
             min-width: 100%;
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            display: table;
+            table-layout: auto;
+        }
+        
+        /* 封控日志：block-table和table-wrapper保持一样的宽度，确保左右对齐 */
+        #block-tab .table-container {
+            width: 100%;
             margin: 0;
             padding: 0;
             box-sizing: border-box;
@@ -237,11 +259,21 @@
             margin: 0;
             padding: 0;
             box-sizing: border-box;
+            display: block;
         }
-        /* 审计日志：audit-table和table-wrapper保持一样的宽度，确保左右对齐 */
-        #audit-table {
+        #block-table {
             width: 100%;
             min-width: 100%;
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            display: table;
+            table-layout: auto;
+        }
+        
+        /* 审计日志：audit-table和table-wrapper保持一样的宽度，确保左右对齐 */
+        #audit-tab .table-container {
+            width: 100%;
             margin: 0;
             padding: 0;
             box-sizing: border-box;
@@ -251,6 +283,16 @@
             margin: 0;
             padding: 0;
             box-sizing: border-box;
+            display: block;
+        }
+        #audit-table {
+            width: 100%;
+            min-width: 100%;
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            display: table;
+            table-layout: auto;
         }
         thead {
             background: #f8f9fa;

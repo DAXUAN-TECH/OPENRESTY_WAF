@@ -338,7 +338,9 @@ function _M.enable_totp()
         return
     end
     
-    ngx.log(ngx.INFO, "auth.enable_totp: verifying TOTP for user: ", session.username, ", secret length: ", #secret, ", secret prefix: ", string.sub(secret, 1, 12), "...", ", code: ", code)
+    -- 记录详细的secret信息用于调试
+    ngx.log(ngx.INFO, "auth.enable_totp: verifying TOTP for user: ", session.username)
+    ngx.log(ngx.INFO, "auth.enable_totp: provided secret length: ", #secret, ", secret (first 20 chars): ", string.sub(secret, 1, 20), ", secret (last 10 chars): ", string.sub(secret, -10), ", code: ", code)
     
     -- 检查缓存的 secret
     local cache = ngx.shared.waf_cache
@@ -350,9 +352,37 @@ function _M.enable_totp()
         local cleaned_cached_secret = string.upper(string.gsub(cached_secret, "%s", ""))
         local cleaned_provided_secret = string.upper(string.gsub(secret, "%s", ""))
         local secrets_match = cleaned_cached_secret == cleaned_provided_secret
-        ngx.log(ngx.INFO, "auth.enable_totp: found cached secret for user: ", session.username, ", cached_secret length: ", #cached_secret, ", cached_secret prefix: ", string.sub(cached_secret, 1, 12), "...", ", provided_secret prefix: ", string.sub(secret, 1, 12), "...", ", secrets match: ", secrets_match)
+        ngx.log(ngx.INFO, "auth.enable_totp: found cached secret for user: ", session.username)
+        ngx.log(ngx.INFO, "auth.enable_totp: cached_secret length: ", #cached_secret, ", cached_secret (first 20 chars): ", string.sub(cached_secret, 1, 20), ", cached_secret (last 10 chars): ", string.sub(cached_secret, -10))
+        ngx.log(ngx.INFO, "auth.enable_totp: provided_secret (first 20 chars): ", string.sub(secret, 1, 20), ", provided_secret (last 10 chars): ", string.sub(secret, -10))
+        ngx.log(ngx.INFO, "auth.enable_totp: cleaned_cached_secret (first 20 chars): ", string.sub(cleaned_cached_secret, 1, 20), ", cleaned_provided_secret (first 20 chars): ", string.sub(cleaned_provided_secret, 1, 20))
+        ngx.log(ngx.INFO, "auth.enable_totp: secrets match: ", secrets_match, ", exact match: ", cached_secret == secret)
+        
+        -- 使用缓存的secret生成当前时间的验证码用于对比
+        local test_code_cached, test_err_cached = totp.generate_totp(cached_secret, 30, 6)
+        if test_code_cached then
+            ngx.log(ngx.INFO, "auth.enable_totp: generated code from cached_secret: ", test_code_cached, ", user input: ", code, ", match: ", test_code_cached == code)
+        else
+            ngx.log(ngx.WARN, "auth.enable_totp: failed to generate code from cached_secret: ", tostring(test_err_cached))
+        end
+        
+        -- 使用提供的secret生成当前时间的验证码用于对比
+        local test_code_provided, test_err_provided = totp.generate_totp(secret, 30, 6)
+        if test_code_provided then
+            ngx.log(ngx.INFO, "auth.enable_totp: generated code from provided_secret: ", test_code_provided, ", user input: ", code, ", match: ", test_code_provided == code)
+        else
+            ngx.log(ngx.WARN, "auth.enable_totp: failed to generate code from provided_secret: ", tostring(test_err_provided))
+        end
     else
         ngx.log(ngx.INFO, "auth.enable_totp: no cached secret found for user: ", session.username)
+        
+        -- 使用提供的secret生成当前时间的验证码用于对比
+        local test_code_provided, test_err_provided = totp.generate_totp(secret, 30, 6)
+        if test_code_provided then
+            ngx.log(ngx.INFO, "auth.enable_totp: generated code from provided_secret: ", test_code_provided, ", user input: ", code, ", match: ", test_code_provided == code)
+        else
+            ngx.log(ngx.WARN, "auth.enable_totp: failed to generate code from provided_secret: ", tostring(test_err_provided))
+        end
     end
     
     -- 优先使用缓存的 secret 验证（如果存在），因为缓存的 secret 是服务器生成的，更可靠
@@ -363,19 +393,26 @@ function _M.enable_totp()
     -- 这对于跨时区或时间同步不准确的情况很有帮助
     local time_window = 10  -- 允许前后10个时间窗口（±5分钟）
     
+    -- 清理secret（移除空格，转换为大写），确保格式一致
+    local cleaned_secret = string.upper(string.gsub(secret, "%s", ""))
+    
     if cached_secret then
+        -- 清理缓存的secret
+        local cleaned_cached_secret = string.upper(string.gsub(cached_secret, "%s", ""))
+        
         -- 先尝试使用缓存的 secret（服务器生成的，更可靠）
         ngx.log(ngx.INFO, "auth.enable_totp: trying cached secret first for user: ", session.username, ", time_window: ", time_window)
-        totp_ok, err = totp.verify_totp(cached_secret, code, 30, time_window)
+        totp_ok, err = totp.verify_totp(cleaned_cached_secret, code, 30, time_window)
         if totp_ok then
-            secret = cached_secret
+            secret = cleaned_cached_secret
             secret_source = "cached"
             ngx.log(ngx.INFO, "auth.enable_totp: cached secret verification successful for user: ", session.username)
         else
             ngx.log(ngx.INFO, "auth.enable_totp: cached secret verification failed, trying provided secret for user: ", session.username)
             -- 如果缓存的 secret 验证失败，尝试提供的 secret
-            totp_ok, err = totp.verify_totp(secret, code, 30, time_window)
+            totp_ok, err = totp.verify_totp(cleaned_secret, code, 30, time_window)
             if totp_ok then
+                secret = cleaned_secret
                 secret_source = "provided"
                 ngx.log(ngx.INFO, "auth.enable_totp: provided secret verification successful for user: ", session.username)
             else
@@ -385,7 +422,10 @@ function _M.enable_totp()
     else
         -- 没有缓存的 secret，直接使用提供的 secret
         ngx.log(ngx.INFO, "auth.enable_totp: no cached secret, using provided secret for user: ", session.username, ", time_window: ", time_window)
-        totp_ok, err = totp.verify_totp(secret, code, 30, time_window)
+        totp_ok, err = totp.verify_totp(cleaned_secret, code, 30, time_window)
+        if totp_ok then
+            secret = cleaned_secret
+        end
         secret_source = "provided"
     end
     

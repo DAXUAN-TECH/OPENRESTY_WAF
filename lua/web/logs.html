@@ -58,9 +58,17 @@
         }
         .tab-content {
             display: none;
+            width: 100%;
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
         }
         .tab-content.active {
             display: block;
+            width: 100%;
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
         }
         .filters {
             background: #fff;
@@ -189,6 +197,7 @@
             color: #333;
         }
         /* 表格容器样式 - 确保表格和table-wrapper左右对齐 */
+        /* 逐级检查：.container -> .tab-content -> .table-container -> .table-wrapper -> table */
         .table-container {
             background: #fff;
             border-radius: 4px;
@@ -197,23 +206,30 @@
             margin: 0;
             padding: 0;
             width: 100%;
+            max-width: 100%;
             box-sizing: border-box;
+            /* 确保与父级对齐 */
+            display: block;
         }
         
         /* 表格包装器 - 确保与表格左右对齐 */
         .table-wrapper {
             overflow-x: auto;
             width: 100%;
+            max-width: 100%;
             margin: 0;
             padding: 0;
             box-sizing: border-box;
             /* 确保与表格对齐 */
             display: block;
+            /* 确保没有额外的边框或间距影响对齐 */
+            border: none;
         }
         
         /* 基础表格样式 - 确保与table-wrapper对齐 */
         table {
             width: 100%;
+            max-width: 100%;
             border-collapse: collapse;
             margin: 0;
             padding: 0;
@@ -221,78 +237,116 @@
             /* 确保表格与wrapper对齐 */
             display: table;
             table-layout: auto;
+            /* 确保没有额外的边框或间距影响对齐 */
+            border-spacing: 0;
         }
         
         /* 访问日志：access-table和table-wrapper保持一样的宽度，确保左右对齐 */
-        #access-tab .table-container {
+        #access-tab {
             width: 100%;
             margin: 0;
             padding: 0;
             box-sizing: border-box;
+        }
+        #access-tab .table-container {
+            width: 100%;
+            max-width: 100%;
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            display: block;
         }
         #access-tab .table-wrapper {
             width: 100%;
+            max-width: 100%;
             margin: 0;
             padding: 0;
             box-sizing: border-box;
             display: block;
+            border: none;
         }
         #access-table {
             width: 100%;
+            max-width: 100%;
             min-width: 100%;
             margin: 0;
             padding: 0;
             box-sizing: border-box;
             display: table;
             table-layout: auto;
+            border-spacing: 0;
         }
         
         /* 封控日志：block-table和table-wrapper保持一样的宽度，确保左右对齐 */
-        #block-tab .table-container {
+        #block-tab {
             width: 100%;
             margin: 0;
             padding: 0;
             box-sizing: border-box;
+        }
+        #block-tab .table-container {
+            width: 100%;
+            max-width: 100%;
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            display: block;
         }
         #block-tab .table-wrapper {
             width: 100%;
+            max-width: 100%;
             margin: 0;
             padding: 0;
             box-sizing: border-box;
             display: block;
+            border: none;
         }
         #block-table {
             width: 100%;
+            max-width: 100%;
             min-width: 100%;
             margin: 0;
             padding: 0;
             box-sizing: border-box;
             display: table;
             table-layout: auto;
+            border-spacing: 0;
         }
         
         /* 审计日志：audit-table和table-wrapper保持一样的宽度，确保左右对齐 */
-        #audit-tab .table-container {
+        #audit-tab {
             width: 100%;
             margin: 0;
             padding: 0;
             box-sizing: border-box;
         }
-        #audit-tab .table-wrapper {
+        #audit-tab .table-container {
             width: 100%;
+            max-width: 100%;
             margin: 0;
             padding: 0;
             box-sizing: border-box;
             display: block;
         }
+        #audit-tab .table-wrapper {
+            width: 100%;
+            max-width: 100%;
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            display: block;
+            border: none;
+        }
         #audit-table {
             width: 100%;
+            max-width: 100%;
             min-width: 100%;
             margin: 0;
             padding: 0;
             box-sizing: border-box;
             display: table;
             table-layout: auto;
+            border-spacing: 0;
         }
         thead {
             background: #f8f9fa;

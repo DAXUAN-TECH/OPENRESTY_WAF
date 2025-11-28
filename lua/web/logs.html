@@ -789,6 +789,8 @@
                     } else {
                         tbody.innerHTML = '<tr><td colspan="8" class="empty">暂无数据</td></tr>';
                     }
+                    // 数据加载后强制设置表格宽度
+                    setTimeout(forceTableWidths, 50);
                 })
                 .catch(err => {
                     loading.style.display = 'none';
@@ -855,6 +857,8 @@
                     } else {
                         tbody.innerHTML = '<tr><td colspan="6" class="empty">暂无数据</td></tr>';
                     }
+                    // 数据加载后强制设置表格宽度
+                    setTimeout(forceTableWidths, 50);
                 })
                 .catch(err => {
                     loading.style.display = 'none';
@@ -926,6 +930,8 @@
                     } else {
                         tbody.innerHTML = '<tr><td colspan="7" class="empty">暂无数据</td></tr>';
                     }
+                    // 数据加载后强制设置表格宽度
+                    setTimeout(forceTableWidths, 50);
                 })
                 .catch(err => {
                     loading.style.display = 'none';

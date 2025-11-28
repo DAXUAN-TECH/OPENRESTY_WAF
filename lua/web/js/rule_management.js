@@ -503,7 +503,8 @@ let currentPage = 1;
                 
                 if (data.success) {
                     showAlert('规则已启用');
-                    loadRules();
+                    // 保持当前页码和筛选条件重新加载
+                    loadRules(currentPage);
                 } else {
                     showAlert(data.error || '操作失败', 'error');
                 }
@@ -522,7 +523,8 @@ let currentPage = 1;
                 
                 if (data.success) {
                     showAlert('规则已禁用');
-                    loadRules();
+                    // 保持当前页码和筛选条件重新加载
+                    loadRules(currentPage);
                 } else {
                     showAlert(data.error || '操作失败', 'error');
                 }

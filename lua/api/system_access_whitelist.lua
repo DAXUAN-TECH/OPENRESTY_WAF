@@ -324,6 +324,12 @@ function _M.create()
             ngx.log(ngx.INFO, "create: 第一条启用的白名单条目已创建，自动开启系统白名单")
             audit_log.log("update", "system_config", "system_access_whitelist_enabled", 
                 "添加第一条启用的白名单条目，自动开启系统白名单", "success")
+            
+            -- 清除配置缓存，确保立即生效
+            if config_manager and config_manager.clear_cache then
+                config_manager.clear_cache("system_access_whitelist_enabled")
+                ngx.log(ngx.INFO, "create: 已清除系统白名单配置缓存")
+            end
         else
             ngx.log(ngx.WARN, "create: 第一条启用的白名单条目已创建，但自动开启系统白名单失败: ", tostring(update_config_err))
             will_enable_whitelist = false

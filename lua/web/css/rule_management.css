@@ -322,7 +322,7 @@
         .form-group select,
         .form-group textarea {
             width: 100%;
-            max-width: 500px;
+            max-width: 400px;
             padding: 10px;
             border: 1px solid #ddd;
             border-radius: 4px;
@@ -331,6 +331,17 @@
             background-color: #fff;
             color: #333;
             transition: border-color 0.3s;
+        }
+        
+        /* 编辑弹出框中的输入框进一步优化 */
+        #edit-modal .form-group input,
+        #edit-modal .form-group select {
+            max-width: 350px;
+        }
+        
+        /* 规则值输入框保持较宽，因为可能需要输入多个IP */
+        #edit-modal .form-group textarea.rule-value-input {
+            max-width: 500px;
         }
         
         .form-group select {

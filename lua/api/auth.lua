@@ -254,13 +254,17 @@ function _M.setup_totp()
         qr_url, _ = totp.generate_qr_url(secret, username, "WAF Management")
     end
     
+    -- 确保返回的secret与qr_data中的secret一致（都是清理后的）
     local response = {
-        secret = secret,
+        secret = qr_data.secret,  -- 使用qr_data中的secret（已清理），确保前后端一致
         qr_data = qr_data,
         qr_generator = qr_generator,
         allow_manual_entry = config.totp and config.totp.allow_manual_entry ~= false,
         message = "请使用 Google Authenticator 扫描二维码或手动输入密钥，然后验证代码以启用双因素认证"
     }
+    
+    -- 记录调试信息
+    ngx.log(ngx.DEBUG, "auth.setup_totp: original secret: ", string.sub(secret, 1, 20), "...", ", response secret: ", string.sub(response.secret, 1, 20), "...", ", qr_data.secret: ", string.sub(qr_data.secret, 1, 20), "...")
     
     if qr_url then
         response.qr_url = qr_url
@@ -268,6 +272,9 @@ function _M.setup_totp()
     
     -- 记录审计日志（设置TOTP）
     audit_log.log_totp_action("setup", session.username, true, nil)
+    
+    -- 记录调试信息：记录返回的secret和otpauth_url
+    ngx.log(ngx.WARN, "auth.setup_totp: DEBUG - returning secret: ", string.sub(response.secret, 1, 20), "...", ", otpauth_url: ", string.sub(qr_data.otpauth_url, 1, 100), "...")
     
     api_utils.json_response(response, 200)
 end

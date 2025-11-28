@@ -519,18 +519,24 @@ function _M.generate_qr_data(secret, username, issuer)
     issuer = issuer or "WAF Management"
     username = username or "user"
     
-    -- 构建 otpauth URL
+    -- 清理secret（移除空格，转换为大写），确保格式一致
+    local cleaned_secret = string.upper(string.gsub(secret, "%s", ""))
+    
+    -- 构建 otpauth URL（使用清理后的secret）
     local otpauth_url = string.format(
         "otpauth://totp/%s:%s?secret=%s&issuer=%s&algorithm=SHA1&digits=6&period=30",
         issuer,
         username,
-        secret,
+        cleaned_secret,
         issuer
     )
     
+    -- 记录调试信息
+    ngx.log(ngx.DEBUG, "totp.generate_qr_data: secret: ", string.sub(secret, 1, 20), "...", ", cleaned_secret: ", string.sub(cleaned_secret, 1, 20), "...", ", otpauth_url: ", string.sub(otpauth_url, 1, 100), "...")
+    
     return {
         otpauth_url = otpauth_url,
-        secret = secret,
+        secret = cleaned_secret,  -- 返回清理后的secret，确保前后端一致
         username = username,
         issuer = issuer
     }

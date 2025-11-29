@@ -284,48 +284,143 @@ fi
 
 # 4.2 优化内核参数
 echo "  优化内核参数..."
-if ! grep -q "# OpenResty WAF Optimization" /etc/sysctl.conf; then
-    cat >> /etc/sysctl.conf <<EOF
 
-# OpenResty WAF Optimization
+# 检测内核版本（用于判断是否支持某些参数）
+KERNEL_MAJOR=$(uname -r | cut -d. -f1)
+KERNEL_MINOR=$(uname -r | cut -d. -f2)
+KERNEL_VERSION_NUM=$((KERNEL_MAJOR * 100 + KERNEL_MINOR))
+
+# 检测系统是否支持某些参数
+check_sysctl_param() {
+    local param="$1"
+    if sysctl "$param" >/dev/null 2>&1; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+# 检测 nf_conntrack 模块是否加载
+NF_CONNTRACK_AVAILABLE=0
+if check_sysctl_param "net.netfilter.nf_conntrack_max"; then
+    NF_CONNTRACK_AVAILABLE=1
+fi
+
+# 检测 fs.nr_open 的最大值（如果系统支持）
+FS_NR_OPEN_MAX=0
+if [ -r /proc/sys/fs/nr_open ]; then
+    FS_NR_OPEN_MAX=$(cat /proc/sys/fs/nr_open 2>/dev/null || echo 0)
+fi
+
+# 确保 fs.nr_open 不超过系统支持的最大值
+if [ "$FS_NR_OPEN_MAX" -gt 0 ] && [ "$ULIMIT_NOFILE" -gt "$FS_NR_OPEN_MAX" ]; then
+    echo -e "    ${YELLOW}⚠ fs.nr_open 值 ($ULIMIT_NOFILE) 超过系统最大值 ($FS_NR_OPEN_MAX)，调整为 $FS_NR_OPEN_MAX${NC}"
+    FS_NR_OPEN_VALUE=$FS_NR_OPEN_MAX
+else
+    FS_NR_OPEN_VALUE=$ULIMIT_NOFILE
+fi
+
+if ! grep -q "# OpenResty WAF Optimization" /etc/sysctl.conf; then
+    # 构建内核参数配置（根据系统支持情况动态生成）
+    SYSCTL_CONFIG="# OpenResty WAF Optimization
 # 网络优化
 net.core.somaxconn = 65535
 net.core.netdev_max_backlog = 32768
 net.ipv4.tcp_max_syn_backlog = 8192
 net.ipv4.tcp_syncookies = 1
 net.ipv4.tcp_tw_reuse = 1
-net.ipv4.tcp_tw_recycle = 0
-net.ipv4.tcp_fin_timeout = 30
+"
+    
+    # tcp_tw_recycle 在 Linux 4.12+ 中已移除，只在不支持时添加
+    if [ "$KERNEL_VERSION_NUM" -lt 412 ]; then
+        if check_sysctl_param "net.ipv4.tcp_tw_recycle"; then
+            SYSCTL_CONFIG="${SYSCTL_CONFIG}net.ipv4.tcp_tw_recycle = 0
+"
+        fi
+    fi
+    
+    SYSCTL_CONFIG="${SYSCTL_CONFIG}net.ipv4.tcp_fin_timeout = 30
 net.ipv4.tcp_keepalive_time = 1200
 net.ipv4.tcp_keepalive_probes = 3
 net.ipv4.tcp_keepalive_intvl = 15
-
+"
+    
+    # 连接跟踪优化（仅在模块加载时添加）
+    if [ "$NF_CONNTRACK_AVAILABLE" -eq 1 ]; then
+        SYSCTL_CONFIG="${SYSCTL_CONFIG}
 # 连接跟踪优化
 net.netfilter.nf_conntrack_max = 1000000
 net.netfilter.nf_conntrack_tcp_timeout_established = 1200
-
+"
+    fi
+    
+    SYSCTL_CONFIG="${SYSCTL_CONFIG}
 # 内存优化
 vm.overcommit_memory = 1
 vm.swappiness = 10
 
 # 文件系统优化
 fs.file-max = $ULIMIT_NOFILE
-fs.nr_open = $ULIMIT_NOFILE
-
+"
+    
+    # fs.nr_open 仅在系统支持时添加
+    if [ "$FS_NR_OPEN_MAX" -gt 0 ]; then
+        SYSCTL_CONFIG="${SYSCTL_CONFIG}fs.nr_open = $FS_NR_OPEN_VALUE
+"
+    fi
+    
+    SYSCTL_CONFIG="${SYSCTL_CONFIG}
 # IP 转发（如果需要）
 # net.ipv4.ip_forward = 1
-EOF
+"
+    
+    # 写入配置
+    echo "$SYSCTL_CONFIG" >> /etc/sysctl.conf
     echo -e "    ${GREEN}✓ 已添加内核参数优化${NC}"
+    
+    if [ "$NF_CONNTRACK_AVAILABLE" -eq 0 ]; then
+        echo -e "    ${YELLOW}⚠ 注意: nf_conntrack 模块未加载，已跳过连接跟踪优化参数${NC}"
+    fi
+    
+    if [ "$FS_NR_OPEN_MAX" -eq 0 ]; then
+        echo -e "    ${YELLOW}⚠ 注意: 系统不支持 fs.nr_open，已跳过该参数${NC}"
+    fi
 else
     echo -e "    ${YELLOW}⚠ 内核参数优化已存在，跳过${NC}"
 fi
 
-# 应用内核参数
-if sysctl -p > /dev/null 2>&1; then
+# 应用内核参数（带详细错误检查）
+echo "  验证并应用内核参数..."
+SYSCTL_ERROR_OUTPUT=$(sysctl -p 2>&1)
+SYSCTL_EXIT_CODE=$?
+
+if [ $SYSCTL_EXIT_CODE -eq 0 ]; then
     echo -e "    ${GREEN}✓ 已应用内核参数${NC}"
 else
-    echo -e "    ${YELLOW}⚠ 内核参数应用失败，请检查 /etc/sysctl.conf 语法${NC}"
-    echo -e "    ${YELLOW}  运行 'sysctl -p' 查看详细错误信息${NC}"
+    # 检查是否有严重错误（可能导致系统启动失败）
+    if echo "$SYSCTL_ERROR_OUTPUT" | grep -qiE "unknown key|invalid argument|permission denied|read-only"; then
+        echo -e "    ${RED}✗ 内核参数应用失败，存在严重错误！${NC}"
+        echo -e "    ${RED}   这可能导致系统启动失败！${NC}"
+        echo ""
+        echo -e "    ${YELLOW}错误详情:${NC}"
+        echo "$SYSCTL_ERROR_OUTPUT" | head -10
+        echo ""
+        echo -e "    ${YELLOW}建议操作:${NC}"
+        echo "    1. 检查 /etc/sysctl.conf 中的错误参数"
+        echo "    2. 从备份恢复: cp $BACKUP_DIR/sysctl.conf.bak /etc/sysctl.conf"
+        echo "    3. 或手动修复错误参数后重新运行脚本"
+        echo ""
+        echo -e "    ${RED}警告: 如果系统无法启动，请使用恢复模式修复 /etc/sysctl.conf${NC}"
+        exit 1
+    else
+        # 非严重错误（如某些参数不支持，但不影响系统启动）
+        echo -e "    ${YELLOW}⚠ 内核参数应用时出现警告（非严重错误）${NC}"
+        echo -e "    ${YELLOW}   某些参数可能不被当前内核支持，但不影响系统启动${NC}"
+        if [ -n "$SYSCTL_ERROR_OUTPUT" ]; then
+            echo -e "    ${BLUE}警告信息:${NC}"
+            echo "$SYSCTL_ERROR_OUTPUT" | head -5
+        fi
+    fi
 fi
 
 # 4.3 优化网络参数（临时生效）

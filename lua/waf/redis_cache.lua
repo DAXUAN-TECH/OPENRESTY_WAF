@@ -285,41 +285,6 @@ function _M.get(key)
         redis_client = nil
         return nil
     end
-            -- 立即清除连接，避免后续操作使用已关闭的连接
-            if redis_client then
-                local close_ok, close_err = pcall(function()
-                    redis_client:close()
-                end)
-                redis_client = nil
-            end
-            red = get_redis()
-            if red then
-                -- 重试一次
-                local retry_pcall_ok, retry_redis_res, retry_redis_err = pcall(function()
-                    return red:get(redis_key)
-                end)
-                if retry_pcall_ok and not retry_redis_err then
-                    if not retry_redis_res or retry_redis_res == ngx.null then
-                        return nil
-                    end
-                    -- 反序列化
-                    local data, format = serializer.decode(retry_redis_res)
-                    return data
-                else
-                    ngx.log(ngx.WARN, "Redis get error after reconnect: ", tostring(retry_redis_res or retry_redis_err))
-                    redis_client = nil
-                    return nil
-                end
-            else
-                ngx.log(ngx.WARN, "Redis reconnect failed, get operation skipped")
-                return nil
-            end
-        else
-            ngx.log(ngx.ERR, "Redis get error: ", tostring(redis_err))
-            redis_client = nil
-            return nil
-        end
-    end
     
     local res = redis_res
     

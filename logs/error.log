@@ -1,17 +1,1 @@
 
-2025/11/29 03:34:29 [warn] 326594#326594: *1301 [lua] system.lua:166: reload_nginx_internal(): OpenResty配置语法正确，但可能存在权限警告: nginx: the configuration file /usr/local/openresty/nginx/conf/nginx.conf syntax is ok
-nginx: configuration file /usr/local/openresty/nginx/conf/nginx.conf test is successful
-, context: ngx.timer, client: 182.2.4.43, server: 0.0.0.0:80
-2025/11/29 03:35:49 [warn] 328753#328753: *1574 [lua] system.lua:166: reload_nginx_internal(): OpenResty配置语法正确，但可能存在权限警告: nginx: the configuration file /usr/local/openresty/nginx/conf/nginx.conf syntax is ok
-nginx: configuration file /usr/local/openresty/nginx/conf/nginx.conf test is successful
-, context: ngx.timer, client: 182.2.4.43, server: 0.0.0.0:80
-2025/11/29 03:36:22 [warn] 329343#329343: *1704 [lua] system.lua:166: reload_nginx_internal(): OpenResty配置语法正确，但可能存在权限警告: nginx: the configuration file /usr/local/openresty/nginx/conf/nginx.conf syntax is ok
-nginx: configuration file /usr/local/openresty/nginx/conf/nginx.conf test is successful
-, context: ngx.timer, client: 182.2.4.43, server: 0.0.0.0:80
-2025/11/29 03:46:15 [error] 329533#329533: *3553 access forbidden by rule, client: 66.132.153.114, server: localhost, request: "GET /.well-known/security.txt HTTP/1.1", host: "47.237.7.51"
-2025/11/29 03:57:52 [error] 329533#329533: *5695 [lua] mysql_pool.lua:130: query(): bad result: Unknown column 'p.backend_path' in 'field list': 1054: 42S22, client: 182.2.4.43, server: localhost, request: "GET /api/proxy?page=1&page_size=20 HTTP/1.1", host: "47.237.7.51", referrer: "http://47.237.7.51/admin/proxy"
-2025/11/29 03:57:52 [error] 329533#329533: *5695 [lua] proxy_management.lua:372: list_proxies(): list proxies error: Unknown column 'p.backend_path' in 'field list', client: 182.2.4.43, server: localhost, request: "GET /api/proxy?page=1&page_size=20 HTTP/1.1", host: "47.237.7.51", referrer: "http://47.237.7.51/admin/proxy"
-2025/11/29 03:57:53 [error] 329533#329533: *5695 [lua] mysql_pool.lua:130: query(): bad result: Unknown column 'p.backend_path' in 'field list': 1054: 42S22, client: 182.2.4.43, server: localhost, request: "GET /api/proxy?page=1&page_size=20 HTTP/1.1", host: "47.237.7.51", referrer: "http://47.237.7.51/admin/proxy"
-2025/11/29 03:57:53 [error] 329533#329533: *5695 [lua] proxy_management.lua:372: list_proxies(): list proxies error: Unknown column 'p.backend_path' in 'field list', client: 182.2.4.43, server: localhost, request: "GET /api/proxy?page=1&page_size=20 HTTP/1.1", host: "47.237.7.51", referrer: "http://47.237.7.51/admin/proxy"
-2025/11/29 03:57:58 [error] 329533#329533: *5695 [lua] mysql_pool.lua:130: query(): bad result: Unknown column 'p.backend_path' in 'field list': 1054: 42S22, client: 182.2.4.43, server: localhost, request: "GET /api/proxy?page=1&page_size=20 HTTP/1.1", host: "47.237.7.51", referrer: "http://47.237.7.51/admin/proxy"
-2025/11/29 03:57:58 [error] 329533#329533: *5695 [lua] proxy_management.lua:372: list_proxies(): list proxies error: Unknown column 'p.backend_path' in 'field list', client: 182.2.4.43, server: localhost, request: "GET /api/proxy?page=1&page_size=20 HTTP/1.1", host: "47.237.7.51", referrer: "http://47.237.7.51/admin/proxy"

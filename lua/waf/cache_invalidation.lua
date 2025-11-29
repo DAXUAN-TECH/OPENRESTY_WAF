@@ -59,8 +59,13 @@ end
 
 -- 清除规则列表缓存
 function _M.invalidate_rule_list_cache()
-    cache:delete("rule_list:ip_range:block")
-    cache:delete("rule_list:ip_range:whitelist")
+    -- 清除共享内存缓存（立即生效）
+    if cache then
+        cache:delete("rule_list:ip_range:block")
+        cache:delete("rule_list:ip_range:whitelist")
+        cache:delete("rule_list:ip_range:block:trie")
+        cache:delete("rule_list:ip_range:whitelist:trie")
+    end
     
     -- 清除Redis缓存（失败不影响主流程，使用pcall确保不会抛出错误）
     if redis_cache.is_available() then

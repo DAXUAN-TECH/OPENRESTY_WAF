@@ -495,10 +495,12 @@ local function check_rule_version()
     if res and #res > 0 then
         local current_version = tonumber(res[1].config_value) or 1
         if cached_version and tonumber(cached_version) ~= current_version then
-            -- 版本号变化，清除所有规则缓存
+            -- 版本号变化，清除所有规则缓存（包括Trie树缓存）
             ngx.log(ngx.INFO, "rule version changed, clearing caches")
             cache:delete(RULE_LIST_KEY_BLOCK)
             cache:delete(RULE_LIST_KEY_WHITELIST)
+            cache:delete(RULE_LIST_KEY_BLOCK .. ":trie")
+            cache:delete(RULE_LIST_KEY_WHITELIST .. ":trie")
         end
         cache:set(cache_key, current_version, config.cache_invalidation.version_check_interval or 30)
     end

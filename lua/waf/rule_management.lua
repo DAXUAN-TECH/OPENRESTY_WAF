@@ -503,8 +503,17 @@ function _M.update_rule(rule_id, rule_data)
         return nil, err
     end
     
-    -- 如果规则状态改变，触发缓存失效（使用pcall确保失败不影响主流程）
+    -- 如果规则状态改变，立即清除缓存并触发缓存失效（使用pcall确保失败不影响主流程）
     if rule_data.status ~= nil and rule.status ~= tonumber(rule_data.status) then
+        -- 立即清除规则列表缓存（确保立即生效）
+        local ok0, err0 = pcall(function()
+            cache_invalidation.invalidate_rule_list_cache()
+        end)
+        if not ok0 then
+            ngx.log(ngx.WARN, "Failed to invalidate rule list cache: ", tostring(err0))
+        end
+        
+        -- 更新规则版本号（触发其他工作进程的缓存失效）
         local ok1, err1 = pcall(function()
             cache_invalidation.increment_rule_version()
         end)
@@ -512,6 +521,7 @@ function _M.update_rule(rule_id, rule_data)
             ngx.log(ngx.WARN, "Failed to increment rule version: ", tostring(err1))
         end
         
+        -- 发送规则更新通知
         local ok2, err2 = pcall(function()
             rule_notification.notify_rule_updated(rule_id, rule.rule_type)
         end)

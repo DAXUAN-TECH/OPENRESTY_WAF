@@ -81,28 +81,15 @@ local function get_redis()
         return nil
     end
     
-    -- 如果连接存在，先检查是否有效
-    if redis_client then
-        -- 使用pcall检查连接是否有效，避免在已关闭的socket上操作
-        local ok, err = pcall(function()
-            -- 尝试执行一个简单的命令来检查连接
-            redis_client:ping()
-        end)
-        
-        if not ok then
-            -- 连接无效，清除并重新连接
-            ngx.log(ngx.DEBUG, "Redis connection invalid, reconnecting: ", tostring(err))
-            redis_client = nil
-        end
-    end
-    
-    -- 如果连接不存在或已失效，重新初始化
+    -- 如果连接不存在，重新初始化
     if not redis_client then
         if not init_redis() then
             return nil
         end
     end
     
+    -- 注意：不在这里检查连接有效性，因为ping()本身可能会在已关闭的socket上发送数据
+    -- 连接有效性检查将在实际Redis操作时通过pcall捕获错误来处理
     return redis_client
 end
 
@@ -132,16 +119,16 @@ function _M.set(key, value, ttl)
     
     -- 存储到Redis（使用pcall包装，捕获可能的socket错误）
     local redis_key = build_key(key)
-    local pcall_ok, result, err = pcall(function()
+    local pcall_ok, redis_ok, redis_err = pcall(function()
         return red:setex(redis_key, ttl, serialized)
     end)
     
     -- 如果pcall失败，说明发生了Lua错误（如socket关闭）
     if not pcall_ok then
-        ngx.log(ngx.WARN, "Redis set pcall failed: ", tostring(result))
+        ngx.log(ngx.WARN, "Redis set pcall failed: ", tostring(redis_ok))
         -- 立即清除连接，避免后续操作使用已关闭的连接
         if redis_client then
-            local ok, close_err = pcall(function()
+            local close_ok, close_err = pcall(function()
                 redis_client:close()
             end)
             redis_client = nil
@@ -149,15 +136,15 @@ function _M.set(key, value, ttl)
         -- 尝试重新连接并重试一次
         red = get_redis()
         if red then
-            local retry_ok, retry_result, retry_err = pcall(function()
+            local retry_pcall_ok, retry_redis_ok, retry_redis_err = pcall(function()
                 return red:setex(redis_key, ttl, serialized)
             end)
-            if retry_ok and not retry_err then
+            if retry_pcall_ok and retry_redis_ok then
                 return true, nil
             else
-                ngx.log(ngx.WARN, "Redis set error after reconnect: ", tostring(retry_result or retry_err))
+                ngx.log(ngx.WARN, "Redis set error after reconnect: ", tostring(retry_redis_ok or retry_redis_err))
                 redis_client = nil
-                return false, tostring(retry_result or retry_err)
+                return false, tostring(retry_redis_ok or retry_redis_err)
             end
         else
             ngx.log(ngx.WARN, "Redis reconnect failed, set operation skipped")
@@ -165,15 +152,13 @@ function _M.set(key, value, ttl)
         end
     end
     
-    local ok = result
-    
     -- 如果Redis返回错误
-    if not ok then
-        if err == "closed" or string.find(tostring(err), "closed") or string.find(tostring(err), "closed socket") then
+    if not redis_ok then
+        if redis_err and (redis_err == "closed" or string.find(tostring(redis_err), "closed") or string.find(tostring(redis_err), "closed socket")) then
             ngx.log(ngx.WARN, "Redis connection closed, attempting to reconnect")
             -- 立即清除连接，避免后续操作使用已关闭的连接
             if redis_client then
-                local ok, close_err = pcall(function()
+                local close_ok, close_err = pcall(function()
                     redis_client:close()
                 end)
                 redis_client = nil
@@ -181,24 +166,24 @@ function _M.set(key, value, ttl)
             red = get_redis()
             if red then
                 -- 重试一次
-                local retry_ok, retry_result, retry_err = pcall(function()
+                local retry_pcall_ok, retry_redis_ok, retry_redis_err = pcall(function()
                     return red:setex(redis_key, ttl, serialized)
                 end)
-                if retry_ok and not retry_err then
+                if retry_pcall_ok and retry_redis_ok then
                     return true, nil
                 else
-                    ngx.log(ngx.WARN, "Redis set error after reconnect: ", tostring(retry_result or retry_err))
+                    ngx.log(ngx.WARN, "Redis set error after reconnect: ", tostring(retry_redis_ok or retry_redis_err))
                     redis_client = nil
-                    return false, tostring(retry_result or retry_err)
+                    return false, tostring(retry_redis_ok or retry_redis_err)
                 end
             else
                 ngx.log(ngx.WARN, "Redis reconnect failed, set operation skipped")
                 return false, "redis reconnect failed"
             end
         else
-            ngx.log(ngx.ERR, "Redis set error: ", tostring(err))
+            ngx.log(ngx.ERR, "Redis set error: ", tostring(redis_err))
             redis_client = nil
-            return false, tostring(err)
+            return false, tostring(redis_err)
         end
     end
     
@@ -219,16 +204,16 @@ function _M.get(key)
     local redis_key = build_key(key)
     
     -- 使用pcall包装Redis操作，捕获可能的socket错误
-    local pcall_ok, result, err = pcall(function()
+    local pcall_ok, redis_res, redis_err = pcall(function()
         return red:get(redis_key)
     end)
     
     -- 如果pcall失败，说明发生了Lua错误（如socket关闭）
     if not pcall_ok then
-        ngx.log(ngx.WARN, "Redis get pcall failed: ", tostring(result))
+        ngx.log(ngx.WARN, "Redis get pcall failed: ", tostring(redis_res))
         -- 立即清除连接，避免后续操作使用已关闭的连接
         if redis_client then
-            local ok, close_err = pcall(function()
+            local close_ok, close_err = pcall(function()
                 redis_client:close()
             end)
             redis_client = nil
@@ -236,19 +221,18 @@ function _M.get(key)
         -- 尝试重新连接并重试一次
         red = get_redis()
         if red then
-            local retry_ok, retry_result, retry_err = pcall(function()
+            local retry_pcall_ok, retry_redis_res, retry_redis_err = pcall(function()
                 return red:get(redis_key)
             end)
-            if retry_ok and not retry_err then
-                local res = retry_result
-                if not res or res == ngx.null then
+            if retry_pcall_ok and not retry_redis_err then
+                if not retry_redis_res or retry_redis_res == ngx.null then
                     return nil
                 end
                 -- 反序列化
-                local data, format = serializer.decode(res)
+                local data, format = serializer.decode(retry_redis_res)
                 return data
             else
-                ngx.log(ngx.WARN, "Redis get retry failed: ", tostring(retry_result or retry_err))
+                ngx.log(ngx.WARN, "Redis get retry failed: ", tostring(retry_redis_res or retry_redis_err))
                 redis_client = nil
                 return nil
             end
@@ -258,15 +242,13 @@ function _M.get(key)
         end
     end
     
-    local res = result
-    
     -- 如果Redis返回错误
-    if err then
-        if err == "closed" or string.find(tostring(err), "closed") or string.find(tostring(err), "closed socket") then
+    if redis_err then
+        if redis_err == "closed" or string.find(tostring(redis_err), "closed") or string.find(tostring(redis_err), "closed socket") then
             ngx.log(ngx.WARN, "Redis connection closed, attempting to reconnect")
             -- 立即清除连接，避免后续操作使用已关闭的连接
             if redis_client then
-                local ok, close_err = pcall(function()
+                local close_ok, close_err = pcall(function()
                     redis_client:close()
                 end)
                 redis_client = nil
@@ -274,19 +256,18 @@ function _M.get(key)
             red = get_redis()
             if red then
                 -- 重试一次
-                local retry_ok, retry_result, retry_err = pcall(function()
+                local retry_pcall_ok, retry_redis_res, retry_redis_err = pcall(function()
                     return red:get(redis_key)
                 end)
-                if retry_ok and not retry_err then
-                    res = retry_result
-                    if not res or res == ngx.null then
+                if retry_pcall_ok and not retry_redis_err then
+                    if not retry_redis_res or retry_redis_res == ngx.null then
                         return nil
                     end
                     -- 反序列化
-                    local data, format = serializer.decode(res)
+                    local data, format = serializer.decode(retry_redis_res)
                     return data
                 else
-                    ngx.log(ngx.WARN, "Redis get error after reconnect: ", tostring(retry_result or retry_err))
+                    ngx.log(ngx.WARN, "Redis get error after reconnect: ", tostring(retry_redis_res or retry_redis_err))
                     redis_client = nil
                     return nil
                 end
@@ -295,11 +276,13 @@ function _M.get(key)
                 return nil
             end
         else
-            ngx.log(ngx.ERR, "Redis get error: ", tostring(err))
+            ngx.log(ngx.ERR, "Redis get error: ", tostring(redis_err))
             redis_client = nil
             return nil
         end
     end
+    
+    local res = redis_res
     
     if not res or res == ngx.null then
         return nil
@@ -326,16 +309,16 @@ function _M.delete(key)
         local redis_key = build_key(key)
         
         -- 使用pcall包装Redis操作，捕获可能的socket错误
-        local ok, del_result, err = pcall(function()
+        local pcall_ok, redis_ok, redis_err = pcall(function()
             return red:del(redis_key)
         end)
         
         -- 如果pcall失败，说明发生了Lua错误（如socket关闭）
-        if not ok then
-            ngx.log(ngx.WARN, "Redis delete pcall failed: ", tostring(del_result))
+        if not pcall_ok then
+            ngx.log(ngx.WARN, "Redis delete pcall failed: ", tostring(redis_ok))
             -- 立即清除连接，避免后续操作使用已关闭的连接
             if redis_client then
-                local ok, close_err = pcall(function()
+                local close_ok, close_err = pcall(function()
                     redis_client:close()
                 end)
                 redis_client = nil
@@ -343,13 +326,13 @@ function _M.delete(key)
             -- 尝试重新连接并重试一次
             red = get_redis()
             if red then
-                local retry_ok, retry_result, retry_err = pcall(function()
+                local retry_pcall_ok, retry_redis_ok, retry_redis_err = pcall(function()
                     return red:del(redis_key)
                 end)
-                if retry_ok and not retry_err then
+                if retry_pcall_ok and retry_redis_ok then
                     return true
                 else
-                    ngx.log(ngx.WARN, "Redis delete retry failed: ", tostring(retry_result or retry_err))
+                    ngx.log(ngx.WARN, "Redis delete retry failed: ", tostring(retry_redis_ok or retry_redis_err))
                     redis_client = nil
                     return false
                 end
@@ -360,12 +343,12 @@ function _M.delete(key)
         end
         
         -- 如果Redis返回错误
-        if err then
-            if err == "closed" or string.find(tostring(err), "closed") or string.find(tostring(err), "closed socket") then
+        if not redis_ok then
+            if redis_err and (redis_err == "closed" or string.find(tostring(redis_err), "closed") or string.find(tostring(redis_err), "closed socket")) then
                 ngx.log(ngx.WARN, "Redis connection closed, attempting to reconnect")
                 -- 立即清除连接，避免后续操作使用已关闭的连接
                 if redis_client then
-                    local ok, close_err = pcall(function()
+                    local close_ok, close_err = pcall(function()
                         redis_client:close()
                     end)
                     redis_client = nil
@@ -373,13 +356,13 @@ function _M.delete(key)
                 red = get_redis()
                 if red then
                     -- 重试一次
-                    local retry_ok, retry_result, retry_err = pcall(function()
+                    local retry_pcall_ok, retry_redis_ok, retry_redis_err = pcall(function()
                         return red:del(redis_key)
                     end)
-                    if retry_ok and not retry_err then
+                    if retry_pcall_ok and retry_redis_ok then
                         return true
                     else
-                        ngx.log(ngx.WARN, "Redis delete error after reconnect: ", tostring(retry_result or retry_err))
+                        ngx.log(ngx.WARN, "Redis delete error after reconnect: ", tostring(retry_redis_ok or retry_redis_err))
                         redis_client = nil
                         return false
                     end
@@ -388,7 +371,7 @@ function _M.delete(key)
                     return false
                 end
             else
-                ngx.log(ngx.WARN, "Redis delete error: ", tostring(err))
+                ngx.log(ngx.WARN, "Redis delete error: ", tostring(redis_err))
                 redis_client = nil
                 return false
             end
@@ -421,16 +404,16 @@ function _M.delete_pattern(pattern)
     local redis_pattern = build_key(pattern)
     
     -- 使用pcall包装Redis操作，捕获可能的socket错误
-    local pcall_ok, result, err = pcall(function()
+    local pcall_ok, redis_keys, redis_err = pcall(function()
         return red:keys(redis_pattern)
     end)
     
     -- 如果pcall失败，说明发生了Lua错误（如socket关闭）
     if not pcall_ok then
-        ngx.log(ngx.WARN, "Redis keys pcall failed: ", tostring(result))
+        ngx.log(ngx.WARN, "Redis keys pcall failed: ", tostring(redis_keys))
         -- 立即清除连接，避免后续操作使用已关闭的连接
         if redis_client then
-            local ok, close_err = pcall(function()
+            local close_ok, close_err = pcall(function()
                 redis_client:close()
             end)
             redis_client = nil
@@ -438,22 +421,21 @@ function _M.delete_pattern(pattern)
         -- 尝试重新连接并重试一次
         red = get_redis()
         if red then
-            local retry_ok, retry_result, retry_err = pcall(function()
+            local retry_pcall_ok, retry_redis_keys, retry_redis_err = pcall(function()
                 return red:keys(redis_pattern)
             end)
-            if retry_ok and not retry_err then
-                local keys = retry_result
-                if keys and #keys > 0 then
-                    local del_ok, del_err = pcall(function()
-                        return red:del(unpack(keys))
+            if retry_pcall_ok and not retry_redis_err then
+                if retry_redis_keys and #retry_redis_keys > 0 then
+                    local del_pcall_ok, del_redis_ok, del_redis_err = pcall(function()
+                        return red:del(unpack(retry_redis_keys))
                     end)
-                    if not del_ok or del_err then
-                        ngx.log(ngx.WARN, "Redis delete pattern failed: ", tostring(del_ok or del_err))
+                    if not del_pcall_ok or not del_redis_ok then
+                        ngx.log(ngx.WARN, "Redis delete pattern failed: ", tostring(del_redis_ok or del_redis_err))
                     end
                 end
                 return true
             else
-                ngx.log(ngx.WARN, "Redis keys retry failed: ", tostring(retry_result or retry_err))
+                ngx.log(ngx.WARN, "Redis keys retry failed: ", tostring(retry_redis_keys or retry_redis_err))
                 redis_client = nil
                 return false
             end
@@ -463,37 +445,34 @@ function _M.delete_pattern(pattern)
         end
     end
     
-    local keys = result
-    
     -- 如果Redis返回错误
-    if err then
-        if err == "closed" or string.find(tostring(err), "closed") or string.find(tostring(err), "closed socket") then
+    if redis_err then
+        if redis_err == "closed" or string.find(tostring(redis_err), "closed") or string.find(tostring(redis_err), "closed socket") then
             ngx.log(ngx.WARN, "Redis connection closed, attempting to reconnect")
             -- 立即清除连接，避免后续操作使用已关闭的连接
             if redis_client then
-                local ok, close_err = pcall(function()
+                local close_ok, close_err = pcall(function()
                     redis_client:close()
                 end)
                 redis_client = nil
             end
             red = get_redis()
             if red then
-                local retry_ok, retry_result, retry_err = pcall(function()
+                local retry_pcall_ok, retry_redis_keys, retry_redis_err = pcall(function()
                     return red:keys(redis_pattern)
                 end)
-                if retry_ok and not retry_err then
-                    keys = retry_result
-                    if keys and #keys > 0 then
-                        local del_ok, del_err = pcall(function()
-                            return red:del(unpack(keys))
+                if retry_pcall_ok and not retry_redis_err then
+                    if retry_redis_keys and #retry_redis_keys > 0 then
+                        local del_pcall_ok, del_redis_ok, del_redis_err = pcall(function()
+                            return red:del(unpack(retry_redis_keys))
                         end)
-                        if not del_ok or del_err then
-                            ngx.log(ngx.WARN, "Redis delete pattern failed: ", tostring(del_ok or del_err))
+                        if not del_pcall_ok or not del_redis_ok then
+                            ngx.log(ngx.WARN, "Redis delete pattern failed: ", tostring(del_redis_ok or del_redis_err))
                         end
                     end
                     return true
                 else
-                    ngx.log(ngx.WARN, "Redis keys error after reconnect: ", tostring(retry_result or retry_err))
+                    ngx.log(ngx.WARN, "Redis keys error after reconnect: ", tostring(retry_redis_keys or retry_redis_err))
                     redis_client = nil
                     return false
                 end
@@ -502,18 +481,20 @@ function _M.delete_pattern(pattern)
                 return false
             end
         else
-            ngx.log(ngx.ERR, "Redis keys error: ", tostring(err))
+            ngx.log(ngx.ERR, "Redis keys error: ", tostring(redis_err))
             redis_client = nil
             return false
         end
     end
     
+    local keys = redis_keys
+    
     if keys and #keys > 0 then
-        local del_ok, del_err = pcall(function()
+        local del_pcall_ok, del_redis_ok, del_redis_err = pcall(function()
             return red:del(unpack(keys))
         end)
-        if not del_ok or del_err then
-            ngx.log(ngx.WARN, "Redis delete pattern failed: ", tostring(del_ok or del_err))
+        if not del_pcall_ok or not del_redis_ok then
+            ngx.log(ngx.WARN, "Redis delete pattern failed: ", tostring(del_redis_ok or del_redis_err))
             -- 即使删除失败，也返回true，因为keys操作成功了
         end
     end
@@ -533,16 +514,16 @@ function _M.publish(channel, message)
     end
     
     -- 使用pcall包装Redis操作，捕获可能的socket错误
-    local pcall_ok, result, err = pcall(function()
+    local pcall_ok, redis_result, redis_err = pcall(function()
         return red:publish(channel, message)
     end)
     
     -- 如果pcall失败，说明发生了Lua错误（如socket关闭）
     if not pcall_ok then
-        ngx.log(ngx.WARN, "Redis publish pcall failed: ", tostring(result))
+        ngx.log(ngx.WARN, "Redis publish pcall failed: ", tostring(redis_result))
         -- 立即清除连接，避免后续操作使用已关闭的连接
         if redis_client then
-            local ok, close_err = pcall(function()
+            local close_ok, close_err = pcall(function()
                 redis_client:close()
             end)
             redis_client = nil
@@ -550,15 +531,15 @@ function _M.publish(channel, message)
         -- 尝试重新连接并重试一次
         red = get_redis()
         if red then
-            local retry_ok, retry_result, retry_err = pcall(function()
+            local retry_pcall_ok, retry_redis_result, retry_redis_err = pcall(function()
                 return red:publish(channel, message)
             end)
-            if retry_ok and not retry_err then
-                return retry_result, nil
+            if retry_pcall_ok and retry_redis_result then
+                return retry_redis_result, nil
             else
-                ngx.log(ngx.WARN, "Redis publish error after reconnect: ", tostring(retry_result or retry_err))
+                ngx.log(ngx.WARN, "Redis publish error after reconnect: ", tostring(retry_redis_result or retry_redis_err))
                 redis_client = nil
-                return false, tostring(retry_result or retry_err)
+                return false, tostring(retry_redis_result or retry_redis_err)
             end
         else
             ngx.log(ngx.WARN, "Redis reconnect failed, publish operation skipped")
@@ -567,12 +548,12 @@ function _M.publish(channel, message)
     end
     
     -- 如果Redis返回错误
-    if err then
-        if err == "closed" or string.find(tostring(err), "closed") or string.find(tostring(err), "closed socket") then
+    if redis_err then
+        if redis_err == "closed" or string.find(tostring(redis_err), "closed") or string.find(tostring(redis_err), "closed socket") then
             ngx.log(ngx.WARN, "Redis connection closed during publish, attempting to reconnect")
             -- 立即清除连接，避免后续操作使用已关闭的连接
             if redis_client then
-                local ok, close_err = pcall(function()
+                local close_ok, close_err = pcall(function()
                     redis_client:close()
                 end)
                 redis_client = nil
@@ -580,28 +561,28 @@ function _M.publish(channel, message)
             red = get_redis()
             if red then
                 -- 重试一次
-                local retry_ok, retry_result, retry_err = pcall(function()
+                local retry_pcall_ok, retry_redis_result, retry_redis_err = pcall(function()
                     return red:publish(channel, message)
                 end)
-                if retry_ok and not retry_err then
-                    return retry_result, nil
+                if retry_pcall_ok and retry_redis_result then
+                    return retry_redis_result, nil
                 else
-                    ngx.log(ngx.WARN, "Redis publish error after reconnect: ", tostring(retry_result or retry_err))
+                    ngx.log(ngx.WARN, "Redis publish error after reconnect: ", tostring(retry_redis_result or retry_redis_err))
                     redis_client = nil
-                    return false, tostring(retry_result or retry_err)
+                    return false, tostring(retry_redis_result or retry_redis_err)
                 end
             else
                 ngx.log(ngx.WARN, "Redis reconnect failed, publish operation skipped")
                 return false, "redis reconnect failed"
             end
         else
-            ngx.log(ngx.ERR, "Redis publish error: ", tostring(err))
+            ngx.log(ngx.ERR, "Redis publish error: ", tostring(redis_err))
             redis_client = nil
-            return false, tostring(err)
+            return false, tostring(redis_err)
         end
     end
     
-    return result, nil
+    return redis_result, nil
 end
 
 -- 检查Redis是否可用

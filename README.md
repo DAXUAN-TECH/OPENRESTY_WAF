@@ -1,181 +1,166 @@
-# OpenResty + MySQL IP 采集与封控系统
+# OpenResty WAF（IP 采集与封控 + 反向代理管理）
 
-基于 OpenResty 和 MySQL 的 Web 应用防火墙（WAF）系统，实现 IP 访问日志采集和智能封控功能。
+基于 OpenResty 和 MySQL 的 Web 应用防火墙（WAF）系统，实现 **IP 访问日志采集、智能封控、系统访问白名单、HTTP/HTTPS/TCP/UDP 反向代理管理** 等功能。
 
 ## 📋 项目概述
 
-本项目实现了一个高性能的 IP 采集与封控系统，主要功能包括：
+主要能力：
 
-1. **IP 采集**：实时采集客户端 IP、请求路径、响应状态码等信息
-2. **IP 封控**：支持单个 IP、IP 段、地域等多种封控方式
-3. **规则管理**：灵活的封控规则配置和管理
-4. **日志分析**：访问日志查询和统计分析
+1. **IP 采集与封控**：实时采集访问日志，支持单 IP、IP 段、IP 范围、地域等多种封控方式，支持白名单和自动封禁/解封。
+2. **规则管理**：通过 Web 界面和 API 管理 WAF 规则（创建、启停、备份、导入导出、模板等）。
+3. **系统访问白名单**：支持系统访问 IP 白名单，结合 403 拦截页统一管理。
+4. **反向代理管理**：支持 HTTP/HTTPS/TCP/UDP 代理，动态生成 Nginx 配置（upstream + server），支持启用/禁用、监听端口/域名配置等。
+5. **统计与监控**：提供基本统计报表与监控指标导出能力。
 
-## ✨ 核心特性
+## ✨ 核心特性（实现维度）
 
-- 🚀 **高性能**：基于 OpenResty，理论最大并发可达 200 万+（32核配置），实际支持 10,000-100,000 QPS
-- 🔒 **灵活封控**：支持单个 IP、IP 段（CIDR）、地域封控
-- 📊 **实时采集**：异步批量写入，不阻塞请求
-- 🎯 **精确识别**：支持代理环境下的真实 IP 识别
-- 💾 **数据持久化**：MySQL 存储，支持复杂查询
-- ⚡ **缓存优化**：本地 LRU 缓存 + Redis 分布式缓存
-- 🛡️ **白名单机制**：防止误封正常用户
-- 🔐 **安全加固**：所有API和页面都需要登录认证，支持TOTP双因素认证
-- 🎛️ **功能开关**：所有功能都可通过数据库动态控制开启/关闭
-- 📦 **可移植性**：代码使用相对路径，支持环境变量配置，易于部署
-- 💻 **硬件友好**：最低配置 2核4GB 即可运行，支持 5,000-10,000 并发
+- **高性能架构**
+  - 基于 OpenResty + Lua，在 `access_by_lua_block` / `log_by_lua_block` 中完成封控与采集。
+  - 使用 MySQL 作为持久化存储，配合共享内存 + LRU / Redis 缓存提升性能。
+  - 支持通过 `scripts/optimize_system.sh` 等脚本进行内核与 Nginx 参数调优。
 
-## 🏗️ 系统架构
+- **灵活封控能力**
+  - 支持单 IP、CIDR、IP 范围、地域（GeoIP）封控。
+  - IP Trie、高效整数比较等实现保证高性能匹配。
+  - 支持自动封禁（频率/行为驱动）与自动解封。
+  - 白名单优先级最高，系统访问白名单支持自动启停逻辑。
 
-```
+- **反向代理管理**
+  - 通过 `lua/waf/nginx_config_generator.lua` 动态生成：
+    - `conf.d/upstream/http_https/http_upstream_{id}.conf`
+    - `conf.d/upstream/tcp_udp/stream_upstream_{id}.conf`
+    - `conf.d/vhost_conf/http_https/proxy_http_{id}.conf`
+    - `conf.d/vhost_conf/tcp_udp/proxy_stream_{id}.conf`
+  - 支持 HTTP/HTTPS/TCP/UDP 四种代理类型，监听端口/域名可配置（部分可为空）。
+  - 启用/禁用代理时自动写入配置并触发 OpenResty reload。
+
+- **安全与管理**
+  - 所有管理 API 和 Web 页面需要登录认证。
+  - 支持 TOTP 双因素认证、密码哈希与强度校验。
+  - 功能开关通过数据库统一管理（见 `waf.feature_switches` 相关实现）。
+
+## 🏗️ 运行架构概览
+
+```text
 客户端请求
     ↓
-OpenResty (access_by_lua: 封控检查)
+OpenResty HTTP 块
+  - access_by_lua_block: WAF 封控检查 / 系统白名单检查
+  - proxy_pass: 反向代理到后端或 upstream
     ↓
-后端应用处理
+后端应用 / 上游服务
     ↓
-OpenResty (log_by_lua: 日志采集)
+OpenResty HTTP 块
+  - log_by_lua_block: 访问日志采集、异步入库
     ↓
-MySQL 数据库
+MySQL / Redis / 共享内存
 ```
 
-## 📁 项目结构
+Stream 块用于 TCP/UDP 代理，通过 `preread_by_lua_block` 等钩子接入 Lua 逻辑。
 
-```
+## 📁 项目结构（基于当前实际代码）
+
+```text
 OPENRESTY_WAF/
-├── README.md                # 项目说明（本文件）
-├── start.sh                 # 一键启动脚本（推荐使用）⭐
-├── start_README.md          # 一键启动脚本说明
-├── init_file/               # 初始配置文件目录
-│   ├── nginx.conf           # Nginx 主配置文件（部署时复制到系统目录）
-│   └── init.sql            # 数据库表结构
-├── conf.d/                  # 配置文件目录（保持在项目目录）⭐
-│   ├── README.md            # 配置说明
-│   ├── set_conf/            # 参数配置文件
-│   │   ├── basic.conf       # 基础配置
-│   │   ├── gzip.conf        # Gzip 压缩配置
-│   │   ├── log.conf         # 日志配置
-│   │   ├── lua.conf         # Lua 模块配置
-│   │   ├── mime.conf        # MIME 类型配置
-│   │   ├── performance.conf # 性能优化配置
-│   │   ├── upstream.conf    # 后端服务器配置
-│   │   └── waf.conf         # WAF 配置
-│   ├── vhost_conf/          # 虚拟主机配置
-│   │   └── default.conf     # 默认 HTTP 服务器配置
-│   ├── cert/                # SSL 证书目录（可选）
-│   └── logs/                # 日志配置目录（可选）
-├── docs/                    # 文档目录
-│   ├── 方案总结.md          # 方案总结
-│   ├── 可行性分析.md        # 可行性分析文档
-│   ├── 需求文档.md          # 需求文档
-│   ├── 技术实施方案.md      # 技术实施方案
-│   ├── 部署文档.md          # 部署文档
-│   ├── 地域封控使用示例.md  # 地域封控使用示例
-│   ├── 性能优化指南.md      # 性能优化指南
-│   └── 代码审计报告.md      # 代码审计报告
-├── scripts/                 # 脚本目录
-│   ├── install_mysql.sh     # MySQL 一键安装脚本（支持多种 Linux 发行版）
-│   ├── install_mysql_README.md  # MySQL 安装说明
-│   ├── install_redis.sh     # Redis 一键安装脚本（支持多种 Linux 发行版）
-│   ├── install_redis_README.md  # Redis 安装说明
-│   ├── install_openresty.sh # OpenResty 一键安装脚本
-│   ├── install_openresty_README.md  # OpenResty 安装说明
-│   ├── deploy.sh            # 部署脚本（自动处理路径）
-│   ├── deploy_README.md     # 部署脚本说明
-│   ├── install_geoip.sh     # GeoIP2 数据库安装脚本
-│   ├── install_geoip_README.md  # GeoIP 安装说明
-│   ├── update_geoip.sh      # GeoIP2 数据库更新脚本
-│   ├── update_geoip_README.md  # GeoIP 更新说明
-│   ├── optimize_system.sh   # 系统优化脚本（根据硬件自动优化）
-│   ├── optimize_system_README.md  # 系统优化脚本说明
-│   ├── check_all.sh         # 项目检查脚本
-│   ├── check_all_README.md  # 项目检查脚本说明
-│   ├── common.sh            # 公共函数库（可选工具）
-│   └── common_README.md     # 公共函数库说明
-├── lua/                     # Lua 脚本目录（保持在项目目录）
-│   ├── config.lua           # 配置文件（数据库连接等）
-│   ├── api/                 # API接口模块
-│   │   ├── handler.lua     # API路由分发器
-│   │   ├── auth.lua        # 认证API
-│   │   ├── rules.lua       # 规则管理API
-│   │   ├── stats.lua        # 统计报表API
-│   │   ├── proxy.lua       # 反向代理管理API
-│   │   ├── features.lua    # 功能开关管理API
-│   │   ├── templates.lua   # 模板管理API
-│   │   ├── batch.lua       # 批量操作API
-│   │   ├── config_check.lua # 配置检查API
-│   │   ├── system.lua      # 系统管理API
-│   │   ├── utils.lua       # API工具函数
-│   │   └── README.md       # API模块说明
-│   ├── web/                 # Web前端文件
-│   │   ├── handler.lua    # Web路由分发器
-│   │   ├── login.html      # 登录页面
-│   │   ├── features.html   # 功能管理界面
-│   │   ├── rule_management.html # 规则管理界面
-│   │   ├── proxy_management.html # 反向代理管理界面
-│   │   ├── stats.html      # 统计报表界面
-│   │   ├── monitor.html    # 监控面板界面
-│   │   └── README.md       # Web模块说明
-│   ├── tests/               # 测试文件
-│   │   ├── unit/           # 单元测试
-│   │   ├── integration/    # 集成测试
-│   │   ├── run_tests.lua   # 测试运行器
-│   │   └── README.md       # 测试说明
-│   ├── geoip/               # GeoIP 数据库目录
-│   │   └── README.md        # GeoIP 使用说明
-│   └── waf/                 # WAF 核心模块
-│       ├── init.lua         # 初始化模块
-│       ├── ip_block.lua     # IP 封控模块
-│       ├── ip_utils.lua     # IP 工具函数
-│       ├── ip_trie.lua      # IP Trie树（高效IP匹配）
-│       ├── log_collect.lua  # 日志采集模块
-│       ├── log_queue.lua    # 日志队列模块
-│       ├── mysql_pool.lua   # MySQL 连接池
-│       ├── geo_block.lua    # 地域封控模块
-│       ├── auto_block.lua   # 自动封控模块
-│       ├── auto_unblock.lua # 自动解封模块
-│       ├── auth.lua         # 用户认证模块
-│       ├── totp.lua         # TOTP双因素认证
-│       ├── password_utils.lua # 密码工具模块
-│       ├── rule_management.lua # 规则管理模块
-│       ├── rule_templates.lua # 规则模板模块
-│       ├── rule_backup.lua  # 规则备份模块
-│       ├── rule_notification.lua # 规则更新通知
-│       ├── batch_operations.lua # 批量操作模块
-│       ├── feature_switches.lua # 功能开关模块
-│       ├── proxy_management.lua # 反向代理管理
-│       ├── frequency_stats.lua # 频率统计模块
-│       ├── lru_cache.lua    # LRU缓存模块
-│       ├── redis_cache.lua  # Redis缓存模块
-│       ├── cache_warmup.lua # 缓存预热模块
-│       ├── cache_invalidation.lua # 缓存失效模块
-│       ├── cache_protection.lua # 缓存穿透防护
-│       ├── serializer.lua  # 序列化模块
-│       ├── metrics.lua      # 监控指标模块
-│       ├── alert.lua        # 告警模块
-│       ├── health_check.lua # 健康检查模块
-│       ├── fallback.lua     # 降级机制模块
-│       ├── pool_monitor.lua # 连接池监控模块
-│       ├── path_utils.lua   # 路径工具模块
-│       ├── config_validator.lua # 配置验证模块
-│       └── test_framework.lua # 测试框架模块
-└── logs/                    # 日志文件目录（保持在项目目录）
-    ├── error.log            # 错误日志
-    ├── access.log           # 访问日志
-    └── geoip_update.log     # GeoIP 更新日志
+├── README.md
+├── start.sh
+├── init_file/
+│   ├── nginx.conf
+│   └── init.sql
+├── conf.d/
+│   ├── README.md
+│   ├── http_set/
+│   ├── stream_set/
+│   ├── upstream/
+│   │   ├── http_https/
+│   │   │   └── README.md
+│   │   └── tcp_udp/
+│   │       └── README.md
+│   ├── vhost_conf/
+│   │   ├── waf.conf
+│   │   ├── default.conf.example
+│   │   ├── http_https/
+│   │   │   └── README.md
+│   │   ├── tcp_udp/
+│   │   │   └── README.md
+│   │   └── README.md
+│   ├── cert/
+│   │   └── README.md
+│   └── web/
+│       ├── 403_waf.html
+│       └── README.md
+├── lua/
+│   ├── config.lua
+│   ├── api/
+│   │   └── README.md
+│   ├── web/
+│   │   └── README.md
+│   ├── waf/
+│   ├── tests/
+│   │   └── README.md
+│   ├── geoip/
+│   │   └── README.md
+│   └── web_utils.lua 等辅助模块
+├── scripts/
+│   ├── README.md
+│   ├── deploy.sh
+│   ├── optimize_system.sh
+│   ├── install_*.sh / uninstall_*.sh
+│   ├── check_all.sh
+│   └── 其他运维脚本
+├── docs/
+│   ├── 部署文档.md
+│   ├── 技术实施方案.md
+│   ├── 性能优化指南.md
+│   └── 硬件开销与并发量分析.md
+├── backup/
+│   └── README.md
+└── logs/
+    ├── error.log
+    ├── access.log
+    └── README.md
 ```
 
-**部署策略说明**：
-- ✅ `init_file/nginx.conf` - 复制到 `${OPENRESTY_PREFIX}/nginx/conf/nginx.conf`（默认：`/usr/local/openresty/nginx/conf/nginx.conf`）
-- ✅ `init_file/init.sql` - 用于初始化数据库
-- ✅ `conf.d/` - **保持在项目目录**（方便配置管理，修改后无需重新部署）
-- ✅ `lua/` - **保持在项目目录**（不复制）
-- ✅ `logs/` - **保持在项目目录**（日志文件）
+**部署策略简述：**
+- `init_file/nginx.conf` 复制到 `${OPENRESTY_PREFIX}/nginx/conf/nginx.conf`。
+- `init_file/init.sql` 用于初始化数据库结构。
+- `conf.d/`、`lua/`、`logs/`、`backup/` 保持在项目目录，通过 `nginx.conf` 中的绝对路径或 `$project_root` 引用。
 
-**路径配置说明**：
-- 所有脚本支持通过环境变量 `OPENRESTY_PREFIX` 配置 OpenResty 安装路径（默认：`/usr/local/openresty`）
-- 项目路径使用相对路径，通过 `$project_root` 变量在配置文件中引用
-- 无硬编码绝对路径，支持灵活部署
+## 🚀 快速开始（简版）
+
+> 详细安装与部署步骤请阅读 `scripts/README.md` 和 `docs/部署文档.md`。
+
+1. 准备 OpenResty、MySQL（和可选的 Redis）环境。
+2. 导入 `init_file/init.sql` 初始化数据库。
+3. 将 `init_file/nginx.conf` 部署到 OpenResty 配置目录，并将 `/path/to/project` 替换为实际项目路径。
+4. 使用 `openresty -t` 校验配置后启动，必要时执行 `-s reload`。
+5. 访问 `conf.d/vhost_conf/waf.conf` 中配置的管理端口，进入 Web 管理界面。
+
+## 📖 文档说明（与当前仓库一致）
+
+- `docs/部署文档.md`：部署步骤、配置说明、故障排查。
+- `docs/技术实施方案.md`：整体架构与技术实现说明。
+- `docs/性能优化指南.md`：内核/Nginx/Lua 层面的性能优化建议。
+- `docs/硬件开销与并发量分析.md`：不同硬件配置下的并发能力与资源开销。
+- `conf.d/README.md`：所有 Nginx 配置文件与 include 关系说明。
+- `lua/api/README.md`：API 模块与路由说明。
+- `lua/web/README.md`：Web 管理界面与前端页面结构说明。
+- `lua/tests/README.md`：测试框架与测试用例说明。
+- `lua/geoip/README.md`：GeoIP 安装与使用说明。
+- `backup/README.md`：备份目录用途与清理策略。
+- `logs/README.md`：日志目录说明。
+
+## ⚠️ 注意事项
+
+1. 生产环境务必修改默认密码和配置，限制管理接口访问源 IP。
+2. 修改 `conf.d/` 或 `lua/` 下配置/代码后，需要 reload OpenResty 才能生效。
+3. 自动生成的 Nginx proxy/upstream 配置请通过 Web 界面或 API 管理，不要直接手改。
+4. 建议定期将数据库与关键配置备份到 `backup/` 目录，并结合系统任务定期清理历史备份。
+
+## 🤝 贡献与许可证
+
+- 欢迎提交 Issue / Pull Request。
+- 项目采用 MIT 许可证，生产环境使用前请充分测试并做好安全加固。
 
 ## 🚀 快速开始
 

@@ -55,6 +55,13 @@
   - 检查脚本语法和逻辑
   - 检查路径引用
   - 检查配置文件完整性
+- **diagnose_openresty.sh** - OpenResty 启动失败诊断脚本 ⭐
+  - 全面诊断 OpenResty 服务启动失败的原因
+  - 检查配置文件语法、路径、权限、端口占用等
+  - 检查 systemd 服务文件配置
+  - 检查依赖服务（MySQL、Redis）状态
+  - 提供详细的错误信息和修复建议
+  - 自动修复部分常见问题（如目录不存在、权限问题）
 - **check_dependencies.sh** - 依赖检查脚本 ⭐
   - 检查所有 Lua 模块依赖的安装状态
   - 交互式安装缺失的依赖
@@ -212,6 +219,9 @@ sudo ./scripts/set_lua_database_connect.sh
 sudo ./scripts/check_dependencies.sh      # 检查依赖（交互式）
 sudo ./scripts/install_dependencies.sh    # 自动安装所有依赖
 sudo ./scripts/uninstall_dependencies.sh  # 卸载依赖（交互式）
+
+# 故障诊断
+sudo ./scripts/diagnose_openresty.sh      # 诊断 OpenResty 启动失败问题
 
 # 或通过 start.sh 使用
 sudo ./start.sh dependencies              # 依赖管理菜单

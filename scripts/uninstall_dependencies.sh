@@ -18,18 +18,19 @@ BLUE='\033[0;34m'
     NC='\033[0m'
 fi
 
+# 引用依赖检查脚本（统一使用 check_dependencies.sh 的检查函数和依赖定义）
+if [ -f "${SCRIPT_DIR}/check_dependencies.sh" ]; then
+    source "${SCRIPT_DIR}/check_dependencies.sh"
+else
+    echo "错误: 无法找到 check_dependencies.sh"
+    exit 1
+fi
+
 # 配置变量（统一使用 OPENRESTY_PREFIX，兼容 OPENRESTY_DIR）
 OPENRESTY_PREFIX="${OPENRESTY_PREFIX:-${OPENRESTY_DIR:-/usr/local/openresty}}"
 LUALIB_DIR="${OPENRESTY_PREFIX}/site/lualib"
 
-# 依赖定义（与 check_dependencies.sh 保持一致）
-declare -A DEPENDENCIES
-DEPENDENCIES["resty.mysql"]="openresty/lua-resty-mysql|必需|MySQL 客户端，用于数据库连接"
-DEPENDENCIES["resty.redis"]="openresty/lua-resty-redis|可选|Redis 客户端，用于二级缓存"
-DEPENDENCIES["resty.maxminddb"]="anjia0532/lua-resty-maxminddb|可选|GeoIP2 数据库查询，用于地域封控"
-DEPENDENCIES["resty.http"]="ledgetech/lua-resty-http|可选|HTTP 客户端，用于告警 Webhook"
-# 注意：resty.file 模块在 OPM 中不存在，代码使用标准 Lua io 库，已从依赖列表中移除
-DEPENDENCIES["resty.msgpack"]="chronolaw/lua-resty-msgpack|可选|MessagePack 序列化，用于高性能序列化"
+# 依赖定义已从 check_dependencies.sh 引用（DEPENDENCIES 数组），无需重复定义
 
 # 统计
 TOTAL=0
@@ -57,18 +58,7 @@ check_openresty() {
     echo ""
 }
 
-# 检查模块是否已安装
-check_module_installed() {
-    local module_name=$1
-    local module_file="${LUALIB_DIR}/${module_name//\./\/}.lua"
-    local module_dir="${LUALIB_DIR}/${module_name//\./\/}"
-    
-    if [ -f "$module_file" ] || [ -d "$module_dir" ]; then
-        return 0
-    fi
-    
-    return 1
-}
+# check_module_installed() 函数已从 check_dependencies.sh 引用，无需重复定义
 
 # 卸载模块
 uninstall_module() {

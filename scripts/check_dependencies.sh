@@ -2,8 +2,18 @@
 
 # 依赖检查和自动安装脚本
 # 功能：检查项目所需的所有第三方依赖，并自动安装缺失的依赖
+# 注意：此脚本可以被 source 引用，其他脚本可以调用其中的函数
 
-set -e
+# 判断是否被 source 引用（如果被 source，$0 会是调用脚本的名称，而不是 check_dependencies.sh）
+IS_SOURCED=false
+if [ "${BASH_SOURCE[0]}" != "${0}" ]; then
+    IS_SOURCED=true
+fi
+
+# 只有在直接执行时才使用 set -e（被 source 时不要 set -e，避免影响调用脚本）
+if [ "$IS_SOURCED" = false ]; then
+    set -e
+fi
 
 # 引入公共函数库
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -321,6 +331,8 @@ main() {
     show_summary
 }
 
-# 运行主函数
-main
+# 只有在直接执行时才运行主函数（被 source 时只定义函数，不执行）
+if [ "$IS_SOURCED" = false ]; then
+    main
+fi
 

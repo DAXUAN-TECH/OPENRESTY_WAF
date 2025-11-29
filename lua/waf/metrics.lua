@@ -31,10 +31,16 @@ function _M.increment_counter(name, labels)
     if labels then
         key = key .. ":" .. table.concat(labels, ":")
     end
-    
-    local current = cache:get(key) or 0
-    cache:incr(key, 1)
-    cache:expire(key, METRICS_TTL)
+
+    -- 使用带默认值的 incr，确保首次调用时能正确初始化为0再加1
+    local new_value, err = cache:incr(key, 1, 0)
+    if not new_value then
+        -- 理论上不会走到这里，但为了安全起见，做一次兜底处理
+        ngx.log(ngx.WARN, "metrics.increment_counter failed, key=", key, ", err=", tostring(err))
+        cache:set(key, 1, METRICS_TTL)
+    else
+        cache:expire(key, METRICS_TTL)
+    end
 end
 
 -- 设置仪表盘指标

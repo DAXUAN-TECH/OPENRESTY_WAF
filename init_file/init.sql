@@ -305,7 +305,7 @@ INSERT INTO waf_system_config (config_key, config_value, description) VALUES
 ('cache_tuner_interval', '300', '缓存调优检查间隔（秒，默认5分钟）'),
 ('cache_base_ttl', '60', '缓存基础TTL（秒，用于自动调优的基准值）'),
 -- 共享内存优化配置
-('shared_memory_optimizer_enable', '0', '是否启用共享内存优化（使用Redis替代部分共享内存，1-启用，0-禁用）'),
+('shared_memory_optimizer_enable', '1', '是否启用共享内存优化（使用Redis替代部分共享内存，1-启用，0-禁用）'),
 ('shared_memory_redis_fallback_enable', '1', '是否启用Redis回退机制（Redis失败时回退到共享内存，1-启用，0-禁用）'),
 -- 网络优化配置
 ('http2_enable', '0', '是否启用HTTP/2支持（需要SSL/TLS，1-启用，0-禁用）'),

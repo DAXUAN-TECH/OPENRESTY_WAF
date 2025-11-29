@@ -256,9 +256,7 @@ opm get openresty/lua-resty-redis  # 可选
 
 **注意**：所有脚本都支持通过环境变量 `OPENRESTY_PREFIX` 配置路径，无硬编码绝对路径。
 
-详细说明请参考：
-- [install_openresty_README.md](scripts/install_openresty_README.md) - OpenResty 安装说明
-- [dependencies_README.md](scripts/dependencies_README.md) - 依赖管理说明（推荐）⭐
+详细安装与依赖说明请直接参考 `scripts/install_openresty.sh`、`scripts/install_dependencies.sh` 中的注释，以及 `docs/部署文档.md`。
 
 ### 3. 数据库配置
 
@@ -361,29 +359,13 @@ sudo ./scripts/optimize_system.sh
 ## 📖 文档说明
 
 ### 核心文档
-- [项目全面分析报告](docs/项目全面分析报告.md) - **全方位项目分析报告（运维、架构、产品视角）** ⭐
-- [需求文档](docs/需求文档.md) - 功能需求、非功能需求、数据需求
 - [技术实施方案](docs/技术实施方案.md) - 架构设计、实现方案、性能优化
 - [数据库设计](init_file/init.sql) - 表结构设计、索引优化
 
 ### 部署与运维
-- [一键安装脚本说明](install_README.md) - 一键安装脚本使用说明（推荐）⭐
 - [部署文档](docs/部署文档.md) - 安装步骤、配置说明、故障排查
-- [MySQL 安装说明](scripts/install_mysql_README.md) - MySQL 安装脚本说明
-- [Redis 安装说明](scripts/install_redis_README.md) - Redis 安装脚本说明
-- [OpenResty 安装说明](scripts/install_openresty_README.md) - OpenResty 安装脚本说明
-- [部署脚本说明](scripts/deploy_README.md) - 部署脚本使用说明
-- [GeoIP 安装说明](scripts/install_geoip_README.md) - GeoIP 数据库安装说明
-- [GeoIP 更新说明](scripts/update_geoip_README.md) - GeoIP 数据库更新说明
-- [系统优化说明](scripts/optimize_system_README.md) - 系统优化脚本说明
-- [项目检查说明](scripts/check_all_README.md) - 项目检查脚本说明
-- [依赖管理说明](scripts/dependencies_README.md) - 第三方依赖管理和自动安装 ⭐
-- [依赖卸载说明](scripts/uninstall_dependencies_README.md) - 依赖卸载脚本说明 ⭐
-- [项目全面分析报告](docs/项目全面分析报告.md) - **全方位项目分析报告（运维、架构、产品视角）** ⭐
-- [代码审计报告](docs/代码审计报告.md) - 代码安全审计报告
 
 ### 功能文档
-- [地域封控使用示例](docs/地域封控使用示例.md) - 地域封控功能使用示例
 - [性能优化指南](docs/性能优化指南.md) - 性能优化配置和调优指南
 - [硬件开销与并发量分析](docs/硬件开销与并发量分析.md) - 硬件配置方案和并发支持能力分析 ⭐
 

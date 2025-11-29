@@ -27,7 +27,7 @@
    - `error_log`: 错误日志路径
    - `pid`: PID 文件路径
 
-2. **日志配置文件**: `conf.d/set_conf/log.conf`
+2. **日志配置文件**: `conf.d/http_set/log.conf`
    - `access_log`: 访问日志路径和格式
 
 ## 日志轮转

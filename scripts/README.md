@@ -96,9 +96,7 @@
   - 必需模块卸载前会警告
   - 提供卸载统计信息
 
-**相关文档**：
-- [dependencies_README.md](dependencies_README.md) - 依赖管理说明文档（完整的依赖列表、安装方法、故障排查）
-- [uninstall_dependencies_README.md](uninstall_dependencies_README.md) - 依赖卸载说明文档（卸载方法、注意事项）
+**说明**：依赖管理脚本的详细使用方式请直接查看 `check_dependencies.sh`、`install_dependencies.sh`、`uninstall_dependencies.sh` 内部注释。
 
 ## 一键安装（推荐）
 
@@ -135,7 +133,7 @@ sudo ./start.sh
 **路径**：
 - `scripts/deploy.sh:77` - 设置 `$project_root` 变量
 - `lua/waf/init.lua:41-48` - 读取 `$project_root` 变量
-- `conf.d/set_conf/lua.conf:8` - Lua 模块路径配置
+- `conf.d/http_set/lua.conf` - Lua 模块路径与初始化配置
 
 ### 3. 数据库初始化
 
@@ -282,30 +280,8 @@ sudo ./start.sh uninstall dependencies   # 卸载依赖
    - 建议运行 `check_dependencies.sh` 或 `install_dependencies.sh` 确保所有依赖完整
    - 可以通过 `start.sh dependencies` 使用依赖管理功能
 
-## 相关文档
+## 相关说明
 
-### 安装脚本文档
-- [start_README.md](../start_README.md) - 一键安装脚本说明
-- [deploy_README.md](deploy_README.md) - 部署脚本说明
-- [install_mysql_README.md](install_mysql_README.md) - MySQL 安装说明
-- [install_redis_README.md](install_redis_README.md) - Redis 安装说明
-- [install_openresty_README.md](install_openresty_README.md) - OpenResty 安装说明
-- [install_geoip_README.md](install_geoip_README.md) - GeoIP 安装说明
-- [set_lua_database_connect_README.md](set_lua_database_connect_README.md) - 数据库配置脚本说明
-
-### 维护脚本文档
-- [check_all_README.md](check_all_README.md) - 项目检查脚本说明
-- [optimize_system_README.md](optimize_system_README.md) - 系统优化脚本说明
-- [update_geoip_README.md](update_geoip_README.md) - GeoIP 更新脚本说明
-
-### 依赖管理文档 ⭐
-- [dependencies_README.md](dependencies_README.md) - 依赖管理说明（依赖列表、安装方法、故障排查）
-- [uninstall_dependencies_README.md](uninstall_dependencies_README.md) - 依赖卸载说明（卸载方法、注意事项）
-
-### 卸载脚本文档
-- [uninstall_openresty_README.md](uninstall_openresty_README.md) - OpenResty 卸载说明
-- [uninstall_mysql_README.md](uninstall_mysql_README.md) - MySQL 卸载说明
-- [uninstall_redis_README.md](uninstall_redis_README.md) - Redis 卸载说明
-- [uninstall_geoip_README.md](uninstall_geoip_README.md) - GeoIP 卸载说明
-- [uninstall_deploy_README.md](uninstall_deploy_README.md) - 配置文件卸载说明
+- 安装与部署整体流程：参考根目录 `README.md` 与 `docs/部署文档.md`。
+- 各脚本的详细参数与行为：参考对应 `*.sh` 文件顶部的注释说明。
 

@@ -1,5 +1,6 @@
 let currentPage = 1;
         const pageSize = 20;
+        let validityTimer = null;
         
         // 切换标签页
         function switchTab(tab) {
@@ -58,6 +59,47 @@ let currentPage = 1;
         // 为兼容性，保留 showAlert 作为 showAlertCustom 的别名
         const showAlert = showAlertCustom;
         
+        function formatDuration(totalSeconds) {
+            if (totalSeconds <= 0) {
+                return '已过期';
+            }
+            const days = Math.floor(totalSeconds / 86400);
+            const hours = Math.floor((totalSeconds % 86400) / 3600);
+            const minutes = Math.floor((totalSeconds % 3600) / 60);
+            const seconds = totalSeconds % 60;
+            return `${days}天${hours}时${minutes}分${seconds}秒`;
+        }
+
+        function initValidityCountdown() {
+            // 清理旧的定时器，避免重复累积
+            if (validityTimer) {
+                clearInterval(validityTimer);
+                validityTimer = null;
+            }
+
+            const cells = document.querySelectorAll('.validity-cell');
+            if (!cells || cells.length === 0) {
+                return;
+            }
+
+            validityTimer = setInterval(() => {
+                cells.forEach(cell => {
+                    const remainingAttr = cell.getAttribute('data-remaining');
+                    if (remainingAttr === null || remainingAttr === '') {
+                        // 无剩余时间（如永久有效），不做动态更新
+                        return;
+                    }
+                    let remaining = parseInt(remainingAttr, 10);
+                    if (isNaN(remaining)) {
+                        return;
+                    }
+                    remaining -= 1;
+                    cell.setAttribute('data-remaining', String(remaining));
+                    cell.textContent = formatDuration(remaining);
+                });
+            }, 1000);
+        }
+
         // 加载规则列表
         async function loadRules(page = 1) {
             currentPage = page;
@@ -73,7 +115,7 @@ let currentPage = 1;
             try {
                 // 显示加载状态
                 const tbody = document.getElementById('rules-tbody');
-                tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 20px;">加载中...</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="10" style="text-align: center; padding: 20px;">加载中...</td></tr>';
                 
                 const response = await fetch(url);
                 
@@ -284,6 +326,11 @@ let currentPage = 1;
             
             if (rules.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="10" style="text-align: center; padding: 20px;">暂无数据</td></tr>';
+                // 清理倒计时（无数据）
+                if (validityTimer) {
+                    clearInterval(validityTimer);
+                    validityTimer = null;
+                }
                 return;
             }
             
@@ -296,7 +343,9 @@ let currentPage = 1;
                     <td>${rule.rule_group || '<span style="color: #999;">未分组</span>'}</td>
                     <td>${rule.priority}</td>
                     <td>${getStatusBadge(rule.status)}</td>
-                    <td>${rule.validity_text || '-'}</td>
+                    <td class="validity-cell" data-remaining="${rule.remaining_seconds !== null && rule.remaining_seconds !== undefined ? rule.remaining_seconds : ''}">
+                        ${rule.validity_text || '-'}
+                    </td>
                     <td>${formatDateTime(rule.created_at)}</td>
                     <td>
                         <div class="action-buttons">
@@ -310,6 +359,9 @@ let currentPage = 1;
                     </td>
                 </tr>
             `).join('');
+
+            // 初始化规则有效期倒计时（前端动态展示，后端仍做一次计算校验）
+            initValidityCountdown();
         }
         
         // 创建规则
@@ -345,13 +397,17 @@ let currentPage = 1;
                 return;
             }
             
-            // 如果填写了结束日期，则校验结束日期不能早于开始日期
-            if (endTime) {
-                if (new Date(endTime) < new Date(startTime)) {
-                    showAlert('结束日期不能早于开始日期', 'error');
-                    document.getElementById('create-end-time').focus();
-                    return;
-                }
+            if (!endTime) {
+                showAlert('请选择结束日期', 'error');
+                document.getElementById('create-end-time').focus();
+                return;
+            }
+            
+            // 校验结束日期不能早于开始日期
+            if (new Date(endTime) < new Date(startTime)) {
+                showAlert('结束日期不能早于开始日期', 'error');
+                document.getElementById('create-end-time').focus();
+                return;
             }
             
             const ruleData = {

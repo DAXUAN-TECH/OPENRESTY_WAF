@@ -36,9 +36,10 @@ local function compute_validity_text(rule)
 
     local days = math.floor(seconds / 86400)
     local hours = math.floor((seconds % 86400) / 3600)
+    local minutes = math.floor((seconds % 3600) / 60)
     local secs = seconds % 60
 
-    return string.format("%d天%d时%d秒", days, hours, secs)
+    return string.format("%d天%d时%d分%d秒", days, hours, minutes, secs)
 end
 
 -- 验证规则值格式

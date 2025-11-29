@@ -345,17 +345,13 @@ let currentPage = 1;
                 return;
             }
             
-            if (!endTime) {
-                showAlert('请选择结束日期', 'error');
-                document.getElementById('create-end-time').focus();
-                return;
-            }
-            
-            // 验证结束日期不能早于开始日期
-            if (new Date(endTime) < new Date(startTime)) {
-                showAlert('结束日期不能早于开始日期', 'error');
-                document.getElementById('create-end-time').focus();
-                return;
+            // 如果填写了结束日期，则校验结束日期不能早于开始日期
+            if (endTime) {
+                if (new Date(endTime) < new Date(startTime)) {
+                    showAlert('结束日期不能早于开始日期', 'error');
+                    document.getElementById('create-end-time').focus();
+                    return;
+                }
             }
             
             const ruleData = {

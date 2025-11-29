@@ -240,10 +240,21 @@ function _M.create_rule(rule_data)
         return nil, err
     end
     
-    -- 如果规则已启用，触发缓存失效
+    -- 如果规则已启用，触发缓存失效（使用pcall确保失败不影响主流程）
     if status == 1 then
-        cache_invalidation.increment_rule_version()
-        rule_notification.notify_rule_created(insert_id, rule_data.rule_type)
+        local ok1, err1 = pcall(function()
+            cache_invalidation.increment_rule_version()
+        end)
+        if not ok1 then
+            ngx.log(ngx.WARN, "Failed to increment rule version: ", tostring(err1))
+        end
+        
+        local ok2, err2 = pcall(function()
+            rule_notification.notify_rule_created(insert_id, rule_data.rule_type)
+        end)
+        if not ok2 then
+            ngx.log(ngx.WARN, "Failed to notify rule creation: ", tostring(err2))
+        end
     end
     
     ngx.log(ngx.INFO, "rule created: ", insert_id)
@@ -492,10 +503,21 @@ function _M.update_rule(rule_id, rule_data)
         return nil, err
     end
     
-    -- 如果规则状态改变，触发缓存失效
+    -- 如果规则状态改变，触发缓存失效（使用pcall确保失败不影响主流程）
     if rule_data.status ~= nil and rule.status ~= tonumber(rule_data.status) then
-        cache_invalidation.increment_rule_version()
-        rule_notification.notify_rule_updated(rule_id, rule.rule_type)
+        local ok1, err1 = pcall(function()
+            cache_invalidation.increment_rule_version()
+        end)
+        if not ok1 then
+            ngx.log(ngx.WARN, "Failed to increment rule version: ", tostring(err1))
+        end
+        
+        local ok2, err2 = pcall(function()
+            rule_notification.notify_rule_updated(rule_id, rule.rule_type)
+        end)
+        if not ok2 then
+            ngx.log(ngx.WARN, "Failed to notify rule update: ", tostring(err2))
+        end
     end
     
     ngx.log(ngx.INFO, "rule updated: ", rule_id)
@@ -553,9 +575,20 @@ function _M.delete_rule(rule_id)
         return nil, err
     end
     
-    -- 触发缓存失效
-    cache_invalidation.increment_rule_version()
-    rule_notification.notify_rule_deleted(rule_id, rule.rule_type)
+    -- 触发缓存失效（使用pcall确保失败不影响主流程）
+    local ok1, err1 = pcall(function()
+        cache_invalidation.increment_rule_version()
+    end)
+    if not ok1 then
+        ngx.log(ngx.WARN, "Failed to increment rule version: ", tostring(err1))
+    end
+    
+    local ok2, err2 = pcall(function()
+        rule_notification.notify_rule_deleted(rule_id, rule.rule_type)
+    end)
+    if not ok2 then
+        ngx.log(ngx.WARN, "Failed to notify rule deletion: ", tostring(err2))
+    end
     
     ngx.log(ngx.INFO, "rule deleted: ", rule_id)
     return {id = rule_id}, nil

@@ -21,38 +21,22 @@ function _M.notify_rule_update(update_type, details)
     end
     
     if USE_REDIS_PUBSUB and redis_cache.is_available() then
-        -- 使用Redis Pub/Sub
-        local ok, redis = pcall(require, "resty.redis")
+        -- 使用Redis Pub/Sub（通过redis_cache模块的连接池）
+        local notification = {
+            type = update_type or "rule_update",
+            timestamp = ngx.time(),
+            details = details or {}
+        }
+        
+        local message = cjson.encode(notification)
+        local ok, err = redis_cache.publish(NOTIFICATION_CHANNEL, message)
+        
         if ok then
-            local red = redis:new()
-            red:set_timeout(config.redis.timeout or 1000)
-            
-            local ok, err = red:connect(config.redis.host, config.redis.port)
-            if ok then
-                if config.redis.password then
-                    red:auth(config.redis.password)
-                end
-                if config.redis.db then
-                    red:select(config.redis.db)
-                end
-                
-                local notification = {
-                    type = update_type or "rule_update",
-                    timestamp = ngx.time(),
-                    details = details or {}
-                }
-                
-                local message = cjson.encode(notification)
-                local ok, err = red:publish(NOTIFICATION_CHANNEL, message)
-                red:set_keepalive(10000, config.redis.pool_size or 100)
-                
-                if ok then
-                    ngx.log(ngx.INFO, "rule update notification sent via Redis Pub/Sub")
-                    return true, nil
-                else
-                    ngx.log(ngx.ERR, "failed to publish notification: ", err)
-                end
-            end
+            ngx.log(ngx.INFO, "rule update notification sent via Redis Pub/Sub")
+            return true, nil
+        else
+            ngx.log(ngx.WARN, "failed to publish notification via Redis: ", tostring(err))
+            -- 继续执行，不阻塞主流程
         end
     end
     

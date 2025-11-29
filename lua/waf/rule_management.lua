@@ -474,7 +474,9 @@ function _M.update_rule(rule_id, rule_data)
         local new_status = tonumber(rule_data.status)
         local old_status = rule.status
         
-        table.insert(update_fields, "status = " .. new_status)
+        -- 使用参数化查询，避免SQL注入
+        table.insert(update_fields, "status = ?")
+        table.insert(update_params, new_status)
         
         -- 如果状态改变，更新规则版本号
         if old_status ~= new_status then
@@ -484,11 +486,6 @@ function _M.update_rule(rule_id, rule_data)
     
     if #update_fields == 0 then
         return nil, "没有需要更新的字段"
-    end
-    
-    -- 添加状态更新参数
-    if rule_data.status ~= nil then
-        table.insert(update_params, rule_data.status)
     end
     
     -- 添加规则ID到参数列表

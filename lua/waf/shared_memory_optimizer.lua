@@ -73,16 +73,13 @@ end
 function _M.get(key, default_value)
     local storage_type = get_storage_type(key)
     
-    if storage_type == "redis" and is_redis_fallback_enabled() and redis_cache.enable then
+    if storage_type == "redis" and is_redis_fallback_enabled() and redis_cache.is_available() then
         -- 使用 Redis
-        local ok, value = redis_cache.get(key)
-        if ok and value then
+        local value = redis_cache.get(key)
+        if value then
             return value
         end
-        -- Redis 失败时回退到共享内存
-        if not ok then
-            ngx.log(ngx.WARN, "Redis get failed for key: ", key, ", falling back to shared memory")
-        end
+        -- Redis 返回 nil 时回退到共享内存（可能是缓存未命中，不是错误）
     end
     
     -- 使用共享内存
@@ -97,7 +94,7 @@ end
 function _M.set(key, value, ttl)
     local storage_type = get_storage_type(key)
     
-    if storage_type == "redis" and is_redis_fallback_enabled() and redis_cache.enable then
+    if storage_type == "redis" and is_redis_fallback_enabled() and redis_cache.is_available() then
         -- 使用 Redis
         local ok, err = redis_cache.set(key, value, ttl)
         if ok then
@@ -119,7 +116,7 @@ function _M.delete(key)
     local storage_type = get_storage_type(key)
     
     -- 同时删除 Redis 和共享内存中的键（确保一致性）
-    if storage_type == "redis" and is_redis_fallback_enabled() and redis_cache.enable then
+    if storage_type == "redis" and is_redis_fallback_enabled() and redis_cache.is_available() then
         redis_cache.delete(key)
     end
     
@@ -130,13 +127,15 @@ end
 function _M.incr(key, value)
     local storage_type = get_storage_type(key)
     
-    if storage_type == "redis" and is_redis_fallback_enabled() and redis_cache.enable then
+    if storage_type == "redis" and is_redis_fallback_enabled() and redis_cache.is_available() then
         -- Redis 不支持 incr，需要先 get 再 set
-        local ok, current = redis_cache.get(key)
-        if ok then
+        local current = redis_cache.get(key)
+        if current then
             local new_value = (tonumber(current) or 0) + (value or 1)
-            redis_cache.set(key, tostring(new_value))
-            return new_value
+            local ok, err = redis_cache.set(key, tostring(new_value))
+            if ok then
+                return new_value
+            end
         end
     end
     
@@ -155,7 +154,7 @@ function _M.get_stats()
     return {
         enabled = true,
         redis_fallback_enabled = is_redis_fallback_enabled(),
-        redis_available = redis_cache.enable or false,
+        redis_available = redis_cache.is_available() or false,
         shared_memory_keys_count = #SHARED_MEMORY_KEYS,
         redis_keys_count = #REDIS_KEYS
     }

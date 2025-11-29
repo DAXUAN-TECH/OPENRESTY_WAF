@@ -73,11 +73,12 @@ check_openresty() {
     echo ""
 }
 
-# 检查模块是否已安装
+# 检查模块是否已安装（增强版，包括 Lua 加载测试，与 check_dependencies.sh 保持一致）
 check_module_installed() {
     local module_name=$1
     local module_file="${LUALIB_DIR}/${module_name//\./\/}.lua"
     local module_dir="${LUALIB_DIR}/${module_name//\./\/}"
+    local installed=0
     
     # 方法1: 使用 opm list 检查（最可靠的方法）
     if [ -f "${OPM_BIN}" ] && [ -x "${OPM_BIN}" ]; then
@@ -85,18 +86,18 @@ check_module_installed() {
         local package_pattern=$(echo "$module_name" | sed 's/^resty\./lua-resty-/')
         # 检查 opm list 输出中是否包含该包
         if ${OPM_BIN} list 2>/dev/null | grep -qiE "${package_pattern}|${module_name}"; then
-            return 0
+            installed=1
         fi
     fi
     
     # 方法2: 检查文件是否存在
     if [ -f "$module_file" ]; then
-        return 0
+        installed=1
     fi
     
     # 方法3: 检查目录是否存在（某些模块可能是目录结构）
     if [ -d "$module_dir" ]; then
-        return 0
+        installed=1
     fi
     
     # 方法4: 检查是否有任何相关文件（某些模块可能有不同的文件结构）
@@ -106,21 +107,42 @@ check_module_installed() {
     
     # 检查直接文件
     if [ -f "${base_dir}/${file_pattern}.lua" ]; then
-        return 0
+        installed=1
     fi
     
     # 检查目录
     if [ -d "${base_dir}/${file_pattern}" ]; then
-        return 0
+        installed=1
     fi
     
     # 检查 init.lua 文件（某些模块使用目录+init.lua结构）
     if [ -f "${base_dir}/${file_pattern}/init.lua" ]; then
-        return 0
+        installed=1
     fi
     
     # 方法5: 使用 find 命令搜索相关文件（兜底方法）
     if find "${LUALIB_DIR}" -type f -name "*${file_pattern}*" 2>/dev/null | grep -q .; then
+        installed=1
+    fi
+    
+    # 方法6: 尝试 Lua 加载测试（最可靠的验证方法，与 check_dependencies.sh 保持一致）
+    if [ "$installed" = "1" ] && [ -f "${OPENRESTY_PREFIX}/bin/resty" ]; then
+        local lua_test=$(cat <<EOF
+local ok, mod = pcall(require, "${module_name}")
+if ok then
+    os.exit(0)
+else
+    os.exit(1)
+end
+EOF
+)
+        if ! "${OPENRESTY_PREFIX}/bin/resty" -e "$lua_test" > /dev/null 2>&1; then
+            # 文件存在但无法加载，可能有问题
+            return 1
+        fi
+    fi
+    
+    if [ "$installed" = "1" ]; then
         return 0
     fi
     
@@ -138,9 +160,9 @@ install_module() {
     
     echo -n "检查 ${module_name}... "
     
-    # 检查是否已安装
+    # 检查是否已安装（包括 Lua 加载测试）
     if check_module_installed "$module_name"; then
-        echo -e "${GREEN}✓ 已安装${NC}"
+        echo -e "${GREEN}✓ 已安装（已验证可加载）${NC}"
         INSTALLED=$((INSTALLED + 1))
         return 0
     fi

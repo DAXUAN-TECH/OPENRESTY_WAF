@@ -514,44 +514,91 @@ echo -e "${BLUE}[8/9] 检查 Lua 模块依赖...${NC}"
 
 OPENRESTY_PREFIX="${OPENRESTY_PREFIX:-/usr/local/openresty}"
 LUALIB_DIR="${OPENRESTY_PREFIX}/site/lualib"
+OPM_BIN="${OPENRESTY_PREFIX}/bin/opm"
+
+# 使用 check_dependencies.sh 的检查方法（增强版）
+check_module_installed_enhanced() {
+    local module_name=$1
+    local module_file="${LUALIB_DIR}/${module_name//\./\/}.lua"
+    local module_dir="${LUALIB_DIR}/${module_name//\./\/}"
+    local installed=0
+    
+    # 方法1: 使用 opm list 检查
+    if [ -f "${OPM_BIN}" ] && [ -x "${OPM_BIN}" ]; then
+        local package_pattern=$(echo "$module_name" | sed 's/^resty\./lua-resty-/')
+        if ${OPM_BIN} list 2>/dev/null | grep -qiE "${package_pattern}|${module_name}"; then
+            installed=1
+        fi
+    fi
+    
+    # 方法2: 检查文件或目录
+    if [ -f "$module_file" ] || [ -d "$module_dir" ]; then
+        installed=1
+    fi
+    
+    # 方法3: 检查 resty 目录下的文件
+    local base_dir="${LUALIB_DIR}/resty"
+    local file_pattern=$(echo "$module_name" | sed 's/^resty\.//')
+    if [ -f "${base_dir}/${file_pattern}.lua" ] || [ -d "${base_dir}/${file_pattern}" ] || [ -f "${base_dir}/${file_pattern}/init.lua" ]; then
+        installed=1
+    fi
+    
+    # 方法4: Lua 加载测试（最可靠）
+    if [ "$installed" = "1" ] && [ -f "${OPENRESTY_PREFIX}/bin/resty" ]; then
+        local lua_test=$(cat <<EOF
+local ok, mod = pcall(require, "${module_name}")
+if ok then
+    os.exit(0)
+else
+    os.exit(1)
+end
+EOF
+)
+        if ! "${OPENRESTY_PREFIX}/bin/resty" -e "$lua_test" > /dev/null 2>&1; then
+            return 1
+        fi
+    fi
+    
+    [ "$installed" = "1" ] && return 0 || return 1
+}
 
 if [ -f "${OPENRESTY_PREFIX}/bin/openresty" ]; then
     # 检查必需模块
-    if [ -f "${LUALIB_DIR}/resty/mysql.lua" ] || [ -d "${LUALIB_DIR}/resty/mysql" ]; then
-        check_ok "resty.mysql (必需) - 已安装"
+    if check_module_installed_enhanced "resty.mysql"; then
+        check_ok "resty.mysql (必需) - 已安装（已验证可加载）"
     else
         check_error "resty.mysql (必需) - 未安装，请运行: sudo ./scripts/install_dependencies.sh"
     fi
     
     # 检查可选模块
-    if [ -f "${LUALIB_DIR}/resty/redis.lua" ] || [ -d "${LUALIB_DIR}/resty/redis" ]; then
-        check_ok "resty.redis (可选) - 已安装"
+    if check_module_installed_enhanced "resty.redis"; then
+        check_ok "resty.redis (可选) - 已安装（已验证可加载）"
     else
         check_warning "resty.redis (可选) - 未安装，Redis 二级缓存功能将受限"
     fi
     
-    if [ -f "${LUALIB_DIR}/resty/maxminddb.lua" ] || [ -d "${LUALIB_DIR}/resty/maxminddb" ]; then
-        check_ok "resty.maxminddb (可选) - 已安装"
+    if check_module_installed_enhanced "resty.maxminddb"; then
+        check_ok "resty.maxminddb (可选) - 已安装（已验证可加载）"
     else
         check_warning "resty.maxminddb (可选) - 未安装，地域封控功能将受限"
     fi
     
-    if [ -f "${LUALIB_DIR}/resty/http.lua" ] || [ -d "${LUALIB_DIR}/resty/http" ]; then
-        check_ok "resty.http (可选) - 已安装"
+    if check_module_installed_enhanced "resty.http"; then
+        check_ok "resty.http (可选) - 已安装（已验证可加载）"
     else
         check_warning "resty.http (可选) - 未安装，告警 Webhook 功能将受限"
     fi
     
     # 注意：resty.file 模块在 OPM 中不存在，代码使用标准 Lua io 库，无需检查
     
-    if [ -f "${LUALIB_DIR}/resty/msgpack.lua" ] || [ -d "${LUALIB_DIR}/resty/msgpack" ]; then
-        check_ok "resty.msgpack (可选) - 已安装"
+    if check_module_installed_enhanced "resty.msgpack"; then
+        check_ok "resty.msgpack (可选) - 已安装（已验证可加载）"
     else
         check_warning "resty.msgpack (可选) - 未安装，将使用 JSON 序列化"
     fi
     
     echo ""
-    echo -e "${BLUE}提示: 运行 sudo ./scripts/check_dependencies.sh 进行详细依赖检查${NC}"
+    echo -e "${BLUE}提示: 运行 sudo ./scripts/check_dependencies.sh 进行详细依赖检查和安装${NC}"
 else
     check_warning "OpenResty 未安装，无法检查 Lua 模块依赖"
 fi

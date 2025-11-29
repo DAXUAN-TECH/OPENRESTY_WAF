@@ -462,7 +462,7 @@ INSERT INTO waf_feature_switches (feature_key, feature_name, description, enable
 ('rate_limit_login', '登录速率限制', '登录接口速率限制功能', 1, 'database'),
 ('rate_limit_api', 'API速率限制', 'API接口速率限制功能', 1, 'database'),
 ('proxy_trusted_check', '受信任代理检查', '受信任代理检查功能，安全获取客户端真实IP', 1, 'database'),
-('system_access_whitelist', '系统访问白名单', '系统访问白名单功能，限制管理系统访问IP', 0, 'database'),
+-- 注意：系统访问白名单功能已从功能管理中移除，保留在系统设置中管理
 -- 网络优化
 ('http2', 'HTTP/2支持', 'HTTP/2支持功能（需要SSL/TLS）', 0, 'database'),
 ('brotli', 'Brotli压缩', 'Brotli压缩功能（需要ngx_brotli模块）', 0, 'database'),

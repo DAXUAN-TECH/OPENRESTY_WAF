@@ -118,10 +118,49 @@ let features = [];
         // 获取功能中文名称
         function getFeatureName(key) {
             const names = {
+                // 核心功能
+                'ip_block': 'IP封控',
+                'geo_block': '地域封控',
+                'auto_block': '自动封控',
+                'whitelist': '白名单',
+                'block_enable': '封控功能',
+                // 日志和监控
+                'log_collect': '日志采集',
+                'metrics': '监控指标',
+                'alert': '告警功能',
+                'performance_monitor': '性能监控',
+                'pool_monitor': '连接池监控',
+                // 缓存相关
+                'cache_warmup': '缓存预热',
+                'cache_protection': '缓存穿透防护',
+                'cache_optimizer': '缓存策略优化',
+                'cache_tuner': '缓存自动调优',
+                'redis_cache': 'Redis二级缓存',
+                'shared_memory_optimizer': '共享内存优化',
+                'cache_invalidation': '缓存失效',
+                // 规则相关
+                'rule_backup': '规则备份',
+                'rule_notification': '规则更新通知',
                 'rule_management_ui': '规则管理界面',
-                'testing': '测试功能',
+                // 系统功能
+                'fallback': '降级机制',
                 'config_validation': '配置验证',
-                'config_check_api': '配置检查API'
+                'config_check_api': '配置检查API',
+                // 安全功能
+                'csrf': 'CSRF防护',
+                'rate_limit_login': '登录速率限制',
+                'rate_limit_api': 'API速率限制',
+                'proxy_trusted_check': '受信任代理检查',
+                'system_access_whitelist': '系统访问白名单',
+                // 网络优化
+                'http2': 'HTTP/2支持',
+                'brotli': 'Brotli压缩',
+                // 界面功能
+                'stats': '统计报表',
+                'monitor': '监控面板',
+                'proxy_management': '反向代理管理',
+                // 其他功能
+                'testing': '测试功能'
             };
             return names[key] || key;
         }

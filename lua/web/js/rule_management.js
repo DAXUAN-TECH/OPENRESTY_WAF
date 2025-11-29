@@ -246,7 +246,7 @@ let currentPage = 1;
             
             // 防御性检查：确保 rules 是数组，如果不是则尝试转换
             if (!rules) {
-                tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 20px;">暂无数据</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="10" style="text-align: center; padding: 20px;">暂无数据</td></tr>';
                 return;
             }
             
@@ -283,7 +283,7 @@ let currentPage = 1;
             }
             
             if (rules.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 20px;">暂无数据</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="10" style="text-align: center; padding: 20px;">暂无数据</td></tr>';
                 return;
             }
             
@@ -296,6 +296,7 @@ let currentPage = 1;
                     <td>${rule.rule_group || '<span style="color: #999;">未分组</span>'}</td>
                     <td>${rule.priority}</td>
                     <td>${getStatusBadge(rule.status)}</td>
+                    <td>${rule.validity_text || '-'}</td>
                     <td>${formatDateTime(rule.created_at)}</td>
                     <td>
                         <div class="action-buttons">

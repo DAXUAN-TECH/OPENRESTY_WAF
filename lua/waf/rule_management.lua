@@ -10,6 +10,37 @@ local cjson = require "cjson"
 
 local _M = {}
 
+-- 计算规则有效期文本（基于 end_time 和当前时间）
+local function compute_validity_text(rule)
+    local end_time = rule.end_time
+
+    -- 未设置结束时间：视为永久有效
+    if not end_time or end_time == ngx.null then
+        return "永久有效"
+    end
+
+    -- remaining_seconds 由SQL计算得到：TIMESTAMPDIFF(SECOND, NOW(), end_time)
+    local remaining = rule.remaining_seconds
+    if remaining == nil or remaining == ngx.null then
+        return "未知"
+    end
+
+    local seconds = tonumber(remaining)
+    if not seconds then
+        return "未知"
+    end
+
+    if seconds <= 0 then
+        return "已过期"
+    end
+
+    local days = math.floor(seconds / 86400)
+    local hours = math.floor((seconds % 86400) / 3600)
+    local secs = seconds % 60
+
+    return string.format("%d天%d时%d秒", days, hours, secs)
+end
+
 -- 验证规则值格式
 local function validate_rule_value(rule_type, rule_value)
     if not rule_value or rule_value == "" then
@@ -311,7 +342,11 @@ function _M.list_rules(params)
     local offset = (page - 1) * page_size
     local sql = string.format([[
         SELECT id, rule_type, rule_value, rule_name, description, rule_group, status, priority, 
-               start_time, end_time, created_at, updated_at, rule_version
+               start_time, end_time, created_at, updated_at, rule_version,
+               CASE 
+                   WHEN end_time IS NULL THEN NULL
+                   ELSE TIMESTAMPDIFF(SECOND, NOW(), end_time)
+               END AS remaining_seconds
         FROM waf_block_rules
         %s
         ORDER BY priority DESC, created_at DESC
@@ -334,6 +369,11 @@ function _M.list_rules(params)
         -- 如果是非数组的table（比如 {key = value}），转换为数组
         ngx.log(ngx.WARN, "list rules: rules is not an array table")
         rules = {}
+    else
+        -- 为每条规则计算有效期文本（规则有效期列）
+        for _, rule in ipairs(rules) do
+            rule.validity_text = compute_validity_text(rule)
+        end
     end
     
     return {

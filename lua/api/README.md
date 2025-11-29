@@ -6,18 +6,21 @@
 
 ```
 lua/api/
-├── handler.lua        # API路由分发器（主入口，统一路由分发）
-├── utils.lua          # API工具函数（响应处理、参数解析等）
-├── auth.lua           # 认证API（登录、登出、TOTP、密码管理）
-├── rules.lua          # 规则管理API（CRUD操作）
-├── templates.lua      # 模板管理API
-├── batch.lua          # 批量操作API（导入/导出）
-├── features.lua       # 功能开关管理API
-├── config_check.lua   # 配置检查API
-├── stats.lua          # 统计报表API
-├── proxy.lua          # 反向代理管理API
-├── system.lua         # 系统管理API（重载配置、系统状态等）
-└── README.md          # 本文件
+├── handler.lua                 # API 路由分发器（主入口，统一路由分发）
+├── utils.lua                   # API 工具函数（响应处理、参数解析等）
+├── auth.lua                    # 认证 API（登录、登出、TOTP、密码管理）
+├── rules.lua                   # 规则管理 API
+├── templates.lua               # 规则模板 API
+├── batch.lua                   # 规则批量导入/导出 API
+├── features.lua                # 功能开关管理 API
+├── config_check.lua            # 配置检查 API
+├── stats.lua                   # 统计报表 API
+├── proxy.lua                   # 反向代理管理 API
+├── system.lua                  # 系统管理 API（重载配置、系统状态等）
+├── system_access_whitelist.lua # 系统访问白名单 API
+├── logs.lua                    # 日志查看 API
+├── performance.lua             # 性能监控与调优 API
+└── README.md                   # 本文件
 ```
 
 ## 模块说明
@@ -97,20 +100,33 @@ API路由分发器，作为所有API请求的统一入口：
 - `rule_stats()` - 获取规则统计信息
 
 ### proxy.lua
-反向代理管理API接口：
-- `create()` - 创建代理配置
-- `list()` - 获取代理配置列表
-- `get()` - 获取代理配置详情
-- `update()` - 更新代理配置
-- `delete()` - 删除代理配置
-- `enable()` - 启用代理配置
-- `disable()` - 禁用代理配置
+反向代理管理 API 接口（HTTP/HTTPS/TCP/UDP 代理）：
+- `create()` / `update()` / `delete()` - 管理代理配置
+- `list()` / `get()` - 查询代理配置
+- `enable()` / `disable()` - 启用/禁用代理
 
 ### system.lua
 系统管理API接口：
 - `reload_nginx()` - 重新加载Nginx配置
 - `test_nginx_config()` - 测试Nginx配置
 - `get_status()` - 获取系统状态
+
+### system_access_whitelist.lua
+系统访问白名单 API 接口：
+- `get_config()` / `update_config()` - 获取/更新系统访问白名单开关（启用/禁用）
+- `list()` / `get()` - 查询白名单条目
+- `create()` / `update()` / `delete()` - 管理白名单条目
+- 内部逻辑负责在**第一条启用的条目创建时自动开启白名单**，在**最后一条启用条目删除时自动关闭白名单**，并触发配置缓存清理与审计日志。
+
+### logs.lua
+日志查看 API 接口：
+- 提供访问日志、封控日志、审计日志等查询能力（具体字段见实现）。
+
+### performance.lua
+性能监控与缓存调优 API 接口：
+- `get_slow_queries()` - 获取慢查询列表
+- `get_stats()` - 获取整体性能统计
+- `analyze_slow_queries()` - 分析慢查询（配合 `waf.performance_monitor` 与 `waf.cache_tuner` 使用）
 
 ## API路由
 

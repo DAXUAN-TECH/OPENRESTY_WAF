@@ -6,15 +6,20 @@
 
 ```
 lua/web/
-├── handler.lua              # Web路由分发器（主入口）
-├── login.html               # 登录页面
-├── features.html            # 功能管理界面
-├── rule_management.html     # 规则管理界面
-├── proxy_management.html    # 反向代理管理界面
-├── stats.html               # 统计报表界面
-├── dashboard.html           # Dashboard界面（监控面板）
-├── common.js                # 前端公共JavaScript函数
-└── README.md                # 本文件
+├── handler.lua           # Web 路由分发器（主入口）
+├── layout.html           # 公共布局模板
+├── dashboard.html        # 概览 / 仪表盘
+├── login.html            # 登录页面
+├── features.html         # 功能管理界面
+├── rule_management.html  # 规则管理界面
+├── proxy_management.html # 反向代理管理界面
+├── stats.html            # 统计报表界面
+├── logs.html             # 日志查看界面
+├── system_settings.html  # 系统设置（系统访问白名单等）
+├── user_settings.html    # 用户与安全设置
+├── common.js             # 公共 JavaScript
+├── css/                  # 各页面样式
+└── js/                   # 各页面 JS
 ```
 
 ## 文件说明
@@ -64,12 +69,24 @@ WAF规则管理Web界面，提供以下功能：
 - IP访问统计
 - 规则效果统计
 
-### monitor.html
-监控面板界面，提供以下功能：
-- 系统运行状态
-- 实时监控指标
-- 性能指标展示
-- 告警信息显示
+### dashboard.html
+Dashboard / 概览界面，提供以下功能：
+- 系统运行状态概览
+- 基本统计与各功能入口
+
+### logs.html
+日志查看界面：
+- 查看和筛选访问日志、封控日志、审计日志等（具体字段与筛选条件以页面实现为准）
+
+### system_settings.html
+系统设置界面，当前主要包含：
+- **系统访问白名单管理**：白名单列表、增删改、搜索/重置等
+- 系统访问白名单开关由后端自动控制（新增第一条启用条目自动开启、删除最后一条启用条目自动关闭）
+
+### user_settings.html
+用户与安全设置界面：
+- 用户基本信息
+- 密码与安全相关设置（结合认证与 TOTP 功能）
 
 ## 部署说明
 
@@ -79,23 +96,24 @@ WAF规则管理Web界面，提供以下功能：
 
 ## 访问路径
 
-所有Web界面都需要登录后才能访问（除了登录页面）：
+所有 Web 界面都需要登录后才能访问（除了登录页面）：
 
 - 登录页面：`http://your-domain/login`
-- 管理首页：`http://your-domain/` 或 `http://your-domain/admin`
+- 管理首页 / Dashboard：`http://your-domain/` 或 `http://your-domain/admin` 或 `/admin/dashboard`
 - 功能管理界面：`http://your-domain/admin/features`
 - 规则管理界面：`http://your-domain/admin/rules`（受 `rule_management_ui` 功能开关控制）
 - 反向代理管理界面：`http://your-domain/admin/proxy`（受 `proxy_management` 功能开关控制）
 - 统计报表界面：`http://your-domain/admin/stats`（受 `stats` 功能开关控制）
-- 监控面板界面：`http://your-domain/admin/monitor`（受 `monitor` 功能开关控制）
-- Prometheus指标：`http://your-domain/metrics`（需要登录，受 `metrics` 配置控制）
+- 日志查看界面：`http://your-domain/admin/logs`
+- 系统设置界面：`http://your-domain/admin/system-settings`
+- 用户设置界面：`http://your-domain/admin/user-settings`
+- Prometheus 指标：`http://your-domain/metrics`（需要登录，受 `metrics` 配置控制）
 
 ## 功能开关控制
 
-部分Web界面受功能开关控制，如果功能被禁用，访问会返回403错误：
+部分 Web 界面受功能开关控制，如果功能被禁用，访问会返回 403 错误：
 - 规则管理界面：受 `rule_management_ui` 功能开关控制
 - 统计报表界面：受 `stats` 功能开关控制
-- 监控面板界面：受 `monitor` 功能开关控制
 - 反向代理管理界面：受 `proxy_management` 功能开关控制
 
 功能管理界面（`/admin/features`）必须可用，用于管理功能开关。

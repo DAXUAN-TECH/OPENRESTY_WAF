@@ -1,5 +1,5 @@
 -- ============================================
--- OpenResty WAF 数据库设计（优化版）
+-- OpenResty WAF 数据库设计（优化版 v2.1）
 -- ============================================
 -- 数据库名：waf_db
 -- 字符集：utf8mb4（支持完整的UTF-8字符集，包括emoji等特殊字符）
@@ -8,18 +8,26 @@
 -- 
 -- 优化说明：
 -- 1. 兼容 MySQL 5.7 和 8.0
--- 2. 优化索引结构，去除冗余索引
+-- 2. 优化索引结构，去除冗余索引，添加覆盖索引
 -- 3. 优化字段类型，提高查询性能
--- 4. 添加覆盖索引，减少回表查询
--- 5. 优化SQL语句，提高执行效率
+-- 4. 添加联合索引，减少回表查询
+-- 5. 优化SQL语句，使用INSERT IGNORE提高性能
+-- 6. 优化视图查询，使用子查询和索引提示
+-- 7. 确保所有字段完整，支持location_paths等新功能
+-- 8. 添加缺失的索引，优化常用查询路径
 -- 
 -- 数据库用途：
 -- 1. 存储WAF封控规则、白名单规则
 -- 2. 记录访问日志和封控日志
 -- 3. 存储用户信息和会话信息
 -- 4. 存储系统配置和功能开关
--- 5. 存储反向代理配置
+-- 5. 存储反向代理配置（支持多location路径）
 -- 6. 存储IP频率统计和自动封控记录
+-- 
+-- 版本历史：
+-- v2.1 (2025-12-03): 添加缺失索引，优化INSERT语句，完善表结构
+-- v2.0 (2025-12-03): 优化索引结构，添加联合索引，优化视图查询
+-- v1.0: 初始版本
 -- ============================================
 
 CREATE DATABASE IF NOT EXISTS waf_db DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
@@ -344,7 +352,8 @@ CREATE TABLE IF NOT EXISTS waf_ip_frequency (
     KEY idx_client_ip_window_end (client_ip, window_end) COMMENT 'IP和窗口结束时间联合索引，用于查询特定IP的最新统计',
     KEY idx_access_count (access_count) COMMENT '访问次数索引，用于查询高频访问IP',
     KEY idx_error_count (error_count) COMMENT '错误次数索引，用于查询高错误率IP',
-    KEY idx_unique_path_count (unique_path_count) COMMENT '唯一路径数量索引，用于检测扫描行为'
+    KEY idx_unique_path_count (unique_path_count) COMMENT '唯一路径数量索引，用于检测扫描行为',
+    KEY idx_client_ip_last_access (client_ip, last_access_time) COMMENT 'IP和最后访问时间联合索引，用于查询特定IP的最新访问记录'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci 
 ROW_FORMAT=DYNAMIC COMMENT='IP频率统计表：按时间窗口统计IP访问频率、错误率、扫描行为等指标';
 
@@ -383,14 +392,14 @@ CREATE TABLE IF NOT EXISTS waf_trusted_proxies (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci 
 ROW_FORMAT=DYNAMIC COMMENT='受信任代理IP表：存储受信任的代理服务器IP，用于安全获取客户端真实IP';
 
--- 插入默认受信任代理IP（本地回环和私有网络）
-INSERT INTO waf_trusted_proxies (proxy_ip, description, status) VALUES
+-- 插入默认受信任代理IP（本地回环和私有网络，使用INSERT IGNORE提高性能）
+-- 注意：waf_trusted_proxies表没有唯一索引，ON DUPLICATE KEY UPDATE不会生效，改为INSERT IGNORE
+INSERT IGNORE INTO waf_trusted_proxies (proxy_ip, description, status) VALUES
 ('127.0.0.1/32', '本地回环', 1),
 ('::1/128', 'IPv6本地回环', 1),
 ('10.0.0.0/8', '私有网络A类', 1),
 ('172.16.0.0/12', '私有网络B类', 1),
-('192.168.0.0/16', '私有网络C类', 1)
-ON DUPLICATE KEY UPDATE description = VALUES(description);
+('192.168.0.0/16', '私有网络C类', 1);
 
 -- ============================================
 -- 10. 规则模板表（低频更新表）
@@ -406,7 +415,8 @@ CREATE TABLE IF NOT EXISTS waf_rule_templates (
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     PRIMARY KEY (id),
     UNIQUE KEY uk_template_name (template_name),
-    KEY idx_category_status (category, status) COMMENT '分类和状态联合索引'
+    KEY idx_category_status (category, status) COMMENT '分类和状态联合索引',
+    KEY idx_status (status) COMMENT '状态索引，用于快速查询启用的模板'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci 
 ROW_FORMAT=DYNAMIC COMMENT='规则模板表';
 
@@ -549,6 +559,7 @@ CREATE TABLE IF NOT EXISTS waf_auto_unblock_tasks (
     KEY idx_status_scheduled (status, scheduled_time) COMMENT '状态和计划时间联合索引，用于查询待处理任务',
     KEY idx_rule_id (rule_id) COMMENT '规则ID索引',
     KEY idx_client_ip (client_ip) COMMENT 'IP地址索引',
+    KEY idx_unblock_type (unblock_type) COMMENT '解封类型索引，用于按类型查询',
     -- 外键约束：规则删除时，保留任务记录但设置为NULL（SET NULL）
     FOREIGN KEY (rule_id) REFERENCES waf_block_rules(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci 
@@ -623,6 +634,7 @@ CREATE TABLE IF NOT EXISTS waf_proxy_backends (
     PRIMARY KEY (id),
     KEY idx_proxy_id_status (proxy_id, status) COMMENT '代理ID和状态联合索引，用于查询特定代理的启用后端',
     KEY idx_proxy_id_location_path (proxy_id, location_path) COMMENT '代理ID和Location路径联合索引，用于查询特定location的后端服务器',
+    KEY idx_location_path_weight (location_path, weight DESC) COMMENT 'Location路径和权重联合索引（降序），用于排序查询',
     -- 外键约束：代理配置删除时自动删除其所有后端服务器
     FOREIGN KEY (proxy_id) REFERENCES waf_proxy_configs(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci 

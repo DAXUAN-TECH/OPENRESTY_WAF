@@ -147,7 +147,9 @@ const pageSize = 20;
         
         function addEditBackend() {
             const list = document.getElementById('edit-backends-list');
-            const proxyType = document.getElementById('edit-proxy-type').value;
+            // 获取原始代理类型值（从显示值反向转换）
+            const displayValue = document.getElementById('edit-proxy-type').value;
+            const proxyType = currentEditingProxy ? currentEditingProxy.proxy_type : getProxyTypeFromName(displayValue);
             const item = document.createElement('div');
             item.className = 'backend-item';
             
@@ -263,8 +265,12 @@ const pageSize = 20;
                 const list = document.getElementById('edit-backends-list');
                 if (!list) return;
                 
-                const proxyType = document.getElementById('edit-proxy-type');
-                if (!proxyType || proxyType.value !== 'http') return;
+                // 获取原始代理类型值（从显示值反向转换）
+                const proxyTypeEl = document.getElementById('edit-proxy-type');
+                if (!proxyTypeEl) return;
+                const displayValue = proxyTypeEl.value;
+                const proxyType = currentEditingProxy ? currentEditingProxy.proxy_type : getProxyTypeFromName(displayValue);
+                if (proxyType !== 'http') return;
                 
                 const pathInputs = list.querySelectorAll('.backend-path');
                 if (pathInputs.length === 0) return;
@@ -651,7 +657,8 @@ const pageSize = 20;
                     currentEditingProxy = proxy; // 保存代理数据
                     document.getElementById('edit-id').value = proxy.id;
                     document.getElementById('edit-proxy-name').value = proxy.proxy_name;
-                    document.getElementById('edit-proxy-type').value = proxy.proxy_type;
+                    // 显示友好名称（HTTP/HTTPS、TCP、UDP）
+                    document.getElementById('edit-proxy-type').value = getProxyTypeName(proxy.proxy_type);
                     
                     // 根据代理类型填充不同的字段
                     if (proxy.proxy_type === 'http') {
@@ -788,7 +795,15 @@ const pageSize = 20;
             event.preventDefault();
             
             const id = document.getElementById('edit-id').value;
-            const proxyType = document.getElementById('edit-proxy-type').value;
+            // 使用保存的原始代理类型值，而不是显示值（因为显示值可能是"HTTP/HTTPS"等友好名称）
+            // 如果 currentEditingProxy 不存在，则从输入框获取并反向转换
+            let proxyType;
+            if (currentEditingProxy && currentEditingProxy.proxy_type) {
+                proxyType = currentEditingProxy.proxy_type;
+            } else {
+                const displayValue = document.getElementById('edit-proxy-type').value;
+                proxyType = getProxyTypeFromName(displayValue);
+            }
             
             // 获取已选择的规则ID列表
             const ipRuleIds = [];
@@ -1055,6 +1070,16 @@ const pageSize = 20;
                 'udp': 'UDP'
             };
             return names[type] || type;
+        }
+        
+        // 反向转换：从友好名称转换为原始类型值
+        function getProxyTypeFromName(name) {
+            const reverseMap = {
+                'HTTP/HTTPS': 'http',
+                'TCP': 'tcp',
+                'UDP': 'udp'
+            };
+            return reverseMap[name] || name;
         }
         
         function getStatusBadge(status) {

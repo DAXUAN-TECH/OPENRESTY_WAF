@@ -388,10 +388,22 @@
             max-width: 250px !important;
         }
         
+        /* 代理类型的form-group设置固定宽度，用于对齐 */
+        #create-proxy-modal .form-row .form-group:nth-child(2) {
+            flex: 0 0 50%;
+            max-width: 50%;
+        }
+        
         /* 监听地址输入框与代理类型输入框对齐（宽度一致） */
         #create-proxy-modal #create-listen-address {
             width: 50% !important;
             max-width: 250px !important;
+        }
+        
+        /* 监听地址的form-group设置固定宽度，与代理类型的form-group对齐 */
+        #create-proxy-modal #http-fields .form-group:nth-child(3) {
+            flex: 0 0 50%;
+            max-width: 50%;
         }
         
         /* 监听端口输入框缩短二分之一（在form-row中，从100%缩短到50%） */

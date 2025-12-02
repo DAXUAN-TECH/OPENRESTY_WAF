@@ -651,6 +651,12 @@
             flex: 1;
         }
         
+        /* 路径匹配和目标路径输入框的placeholder字体缩小2个号（从14px缩小到12px） */
+        .backend-item .backend-location-path::placeholder,
+        .backend-item .backend-path::placeholder {
+            font-size: 12px;
+        }
+        
         /* 权重输入框缩短三分之二（保留原来的1/3宽度） */
         .backend-item .backend-weight {
             flex: 0 0 33.33%;

@@ -534,11 +534,11 @@ function _M.get_proxy(proxy_id)
     -- 查询后端服务器（只支持upstream类型）
     if proxy.backend_type == "upstream" then
         local backends_sql = [[
-            SELECT id, backend_address, backend_port, backend_path, weight, max_fails, fail_timeout,
+            SELECT id, location_path, backend_address, backend_port, backend_path, weight, max_fails, fail_timeout,
                    backup, down, status
             FROM waf_proxy_backends
             WHERE proxy_id = ?
-            ORDER BY weight DESC, id ASC
+            ORDER BY location_path, weight DESC, id ASC
         ]]
         local backends, _ = mysql_pool.query(backends_sql, proxy_id)
         proxy.backends = backends or {}

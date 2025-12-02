@@ -955,22 +955,25 @@
             border-radius: 4px;
         }
         
-        /* 编辑代理防护规则：请选择规则条目下拉框缩短二分之一 */
+        /* 编辑代理防护规则：请选择规则条目下拉框 */
         #edit-modal .rule-item select.rule-id {
-            width: 50% !important;
-            max-width: 250px !important;
+            flex: 0 1 auto;
+            min-width: 150px;
+            max-width: 250px;
         }
         
-        /* 创建代理防护规则：请选择规则类型下拉框缩短二分之一 */
+        /* 创建代理防护规则：请选择规则类型下拉框 */
         #create-proxy-modal .rule-item select.rule-type {
-            width: 50% !important;
-            max-width: 250px !important;
+            flex: 0 1 auto;
+            min-width: 150px;
+            max-width: 250px;
         }
         
-        /* 编辑代理防护规则：请选择规则类型下拉框缩短二分之一 */
+        /* 编辑代理防护规则：请选择规则类型下拉框 */
         #edit-modal .rule-item select.rule-type {
-            width: 50% !important;
-            max-width: 250px !important;
+            flex: 0 1 auto;
+            min-width: 150px;
+            max-width: 250px;
         }
         
         .rule-item .btn {

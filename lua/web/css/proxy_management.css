@@ -355,10 +355,42 @@
         .form-row {
             display: flex;
             gap: 15px;
+            margin-bottom: 15px;
         }
         
         .form-row .form-group {
             flex: 1;
+        }
+        
+        /* 配置区域样式 */
+        .config-section {
+            background: #f8f9fa;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            padding: 15px;
+            margin-top: 10px;
+        }
+        
+        .config-subsection {
+            margin-bottom: 20px;
+        }
+        
+        .config-subsection:last-child {
+            margin-bottom: 0;
+        }
+        
+        .subsection-label {
+            display: block;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 14px;
+        }
+        
+        /* 小按钮样式 */
+        .btn-sm {
+            padding: 6px 12px;
+            font-size: 13px;
         }
         
         .form-actions {
@@ -369,11 +401,29 @@
         }
         
         /* 创建代理弹出框特定样式 */
+        #create-proxy-modal .form-group {
+            margin-bottom: 20px;
+        }
+        
+        #create-proxy-modal .form-group:last-child {
+            margin-bottom: 0;
+        }
+        
         #create-proxy-modal .form-group input,
         #create-proxy-modal .form-group select,
         #create-proxy-modal .form-group textarea {
             width: 100%;
             max-width: 500px;
+            padding: 8px 12px;
+            font-size: 14px;
+        }
+        
+        #create-proxy-modal .form-group label {
+            display: block;
+            margin-bottom: 6px;
+            font-weight: 600;
+            color: #333;
+            font-size: 14px;
         }
         
         /* 代理名称输入框缩短二分之一 */
@@ -609,10 +659,11 @@
             font-size: 12px;
         }        
         .backends-list {
-            margin-top: 10px;
-            padding: 10px;
-            background-color: #f9f9f9;
-            border-radius: 4px;
+            margin-bottom: 10px;
+        }
+        
+        .location-paths-list {
+            margin-bottom: 10px;
         }
         
         /* 防护规则列表样式（参考后端服务器列表） */
@@ -622,12 +673,18 @@
         
         .rule-item {
             display: flex;
-            gap: 10px;
+            gap: 8px;
             align-items: center;
-            margin-bottom: 10px;
-            padding: 10px;
-            background: #f9f9f9;
+            margin-bottom: 8px;
+            padding: 8px;
+            background: white;
             border-radius: 4px;
+            border: 1px solid #e0e0e0;
+        }
+        
+        .rule-item select {
+            padding: 6px 10px;
+            font-size: 13px;
         }
         
         .rule-item select.rule-type {
@@ -672,26 +729,29 @@
         
         .location-path-item {
             display: flex;
-            gap: 10px;
-            margin-bottom: 10px;
-            padding: 10px;
+            gap: 8px;
+            margin-bottom: 8px;
+            padding: 8px;
             background: white;
             border-radius: 4px;
             align-items: center;
+            border: 1px solid #e0e0e0;
         }
         
         .location-path-item input {
             flex: 1;
+            padding: 6px 10px;
+            font-size: 13px;
         }
         
         .location-path-item .location-path-input {
-            flex: 0 0 200px;
-            max-width: 200px;
+            flex: 0 0 180px;
+            max-width: 180px;
         }
         
         .location-path-item .location-backend-path-input {
-            flex: 0 0 200px;
-            max-width: 200px;
+            flex: 0 0 180px;
+            max-width: 180px;
         }
         
         .location-path-item .location-path-input::placeholder,
@@ -701,12 +761,18 @@
         
         .backend-item {
             display: flex;
-            gap: 10px;
-            margin-bottom: 10px;
-            padding: 10px;
+            gap: 8px;
+            margin-bottom: 8px;
+            padding: 8px;
             background: white;
             border-radius: 4px;
             align-items: center;
+            border: 1px solid #e0e0e0;
+        }
+        
+        .backend-item input {
+            padding: 6px 10px;
+            font-size: 13px;
         }
         
         .backend-item input {

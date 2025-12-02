@@ -67,10 +67,15 @@ const pageSize = 20;
             if (proxyType === 'http') {
                 httpFields.style.display = 'flex';
                 tcpUdpFields.style.display = 'none';
-                // 显示路径匹配列表
+                // 显示路径匹配列表（在config-subsection中）
                 const locationPathsFields = document.getElementById('location-paths-fields');
                 if (locationPathsFields) {
                     locationPathsFields.style.display = 'block';
+                }
+                // 显示后端服务器配置区域
+                const upstreamFields = document.getElementById('upstream-fields');
+                if (upstreamFields) {
+                    upstreamFields.style.display = 'block';
                 }
                 // 为显示的字段添加required属性
                 createListenPort.setAttribute('required', 'required');
@@ -92,10 +97,15 @@ const pageSize = 20;
             } else if (proxyType === 'tcp' || proxyType === 'udp') {
                 httpFields.style.display = 'none';
                 tcpUdpFields.style.display = 'flex';
-                // 隐藏路径匹配列表
+                // 隐藏路径匹配列表（在config-subsection中）
                 const locationPathsFields = document.getElementById('location-paths-fields');
                 if (locationPathsFields) {
                     locationPathsFields.style.display = 'none';
+                }
+                // 显示后端服务器配置区域（TCP/UDP也需要）
+                const upstreamFields = document.getElementById('upstream-fields');
+                if (upstreamFields) {
+                    upstreamFields.style.display = 'block';
                 }
                 // 为隐藏的字段移除required属性
                 createListenPort.removeAttribute('required');

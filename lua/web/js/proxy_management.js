@@ -1111,6 +1111,11 @@ const pageSize = 20;
         // 重置创建表单
         function resetCreateForm() {
             document.getElementById('create-form').reset();
+            // 重置后设置默认代理类型为HTTP/HTTPS
+            const proxyTypeSelect = document.getElementById('create-proxy-type');
+            if (proxyTypeSelect) {
+                proxyTypeSelect.value = 'http';
+            }
             const proxyType = document.getElementById('create-proxy-type').value;
             const locationPathField = proxyType === 'http' 
                 ? '<input type="text" placeholder="匹配路径：/PATH" class="backend-location-path" title="匹配路径：/PATH" >'
@@ -1147,6 +1152,13 @@ const pageSize = 20;
             if (modal) {
                 modal.style.display = 'flex';
                 modal.classList.add('show');
+                // 设置默认代理类型为HTTP/HTTPS
+                const proxyTypeSelect = document.getElementById('create-proxy-type');
+                if (proxyTypeSelect) {
+                    proxyTypeSelect.value = 'http';
+                    // 触发字段切换，显示HTTP/HTTPS相关字段
+                    toggleProxyFields();
+                }
                 // 清空规则列表，只保留一个空规则条目
                 const rulesList = document.getElementById('rules-list');
                 if (rulesList) {

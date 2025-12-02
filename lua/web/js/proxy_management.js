@@ -123,8 +123,8 @@ const pageSize = 20;
         
         // 添加后端服务器配置项
         function addBackend() {
-            const list = document.getElementById('config-items-list');
-            if (!list) return;
+            const configSection = document.querySelector('#upstream-fields .config-section');
+            if (!configSection) return;
             
             const proxyType = document.getElementById('create-proxy-type').value;
             const item = document.createElement('div');
@@ -166,7 +166,7 @@ const pageSize = 20;
                     <button type="button" class="btn btn-danger btn-sm" onclick="removeConfigItem(this)">删除</button>
                 </div>
             `;
-            list.appendChild(item);
+            configSection.appendChild(item);
         }
         
         // 删除后端服务器（保留用于向后兼容）
@@ -238,8 +238,8 @@ const pageSize = 20;
         
         // 添加路径匹配配置项
         function addLocationPath() {
-            const list = document.getElementById('config-items-list');
-            if (!list) return;
+            const configSection = document.querySelector('#upstream-fields .config-section');
+            if (!configSection) return;
             
             const proxyType = document.getElementById('create-proxy-type').value;
             const item = document.createElement('div');
@@ -281,15 +281,15 @@ const pageSize = 20;
                     <button type="button" class="btn btn-danger btn-sm" onclick="removeConfigItem(this)">删除</button>
                 </div>
             `;
-            list.appendChild(item);
+            configSection.appendChild(item);
         }
         
         // 删除配置项
         function removeConfigItem(button) {
             const item = button.closest('.config-item');
             if (item) {
-                const list = document.getElementById('config-items-list');
-                if (list && list.children.length > 1) {
+                const configSection = document.querySelector('#upstream-fields .config-section');
+                if (configSection && configSection.querySelectorAll('.config-item').length > 1) {
                     item.remove();
                 } else {
                     // 至少保留一个
@@ -793,12 +793,12 @@ const pageSize = 20;
                 proxyData.server_name = serverName || null;
                 
                 // 从融合的配置列表中收集路径匹配和后端服务器数据
-                const configItemsList = document.getElementById('config-items-list');
+                const configSection = document.querySelector('#upstream-fields .config-section');
                 const locationPaths = [];
                 const backends = [];
                 
-                if (configItemsList) {
-                    const configItems = configItemsList.querySelectorAll('.config-item');
+                if (configSection) {
+                    const configItems = configSection.querySelectorAll('.config-item');
                     configItems.forEach(item => {
                         // 收集路径匹配
                         const locationPathInput = item.querySelector('.location-path-input');
@@ -844,11 +844,11 @@ const pageSize = 20;
                 proxyData.server_name = null;
                 
                 // 从融合的配置列表中收集后端服务器数据
-                const configItemsList = document.getElementById('config-items-list');
+                const configSection = document.querySelector('#upstream-fields .config-section');
                 const backends = [];
                 
-                if (configItemsList) {
-                    const configItems = configItemsList.querySelectorAll('.config-item');
+                if (configSection) {
+                    const configItems = configSection.querySelectorAll('.config-item');
                     configItems.forEach(item => {
                         const address = item.querySelector('.backend-address')?.value;
                         const port = item.querySelector('.backend-port')?.value;
@@ -1328,8 +1328,8 @@ const pageSize = 20;
             const proxyType = document.getElementById('create-proxy-type').value;
             
             // 重置配置列表
-            const configItemsList = document.getElementById('config-items-list');
-            if (configItemsList) {
+            const configSection = document.querySelector('#upstream-fields .config-section');
+            if (configSection) {
                 const locationPathWrapper = proxyType === 'http' ? `
                     <div class="input-with-add">
                         <input type="text" placeholder="匹配路径：/PATH" class="location-path-input" title="匹配路径：/PATH">
@@ -1344,7 +1344,7 @@ const pageSize = 20;
                     </div>
                 ` : '';
                 
-                configItemsList.innerHTML = `
+                configSection.innerHTML = `
                     <div class="config-item">
                         <div class="config-item-row">
                             ${locationPathWrapper}

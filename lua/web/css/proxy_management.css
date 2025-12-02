@@ -393,11 +393,7 @@
             font-size: 13px;
         }
         
-        /* 配置项列表样式 */
-        .config-items-list {
-            margin-bottom: 10px;
-        }
-        
+        /* 配置项样式 */
         .config-item {
             margin-bottom: 8px;
             padding: 8px;

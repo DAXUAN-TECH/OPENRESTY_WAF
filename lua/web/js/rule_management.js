@@ -282,6 +282,47 @@ let currentPage = 1;
             }
         }
         
+        // 格式化规则值：根据逗号分隔，每行最多显示3个IP/片段
+        // 仅负责展示，不修改原始数据；后端仍按完整字符串进行校验和存储
+        function formatRuleValueForDisplay(rawValue) {
+            if (rawValue === null || rawValue === undefined) {
+                return '';
+            }
+
+            // 确保是字符串
+            const value = String(rawValue);
+            if (!value.trim()) {
+                return '';
+            }
+
+            // 统一中英文逗号作为分隔符
+            const parts = value
+                .split(/[,，]/)
+                .map(part => part.trim())
+                .filter(part => part.length > 0);
+
+            if (parts.length === 0) {
+                return '';
+            }
+
+            // 使用前端 escapeHtml 工具进行转义，避免XSS
+            const escapeHtmlFn = window.escapeHtml || function (text) {
+                if (!text) return '';
+                const div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
+            };
+
+            const lines = [];
+            for (let i = 0; i < parts.length; i += 3) {
+                const group = parts.slice(i, i + 3);
+                const lineText = group.join(', ');
+                lines.push(`<div class="rule-value-line">${escapeHtmlFn(lineText)}</div>`);
+            }
+
+            return lines.join('');
+        }
+
         // 渲染规则表格
         function renderRulesTable(rules) {
             const tbody = document.getElementById('rules-tbody');
@@ -333,13 +374,13 @@ let currentPage = 1;
                 }
                 return;
             }
-            
+
             tbody.innerHTML = rules.map(rule => `
                 <tr>
                     <td>${rule.id}</td>
                     <td>${rule.rule_name}</td>
                     <td>${getRuleTypeName(rule.rule_type)}</td>
-                    <td>${rule.rule_value}</td>
+                    <td>${formatRuleValueForDisplay(rule.rule_value)}</td>
                     <td>${rule.rule_group || '<span style="color: #999;">未分组</span>'}</td>
                     <td>${rule.priority}</td>
                     <td>${getStatusBadge(rule.status)}</td>

@@ -709,19 +709,25 @@ DROP VIEW IF EXISTS waf_v_block_rule_stats;
 DROP VIEW IF EXISTS waf_v_ip_access_stats;
 DROP VIEW IF EXISTS waf_v_pending_unblock_tasks;
 
--- 创建视图：封控规则统计视图
+-- 创建视图：封控规则统计视图（优化：使用子查询提高性能）
 CREATE VIEW waf_v_block_rule_stats AS
 SELECT 
     br.id,
     br.rule_name,
     br.rule_type,
     br.status,
-    COUNT(bl.id) AS block_count,
-    MAX(bl.block_time) AS last_block_time
+    COALESCE(bl_stats.block_count, 0) AS block_count,
+    bl_stats.last_block_time
 FROM waf_block_rules br
-LEFT JOIN waf_block_logs bl ON br.id = bl.rule_id
-WHERE br.status = 1
-GROUP BY br.id, br.rule_name, br.rule_type, br.status;
+LEFT JOIN (
+    SELECT 
+        rule_id,
+        COUNT(*) AS block_count,
+        MAX(block_time) AS last_block_time
+    FROM waf_block_logs
+    GROUP BY rule_id
+) bl_stats ON br.id = bl_stats.rule_id
+WHERE br.status = 1;
 
 -- 创建视图：IP 访问统计视图（最近24小时，优化：使用索引提示）
 CREATE VIEW waf_v_ip_access_stats AS

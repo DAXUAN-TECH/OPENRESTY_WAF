@@ -1063,11 +1063,18 @@
             max-width: 250px;
         }
         
-        /* 创建代理防护规则：请选择规则类型下拉框 */
+        /* 创建代理防护规则：请选择规则类型下拉框（扩宽三分之一） */
         #create-proxy-modal .rule-item select.rule-type {
             flex: 0 1 auto;
-            min-width: 150px;
-            max-width: 250px;
+            min-width: 200px !important;
+            max-width: 333px !important;
+        }
+        
+        /* 创建代理防护规则：请选择规则条目下拉框（扩宽三分之一） */
+        #create-proxy-modal .rule-item select.rule-id {
+            flex: 0 1 auto;
+            min-width: 200px !important;
+            max-width: 333px !important;
         }
         
         /* 编辑代理防护规则：请选择规则类型下拉框 */

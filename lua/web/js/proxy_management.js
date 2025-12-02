@@ -1959,25 +1959,8 @@ const pageSize = 20;
                 if (rulesList) {
                     const ruleItems = rulesList.querySelectorAll('.rule-item');
                     if (ruleItems.length > 1) {
-                        // 移除现有的添加按钮（如果存在）
-                        const existingAddButton = rulesList.querySelector('button.btn-primary.btn-sm');
-                        if (existingAddButton && existingAddButton.textContent === '添加') {
-                            existingAddButton.remove();
-                        }
-                ruleItem.remove();
-                        // 在最后一个rule-item下面重新添加"添加"按钮
-                        const lastRuleItem = rulesList.querySelector('.rule-item:last-child');
-                        if (lastRuleItem) {
-                            const addButton = document.createElement('button');
-                            addButton.type = 'button';
-                            addButton.className = 'btn btn-primary btn-sm';
-                            addButton.textContent = '添加';
-                            addButton.style.cssText = 'display: inline-block !important; visibility: visible !important; opacity: 1 !important; background-color: #4CAF50 !important; color: white !important; padding: 8px 16px !important; min-width: 80px !important; height: 36px !important; border: 2px solid #4CAF50 !important; border-radius: 4px !important; font-size: 14px !important; font-weight: bold !important; cursor: pointer !important; margin-top: 8px !important;';
-                            const listId = rulesList.id;
-                            addButton.onclick = function() { addRule(listId); };
-                            rulesList.appendChild(addButton);
-                        }
-                // 更新所有规则条目的选择框（移除已删除的规则）
+                        ruleItem.remove();
+                        // 更新所有规则条目的选择框（移除已删除的规则）
                         updateAllRuleSelects(rulesList.id);
                     } else {
                         // 至少保留一条规则

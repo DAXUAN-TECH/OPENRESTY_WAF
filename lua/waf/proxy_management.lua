@@ -452,23 +452,30 @@ function _M.list_proxies(params)
                     local rule_name = rule.rule_name or rule.RULE_NAME or rule.ruleName
                     local rule_type = rule.rule_type or rule.RULE_TYPE or rule.ruleType
                     if rule_id then
+                        -- 确保rule_id是数字类型（用于匹配）
+                        rule_id = tonumber(rule_id) or rule_id
                         rule_map[rule_id] = {
-                            id = rule_id,
-                            rule_name = rule_name,
-                            rule_type = rule_type
+                            id = tonumber(rule_id) or rule_id,
+                            rule_name = rule_name or "",
+                            rule_type = rule_type or ""
                         }
                     end
                 end
                 local ordered_rules = {}
                 for _, rule_id in ipairs(rule_ids) do
-                    if rule_map[rule_id] then
+                    -- 确保rule_id是数字类型（用于匹配）
+                    local rule_id_num = tonumber(rule_id) or rule_id
+                    if rule_map[rule_id_num] then
                         -- 创建一个新的table，确保字段名正确（避免MySQL返回的字段名问题）
                         local rule_item = {
-                            id = rule_map[rule_id].id,
-                            rule_name = rule_map[rule_id].rule_name,
-                            rule_type = rule_map[rule_id].rule_type
+                            id = rule_map[rule_id_num].id,
+                            rule_name = rule_map[rule_id_num].rule_name,
+                            rule_type = rule_map[rule_id_num].rule_type
                         }
                         table.insert(ordered_rules, rule_item)
+                    else
+                        -- 调试日志：记录未匹配的rule_id
+                        ngx.log(ngx.WARN, "proxy_id=", proxy.id, ", rule_id=", rule_id, " not found in rule_map")
                     end
                 end
                 -- 保存所有规则的详细信息（确保是数组格式）

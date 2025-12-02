@@ -968,25 +968,42 @@ const pageSize = 20;
                     return div.innerHTML;
                 };
                 // 检查proxy.rules是否存在且是数组
+                if (proxy.rules) {
+                    console.log(`Proxy ${proxy.id} rules:`, {
+                        type: typeof proxy.rules,
+                        isArray: Array.isArray(proxy.rules),
+                        length: proxy.rules.length,
+                        content: JSON.stringify(proxy.rules)
+                    });
+                }
                 if (proxy.rules && Array.isArray(proxy.rules) && proxy.rules.length > 0) {
                     // 显示所有规则的名称，每行一个
-                    const ruleNames = proxy.rules.map(rule => {
+                    const ruleNames = proxy.rules.map((rule, index) => {
                         // 兼容不同的字段名格式（rule_name 或 ruleName）
-                        const name = rule.rule_name || rule.ruleName || '';
+                        const name = rule.rule_name || rule.ruleName || rule.RULE_NAME || '';
+                        console.log(`Proxy ${proxy.id} rule[${index}]:`, {
+                            id: rule.id || rule.ID,
+                            name: name,
+                            type: rule.rule_type || rule.ruleType || rule.RULE_TYPE
+                        });
                         return escapeHtmlFn(name);
                     }).filter(name => name !== ''); // 过滤空名称
                     rulesDisplay = ruleNames.length > 0 ? ruleNames.join('<br>') : '-';
+                    console.log(`Proxy ${proxy.id} ruleNames:`, ruleNames);
                     // 显示所有规则的类型，每行一个
                     const ruleTypes = proxy.rules.map(rule => {
                         // 兼容不同的字段名格式（rule_type 或 ruleType）
-                        const type = rule.rule_type || rule.ruleType || '';
+                        const type = rule.rule_type || rule.ruleType || rule.RULE_TYPE || '';
                         return escapeHtmlFn(getRuleTypeName(type) || '');
                     }).filter(type => type !== ''); // 过滤空类型
                     ruleTypesDisplay = ruleTypes.length > 0 ? ruleTypes.join('<br>') : '-';
                 } else if (proxy.rule_name) {
                     // 向后兼容：如果没有rules数组，使用rule_name和rule_type
+                    console.log(`Proxy ${proxy.id} using fallback rule_name:`, proxy.rule_name);
                     rulesDisplay = escapeHtmlFn(proxy.rule_name);
                     ruleTypesDisplay = escapeHtmlFn(getRuleTypeName(proxy.rule_type) || '-');
+                } else {
+                    console.log(`Proxy ${proxy.id} has no rules and no rule_name`);
                 }
                 
                 return `

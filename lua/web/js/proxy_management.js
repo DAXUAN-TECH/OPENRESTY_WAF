@@ -240,13 +240,18 @@ const pageSize = 20;
                 const locationPathInputs = list.querySelectorAll('.backend-location-path');
                 if (locationPathInputs.length === 0) return;
                 
-                // 获取第一个路径匹配值
-                const firstValue = locationPathInputs[0] ? locationPathInputs[0].value.trim() || '/' : '/';
+                // 获取第一个路径匹配值（如果为空，不设置值，让placeholder显示）
+                const firstInput = locationPathInputs[0];
+                const firstValue = firstInput ? firstInput.value.trim() : '';
                 
-                // 同步所有路径匹配输入框的值
+                // 只有当第一个输入框有实际值时才同步，否则清空所有输入框让placeholder显示
                 locationPathInputs.forEach(input => {
                     if (input.style.display !== 'none') {
-                        input.value = firstValue;
+                        if (firstValue) {
+                            input.value = firstValue;
+                        } else {
+                            input.value = '';
+                        }
                     }
                 });
             } catch (e) {
@@ -267,13 +272,18 @@ const pageSize = 20;
                 const locationPathInputs = list.querySelectorAll('.backend-location-path');
                 if (locationPathInputs.length === 0) return;
                 
-                // 获取第一个路径匹配值
-                const firstValue = locationPathInputs[0] ? locationPathInputs[0].value.trim() || '/' : '/';
+                // 获取第一个路径匹配值（如果为空，不设置值，让placeholder显示）
+                const firstInput = locationPathInputs[0];
+                const firstValue = firstInput ? firstInput.value.trim() : '';
                 
-                // 同步所有路径匹配输入框的值
+                // 只有当第一个输入框有实际值时才同步，否则清空所有输入框让placeholder显示
                 locationPathInputs.forEach(input => {
                     if (input.style.display !== 'none') {
-                        input.value = firstValue;
+                        if (firstValue) {
+                            input.value = firstValue;
+                        } else {
+                            input.value = '';
+                        }
                     }
                 });
             } catch (e) {

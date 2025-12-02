@@ -651,6 +651,12 @@
             flex: 1;
         }
         
+        /* 权重输入框缩短三分之二（保留原来的1/3宽度） */
+        .backend-item .backend-weight {
+            flex: 0 0 33.33%;
+            max-width: 33.33%;
+        }
+        
         .tcp-udp-mode .backend-address-field,
         .tcp-udp-mode .tcp-udp-backend-port-field {
             flex: 0 0 25%;

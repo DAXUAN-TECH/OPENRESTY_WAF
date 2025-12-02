@@ -690,18 +690,23 @@
             max-width: 250px !important;
         }
         
-        /* 负载均衡算法输入框宽度（在form-row中，增加宽度） */
+        /* 负载均衡算法输入框宽度（在form-row中，增加宽度，至少显示四个汉字） */
         #create-proxy-modal .form-row #create-load-balance {
-            width: 60% !important;
-            max-width: 350px !important;
+            width: 70% !important;
+            max-width: 450px !important;
         }
         
         /* 连接超时、发送超时、读取超时输入框宽度（在form-row中，减少宽度） */
-        #create-proxy-modal .form-row #create-proxy-connect-timeout,
-        #create-proxy-modal .form-row #create-proxy-send-timeout,
-        #create-proxy-modal .form-row #create-proxy-read-timeout {
+        #create-proxy-modal .form-row #create-proxy-connect-timeout {
             width: 15% !important;
             max-width: 75px !important;
+        }
+        
+        /* 发送超时、读取超时输入框宽度（增加宽度以显示字符） */
+        #create-proxy-modal .form-row #create-proxy-send-timeout,
+        #create-proxy-modal .form-row #create-proxy-read-timeout {
+            width: 25% !important;
+            max-width: 120px !important;
         }
         
         /* 防护规则筛选框样式 */
@@ -792,18 +797,23 @@
             max-width: 250px !important;
         }
         
-        /* 负载均衡算法输入框宽度（在form-row中，增加宽度） */
+        /* 负载均衡算法输入框宽度（在form-row中，增加宽度，至少显示四个汉字） */
         #edit-modal .form-row #edit-load-balance {
-            width: 60% !important;
-            max-width: 350px !important;
+            width: 70% !important;
+            max-width: 450px !important;
         }
         
         /* 连接超时、发送超时、读取超时输入框宽度（在form-row中，减少宽度） */
-        #edit-modal .form-row #edit-proxy-connect-timeout,
-        #edit-modal .form-row #edit-proxy-send-timeout,
-        #edit-modal .form-row #edit-proxy-read-timeout {
+        #edit-modal .form-row #edit-proxy-connect-timeout {
             width: 15% !important;
             max-width: 75px !important;
+        }
+        
+        /* 发送超时、读取超时输入框宽度（增加宽度以显示字符） */
+        #edit-modal .form-row #edit-proxy-send-timeout,
+        #edit-modal .form-row #edit-proxy-read-timeout {
+            width: 25% !important;
+            max-width: 120px !important;
         }
         
         /* 分页样式 */

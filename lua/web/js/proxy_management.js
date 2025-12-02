@@ -1937,12 +1937,20 @@ const pageSize = 20;
                 <select class="rule-id">
                     <option value="">请选择规则条目</option>
                 </select>
-                <div class="rule-item-actions" style="display: flex !important; gap: 8px; align-items: center; flex-shrink: 0; min-width: 120px;">
-                    <button type="button" class="btn btn-primary btn-sm" onclick="addRule('${listId}')" style="display: inline-block !important; visibility: visible !important; opacity: 1 !important; background-color: #4CAF50 !important; color: white !important; padding: 8px 16px !important; min-width: 80px !important; height: 36px !important; border: 2px solid #4CAF50 !important; border-radius: 4px !important; font-size: 14px !important; font-weight: bold !important; cursor: pointer !important;">添加</button>
+                <div class="rule-item-actions">
                     <button type="button" class="btn-icon btn-remove-icon" onclick="removeRule(this)" title="删除">−</button>
                 </div>
             `;
             rulesList.appendChild(ruleItem);
+            
+            // 在每个rule-item下面添加"添加"按钮
+            const addButton = document.createElement('button');
+            addButton.type = 'button';
+            addButton.className = 'btn btn-primary btn-sm';
+            addButton.textContent = '添加';
+            addButton.style.marginTop = '8px';
+            addButton.onclick = function() { addRule(listId); };
+            rulesList.appendChild(addButton);
         }
         
         // 删除规则条目（支持创建和编辑）

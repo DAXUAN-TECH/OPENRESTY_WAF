@@ -171,7 +171,7 @@ const pageSize = 20;
                             </div>
                             ${proxyType === 'http' ? `
                             <div class="input-with-add location-backend-path-input-wrapper">
-                                <input type="text" placeholder="目标路径：/PATH（可选）" class="location-backend-path-input" title="目标路径：/PATH（可选）">
+                                <input type="text" placeholder="目标路径：/PATH" class="location-backend-path-input" title="目标路径：/PATH">
                             </div>
                             ` : ''}
                             <div class="input-with-add input-weight">
@@ -236,7 +236,7 @@ const pageSize = 20;
                     if (proxyType !== 'http') return;
                     newDiv.className = 'input-with-add';
                     newDiv.innerHTML = `
-                        <input type="text" placeholder="目标路径：/PATH（可选）" class="location-backend-path-input" title="目标路径：/PATH（可选）">
+                        <input type="text" placeholder="目标路径：/PATH" class="location-backend-path-input" title="目标路径：/PATH">
                         <button type="button" class="btn-add" onclick="addInputFieldInLocation('location-backend-path', this)" title="添加目标路径">+</button>
                     `;
                     break;
@@ -301,7 +301,7 @@ const pageSize = 20;
                 </div>
                 ${proxyType === 'http' ? `
                 <div class="input-with-add location-backend-path-input-wrapper">
-                    <input type="text" placeholder="目标路径：/PATH（可选）" class="location-backend-path-input" title="目标路径：/PATH（可选）">
+                    <input type="text" placeholder="目标路径：/PATH" class="location-backend-path-input" title="目标路径：/PATH">
                 </div>
                 ` : ''}
                 <div class="input-with-add input-weight">
@@ -443,7 +443,7 @@ const pageSize = 20;
                             </div>
                             ${proxyType === 'http' ? `
                             <div class="input-with-add location-backend-path-input-wrapper">
-                                <input type="text" placeholder="目标路径：/PATH（可选）" class="location-backend-path-input" title="目标路径：/PATH（可选）">
+                                <input type="text" placeholder="目标路径：/PATH" class="location-backend-path-input" title="目标路径：/PATH">
                             </div>
                             ` : ''}
                             <div class="input-with-add input-weight">
@@ -487,7 +487,7 @@ const pageSize = 20;
                 </div>
                 ${proxyType === 'http' ? `
                 <div class="input-with-add location-backend-path-input-wrapper">
-                    <input type="text" placeholder="目标路径：/PATH（可选）" class="location-backend-path-input" title="目标路径：/PATH（可选）">
+                    <input type="text" placeholder="目标路径：/PATH" class="location-backend-path-input" title="目标路径：/PATH">
                 </div>
                 ` : ''}
                 <div class="input-with-add input-weight">

@@ -450,10 +450,15 @@
             gap: 8px;
             align-items: center;
             flex-shrink: 0;
-            min-width: 80px;
+            min-width: 120px;
         }
         
         /* 防护规则添加按钮样式，确保可见 */
+        .rule-item-actions .btn {
+            flex-shrink: 0;
+            white-space: nowrap;
+        }
+        
         .rule-item-actions .btn-add-icon {
             width: 32px;
             height: 32px;
@@ -922,6 +927,7 @@
             background: white;
             border-radius: 4px;
             border: 1px solid #e0e0e0;
+            flex-wrap: nowrap;
         }
         
         .rule-item select {

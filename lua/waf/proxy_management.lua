@@ -434,20 +434,37 @@ function _M.list_proxies(params)
         -- 根据ip_rule_ids查询规则信息（用于列表显示）
         if rule_ids and #rule_ids > 0 then
             -- 查询所有规则的名称和类型（用于列表显示，每行显示一个规则）
-            local rule_ids_str = table.concat(rule_ids, ",")
-            local rule_info_sql = string.format([[
-                SELECT id, rule_name, rule_type 
-                FROM waf_block_rules 
-                WHERE id IN (%s) AND status = 1 
-                ORDER BY FIELD(id, %s)
-            ]], rule_ids_str, rule_ids_str)
-            local rule_info = mysql_pool.query(rule_info_sql)
+            -- 构建IN子句的占位符和参数
+            local placeholders = {}
+            local params = {}
+            for i = 1, #rule_ids do
+                table.insert(placeholders, "?")
+                table.insert(params, rule_ids[i])
+            end
+            local rule_info_sql = "SELECT id, rule_name, rule_type FROM waf_block_rules WHERE id IN (" .. table.concat(placeholders, ",") .. ") AND status = 1 ORDER BY id ASC"
+            local rule_info = mysql_pool.query(rule_info_sql, unpack(params))
             if rule_info and #rule_info > 0 then
+                -- 按照rule_ids的顺序排序规则（保持用户选择的顺序）
+                local rule_map = {}
+                for _, rule in ipairs(rule_info) do
+                    rule_map[rule.id] = rule
+                end
+                local ordered_rules = {}
+                for _, rule_id in ipairs(rule_ids) do
+                    if rule_map[rule_id] then
+                        table.insert(ordered_rules, rule_map[rule_id])
+                    end
+                end
                 -- 保存所有规则的详细信息
-                proxy.rules = rule_info
+                proxy.rules = ordered_rules
                 -- 为了向后兼容，保留第一个规则的名称和类型
-                proxy.rule_name = rule_info[1].rule_name
-                proxy.rule_type = rule_info[1].rule_type
+                if #ordered_rules > 0 then
+                    proxy.rule_name = ordered_rules[1].rule_name
+                    proxy.rule_type = ordered_rules[1].rule_type
+                else
+                    proxy.rule_name = nil
+                    proxy.rule_type = nil
+                end
             else
                 proxy.rules = {}
                 proxy.rule_name = nil

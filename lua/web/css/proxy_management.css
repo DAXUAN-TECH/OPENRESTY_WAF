@@ -509,17 +509,12 @@
             display: inline-block !important;
         }
         
-        .rule-item-actions .btn-add-icon {
-            width: 32px;
-            height: 32px;
-            font-size: 20px;
-            flex-shrink: 0;
-        }
-        
+        /* 防护规则按钮大小与添加服务器按钮一致 */
+        .rule-item-actions .btn-add-icon,
         .rule-item-actions .btn-remove-icon {
-            width: 32px;
-            height: 32px;
-            font-size: 20px;
+            width: 28px;
+            height: 28px;
+            font-size: 18px;
             flex-shrink: 0;
         }
         

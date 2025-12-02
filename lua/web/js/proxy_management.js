@@ -891,6 +891,18 @@ const pageSize = 20;
                     console.log('Final proxies array length:', proxiesArray.length);
                     
                     // 使用转换后的数组
+                    // 调试日志：检查每个proxy的rules数据
+                    console.log('=== Proxies Rules Debug ===');
+                    proxiesArray.forEach((proxy, index) => {
+                        if (proxy.rules) {
+                            console.log(`Proxy ${proxy.id} (index ${index}): rules type=${typeof proxy.rules}, isArray=${Array.isArray(proxy.rules)}, length=${proxy.rules ? proxy.rules.length : 0}`);
+                            console.log(`Proxy ${proxy.id} rules content:`, JSON.stringify(proxy.rules));
+                        } else {
+                            console.log(`Proxy ${proxy.id} (index ${index}): no rules field, rule_name=${proxy.rule_name}`);
+                        }
+                    });
+                    console.log('========================');
+                    
                     renderProxiesTable(proxiesArray);
                     if (data.data) {
                         renderPagination(data.data, 'pagination', loadProxies);

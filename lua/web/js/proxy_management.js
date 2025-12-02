@@ -181,9 +181,9 @@ const pageSize = 20;
                                 <input type="number" placeholder="权重" class="backend-weight" value="1" min="1">
                                 <button type="button" class="btn-add" onclick="addInputFieldInLocation('weight', this)" title="添加权重">+</button>
                             </div>
+                            <button type="button" class="btn btn-primary btn-sm" onclick="addBackendRow(this)">添加</button>
                             <button type="button" class="btn btn-danger btn-sm" onclick="removeBackendRow(this)">删除</button>
                         </div>
-                        <button type="button" class="btn btn-primary btn-sm" onclick="addBackendRow(this)" style="margin-top: 8px;">添加后端行</button>
                     </div>
                 </div>
                 <div class="location-actions">
@@ -293,17 +293,21 @@ const pageSize = 20;
             backendRow.innerHTML = `
                 <div class="input-with-add address-input">
                     <input type="text" placeholder="IP地址" class="backend-address">
+                    <button type="button" class="btn-add" onclick="addInputFieldInLocation('address', this)" title="添加IP地址">+</button>
                 </div>
                 <div class="input-with-add port-input">
                     <input type="number" placeholder="端口" class="backend-port" min="1" max="65535">
+                    <button type="button" class="btn-add" onclick="addInputFieldInLocation('port', this)" title="添加端口">+</button>
                 </div>
                 ${proxyType === 'http' ? `
                 <div class="input-with-add location-backend-path-input-wrapper">
                     <input type="text" placeholder="目标路径：/PATH（可选）" class="location-backend-path-input" title="目标路径：/PATH（可选）">
+                    <button type="button" class="btn-add" onclick="addInputFieldInLocation('location-backend-path', this)" title="添加目标路径">+</button>
                 </div>
                 ` : ''}
                 <div class="input-with-add input-weight">
                     <input type="number" placeholder="权重" class="backend-weight" value="1" min="1">
+                    <button type="button" class="btn-add" onclick="addInputFieldInLocation('weight', this)" title="添加权重">+</button>
                 </div>
                 <button type="button" class="btn btn-primary btn-sm" onclick="addBackendRow(this)">添加</button>
                 <button type="button" class="btn btn-danger btn-sm" onclick="removeBackendRow(this)">删除</button>

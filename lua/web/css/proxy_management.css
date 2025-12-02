@@ -446,17 +446,23 @@
         }
         
         .rule-item-actions {
-            display: flex;
+            display: flex !important;
             gap: 8px;
             align-items: center;
             flex-shrink: 0;
             min-width: 120px;
+            position: relative;
+            z-index: 1;
         }
         
         /* 防护规则添加按钮样式，确保可见 */
         .rule-item-actions .btn {
-            flex-shrink: 0;
-            white-space: nowrap;
+            flex-shrink: 0 !important;
+            white-space: nowrap !important;
+            min-width: 60px;
+            height: auto;
+            position: relative;
+            z-index: 2;
         }
         
         .rule-item-actions .btn-add-icon {

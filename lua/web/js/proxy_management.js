@@ -133,7 +133,7 @@ const pageSize = 20;
             
             // HTTP/HTTPS代理显示路径匹配字段（在IP地址前）和代理路径字段，TCP/UDP代理不显示
             const locationPathField = proxyType === 'http' 
-                ? '<input type="text" placeholder="匹配路径：/PATH" class="backend-location-path" title="匹配路径：/PATH" value="/">'
+                ? '<input type="text" placeholder="匹配路径：/PATH" class="backend-location-path" title="匹配路径：/PATH" >'
                 : '<input type="text" placeholder="匹配路径：/PATH" class="backend-location-path" title="匹配路径：/PATH" style="display: none;">';
             const backendPathField = proxyType === 'http' 
                 ? '<input type="text" placeholder="目标路径：/PATH" class="backend-path" title="目标路径：/PATH">'
@@ -176,7 +176,7 @@ const pageSize = 20;
             
             // HTTP/HTTPS代理显示路径匹配字段（在IP地址前）和代理路径字段，TCP/UDP代理不显示
             const locationPathField = proxyType === 'http' 
-                ? '<input type="text" placeholder="匹配路径：/PATH" class="backend-location-path" title="匹配路径：/PATH" value="/">'
+                ? '<input type="text" placeholder="匹配路径：/PATH" class="backend-location-path" title="匹配路径：/PATH" >'
                 : '<input type="text" placeholder="匹配路径：/PATH" class="backend-location-path" title="匹配路径：/PATH" style="display: none;">';
             const backendPathField = proxyType === 'http' 
                 ? '<input type="text" placeholder="目标路径：/PATH" class="backend-path" title="目标路径：/PATH">'
@@ -1103,7 +1103,7 @@ const pageSize = 20;
             document.getElementById('create-form').reset();
             const proxyType = document.getElementById('create-proxy-type').value;
             const locationPathField = proxyType === 'http' 
-                ? '<input type="text" placeholder="匹配路径：/PATH" class="backend-location-path" title="匹配路径：/PATH" value="/">'
+                ? '<input type="text" placeholder="匹配路径：/PATH" class="backend-location-path" title="匹配路径：/PATH" >'
                 : '<input type="text" placeholder="匹配路径：/PATH" class="backend-location-path" title="匹配路径：/PATH" style="display: none;">';
             const backendPathField = proxyType === 'http' 
                 ? '<input type="text" placeholder="目标路径：/PATH" class="backend-path" title="目标路径：/PATH">'

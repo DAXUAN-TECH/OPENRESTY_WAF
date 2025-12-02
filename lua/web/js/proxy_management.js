@@ -136,8 +136,8 @@ const pageSize = 20;
                 ? '<input type="text" placeholder="匹配路径：/PATH" class="backend-location-path" title="匹配路径：/PATH" value="/">'
                 : '<input type="text" placeholder="匹配路径：/PATH" class="backend-location-path" title="匹配路径：/PATH" style="display: none;">';
             const backendPathField = proxyType === 'http' 
-                ? '<input type="text" placeholder="代理路径：/PATH" class="backend-path" title="代理路径：/PATH">'
-                : '<input type="text" placeholder="代理路径：/PATH" class="backend-path" title="代理路径：/PATH" style="display: none;">';
+                ? '<input type="text" placeholder="目标路径：/PATH" class="backend-path" title="目标路径：/PATH">'
+                : '<input type="text" placeholder="目标路径：/PATH" class="backend-path" title="目标路径：/PATH" style="display: none;">';
             
             item.innerHTML = `
                 ${locationPathField}
@@ -179,8 +179,8 @@ const pageSize = 20;
                 ? '<input type="text" placeholder="匹配路径：/PATH" class="backend-location-path" title="匹配路径：/PATH" value="/">'
                 : '<input type="text" placeholder="匹配路径：/PATH" class="backend-location-path" title="匹配路径：/PATH" style="display: none;">';
             const backendPathField = proxyType === 'http' 
-                ? '<input type="text" placeholder="代理路径：/PATH" class="backend-path" title="代理路径：/PATH">'
-                : '<input type="text" placeholder="代理路径：/PATH" class="backend-path" title="代理路径：/PATH" style="display: none;">';
+                ? '<input type="text" placeholder="目标路径：/PATH" class="backend-path" title="目标路径：/PATH">'
+                : '<input type="text" placeholder="目标路径：/PATH" class="backend-path" title="目标路径：/PATH" style="display: none;">';
             
             item.innerHTML = `
                 ${locationPathField}
@@ -1106,8 +1106,8 @@ const pageSize = 20;
                 ? '<input type="text" placeholder="匹配路径：/PATH" class="backend-location-path" title="匹配路径：/PATH" value="/">'
                 : '<input type="text" placeholder="匹配路径：/PATH" class="backend-location-path" title="匹配路径：/PATH" style="display: none;">';
             const backendPathField = proxyType === 'http' 
-                ? '<input type="text" placeholder="代理路径：/PATH" class="backend-path" title="代理路径：/PATH">'
-                : '<input type="text" placeholder="代理路径：/PATH" class="backend-path" title="代理路径：/PATH" style="display: none;">';
+                ? '<input type="text" placeholder="目标路径：/PATH" class="backend-path" title="目标路径：/PATH">'
+                : '<input type="text" placeholder="目标路径：/PATH" class="backend-path" title="目标路径：/PATH" style="display: none;">';
             document.getElementById('backends-list').innerHTML = `<div class="backend-item">${locationPathField}<input type="text" placeholder="IP地址" class="backend-address"><input type="number" placeholder="端口" class="backend-port" min="1" max="65535">${backendPathField}<input type="number" placeholder="权重" class="backend-weight" value="1" min="1"><button type="button" class="btn btn-danger" onclick="removeBackend(this)">删除</button></div>`;
             toggleProxyFields();
             // 清空规则列表，只保留一个空规则条目

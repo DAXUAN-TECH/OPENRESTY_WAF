@@ -69,7 +69,7 @@ const pageSize = 20;
                 tcpUdpFields.style.display = 'none';
                 // 显示location中的路径匹配输入框和目标路径输入框
                 document.querySelectorAll('.location-item').forEach(locationItem => {
-                    const locationPathWrapper = locationItem.querySelector('#location-path-input-wrapper');
+                    const locationPathWrapper = locationItem.querySelector('.location-path-input-wrapper');
                     if (locationPathWrapper) {
                         locationPathWrapper.style.display = 'flex';
                     }
@@ -99,7 +99,7 @@ const pageSize = 20;
                 tcpUdpFields.style.display = 'flex';
                 // 隐藏location中的路径匹配输入框和目标路径输入框
                 document.querySelectorAll('.location-item').forEach(locationItem => {
-                    const locationPathWrapper = locationItem.querySelector('#location-path-input-wrapper');
+                    const locationPathWrapper = locationItem.querySelector('.location-path-input-wrapper');
                     if (locationPathWrapper) {
                         locationPathWrapper.style.display = 'none';
                     }
@@ -149,7 +149,7 @@ const pageSize = 20;
             let locationPathHtml = '';
             if (proxyType === 'http') {
                 locationPathHtml = `
-                    <div class="input-with-add">
+                    <div class="input-with-add location-path-input-wrapper">
                         <input type="text" placeholder="匹配路径：/PATH" class="location-path-input" title="匹配路径：/PATH">
                     </div>
                 `;

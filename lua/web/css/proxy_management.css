@@ -445,6 +445,52 @@
             flex-shrink: 0;
         }
         
+        .btn-icon {
+            width: 28px;
+            height: 28px;
+            padding: 0;
+            border: 1px solid;
+            border-radius: 4px;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+            background: white;
+        }
+        
+        .btn-add-icon {
+            color: #4CAF50;
+            border-color: #4CAF50;
+        }
+        
+        .btn-add-icon:hover {
+            background-color: #4CAF50;
+            color: white;
+            transform: scale(1.1);
+        }
+        
+        .btn-add-icon:active {
+            transform: scale(0.95);
+        }
+        
+        .btn-remove-icon {
+            color: #f44336;
+            border-color: #f44336;
+        }
+        
+        .btn-remove-icon:hover {
+            background-color: #f44336;
+            color: white;
+            transform: scale(1.1);
+        }
+        
+        .btn-remove-icon:active {
+            transform: scale(0.95);
+        }
+        
         .location-actions {
             display: flex;
             gap: 10px;

@@ -438,6 +438,13 @@
             margin-bottom: 0;
         }
         
+        .backend-row-actions {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            flex-shrink: 0;
+        }
+        
         .location-actions {
             display: flex;
             gap: 10px;

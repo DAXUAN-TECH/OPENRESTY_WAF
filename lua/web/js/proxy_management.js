@@ -131,12 +131,15 @@ const pageSize = 20;
             item.className = 'config-item';
             
             let locationPathWrapper = '';
+            let locationBackendPathWrapper = '';
             if (proxyType === 'http') {
                 locationPathWrapper = `
                     <div class="input-with-add">
                         <input type="text" placeholder="匹配路径：/PATH" class="location-path-input" title="匹配路径：/PATH">
                         <button type="button" class="btn-add" onclick="addLocationPath()" title="添加路径匹配">+</button>
                     </div>
+                `;
+                locationBackendPathWrapper = `
                     <div class="input-with-add">
                         <input type="text" placeholder="目标路径：/PATH（可选）" class="location-backend-path-input" title="目标路径：/PATH（可选）">
                         <button type="button" class="btn-add" onclick="addLocationPath()" title="添加路径匹配">+</button>
@@ -155,6 +158,7 @@ const pageSize = 20;
                         <input type="number" placeholder="端口" class="backend-port" min="1" max="65535">
                         <button type="button" class="btn-add" onclick="addBackend()" title="添加后端服务器">+</button>
                     </div>
+                    ${locationBackendPathWrapper}
                     <div class="input-with-add input-weight">
                         <input type="number" placeholder="权重" class="backend-weight" value="1" min="1">
                         <button type="button" class="btn-add" onclick="addBackend()" title="添加后端服务器">+</button>
@@ -242,12 +246,15 @@ const pageSize = 20;
             item.className = 'config-item';
             
             let locationPathWrapper = '';
+            let locationBackendPathWrapper = '';
             if (proxyType === 'http') {
                 locationPathWrapper = `
                     <div class="input-with-add">
                         <input type="text" placeholder="匹配路径：/PATH" class="location-path-input" title="匹配路径：/PATH">
                         <button type="button" class="btn-add" onclick="addLocationPath()" title="添加路径匹配">+</button>
                     </div>
+                `;
+                locationBackendPathWrapper = `
                     <div class="input-with-add">
                         <input type="text" placeholder="目标路径：/PATH（可选）" class="location-backend-path-input" title="目标路径：/PATH（可选）">
                         <button type="button" class="btn-add" onclick="addLocationPath()" title="添加路径匹配">+</button>
@@ -266,6 +273,7 @@ const pageSize = 20;
                         <input type="number" placeholder="端口" class="backend-port" min="1" max="65535">
                         <button type="button" class="btn-add" onclick="addBackend()" title="添加后端服务器">+</button>
                     </div>
+                    ${locationBackendPathWrapper}
                     <div class="input-with-add input-weight">
                         <input type="number" placeholder="权重" class="backend-weight" value="1" min="1">
                         <button type="button" class="btn-add" onclick="addBackend()" title="添加后端服务器">+</button>
@@ -1327,6 +1335,9 @@ const pageSize = 20;
                         <input type="text" placeholder="匹配路径：/PATH" class="location-path-input" title="匹配路径：/PATH">
                         <button type="button" class="btn-add" onclick="addLocationPath()" title="添加路径匹配">+</button>
                     </div>
+                ` : '';
+                
+                const locationBackendPathWrapper = proxyType === 'http' ? `
                     <div class="input-with-add">
                         <input type="text" placeholder="目标路径：/PATH（可选）" class="location-backend-path-input" title="目标路径：/PATH（可选）">
                         <button type="button" class="btn-add" onclick="addLocationPath()" title="添加路径匹配">+</button>
@@ -1345,6 +1356,7 @@ const pageSize = 20;
                                 <input type="number" placeholder="端口" class="backend-port" min="1" max="65535">
                                 <button type="button" class="btn-add" onclick="addBackend()" title="添加后端服务器">+</button>
                             </div>
+                            ${locationBackendPathWrapper}
                             <div class="input-with-add input-weight">
                                 <input type="number" placeholder="权重" class="backend-weight" value="1" min="1">
                                 <button type="button" class="btn-add" onclick="addBackend()" title="添加后端服务器">+</button>

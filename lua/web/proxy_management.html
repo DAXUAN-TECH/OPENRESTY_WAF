@@ -122,33 +122,30 @@
                 <div class="form-group" id="upstream-fields">
                     <label>后端服务器配置</label>
                     <div class="config-section">
-                        <div class="config-subsection">
-                            <label class="subsection-label">配置列表</label>
-                            <div class="config-items-list" id="config-items-list">
-                                <div class="config-item">
-                                    <div class="config-item-row">
-                                        <div class="input-with-add" id="location-path-input-wrapper" style="display: none;">
-                                            <input type="text" placeholder="匹配路径：/PATH" class="location-path-input" title="匹配路径：/PATH">
-                                            <button type="button" class="btn-add" onclick="addLocationPath()" title="添加路径匹配">+</button>
-                                        </div>
-                                        <div class="input-with-add" id="location-backend-path-input-wrapper" style="display: none;">
-                                            <input type="text" placeholder="目标路径：/PATH（可选）" class="location-backend-path-input" title="目标路径：/PATH（可选）">
-                                            <button type="button" class="btn-add" onclick="addLocationPath()" title="添加路径匹配">+</button>
-                                        </div>
-                                        <div class="input-with-add">
-                                            <input type="text" placeholder="IP地址" class="backend-address">
-                                            <button type="button" class="btn-add" onclick="addBackend()" title="添加后端服务器">+</button>
-                                        </div>
-                                        <div class="input-with-add">
-                                            <input type="number" placeholder="端口" class="backend-port" min="1" max="65535">
-                                            <button type="button" class="btn-add" onclick="addBackend()" title="添加后端服务器">+</button>
-                                        </div>
-                                        <div class="input-with-add input-weight">
-                                            <input type="number" placeholder="权重" class="backend-weight" value="1" min="1">
-                                            <button type="button" class="btn-add" onclick="addBackend()" title="添加后端服务器">+</button>
-                                        </div>
-                                        <button type="button" class="btn btn-danger btn-sm" onclick="removeConfigItem(this)">删除</button>
+                        <div class="config-items-list" id="config-items-list">
+                            <div class="config-item">
+                                <div class="config-item-row">
+                                    <div class="input-with-add" id="location-path-input-wrapper" style="display: none;">
+                                        <input type="text" placeholder="匹配路径：/PATH" class="location-path-input" title="匹配路径：/PATH">
+                                        <button type="button" class="btn-add" onclick="addLocationPath()" title="添加路径匹配">+</button>
                                     </div>
+                                    <div class="input-with-add">
+                                        <input type="text" placeholder="IP地址" class="backend-address">
+                                        <button type="button" class="btn-add" onclick="addBackend()" title="添加后端服务器">+</button>
+                                    </div>
+                                    <div class="input-with-add">
+                                        <input type="number" placeholder="端口" class="backend-port" min="1" max="65535">
+                                        <button type="button" class="btn-add" onclick="addBackend()" title="添加后端服务器">+</button>
+                                    </div>
+                                    <div class="input-with-add" id="location-backend-path-input-wrapper" style="display: none;">
+                                        <input type="text" placeholder="目标路径：/PATH（可选）" class="location-backend-path-input" title="目标路径：/PATH（可选）">
+                                        <button type="button" class="btn-add" onclick="addLocationPath()" title="添加路径匹配">+</button>
+                                    </div>
+                                    <div class="input-with-add input-weight">
+                                        <input type="number" placeholder="权重" class="backend-weight" value="1" min="1">
+                                        <button type="button" class="btn-add" onclick="addBackend()" title="添加后端服务器">+</button>
+                                    </div>
+                                    <button type="button" class="btn btn-danger btn-sm" onclick="removeConfigItem(this)">删除</button>
                                 </div>
                             </div>
                         </div>

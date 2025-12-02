@@ -422,11 +422,11 @@
             min-width: 120px;
         }
         
-        /* 权重输入框固定宽度 */
+        /* 权重输入框固定宽度（缩短一半） */
         .input-with-add.input-weight {
-            flex: 0 0 80px;
-            min-width: 80px;
-            max-width: 80px;
+            flex: 0 0 40px;
+            min-width: 40px;
+            max-width: 40px;
         }
         
         .input-with-add input {

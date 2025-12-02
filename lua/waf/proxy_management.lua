@@ -447,7 +447,17 @@ function _M.list_proxies(params)
                 -- 按照rule_ids的顺序排序规则（保持用户选择的顺序）
                 local rule_map = {}
                 for _, rule in ipairs(rule_info) do
-                    rule_map[rule.id] = rule
+                    -- 处理MySQL返回的字段名（可能是大写或下划线格式）
+                    local rule_id = rule.id or rule.ID or rule.rule_id or rule.RULE_ID
+                    local rule_name = rule.rule_name or rule.RULE_NAME or rule.ruleName
+                    local rule_type = rule.rule_type or rule.RULE_TYPE or rule.ruleType
+                    if rule_id then
+                        rule_map[rule_id] = {
+                            id = rule_id,
+                            rule_name = rule_name,
+                            rule_type = rule_type
+                        }
+                    end
                 end
                 local ordered_rules = {}
                 for _, rule_id in ipairs(rule_ids) do
@@ -467,15 +477,19 @@ function _M.list_proxies(params)
                     -- 为了向后兼容，保留第一个规则的名称和类型
                     proxy.rule_name = ordered_rules[1].rule_name
                     proxy.rule_type = ordered_rules[1].rule_type
+                    -- 调试日志：记录规则数量
+                    ngx.log(ngx.DEBUG, "proxy_id=", proxy.id, ", found ", #ordered_rules, " rules")
                 else
                     proxy.rules = {}
                     proxy.rule_name = nil
                     proxy.rule_type = nil
+                    ngx.log(ngx.WARN, "proxy_id=", proxy.id, ", ordered_rules is empty after mapping")
                 end
             else
                 proxy.rules = {}
                 proxy.rule_name = nil
                 proxy.rule_type = nil
+                ngx.log(ngx.WARN, "proxy_id=", proxy.id, ", no rules found in database for rule_ids: ", cjson.encode(rule_ids))
             end
         else
             proxy.rules = {}

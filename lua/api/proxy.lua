@@ -182,14 +182,30 @@ function _M.list()
                 -- 如果是数组，直接复制
                 if #proxy.rules > 0 then
                     for j = 1, #proxy.rules do
-                        rules_array[j] = proxy.rules[j]
+                        local rule = proxy.rules[j]
+                        -- 确保rule对象字段名正确
+                        if rule then
+                            rules_array[j] = {
+                                id = rule.id or rule.ID,
+                                rule_name = rule.rule_name or rule.RULE_NAME or rule.ruleName,
+                                rule_type = rule.rule_type or rule.RULE_TYPE or rule.ruleType
+                            }
+                        end
                     end
+                    -- 调试日志：记录规则数量
+                    ngx.log(ngx.DEBUG, "proxy_id=", proxy.id, ", rules_array length: ", #rules_array)
                 else
                     -- 如果不是数组，尝试转换为数组
                     local idx = 1
                     for _, rule in pairs(proxy.rules) do
-                        rules_array[idx] = rule
-                        idx = idx + 1
+                        if rule then
+                            rules_array[idx] = {
+                                id = rule.id or rule.ID,
+                                rule_name = rule.rule_name or rule.RULE_NAME or rule.ruleName,
+                                rule_type = rule.rule_type or rule.RULE_TYPE or rule.ruleType
+                            }
+                            idx = idx + 1
+                        end
                     end
                 end
                 proxy.rules = rules_array

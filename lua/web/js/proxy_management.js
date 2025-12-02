@@ -1264,7 +1264,7 @@ const pageSize = 20;
                             let locationPaths = [];
                             if (proxy.location_paths && Array.isArray(proxy.location_paths) && proxy.location_paths.length > 0) {
                                 locationPaths = proxy.location_paths;
-                            } else {
+                    } else {
                                 // 向后兼容：如果没有location_paths，使用location_path
                                 locationPaths = [{
                                     location_path: proxy.location_path || '/',
@@ -1307,7 +1307,7 @@ const pageSize = 20;
                                     });
                                 }
                             });
-                        } else {
+                    } else {
                             // TCP/UDP代理：直接创建location项，不包含匹配路径
                             addEditLocation();
                             const locationItems = configSection.querySelectorAll('.location-item');
@@ -1480,7 +1480,7 @@ const pageSize = 20;
                             const port = parseInt(backendRow.querySelector('.backend-port').value);
                             const weight = parseInt(backendRow.querySelector('.backend-weight').value) || 1;
                             
-                            if (address && port) {
+                if (address && port) {
                                 allBackends.push({
                                     backend_address: address,
                                     backend_port: port,
@@ -1954,7 +1954,7 @@ const pageSize = 20;
             addButton.type = 'button';
             addButton.className = 'btn btn-primary btn-sm';
             addButton.textContent = '添加';
-            addButton.style.marginTop = '8px';
+            addButton.style.cssText = 'display: inline-block !important; visibility: visible !important; opacity: 1 !important; background-color: #4CAF50 !important; color: white !important; padding: 8px 16px !important; min-width: 80px !important; height: 36px !important; border: 2px solid #4CAF50 !important; border-radius: 4px !important; font-size: 14px !important; font-weight: bold !important; cursor: pointer !important; margin-top: 8px !important;';
             addButton.onclick = function() { addRule(listId); };
             rulesList.appendChild(addButton);
         }
@@ -1972,7 +1972,7 @@ const pageSize = 20;
                         if (existingAddButton && existingAddButton.textContent === '添加') {
                             existingAddButton.remove();
                         }
-                        ruleItem.remove();
+                ruleItem.remove();
                         // 在最后一个rule-item下面重新添加"添加"按钮
                         const lastRuleItem = rulesList.querySelector('.rule-item:last-child');
                         if (lastRuleItem) {
@@ -1980,12 +1980,12 @@ const pageSize = 20;
                             addButton.type = 'button';
                             addButton.className = 'btn btn-primary btn-sm';
                             addButton.textContent = '添加';
-                            addButton.style.marginTop = '8px';
+                            addButton.style.cssText = 'display: inline-block !important; visibility: visible !important; opacity: 1 !important; background-color: #4CAF50 !important; color: white !important; padding: 8px 16px !important; min-width: 80px !important; height: 36px !important; border: 2px solid #4CAF50 !important; border-radius: 4px !important; font-size: 14px !important; font-weight: bold !important; cursor: pointer !important; margin-top: 8px !important;';
                             const listId = rulesList.id;
                             addButton.onclick = function() { addRule(listId); };
                             rulesList.appendChild(addButton);
                         }
-                        // 更新所有规则条目的选择框（移除已删除的规则）
+                // 更新所有规则条目的选择框（移除已删除的规则）
                         updateAllRuleSelects(rulesList.id);
                     } else {
                         // 至少保留一条规则

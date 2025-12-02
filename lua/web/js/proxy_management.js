@@ -155,11 +155,7 @@ const pageSize = 20;
                         <input type="number" placeholder="端口" class="backend-port" min="1" max="65535">
                         <button type="button" class="btn-add" onclick="addBackend()" title="添加后端服务器">+</button>
                     </div>
-                    <div class="input-with-add" style="display: ${proxyType === 'http' ? 'flex' : 'none'};">
-                        <input type="text" placeholder="目标路径：/PATH" class="backend-path" title="目标路径：/PATH">
-                        <button type="button" class="btn-add" onclick="addBackend()" title="添加后端服务器">+</button>
-                    </div>
-                    <div class="input-with-add">
+                    <div class="input-with-add input-weight">
                         <input type="number" placeholder="权重" class="backend-weight" value="1" min="1">
                         <button type="button" class="btn-add" onclick="addBackend()" title="添加后端服务器">+</button>
                     </div>
@@ -270,11 +266,7 @@ const pageSize = 20;
                         <input type="number" placeholder="端口" class="backend-port" min="1" max="65535">
                         <button type="button" class="btn-add" onclick="addBackend()" title="添加后端服务器">+</button>
                     </div>
-                    <div class="input-with-add" style="display: ${proxyType === 'http' ? 'flex' : 'none'};">
-                        <input type="text" placeholder="目标路径：/PATH" class="backend-path" title="目标路径：/PATH">
-                        <button type="button" class="btn-add" onclick="addBackend()" title="添加后端服务器">+</button>
-                    </div>
-                    <div class="input-with-add">
+                    <div class="input-with-add input-weight">
                         <input type="number" placeholder="权重" class="backend-weight" value="1" min="1">
                         <button type="button" class="btn-add" onclick="addBackend()" title="添加后端服务器">+</button>
                     </div>
@@ -812,24 +804,17 @@ const pageSize = 20;
                             });
                         }
                         
-                        // 收集后端服务器
+                        // 收集后端服务器（不再收集backend-path，因为location_paths的backend_path优先级更高）
                         const address = item.querySelector('.backend-address')?.value;
                         const port = item.querySelector('.backend-port')?.value;
                         const weight = item.querySelector('.backend-weight')?.value || '1';
-                        const backendPathField = item.querySelector('.backend-path');
-                        const backendPath = backendPathField ? backendPathField.value.trim() : '';
                         
                         if (address && port) {
-                            const backend = {
+                            backends.push({
                                 backend_address: address,
                                 backend_port: parseInt(port),
                                 weight: parseInt(weight) || 1
-                            };
-                            // HTTP/HTTPS代理时，如果有路径，添加到后端配置中
-                            if (proxyData.proxy_type === 'http' && backendPath) {
-                                backend.backend_path = backendPath;
-                            }
-                            backends.push(backend);
+                            });
                         }
                     });
                 }
@@ -1348,13 +1333,6 @@ const pageSize = 20;
                     </div>
                 ` : '';
                 
-                const backendPathWrapper = proxyType === 'http' ? `
-                    <div class="input-with-add">
-                        <input type="text" placeholder="目标路径：/PATH" class="backend-path" title="目标路径：/PATH">
-                        <button type="button" class="btn-add" onclick="addBackend()" title="添加后端服务器">+</button>
-                    </div>
-                ` : '';
-                
                 configItemsList.innerHTML = `
                     <div class="config-item">
                         <div class="config-item-row">
@@ -1367,8 +1345,7 @@ const pageSize = 20;
                                 <input type="number" placeholder="端口" class="backend-port" min="1" max="65535">
                                 <button type="button" class="btn-add" onclick="addBackend()" title="添加后端服务器">+</button>
                             </div>
-                            ${backendPathWrapper}
-                            <div class="input-with-add">
+                            <div class="input-with-add input-weight">
                                 <input type="number" placeholder="权重" class="backend-weight" value="1" min="1">
                                 <button type="button" class="btn-add" onclick="addBackend()" title="添加后端服务器">+</button>
                             </div>

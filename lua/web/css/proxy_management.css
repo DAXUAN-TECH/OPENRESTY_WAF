@@ -422,6 +422,13 @@
             min-width: 120px;
         }
         
+        /* 权重输入框固定宽度 */
+        .input-with-add.input-weight {
+            flex: 0 0 80px;
+            min-width: 80px;
+            max-width: 80px;
+        }
+        
         .input-with-add input {
             width: 100%;
             padding: 6px 10px;

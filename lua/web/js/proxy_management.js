@@ -1924,6 +1924,12 @@ const pageSize = 20;
             const rulesList = document.getElementById(listId);
             if (!rulesList) return;
             
+            // 移除现有的添加按钮（如果存在）
+            const existingAddButton = rulesList.querySelector('button.btn-primary.btn-sm');
+            if (existingAddButton && existingAddButton.textContent === '添加') {
+                existingAddButton.remove();
+            }
+            
             const ruleItem = document.createElement('div');
             ruleItem.className = 'rule-item';
             ruleItem.innerHTML = `
@@ -1943,7 +1949,7 @@ const pageSize = 20;
             `;
             rulesList.appendChild(ruleItem);
             
-            // 在每个rule-item下面添加"添加"按钮
+            // 在最后一个rule-item下面添加"添加"按钮
             const addButton = document.createElement('button');
             addButton.type = 'button';
             addButton.className = 'btn btn-primary btn-sm';
@@ -1961,12 +1967,24 @@ const pageSize = 20;
                 if (rulesList) {
                     const ruleItems = rulesList.querySelectorAll('.rule-item');
                     if (ruleItems.length > 1) {
-                        // 删除rule-item下面的添加按钮（如果存在）
-                        const nextSibling = ruleItem.nextSibling;
-                        if (nextSibling && nextSibling.tagName === 'BUTTON' && nextSibling.textContent === '添加') {
-                            nextSibling.remove();
+                        // 移除现有的添加按钮（如果存在）
+                        const existingAddButton = rulesList.querySelector('button.btn-primary.btn-sm');
+                        if (existingAddButton && existingAddButton.textContent === '添加') {
+                            existingAddButton.remove();
                         }
                         ruleItem.remove();
+                        // 在最后一个rule-item下面重新添加"添加"按钮
+                        const lastRuleItem = rulesList.querySelector('.rule-item:last-child');
+                        if (lastRuleItem) {
+                            const addButton = document.createElement('button');
+                            addButton.type = 'button';
+                            addButton.className = 'btn btn-primary btn-sm';
+                            addButton.textContent = '添加';
+                            addButton.style.marginTop = '8px';
+                            const listId = rulesList.id;
+                            addButton.onclick = function() { addRule(listId); };
+                            rulesList.appendChild(addButton);
+                        }
                         // 更新所有规则条目的选择框（移除已删除的规则）
                         updateAllRuleSelects(rulesList.id);
                     } else {
@@ -1976,11 +1994,6 @@ const pageSize = 20;
                         });
                     }
                 } else {
-                    // 删除rule-item下面的添加按钮（如果存在）
-                    const nextSibling = ruleItem.nextSibling;
-                    if (nextSibling && nextSibling.tagName === 'BUTTON' && nextSibling.textContent === '添加') {
-                        nextSibling.remove();
-                    }
                     ruleItem.remove();
                     // 更新所有规则条目的选择框（移除已删除的规则）
                     updateAllRuleSelects('rules-list');

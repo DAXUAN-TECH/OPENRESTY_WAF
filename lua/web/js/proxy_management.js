@@ -127,44 +127,57 @@ const pageSize = 20;
             if (!configSection) return;
             
             const proxyType = document.getElementById('create-proxy-type').value;
-            const item = document.createElement('div');
-            item.className = 'config-item-row';
             
             let locationPathWrapper = '';
             let locationBackendPathWrapper = '';
             if (proxyType === 'http') {
-                locationPathWrapper = `
-                    <div class="input-with-add">
-                        <input type="text" placeholder="匹配路径：/PATH" class="location-path-input" title="匹配路径：/PATH">
-                        <button type="button" class="btn-add" onclick="addLocationPath()" title="添加路径匹配">+</button>
-                    </div>
+                const locationPathDiv = document.createElement('div');
+                locationPathDiv.className = 'input-with-add';
+                locationPathDiv.innerHTML = `
+                    <input type="text" placeholder="匹配路径：/PATH" class="location-path-input" title="匹配路径：/PATH">
+                    <button type="button" class="btn-add" onclick="addLocationPath()" title="添加路径匹配">+</button>
                 `;
-                locationBackendPathWrapper = `
-                    <div class="input-with-add">
-                        <input type="text" placeholder="目标路径：/PATH（可选）" class="location-backend-path-input" title="目标路径：/PATH（可选）">
-                        <button type="button" class="btn-add" onclick="addLocationPath()" title="添加路径匹配">+</button>
-                    </div>
+                configSection.appendChild(locationPathDiv);
+                
+                const locationBackendPathDiv = document.createElement('div');
+                locationBackendPathDiv.className = 'input-with-add';
+                locationBackendPathDiv.innerHTML = `
+                    <input type="text" placeholder="目标路径：/PATH（可选）" class="location-backend-path-input" title="目标路径：/PATH（可选）">
+                    <button type="button" class="btn-add" onclick="addLocationPath()" title="添加路径匹配">+</button>
                 `;
+                configSection.appendChild(locationBackendPathDiv);
             }
             
-            item.innerHTML = `
-                ${locationPathWrapper}
-                <div class="input-with-add">
-                    <input type="text" placeholder="IP地址" class="backend-address">
-                    <button type="button" class="btn-add" onclick="addBackend()" title="添加后端服务器">+</button>
-                </div>
-                <div class="input-with-add">
-                    <input type="number" placeholder="端口" class="backend-port" min="1" max="65535">
-                    <button type="button" class="btn-add" onclick="addBackend()" title="添加后端服务器">+</button>
-                </div>
-                ${locationBackendPathWrapper}
-                <div class="input-with-add input-weight">
-                    <input type="number" placeholder="权重" class="backend-weight" value="1" min="1">
-                    <button type="button" class="btn-add" onclick="addBackend()" title="添加后端服务器">+</button>
-                </div>
-                <button type="button" class="btn btn-danger btn-sm" onclick="removeConfigItem(this)">删除</button>
+            const addressDiv = document.createElement('div');
+            addressDiv.className = 'input-with-add';
+            addressDiv.innerHTML = `
+                <input type="text" placeholder="IP地址" class="backend-address">
+                <button type="button" class="btn-add" onclick="addBackend()" title="添加后端服务器">+</button>
             `;
-            configSection.appendChild(item);
+            configSection.appendChild(addressDiv);
+            
+            const portDiv = document.createElement('div');
+            portDiv.className = 'input-with-add';
+            portDiv.innerHTML = `
+                <input type="number" placeholder="端口" class="backend-port" min="1" max="65535">
+                <button type="button" class="btn-add" onclick="addBackend()" title="添加后端服务器">+</button>
+            `;
+            configSection.appendChild(portDiv);
+            
+            const weightDiv = document.createElement('div');
+            weightDiv.className = 'input-with-add input-weight';
+            weightDiv.innerHTML = `
+                <input type="number" placeholder="权重" class="backend-weight" value="1" min="1">
+                <button type="button" class="btn-add" onclick="addBackend()" title="添加后端服务器">+</button>
+            `;
+            configSection.appendChild(weightDiv);
+            
+            const deleteBtn = document.createElement('button');
+            deleteBtn.type = 'button';
+            deleteBtn.className = 'btn btn-danger btn-sm';
+            deleteBtn.textContent = '删除';
+            deleteBtn.onclick = function() { removeConfigItem(this); };
+            configSection.appendChild(deleteBtn);
         }
         
         // 删除后端服务器（保留用于向后兼容）
@@ -240,57 +253,99 @@ const pageSize = 20;
             if (!configSection) return;
             
             const proxyType = document.getElementById('create-proxy-type').value;
-            const item = document.createElement('div');
-            item.className = 'config-item-row';
             
-            let locationPathWrapper = '';
-            let locationBackendPathWrapper = '';
             if (proxyType === 'http') {
-                locationPathWrapper = `
-                    <div class="input-with-add">
-                        <input type="text" placeholder="匹配路径：/PATH" class="location-path-input" title="匹配路径：/PATH">
-                        <button type="button" class="btn-add" onclick="addLocationPath()" title="添加路径匹配">+</button>
-                    </div>
+                const locationPathDiv = document.createElement('div');
+                locationPathDiv.className = 'input-with-add';
+                locationPathDiv.innerHTML = `
+                    <input type="text" placeholder="匹配路径：/PATH" class="location-path-input" title="匹配路径：/PATH">
+                    <button type="button" class="btn-add" onclick="addLocationPath()" title="添加路径匹配">+</button>
                 `;
-                locationBackendPathWrapper = `
-                    <div class="input-with-add">
-                        <input type="text" placeholder="目标路径：/PATH（可选）" class="location-backend-path-input" title="目标路径：/PATH（可选）">
-                        <button type="button" class="btn-add" onclick="addLocationPath()" title="添加路径匹配">+</button>
-                    </div>
+                configSection.appendChild(locationPathDiv);
+                
+                const locationBackendPathDiv = document.createElement('div');
+                locationBackendPathDiv.className = 'input-with-add';
+                locationBackendPathDiv.innerHTML = `
+                    <input type="text" placeholder="目标路径：/PATH（可选）" class="location-backend-path-input" title="目标路径：/PATH（可选）">
+                    <button type="button" class="btn-add" onclick="addLocationPath()" title="添加路径匹配">+</button>
                 `;
+                configSection.appendChild(locationBackendPathDiv);
             }
             
-            item.innerHTML = `
-                ${locationPathWrapper}
-                <div class="input-with-add">
-                    <input type="text" placeholder="IP地址" class="backend-address">
-                    <button type="button" class="btn-add" onclick="addBackend()" title="添加后端服务器">+</button>
-                </div>
-                <div class="input-with-add">
-                    <input type="number" placeholder="端口" class="backend-port" min="1" max="65535">
-                    <button type="button" class="btn-add" onclick="addBackend()" title="添加后端服务器">+</button>
-                </div>
-                ${locationBackendPathWrapper}
-                <div class="input-with-add input-weight">
-                    <input type="number" placeholder="权重" class="backend-weight" value="1" min="1">
-                    <button type="button" class="btn-add" onclick="addBackend()" title="添加后端服务器">+</button>
-                </div>
-                <button type="button" class="btn btn-danger btn-sm" onclick="removeConfigItem(this)">删除</button>
+            const addressDiv = document.createElement('div');
+            addressDiv.className = 'input-with-add';
+            addressDiv.innerHTML = `
+                <input type="text" placeholder="IP地址" class="backend-address">
+                <button type="button" class="btn-add" onclick="addBackend()" title="添加后端服务器">+</button>
             `;
-            configSection.appendChild(item);
+            configSection.appendChild(addressDiv);
+            
+            const portDiv = document.createElement('div');
+            portDiv.className = 'input-with-add';
+            portDiv.innerHTML = `
+                <input type="number" placeholder="端口" class="backend-port" min="1" max="65535">
+                <button type="button" class="btn-add" onclick="addBackend()" title="添加后端服务器">+</button>
+            `;
+            configSection.appendChild(portDiv);
+            
+            const weightDiv = document.createElement('div');
+            weightDiv.className = 'input-with-add input-weight';
+            weightDiv.innerHTML = `
+                <input type="number" placeholder="权重" class="backend-weight" value="1" min="1">
+                <button type="button" class="btn-add" onclick="addBackend()" title="添加后端服务器">+</button>
+            `;
+            configSection.appendChild(weightDiv);
+            
+            const deleteBtn = document.createElement('button');
+            deleteBtn.type = 'button';
+            deleteBtn.className = 'btn btn-danger btn-sm';
+            deleteBtn.textContent = '删除';
+            deleteBtn.onclick = function() { removeConfigItem(this); };
+            configSection.appendChild(deleteBtn);
         }
         
         // 删除配置项
         function removeConfigItem(button) {
-            const item = button.closest('.config-item-row');
-            if (item) {
-                const configSection = document.querySelector('#upstream-fields .config-section');
-                if (configSection && configSection.querySelectorAll('.config-item-row').length > 1) {
-                    item.remove();
+            const configSection = document.querySelector('#upstream-fields .config-section');
+            if (!configSection) return;
+            
+            // 找到当前配置项的所有元素（从匹配路径到删除按钮）
+            // 一个配置项包含：匹配路径（可选）、IP地址、端口、目标路径（可选）、权重、删除按钮
+            
+            const allElements = Array.from(configSection.children);
+            const deleteIndex = allElements.indexOf(button);
+            
+            if (deleteIndex === -1) return;
+            
+            // 向前查找，找到这个配置项的开始位置
+            // 一个配置项通常包含：匹配路径（可选）、IP、端口、目标路径（可选）、权重、删除按钮
+            let startIndex = deleteIndex;
+            
+            // 向前查找，直到找到不属于这个配置项的元素
+            while (startIndex >= 0) {
+                const element = allElements[startIndex];
+                if (element.classList.contains('input-with-add') || element === button) {
+                    startIndex--;
                 } else {
-                    // 至少保留一个
-                    alert('至少需要保留一个配置项');
+                    startIndex++;
+                    break;
                 }
+            }
+            
+            if (startIndex < 0) startIndex = 0;
+            
+            // 删除从startIndex到deleteIndex的所有元素
+            for (let i = deleteIndex; i >= startIndex; i--) {
+                if (allElements[i]) {
+                    allElements[i].remove();
+                }
+            }
+            
+            // 检查是否还有配置项
+            const remainingInputs = configSection.querySelectorAll('.input-with-add');
+            if (remainingInputs.length === 0) {
+                // 如果没有配置项了，重新初始化一个
+                addBackend();
             }
         }
         
@@ -794,11 +849,51 @@ const pageSize = 20;
                 const backends = [];
                 
                 if (configSection) {
-                    const configItems = configSection.querySelectorAll('.config-item-row');
-                    configItems.forEach(item => {
+                    // 由于没有config-item-row，需要通过删除按钮来识别配置项
+                    // 每个配置项的结构：匹配路径（可选）、IP、端口、目标路径（可选）、权重、删除按钮
+                    const allChildren = Array.from(configSection.children);
+                    const deleteButtons = allChildren.filter(child => child.classList.contains('btn') && child.classList.contains('btn-danger'));
+                    
+                    deleteButtons.forEach(deleteBtn => {
+                        const deleteIndex = allChildren.indexOf(deleteBtn);
+                        if (deleteIndex === -1) return;
+                        
+                        // 向前查找，找到这个配置项的所有元素
+                        const configElements = [];
+                        for (let i = deleteIndex - 1; i >= 0; i--) {
+                            const element = allChildren[i];
+                            if (element.classList.contains('input-with-add') || element.classList.contains('btn')) {
+                                configElements.unshift(element);
+                            } else {
+                                break;
+                            }
+                        }
+                        configElements.push(deleteBtn);
+                        
+                        // 从配置元素中提取数据
+                        let locationPathInput = null;
+                        let locationBackendPathInput = null;
+                        let addressInput = null;
+                        let portInput = null;
+                        let weightInput = null;
+                        
+                        configElements.forEach(element => {
+                            if (element.classList.contains('input-with-add')) {
+                                const locationPath = element.querySelector('.location-path-input');
+                                const locationBackendPath = element.querySelector('.location-backend-path-input');
+                                const address = element.querySelector('.backend-address');
+                                const port = element.querySelector('.backend-port');
+                                const weight = element.querySelector('.backend-weight');
+                                
+                                if (locationPath) locationPathInput = locationPath;
+                                if (locationBackendPath) locationBackendPathInput = locationBackendPath;
+                                if (address) addressInput = address;
+                                if (port) portInput = port;
+                                if (weight) weightInput = weight;
+                            }
+                        });
+                        
                         // 收集路径匹配
-                        const locationPathInput = item.querySelector('.location-path-input');
-                        const locationBackendPathInput = item.querySelector('.location-backend-path-input');
                         if (locationPathInput && locationPathInput.value.trim()) {
                             const locationPath = locationPathInput.value.trim();
                             const backendPath = locationBackendPathInput ? locationBackendPathInput.value.trim() : '';
@@ -808,16 +903,12 @@ const pageSize = 20;
                             });
                         }
                         
-                        // 收集后端服务器（不再收集backend-path，因为location_paths的backend_path优先级更高）
-                        const address = item.querySelector('.backend-address')?.value;
-                        const port = item.querySelector('.backend-port')?.value;
-                        const weight = item.querySelector('.backend-weight')?.value || '1';
-                        
-                        if (address && port) {
+                        // 收集后端服务器
+                        if (addressInput && addressInput.value && portInput && portInput.value) {
                             backends.push({
-                                backend_address: address,
-                                backend_port: parseInt(port),
-                                weight: parseInt(weight) || 1
+                                backend_address: addressInput.value,
+                                backend_port: parseInt(portInput.value),
+                                weight: parseInt(weightInput?.value || '1') || 1
                             });
                         }
                     });
@@ -844,17 +935,47 @@ const pageSize = 20;
                 const backends = [];
                 
                 if (configSection) {
-                    const configItems = configSection.querySelectorAll('.config-item-row');
-                    configItems.forEach(item => {
-                        const address = item.querySelector('.backend-address')?.value;
-                        const port = item.querySelector('.backend-port')?.value;
-                        const weight = item.querySelector('.backend-weight')?.value || '1';
+                    // 由于没有config-item-row，需要通过删除按钮来识别配置项
+                    const allChildren = Array.from(configSection.children);
+                    const deleteButtons = allChildren.filter(child => child.classList.contains('btn') && child.classList.contains('btn-danger'));
+                    
+                    deleteButtons.forEach(deleteBtn => {
+                        const deleteIndex = allChildren.indexOf(deleteBtn);
+                        if (deleteIndex === -1) return;
                         
-                        if (address && port) {
+                        // 向前查找，找到这个配置项的所有元素
+                        const configElements = [];
+                        for (let i = deleteIndex - 1; i >= 0; i--) {
+                            const element = allChildren[i];
+                            if (element.classList.contains('input-with-add') || element.classList.contains('btn')) {
+                                configElements.unshift(element);
+                            } else {
+                                break;
+                            }
+                        }
+                        
+                        // 从配置元素中提取数据
+                        let addressInput = null;
+                        let portInput = null;
+                        let weightInput = null;
+                        
+                        configElements.forEach(element => {
+                            if (element.classList.contains('input-with-add')) {
+                                const address = element.querySelector('.backend-address');
+                                const port = element.querySelector('.backend-port');
+                                const weight = element.querySelector('.backend-weight');
+                                
+                                if (address) addressInput = address;
+                                if (port) portInput = port;
+                                if (weight) weightInput = weight;
+                            }
+                        });
+                        
+                        if (addressInput && addressInput.value && portInput && portInput.value) {
                             backends.push({
-                                backend_address: address,
-                                backend_port: parseInt(port),
-                                weight: parseInt(weight) || 1
+                                backend_address: addressInput.value,
+                                backend_port: parseInt(portInput.value),
+                                weight: parseInt(weightInput?.value || '1') || 1
                             });
                         }
                     });
@@ -1340,25 +1461,56 @@ const pageSize = 20;
                     </div>
                 ` : '';
                 
-                configSection.innerHTML = `
-                    <div class="config-item-row">
-                        ${locationPathWrapper}
-                        <div class="input-with-add">
-                            <input type="text" placeholder="IP地址" class="backend-address">
-                            <button type="button" class="btn-add" onclick="addBackend()" title="添加后端服务器">+</button>
-                        </div>
-                        <div class="input-with-add">
-                            <input type="number" placeholder="端口" class="backend-port" min="1" max="65535">
-                            <button type="button" class="btn-add" onclick="addBackend()" title="添加后端服务器">+</button>
-                        </div>
-                        ${locationBackendPathWrapper}
-                        <div class="input-with-add input-weight">
-                            <input type="number" placeholder="权重" class="backend-weight" value="1" min="1">
-                            <button type="button" class="btn-add" onclick="addBackend()" title="添加后端服务器">+</button>
-                        </div>
-                        <button type="button" class="btn btn-danger btn-sm" onclick="removeConfigItem(this)">删除</button>
-                    </div>
+                configSection.innerHTML = '';
+                
+                if (proxyType === 'http') {
+                    const locationPathDiv = document.createElement('div');
+                    locationPathDiv.className = 'input-with-add';
+                    locationPathDiv.innerHTML = `
+                        <input type="text" placeholder="匹配路径：/PATH" class="location-path-input" title="匹配路径：/PATH">
+                        <button type="button" class="btn-add" onclick="addLocationPath()" title="添加路径匹配">+</button>
+                    `;
+                    configSection.appendChild(locationPathDiv);
+                    
+                    const locationBackendPathDiv = document.createElement('div');
+                    locationBackendPathDiv.className = 'input-with-add';
+                    locationBackendPathDiv.innerHTML = `
+                        <input type="text" placeholder="目标路径：/PATH（可选）" class="location-backend-path-input" title="目标路径：/PATH（可选）">
+                        <button type="button" class="btn-add" onclick="addLocationPath()" title="添加路径匹配">+</button>
+                    `;
+                    configSection.appendChild(locationBackendPathDiv);
+                }
+                
+                const addressDiv = document.createElement('div');
+                addressDiv.className = 'input-with-add';
+                addressDiv.innerHTML = `
+                    <input type="text" placeholder="IP地址" class="backend-address">
+                    <button type="button" class="btn-add" onclick="addBackend()" title="添加后端服务器">+</button>
                 `;
+                configSection.appendChild(addressDiv);
+                
+                const portDiv = document.createElement('div');
+                portDiv.className = 'input-with-add';
+                portDiv.innerHTML = `
+                    <input type="number" placeholder="端口" class="backend-port" min="1" max="65535">
+                    <button type="button" class="btn-add" onclick="addBackend()" title="添加后端服务器">+</button>
+                `;
+                configSection.appendChild(portDiv);
+                
+                const weightDiv = document.createElement('div');
+                weightDiv.className = 'input-with-add input-weight';
+                weightDiv.innerHTML = `
+                    <input type="number" placeholder="权重" class="backend-weight" value="1" min="1">
+                    <button type="button" class="btn-add" onclick="addBackend()" title="添加后端服务器">+</button>
+                `;
+                configSection.appendChild(weightDiv);
+                
+                const deleteBtn = document.createElement('button');
+                deleteBtn.type = 'button';
+                deleteBtn.className = 'btn btn-danger btn-sm';
+                deleteBtn.textContent = '删除';
+                deleteBtn.onclick = function() { removeConfigItem(this); };
+                configSection.appendChild(deleteBtn);
             }
             toggleProxyFields();
             // 清空规则列表，只保留一个空规则条目

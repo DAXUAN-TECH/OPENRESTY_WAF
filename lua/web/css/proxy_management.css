@@ -448,15 +448,18 @@
         
         .rule-item-actions {
             display: flex !important;
-            gap: 8px;
+            gap: 8px !important;
             align-items: center;
             flex-shrink: 0 !important;
+            flex-grow: 0 !important;
             min-width: 120px !important;
-            position: relative;
-            z-index: 10;
+            max-width: none !important;
+            position: relative !important;
+            z-index: 10 !important;
             visibility: visible !important;
             opacity: 1 !important;
-            width: auto;
+            width: auto !important;
+            margin-left: auto !important;
         }
         
         /* 防护规则添加按钮样式，确保可见 */
@@ -945,7 +948,8 @@
             flex-wrap: nowrap !important;
             overflow: visible !important;
             min-width: 0;
-            width: 100%;
+            width: 100% !important;
+            max-width: none !important;
             box-sizing: border-box;
         }
         

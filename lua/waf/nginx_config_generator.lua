@@ -196,83 +196,163 @@ local function generate_http_server_config(proxy, upstream_name, backends)
     config = config .. "    }\n"
     
     -- Location配置
-    config = config .. "\n    location " .. escape_nginx_value(proxy.location_path or "/") .. " {\n"
-    
-    -- 代理到后端
-    -- 注意：只支持upstream类型（多个后端服务器），使用upstream配置
-    if upstream_name then
-        -- 检查后端服务器是否有路径配置
-        local backend_path = nil
-        if backends and #backends > 0 then
-            -- 检查所有后端服务器的路径是否相同
-            -- 处理可能的空字符串、nil、cjson.null等情况
-            local first_path = backends[1].backend_path
-            if first_path == nil or first_path == cjson.null then
-                first_path = nil
-            elseif type(first_path) == "string" and first_path:match("^%s*$") then
-                -- 空字符串或只包含空白字符
-                first_path = nil
-            end
-            
-            local all_same = true
-            if first_path and first_path ~= "" then
-                for i = 2, #backends do
-                    local path = backends[i].backend_path
-                    if path == nil or path == cjson.null then
-                        path = nil
-                    elseif type(path) == "string" and path:match("^%s*$") then
-                        path = nil
+    -- 如果location_paths有值，生成多个location块；否则使用单个location块（向后兼容）
+    local location_paths = proxy.location_paths
+    if location_paths and type(location_paths) == "table" and #location_paths > 0 then
+        -- 生成多个location块
+        for _, loc in ipairs(location_paths) do
+            if loc.location_path and loc.location_path ~= "" then
+                config = config .. "\n    location " .. escape_nginx_value(loc.location_path) .. " {\n"
+                
+                -- 代理到后端
+                if upstream_name then
+                    -- 使用location配置中的backend_path，如果没有则使用后端服务器的backend_path
+                    local backend_path = loc.backend_path
+                    if not backend_path or backend_path == "" then
+                        -- 检查后端服务器是否有路径配置
+                        if backends and #backends > 0 then
+                            local first_path = backends[1].backend_path
+                            if first_path == nil or first_path == cjson.null then
+                                first_path = nil
+                            elseif type(first_path) == "string" and first_path:match("^%s*$") then
+                                first_path = nil
+                            end
+                            
+                            local all_same = true
+                            if first_path and first_path ~= "" then
+                                for i = 2, #backends do
+                                    local path = backends[i].backend_path
+                                    if path == nil or path == cjson.null then
+                                        path = nil
+                                    elseif type(path) == "string" and path:match("^%s*$") then
+                                        path = nil
+                                    end
+                                    if path ~= first_path then
+                                        all_same = false
+                                        break
+                                    end
+                                end
+                                if all_same then
+                                    backend_path = first_path
+                                end
+                            end
+                        end
                     end
-                    if path ~= first_path then
-                        all_same = false
-                        break
+                    
+                    -- 如果后端服务器有路径，在proxy_pass中添加路径
+                    if backend_path and backend_path ~= "" then
+                        config = config .. "        proxy_pass http://" .. upstream_name .. escape_nginx_value(backend_path) .. ";\n"
+                    else
+                        -- 如果后端服务器没有路径，直接代理到根路径
+                        config = config .. "        proxy_pass http://" .. upstream_name .. ";\n"
                     end
+                else
+                    ngx.log(ngx.ERR, "generate_http_config: no upstream config for proxy_id=", proxy.id, ", proxy_name=", proxy.proxy_name)
+                    config = config .. "        # 错误：缺少后端服务器配置\n"
+                    config = config .. "        return 503;\n"
                 end
-                if all_same then
-                    backend_path = first_path
+                
+                -- 请求头设置
+                config = config .. "\n        # 请求头设置\n"
+                config = config .. "        proxy_set_header Host $host;\n"
+                config = config .. "        proxy_set_header X-Real-IP $remote_addr;\n"
+                config = config .. "        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n"
+                config = config .. "        proxy_set_header X-Forwarded-Proto $scheme;\n"
+                config = config .. "        proxy_set_header Connection \"\";\n"
+                
+                -- HTTP版本
+                config = config .. "\n        # HTTP版本\n"
+                config = config .. "        proxy_http_version 1.1;\n"
+                
+                -- 超时设置
+                config = config .. "\n        # 超时设置\n"
+                if proxy.proxy_connect_timeout then
+                    config = config .. "        proxy_connect_timeout " .. proxy.proxy_connect_timeout .. "s;\n"
                 end
+                if proxy.proxy_send_timeout then
+                    config = config .. "        proxy_send_timeout " .. proxy.proxy_send_timeout .. "s;\n"
+                end
+                if proxy.proxy_read_timeout then
+                    config = config .. "        proxy_read_timeout " .. proxy.proxy_read_timeout .. "s;\n"
+                end
+                
+                config = config .. "    }\n"
             end
-        end
-        
-        -- 如果后端服务器有路径，在proxy_pass中添加路径
-        if backend_path and backend_path ~= "" then
-            config = config .. "        proxy_pass http://" .. upstream_name .. escape_nginx_value(backend_path) .. ";\n"
-        else
-            -- 如果后端服务器没有路径，直接代理到根路径
-            config = config .. "        proxy_pass http://" .. upstream_name .. ";\n"
         end
     else
-        -- 如果没有upstream配置，记录错误（不应该发生，因为现在只支持upstream类型）
-        ngx.log(ngx.ERR, "generate_http_config: no upstream config for proxy_id=", proxy.id, ", proxy_name=", proxy.proxy_name)
-        config = config .. "        # 错误：缺少后端服务器配置\n"
-        config = config .. "        return 503;\n"
+        -- 向后兼容：使用单个location块
+        config = config .. "\n    location " .. escape_nginx_value(proxy.location_path or "/") .. " {\n"
+        
+        -- 代理到后端
+        if upstream_name then
+            -- 检查后端服务器是否有路径配置
+            local backend_path = nil
+            if backends and #backends > 0 then
+                local first_path = backends[1].backend_path
+                if first_path == nil or first_path == cjson.null then
+                    first_path = nil
+                elseif type(first_path) == "string" and first_path:match("^%s*$") then
+                    first_path = nil
+                end
+                
+                local all_same = true
+                if first_path and first_path ~= "" then
+                    for i = 2, #backends do
+                        local path = backends[i].backend_path
+                        if path == nil or path == cjson.null then
+                            path = nil
+                        elseif type(path) == "string" and path:match("^%s*$") then
+                            path = nil
+                        end
+                        if path ~= first_path then
+                            all_same = false
+                            break
+                        end
+                    end
+                    if all_same then
+                        backend_path = first_path
+                    end
+                end
+            end
+            
+            -- 如果后端服务器有路径，在proxy_pass中添加路径
+            if backend_path and backend_path ~= "" then
+                config = config .. "        proxy_pass http://" .. upstream_name .. escape_nginx_value(backend_path) .. ";\n"
+            else
+                config = config .. "        proxy_pass http://" .. upstream_name .. ";\n"
+            end
+        else
+            ngx.log(ngx.ERR, "generate_http_config: no upstream config for proxy_id=", proxy.id, ", proxy_name=", proxy.proxy_name)
+            config = config .. "        # 错误：缺少后端服务器配置\n"
+            config = config .. "        return 503;\n"
+        end
+        
+        -- 请求头设置
+        config = config .. "\n        # 请求头设置\n"
+        config = config .. "        proxy_set_header Host $host;\n"
+        config = config .. "        proxy_set_header X-Real-IP $remote_addr;\n"
+        config = config .. "        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n"
+        config = config .. "        proxy_set_header X-Forwarded-Proto $scheme;\n"
+        config = config .. "        proxy_set_header Connection \"\";\n"
+        
+        -- HTTP版本
+        config = config .. "\n        # HTTP版本\n"
+        config = config .. "        proxy_http_version 1.1;\n"
+        
+        -- 超时设置
+        config = config .. "\n        # 超时设置\n"
+        if proxy.proxy_connect_timeout then
+            config = config .. "        proxy_connect_timeout " .. proxy.proxy_connect_timeout .. "s;\n"
+        end
+        if proxy.proxy_send_timeout then
+            config = config .. "        proxy_send_timeout " .. proxy.proxy_send_timeout .. "s;\n"
+        end
+        if proxy.proxy_read_timeout then
+            config = config .. "        proxy_read_timeout " .. proxy.proxy_read_timeout .. "s;\n"
+        end
+        
+        config = config .. "    }\n"
     end
-    
-    -- 请求头设置
-    config = config .. "\n        # 请求头设置\n"
-    config = config .. "        proxy_set_header Host $host;\n"
-    config = config .. "        proxy_set_header X-Real-IP $remote_addr;\n"
-    config = config .. "        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n"
-    config = config .. "        proxy_set_header X-Forwarded-Proto $scheme;\n"
-    config = config .. "        proxy_set_header Connection \"\";\n"
-    
-    -- HTTP版本
-    config = config .. "\n        # HTTP版本\n"
-    config = config .. "        proxy_http_version 1.1;\n"
-    
-    -- 超时设置
-    config = config .. "\n        # 超时设置\n"
-    if proxy.proxy_connect_timeout then
-        config = config .. "        proxy_connect_timeout " .. proxy.proxy_connect_timeout .. "s;\n"
-    end
-    if proxy.proxy_send_timeout then
-        config = config .. "        proxy_send_timeout " .. proxy.proxy_send_timeout .. "s;\n"
-    end
-    if proxy.proxy_read_timeout then
-        config = config .. "        proxy_read_timeout " .. proxy.proxy_read_timeout .. "s;\n"
-    end
-    
-    config = config .. "    }\n"
     
     -- 禁止访问隐藏文件
     config = config .. "\n    # 禁止访问隐藏文件\n"
@@ -573,7 +653,7 @@ function _M.generate_all_configs()
     -- 注意：只查询 status = 1 的代理，禁用的代理（status = 0）不会被查询
     -- 禁用的代理的配置文件会在 cleanup_orphaned_files() 中被清理
         local sql = [[
-            SELECT id, proxy_name, proxy_type, listen_port, listen_address, server_name, location_path,
+            SELECT id, proxy_name, proxy_type, listen_port, listen_address, server_name, location_path, location_paths,
                backend_type, load_balance,
                ssl_enable, ssl_cert_path, ssl_key_path,
                proxy_timeout, proxy_connect_timeout, proxy_send_timeout, proxy_read_timeout,
@@ -621,6 +701,18 @@ function _M.generate_all_configs()
     -- 为每个代理生成独立的配置文件
     for _, proxy in ipairs(proxies) do
         active_proxy_ids[proxy.id] = true
+        
+        -- 解析location_paths JSON字段
+        if proxy.location_paths then
+            local ok, decoded_location_paths = pcall(cjson.decode, proxy.location_paths)
+            if ok and decoded_location_paths and type(decoded_location_paths) == "table" then
+                proxy.location_paths = decoded_location_paths
+            else
+                proxy.location_paths = nil
+            end
+        else
+            proxy.location_paths = nil
+        end
         
         -- 查询后端服务器并生成upstream配置
         -- 注意：只支持upstream类型（多个后端服务器），不再支持single类型

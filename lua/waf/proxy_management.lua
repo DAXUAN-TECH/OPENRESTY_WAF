@@ -212,13 +212,13 @@ function _M.create_proxy(proxy_data)
     -- 构建SQL
     local sql = [[
         INSERT INTO waf_proxy_configs 
-        (proxy_name, proxy_type, listen_port, listen_address, server_name, location_path,
+        (proxy_name, proxy_type, listen_port, listen_address, server_name, location_path, location_paths,
          backend_type, load_balance,
          health_check_enable, health_check_interval, health_check_timeout,
          max_fails, fail_timeout, proxy_timeout, proxy_connect_timeout,
          proxy_send_timeout, proxy_read_timeout, ssl_enable, ssl_cert_path, ssl_key_path,
          description, ip_rule_ids, status)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ]]
     
     local listen_address = proxy_data.listen_address or "0.0.0.0"
@@ -228,6 +228,21 @@ function _M.create_proxy(proxy_data)
         server_name = null_to_nil(proxy_data.server_name)
     end
     local location_path = proxy_data.location_path or "/"
+    
+    -- 处理location_paths（多个location_path配置）
+    local location_paths_json = nil
+    if proxy_data.proxy_type == "http" and proxy_data.location_paths then
+        -- 验证location_paths格式
+        if type(proxy_data.location_paths) == "table" and #proxy_data.location_paths > 0 then
+            -- 验证每个location_path配置
+            for i, loc in ipairs(proxy_data.location_paths) do
+                if not loc.location_path or loc.location_path == "" then
+                    return nil, "location_paths[" .. i .. "]的location_path不能为空"
+                end
+            end
+            location_paths_json = cjson.encode(proxy_data.location_paths)
+        end
+    end
     -- 只支持多个后端（负载均衡），不再支持单个后端
     local backend_type = "upstream"
     local load_balance = proxy_data.load_balance or "round_robin"
@@ -260,6 +275,7 @@ function _M.create_proxy(proxy_data)
         listen_address,
         server_name,
         location_path,
+        location_paths_json,
         backend_type,
         load_balance,
         health_check_enable,
@@ -364,7 +380,7 @@ function _M.list_proxies(params)
     -- 查询列表（LEFT JOIN规则表获取规则名称和类型）
     local offset = (page - 1) * page_size
     local sql = string.format([[
-        SELECT p.id, p.proxy_name, p.proxy_type, p.listen_port, p.listen_address, p.server_name, p.location_path,
+        SELECT p.id, p.proxy_name, p.proxy_type, p.listen_port, p.listen_address, p.server_name, p.location_path, p.location_paths,
                p.backend_type, p.load_balance,
                p.health_check_enable, p.health_check_interval, p.health_check_timeout,
                p.max_fails, p.fail_timeout, p.proxy_timeout, p.proxy_connect_timeout,
@@ -397,6 +413,19 @@ function _M.list_proxies(params)
             end
         else
             proxy.ip_rule_ids = nil
+        end
+        
+        -- 从location_paths字段读取location_paths数组（JSON格式）
+        if proxy.location_paths then
+            local cjson = require "cjson"
+            local ok, decoded_location_paths = pcall(cjson.decode, proxy.location_paths)
+            if ok and decoded_location_paths and type(decoded_location_paths) == "table" then
+                proxy.location_paths = decoded_location_paths
+            else
+                proxy.location_paths = nil
+            end
+        else
+            proxy.location_paths = nil
         end
         
         -- 根据ip_rule_ids查询规则信息（用于列表显示）
@@ -450,7 +479,7 @@ function _M.get_proxy(proxy_id)
     end
     
     local sql = [[
-        SELECT id, proxy_name, proxy_type, listen_port, listen_address, server_name, location_path,
+        SELECT id, proxy_name, proxy_type, listen_port, listen_address, server_name, location_path, location_paths,
                backend_type, load_balance,
                health_check_enable, health_check_interval, health_check_timeout,
                max_fails, fail_timeout, proxy_timeout, proxy_connect_timeout,
@@ -484,6 +513,19 @@ function _M.get_proxy(proxy_id)
         end
     else
         proxy.ip_rule_ids = nil
+    end
+    
+    -- 从location_paths字段读取location_paths数组（JSON格式）
+    if proxy.location_paths then
+        local cjson = require "cjson"
+        local ok, decoded_location_paths = pcall(cjson.decode, proxy.location_paths)
+        if ok and decoded_location_paths and type(decoded_location_paths) == "table" then
+            proxy.location_paths = decoded_location_paths
+        else
+            proxy.location_paths = nil
+        end
+    else
+        proxy.location_paths = nil
     end
     
     -- 查询后端服务器（只支持upstream类型）
@@ -677,7 +719,7 @@ function _M.update_proxy(proxy_id, proxy_data)
     local update_params = {}
     
     local fields_to_update = {
-        "proxy_name", "proxy_type", "listen_port", "listen_address", "server_name", "location_path",
+        "proxy_name", "proxy_type", "listen_port", "listen_address", "server_name", "location_path", "location_paths",
         "backend_type", "load_balance",
         "health_check_enable", "health_check_interval", "health_check_timeout",
         "max_fails", "fail_timeout", "proxy_timeout", "proxy_connect_timeout",
@@ -698,6 +740,19 @@ function _M.update_proxy(proxy_id, proxy_data)
                 end
             elseif field == "ssl_cert_path" or field == "ssl_key_path" or field == "description" then
                 table.insert(update_params, null_to_nil(proxy_data[field]))
+            elseif field == "location_paths" then
+                -- location_paths字段需要特殊处理：如果是HTTP代理且有值，转换为JSON；否则为nil
+                if proxy.proxy_type == "http" and proxy_data[field] and type(proxy_data[field]) == "table" and #proxy_data[field] > 0 then
+                    -- 验证每个location_path配置
+                    for i, loc in ipairs(proxy_data[field]) do
+                        if not loc.location_path or loc.location_path == "" then
+                            return nil, "location_paths[" .. i .. "]的location_path不能为空"
+                        end
+                    end
+                    table.insert(update_params, cjson.encode(proxy_data[field]))
+                else
+                    table.insert(update_params, nil)
+                end
             else
                 table.insert(update_params, proxy_data[field])
             end

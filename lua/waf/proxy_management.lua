@@ -455,11 +455,11 @@ function _M.list_proxies(params)
         
         if proxy.backend_type == "upstream" then
             local backends_sql = [[
-                SELECT id, backend_address, backend_port, backend_path, weight, max_fails, fail_timeout,
+                SELECT id, location_path, backend_address, backend_port, backend_path, weight, max_fails, fail_timeout,
                        backup, down, status
                 FROM waf_proxy_backends
                 WHERE proxy_id = ? AND status = 1
-                ORDER BY weight DESC, id ASC
+                ORDER BY location_path, weight DESC, id ASC
             ]]
             local backends, _ = mysql_pool.query(backends_sql, proxy.id)
             proxy.backends = backends or {}

@@ -445,6 +445,13 @@
             flex-shrink: 0;
         }
         
+        .rule-item-actions {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            flex-shrink: 0;
+        }
+        
         .btn-icon {
             width: 28px;
             height: 28px;
@@ -667,8 +674,8 @@
         
         /* 监听端口输入框宽度（确保数字不被遮挡，居中显示） */
         #create-proxy-modal #create-listen-port {
-            width: 150px !important;
-            max-width: 150px !important;
+            width: 100px !important;
+            max-width: 100px !important;
         }
         
         /* TCP/UDP代理：监听端口输入框同代理名称输入框一样宽 */
@@ -683,18 +690,18 @@
             max-width: 250px !important;
         }
         
-        /* 负载均衡算法输入框宽度（在form-row中，50%宽度） */
+        /* 负载均衡算法输入框宽度（在form-row中，增加宽度） */
         #create-proxy-modal .form-row #create-load-balance {
-            width: 50% !important;
-            max-width: 300px !important;
+            width: 60% !important;
+            max-width: 350px !important;
         }
         
-        /* 连接超时、发送超时、读取超时输入框宽度（在form-row中） */
+        /* 连接超时、发送超时、读取超时输入框宽度（在form-row中，减少宽度） */
         #create-proxy-modal .form-row #create-proxy-connect-timeout,
         #create-proxy-modal .form-row #create-proxy-send-timeout,
         #create-proxy-modal .form-row #create-proxy-read-timeout {
-            width: 50% !important;
-            max-width: 300px !important;
+            width: 30% !important;
+            max-width: 150px !important;
         }
         
         /* 防护规则筛选框样式 */
@@ -740,8 +747,8 @@
         /* 监听端口输入框缩短二分之一（在form-row中） */
         #edit-modal #edit-listen-port,
         #edit-modal #edit-tcp-udp-listen-port {
-            width: 50% !important;
-            max-width: 250px !important;
+            width: 100px !important;
+            max-width: 100px !important;
         }
         
         /* 创建代理HTTP：监听域名、监听端口、路径匹配、监听地址在同一水平线，间距一致 */
@@ -785,18 +792,18 @@
             max-width: 250px !important;
         }
         
-        /* 负载均衡算法输入框宽度（在form-row中，50%宽度） */
+        /* 负载均衡算法输入框宽度（在form-row中，增加宽度） */
         #edit-modal .form-row #edit-load-balance {
-            width: 50% !important;
-            max-width: 300px !important;
+            width: 60% !important;
+            max-width: 350px !important;
         }
         
-        /* 连接超时、发送超时、读取超时输入框宽度（在form-row中） */
+        /* 连接超时、发送超时、读取超时输入框宽度（在form-row中，减少宽度） */
         #edit-modal .form-row #edit-proxy-connect-timeout,
         #edit-modal .form-row #edit-proxy-send-timeout,
         #edit-modal .form-row #edit-proxy-read-timeout {
-            width: 50% !important;
-            max-width: 300px !important;
+            width: 30% !important;
+            max-width: 150px !important;
         }
         
         /* 分页样式 */

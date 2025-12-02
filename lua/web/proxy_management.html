@@ -202,10 +202,12 @@
                                 <select class="rule-id">
                                     <option value="">请选择规则条目</option>
                                 </select>
-                                <button type="button" class="btn btn-danger btn-sm" onclick="removeRule(this)">删除</button>
+                                <div class="rule-item-actions">
+                                    <button type="button" class="btn-icon btn-add-icon" onclick="addRule()" title="添加防护规则">+</button>
+                                    <button type="button" class="btn-icon btn-remove-icon" onclick="removeRule(this)" title="删除">−</button>
+                                </div>
                             </div>
                         </div>
-                        <button type="button" class="btn btn-primary btn-sm" onclick="addRule()">添加防护规则</button>
                         <small style="color: #666; display: block; margin-top: 8px; font-size: 12px;">注意：IP白名单和IP黑名单不能同时存在，地域白名单和地域黑名单不能同时存在</small>
                     </div>
                 </div>
@@ -272,24 +274,8 @@
                 
                 <div class="form-group" id="edit-upstream-fields">
                     <label>后端服务器配置</label>
-                    <div class="config-section">
-                        <div class="config-subsection" id="edit-location-paths-fields" style="display: none;">
-                            <label class="subsection-label">路径匹配（HTTP/HTTPS代理）</label>
-                            <div class="location-paths-list" id="edit-location-paths-list">
-                                <div class="location-path-item">
-                                    <input type="text" placeholder="匹配路径：/PATH" class="location-path-input" title="匹配路径：/PATH">
-                                    <input type="text" placeholder="目标路径：/PATH（可选）" class="location-backend-path-input" title="目标路径：/PATH（可选）">
-                                    <button type="button" class="btn btn-danger btn-sm" onclick="removeEditLocationPath(this)">删除</button>
-                                </div>
-                            </div>
-                            <button type="button" class="btn btn-primary btn-sm" onclick="addEditLocationPath()">添加路径匹配</button>
-                        </div>
-                        
-                        <div class="config-subsection">
-                            <label class="subsection-label">后端服务器列表</label>
-                            <div class="backends-list" id="edit-backends-list"></div>
-                            <button type="button" class="btn btn-primary btn-sm" onclick="addEditBackend()">添加后端服务器</button>
-                        </div>
+                    <div class="config-section" id="edit-config-section">
+                        <!-- location项将动态添加到这里 -->
                     </div>
                 </div>
                 
@@ -327,7 +313,6 @@
                         <div class="rules-list" id="edit-rules-list">
                             <!-- 规则条目将动态添加到这里 -->
                         </div>
-                        <button type="button" class="btn btn-primary btn-sm" onclick="addEditRule()">添加防护规则</button>
                         <small style="color: #666; display: block; margin-top: 8px; font-size: 12px;">注意：IP白名单和IP黑名单不能同时存在，地域白名单和地域黑名单不能同时存在</small>
                     </div>
                 </div>

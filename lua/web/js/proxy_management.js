@@ -407,19 +407,146 @@ const pageSize = 20;
             removeConfigItem(button);
         }
         
-        // 添加编辑路径匹配
-        function addEditLocationPath() {
-            const list = document.getElementById('edit-location-paths-list');
-            if (!list) return;
+        // 添加编辑location（用于编辑代理配置）
+        function addEditLocation() {
+            const configSection = document.getElementById('edit-config-section');
+            if (!configSection) return;
             
-            const item = document.createElement('div');
-            item.className = 'location-path-item';
-            item.innerHTML = `
-                <input type="text" placeholder="匹配路径：/PATH" class="location-path-input" title="匹配路径：/PATH">
-                <input type="text" placeholder="目标路径：/PATH（可选）" class="location-backend-path-input" title="目标路径：/PATH（可选）">
-                <button type="button" class="btn btn-danger" onclick="removeEditLocationPath(this)">删除</button>
+            const displayValue = document.getElementById('edit-proxy-type').value;
+            const proxyType = currentEditingProxy ? currentEditingProxy.proxy_type : getProxyTypeFromName(displayValue);
+            
+            const locationItem = document.createElement('div');
+            locationItem.className = 'location-item';
+            
+            let locationPathHtml = '';
+            if (proxyType === 'http') {
+                locationPathHtml = `
+                    <div class="input-with-add location-path-input-wrapper">
+                        <input type="text" placeholder="匹配路径：/PATH" class="location-path-input" title="匹配路径：/PATH">
+                    </div>
+                `;
+            }
+            
+            locationItem.innerHTML = `
+                <div class="location-content">
+                    <div class="location-path-section">
+                        ${locationPathHtml}
+                    </div>
+                    <div class="location-divider"></div>
+                    <div class="location-backends">
+                        <div class="backend-row">
+                            <div class="input-with-add address-input">
+                                <input type="text" placeholder="IP地址" class="backend-address">
+                            </div>
+                            <div class="input-with-add port-input">
+                                <input type="number" placeholder="端口" class="backend-port" min="1" max="65535">
+                            </div>
+                            ${proxyType === 'http' ? `
+                            <div class="input-with-add location-backend-path-input-wrapper">
+                                <input type="text" placeholder="目标路径：/PATH（可选）" class="location-backend-path-input" title="目标路径：/PATH（可选）">
+                            </div>
+                            ` : ''}
+                            <div class="input-with-add input-weight">
+                                <input type="number" placeholder="权重" class="backend-weight" value="1" min="1">
+                            </div>
+                            <div class="backend-row-actions">
+                                <button type="button" class="btn-icon btn-add-icon" onclick="addEditBackendRow(this)" title="添加">+</button>
+                                <button type="button" class="btn-icon btn-remove-icon" onclick="removeEditBackendRow(this)" title="删除">−</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="location-actions">
+                    <button type="button" class="btn-icon btn-add-icon" onclick="addEditLocation()" title="添加location">+</button>
+                    <button type="button" class="btn-icon btn-remove-icon" onclick="removeEditLocation(this)" title="删除location">−</button>
+                </div>
             `;
-            list.appendChild(item);
+            configSection.appendChild(locationItem);
+        }
+        
+        // 添加编辑后端行（用于编辑代理配置）
+        function addEditBackendRow(button) {
+            const locationBackends = button ? button.closest('.location-backends') : null;
+            if (!locationBackends) {
+                // 如果没有button，可能是直接传入locationBackends元素
+                locationBackends = button;
+            }
+            if (!locationBackends) return;
+            
+            const displayValue = document.getElementById('edit-proxy-type').value;
+            const proxyType = currentEditingProxy ? currentEditingProxy.proxy_type : getProxyTypeFromName(displayValue);
+            const backendRow = document.createElement('div');
+            backendRow.className = 'backend-row';
+            
+            backendRow.innerHTML = `
+                <div class="input-with-add address-input">
+                    <input type="text" placeholder="IP地址" class="backend-address">
+                </div>
+                <div class="input-with-add port-input">
+                    <input type="number" placeholder="端口" class="backend-port" min="1" max="65535">
+                </div>
+                ${proxyType === 'http' ? `
+                <div class="input-with-add location-backend-path-input-wrapper">
+                    <input type="text" placeholder="目标路径：/PATH（可选）" class="location-backend-path-input" title="目标路径：/PATH（可选）">
+                </div>
+                ` : ''}
+                <div class="input-with-add input-weight">
+                    <input type="number" placeholder="权重" class="backend-weight" value="1" min="1">
+                </div>
+                <div class="backend-row-actions">
+                    <button type="button" class="btn-icon btn-add-icon" onclick="addEditBackendRow(this)" title="添加">+</button>
+                    <button type="button" class="btn-icon btn-remove-icon" onclick="removeEditBackendRow(this)" title="删除">−</button>
+                </div>
+            `;
+            
+            // 在当前backend-row后面插入新的backend-row
+            if (button && typeof button.closest === 'function') {
+                const currentBackendRow = button.closest('.backend-row');
+                if (currentBackendRow) {
+                    currentBackendRow.parentNode.insertBefore(backendRow, currentBackendRow.nextSibling);
+                } else {
+                    locationBackends.appendChild(backendRow);
+                }
+            } else {
+                locationBackends.appendChild(backendRow);
+            }
+        }
+        
+        // 删除编辑后端行
+        function removeEditBackendRow(button) {
+            const backendRow = button.closest('.backend-row');
+            if (backendRow) {
+                const locationBackends = backendRow.closest('.location-backends');
+                const backendRows = locationBackends.querySelectorAll('.backend-row');
+                if (backendRows.length > 1) {
+                    backendRow.remove();
+                } else {
+                    showConfirmModal('提示', '至少需要保留一个后端服务器配置', function() {
+                        closeConfirmModal();
+                    });
+                }
+            }
+        }
+        
+        // 删除编辑location
+        function removeEditLocation(button) {
+            const locationItem = button.closest('.location-item');
+            if (locationItem) {
+                const configSection = document.getElementById('edit-config-section');
+                const locationItems = configSection.querySelectorAll('.location-item');
+                if (locationItems.length > 1) {
+                    locationItem.remove();
+                } else {
+                    showConfirmModal('提示', '至少需要保留一个location', function() {
+                        closeConfirmModal();
+                    });
+                }
+            }
+        }
+        
+        // 添加编辑路径匹配（保留用于向后兼容）
+        function addEditLocationPath() {
+            // 不再使用，保留用于向后兼容
         }
         
         // 删除编辑路径匹配
@@ -1108,11 +1235,6 @@ const pageSize = 20;
                     if (proxy.proxy_type === 'http') {
                         document.getElementById('edit-http-fields').style.display = 'flex';
                         document.getElementById('edit-tcp-udp-fields').style.display = 'none';
-                        // 显示路径匹配列表
-                        const editLocationPathsFields = document.getElementById('edit-location-paths-fields');
-                        if (editLocationPathsFields) {
-                            editLocationPathsFields.style.display = 'block';
-                        }
                         // 为显示的字段添加required属性
                         editListenPort.setAttribute('required', 'required');
                         // 为隐藏的字段移除required属性
@@ -1120,11 +1242,6 @@ const pageSize = 20;
                     } else if (proxy.proxy_type === 'tcp' || proxy.proxy_type === 'udp') {
                         document.getElementById('edit-http-fields').style.display = 'none';
                         document.getElementById('edit-tcp-udp-fields').style.display = 'flex';
-                        // 隐藏路径匹配列表
-                        const editLocationPathsFields = document.getElementById('edit-location-paths-fields');
-                        if (editLocationPathsFields) {
-                            editLocationPathsFields.style.display = 'none';
-                        }
                         // 为隐藏的字段移除required属性
                         editListenPort.removeAttribute('required');
                         // 为显示的字段添加required属性
@@ -1137,88 +1254,82 @@ const pageSize = 20;
                         editTcpUdpListenPort.removeAttribute('required');
                     }
                     
-                    // 加载路径匹配列表（HTTP代理）
-                    if (proxy.proxy_type === 'http') {
-                        const locationPathsList = document.getElementById('edit-location-paths-list');
-                        if (locationPathsList) {
-                            locationPathsList.innerHTML = '';
-                            // 如果location_paths有值，使用它；否则使用location_path（向后兼容）
+                    // 加载后端服务器配置（使用新的location结构）
+                    const configSection = document.getElementById('edit-config-section');
+                    if (configSection) {
+                        configSection.innerHTML = '';
+                        
+                        if (proxy.proxy_type === 'http') {
+                            // HTTP代理：根据location_paths创建location项
+                            let locationPaths = [];
                             if (proxy.location_paths && Array.isArray(proxy.location_paths) && proxy.location_paths.length > 0) {
-                                proxy.location_paths.forEach(loc => {
-                                    addEditLocationPath();
-                                    const items = locationPathsList.querySelectorAll('.location-path-item');
-                                    const lastItem = items[items.length - 1];
-                                    lastItem.querySelector('.location-path-input').value = loc.location_path || '';
-                                    const backendPathInput = lastItem.querySelector('.location-backend-path-input');
-                                    if (backendPathInput) {
-                                        backendPathInput.value = loc.backend_path || '';
-                                    }
-                                });
+                                locationPaths = proxy.location_paths;
                             } else {
                                 // 向后兼容：如果没有location_paths，使用location_path
-                                addEditLocationPath();
-                                const items = locationPathsList.querySelectorAll('.location-path-item');
-                                const lastItem = items[items.length - 1];
-                                lastItem.querySelector('.location-path-input').value = proxy.location_path || '/';
+                                locationPaths = [{
+                                    location_path: proxy.location_path || '/',
+                                    backend_path: ''
+                                }];
+                            }
+                            
+                            // 为每个location_path创建一个location项
+                            locationPaths.forEach((loc, locIndex) => {
+                                addEditLocation();
+                                const locationItems = configSection.querySelectorAll('.location-item');
+                                const lastLocationItem = locationItems[locationItems.length - 1];
+                                
+                                // 设置匹配路径
+                                const locationPathInput = lastLocationItem.querySelector('.location-path-input');
+                                if (locationPathInput) {
+                                    locationPathInput.value = loc.location_path || '/';
+                                }
+                                
+                                // 设置后端服务器
+                                const locationBackends = lastLocationItem.querySelector('.location-backends');
+                                if (locationBackends && proxy.backends && proxy.backends.length > 0) {
+                                    // 清空默认的后端行
+                                    locationBackends.innerHTML = '';
+                                    
+                                    proxy.backends.forEach((backend, backendIndex) => {
+                                        addEditBackendRow(locationBackends);
+                                        const backendRows = locationBackends.querySelectorAll('.backend-row');
+                                        const lastBackendRow = backendRows[backendRows.length - 1];
+                                        
+                                        lastBackendRow.querySelector('.backend-address').value = backend.backend_address;
+                                        lastBackendRow.querySelector('.backend-port').value = backend.backend_port;
+                                        lastBackendRow.querySelector('.backend-weight').value = backend.weight || 1;
+                                        
+                                        // 设置目标路径（如果存在）
+                                        const targetPathInput = lastBackendRow.querySelector('.location-backend-path-input');
+                                        if (targetPathInput) {
+                                            targetPathInput.value = loc.backend_path || backend.backend_path || '';
+                                        }
+                                    });
+                                }
+                            });
+                        } else {
+                            // TCP/UDP代理：直接创建location项，不包含匹配路径
+                            addEditLocation();
+                            const locationItems = configSection.querySelectorAll('.location-item');
+                            const lastLocationItem = locationItems[locationItems.length - 1];
+                            
+                            // 设置后端服务器
+                            const locationBackends = lastLocationItem.querySelector('.location-backends');
+                            if (locationBackends && proxy.backends && proxy.backends.length > 0) {
+                                // 清空默认的后端行
+                                locationBackends.innerHTML = '';
+                                
+                                proxy.backends.forEach((backend) => {
+                                    addEditBackendRow(locationBackends);
+                                    const backendRows = locationBackends.querySelectorAll('.backend-row');
+                                    const lastBackendRow = backendRows[backendRows.length - 1];
+                                    
+                                    lastBackendRow.querySelector('.backend-address').value = backend.backend_address;
+                                    lastBackendRow.querySelector('.backend-port').value = backend.backend_port;
+                                    lastBackendRow.querySelector('.backend-weight').value = backend.weight || 1;
+                                });
                             }
                         }
-                    }
-                    
-                    // 加载后端服务器列表
-                    const list = document.getElementById('edit-backends-list');
-                    list.innerHTML = '';
-                    if (proxy.backends && proxy.backends.length > 0) {
-                        proxy.backends.forEach((backend, index) => {
-                            addEditBackend();
-                            const items = list.querySelectorAll('.backend-item');
-                            const lastItem = items[items.length - 1];
-                            lastItem.querySelector('.backend-address').value = backend.backend_address;
-                            lastItem.querySelector('.backend-port').value = backend.backend_port;
-                            lastItem.querySelector('.backend-weight').value = backend.weight || 1;
-                            // 设置代理路径字段（如果存在）
-                            const pathField = lastItem.querySelector('.backend-path');
-                            if (pathField && backend.backend_path) {
-                                pathField.value = backend.backend_path;
-                            }
-                        });
-                    } else {
-                        // 如果没有后端服务器，至少添加一个空的后端项
-                        addEditBackend();
-                        // 设置路径匹配字段
-                        const firstItem = list.querySelector('.backend-item');
-                        if (firstItem && proxy.proxy_type === 'http') {
-                            const locationPathField = firstItem.querySelector('.backend-location-path');
-                            if (locationPathField) {
-                                locationPathField.value = proxy.location_path || '/';
-                            }
-                        }
-                    }
-                    
-                    // 根据代理类型显示/隐藏路径字段
-                    if (proxy.proxy_type === 'http') {
-                        // 隐藏后端服务器列表中的匹配路径字段，使用独立的路径匹配列表
-                        document.querySelectorAll('#edit-backends-list .backend-location-path').forEach(field => {
-                            field.style.display = 'none';
-                        });
-                        document.querySelectorAll('#edit-backends-list .backend-path').forEach(field => {
-                            field.style.display = 'block';
-                            field.addEventListener('input', checkEditBackendPaths);
-                        });
-                        // 重新检查代理路径一致性
-                        checkEditBackendPaths();
-                    } else {
-                        document.querySelectorAll('#edit-backends-list .backend-path').forEach(field => {
-                            field.style.display = 'none';
-                        });
-                        // 移除错误提示
-                        const errorDiv = document.getElementById('edit-backends-list')?.querySelector('.backend-path-error');
-                        if (errorDiv) {
-                            errorDiv.remove();
-                        }
-                        // 移除错误样式
-                        document.querySelectorAll('#edit-backends-list .backend-path').forEach(field => {
-                            field.classList.remove('backend-path-error');
-                        });
                     }
                     
                     const editModal = document.getElementById('edit-modal');
@@ -1282,17 +1393,53 @@ const pageSize = 20;
                 const serverName = document.getElementById('edit-server-name').value.trim();
                 proxyData.server_name = serverName || null;
                 
-                // 收集路径匹配列表
-                const locationPathsList = document.getElementById('edit-location-paths-list');
+                // 收集路径匹配列表（从新的location结构）
+                const configSection = document.getElementById('edit-config-section');
                 const locationPaths = [];
-                if (locationPathsList) {
-                    const items = locationPathsList.querySelectorAll('.location-path-item');
-                    items.forEach(item => {
-                        const locationPathInput = item.querySelector('.location-path-input');
-                        const backendPathInput = item.querySelector('.location-backend-path-input');
-                        if (locationPathInput && locationPathInput.value.trim()) {
-                            const locationPath = locationPathInput.value.trim();
-                            const backendPath = backendPathInput ? backendPathInput.value.trim() : '';
+                const allBackends = [];
+                
+                if (configSection) {
+                    const locationItems = configSection.querySelectorAll('.location-item');
+                    locationItems.forEach(locationItem => {
+                        const locationPathInput = locationItem.querySelector('.location-path-input');
+                        const locationBackends = locationItem.querySelector('.location-backends');
+                        
+                        let locationPath = '/';
+                        if (locationPathInput) {
+                            locationPath = locationPathInput.value.trim() || '/';
+                        }
+                        
+                        // 收集该location下的所有后端服务器
+                        const backendRows = locationBackends ? locationBackends.querySelectorAll('.backend-row') : [];
+                        backendRows.forEach(backendRow => {
+                            const address = backendRow.querySelector('.backend-address').value.trim();
+                            const port = parseInt(backendRow.querySelector('.backend-port').value);
+                            const weight = parseInt(backendRow.querySelector('.backend-weight').value) || 1;
+                            const targetPathInput = backendRow.querySelector('.location-backend-path-input');
+                            const targetPath = targetPathInput ? targetPathInput.value.trim() : '';
+                            
+                            if (address && port) {
+                                allBackends.push({
+                                    backend_address: address,
+                                    backend_port: port,
+                                    weight: weight,
+                                    backend_path: targetPath || null
+                                });
+                            }
+                        });
+                        
+                        // 收集location_paths（HTTP代理）
+                        if (locationPathInput && locationPath !== '/') {
+                            // 获取该location下第一个后端行的目标路径
+                            const firstBackendRow = backendRows[0];
+                            let backendPath = '';
+                            if (firstBackendRow) {
+                                const targetPathInput = firstBackendRow.querySelector('.location-backend-path-input');
+                                if (targetPathInput) {
+                                    backendPath = targetPathInput.value.trim();
+                                }
+                            }
+                            
                             locationPaths.push({
                                 location_path: locationPath,
                                 backend_path: backendPath || null
@@ -1311,32 +1458,42 @@ const pageSize = 20;
                     proxyData.location_path = '/';
                     proxyData.location_paths = null;
                 }
+                
+                proxyData.backends = allBackends;
             } else if (proxyType === 'tcp' || proxyType === 'udp') {
                 proxyData.listen_port = parseInt(document.getElementById('edit-tcp-udp-listen-port').value);
                 proxyData.listen_address = document.getElementById('edit-tcp-udp-listen-address').value;
                 // TCP/UDP 代理不支持监听域名，设置为 null
                 proxyData.server_name = null;
+            } else if (proxyType === 'tcp' || proxyType === 'udp') {
+                // TCP/UDP代理：从新的location结构收集后端服务器
+                const configSection = document.getElementById('edit-config-section');
+                const allBackends = [];
+                
+                if (configSection) {
+                    const locationItems = configSection.querySelectorAll('.location-item');
+                    locationItems.forEach(locationItem => {
+                        const locationBackends = locationItem.querySelector('.location-backends');
+                        const backendRows = locationBackends ? locationBackends.querySelectorAll('.backend-row') : [];
+                        backendRows.forEach(backendRow => {
+                            const address = backendRow.querySelector('.backend-address').value.trim();
+                            const port = parseInt(backendRow.querySelector('.backend-port').value);
+                            const weight = parseInt(backendRow.querySelector('.backend-weight').value) || 1;
+                            
+                            if (address && port) {
+                                allBackends.push({
+                                    backend_address: address,
+                                    backend_port: port,
+                                    weight: weight
+                                });
+                            }
+                        });
+                    });
+                }
+                
+                proxyData.backends = allBackends;
             }
             
-            // 获取后端服务器列表
-            const backends = [];
-            const backendItems = document.querySelectorAll('#edit-backends-list .backend-item');
-            backendItems.forEach(item => {
-                const address = item.querySelector('.backend-address').value;
-                const port = parseInt(item.querySelector('.backend-port').value);
-                const weight = parseInt(item.querySelector('.backend-weight').value) || 1;
-                const pathField = item.querySelector('.backend-path');
-                const path = pathField ? pathField.value.trim() : '';
-                if (address && port) {
-                    const backend = {backend_address: address, backend_port: port, weight: weight};
-                    // HTTP/HTTPS代理时，如果有路径，添加到后端配置中
-                    if (proxyType === 'http' && path) {
-                        backend.backend_path = path;
-                    }
-                    backends.push(backend);
-                }
-            });
-            proxyData.backends = backends;
             proxyData.load_balance = document.getElementById('edit-load-balance').value;
             
             try {
@@ -1780,7 +1937,10 @@ const pageSize = 20;
                 <select class="rule-id">
                     <option value="">请选择规则条目</option>
                 </select>
-                <button type="button" class="btn btn-danger" onclick="removeRule(this)">删除</button>
+                <div class="rule-item-actions">
+                    <button type="button" class="btn-icon btn-add-icon" onclick="addRule('${listId}')" title="添加防护规则">+</button>
+                    <button type="button" class="btn-icon btn-remove-icon" onclick="removeRule(this)" title="删除">−</button>
+                </div>
             `;
             rulesList.appendChild(ruleItem);
         }

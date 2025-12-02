@@ -452,16 +452,23 @@ function _M.list_proxies(params)
                 local ordered_rules = {}
                 for _, rule_id in ipairs(rule_ids) do
                     if rule_map[rule_id] then
-                        table.insert(ordered_rules, rule_map[rule_id])
+                        -- 创建一个新的table，确保字段名正确（避免MySQL返回的字段名问题）
+                        local rule_item = {
+                            id = rule_map[rule_id].id,
+                            rule_name = rule_map[rule_id].rule_name,
+                            rule_type = rule_map[rule_id].rule_type
+                        }
+                        table.insert(ordered_rules, rule_item)
                     end
                 end
-                -- 保存所有规则的详细信息
-                proxy.rules = ordered_rules
-                -- 为了向后兼容，保留第一个规则的名称和类型
+                -- 保存所有规则的详细信息（确保是数组格式）
                 if #ordered_rules > 0 then
+                    proxy.rules = ordered_rules
+                    -- 为了向后兼容，保留第一个规则的名称和类型
                     proxy.rule_name = ordered_rules[1].rule_name
                     proxy.rule_type = ordered_rules[1].rule_type
                 else
+                    proxy.rules = {}
                     proxy.rule_name = nil
                     proxy.rule_type = nil
                 end

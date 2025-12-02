@@ -67,11 +67,14 @@ const pageSize = 20;
             if (proxyType === 'http') {
                 httpFields.style.display = 'flex';
                 tcpUdpFields.style.display = 'none';
-                // 显示路径匹配列表（在config-subsection中）
-                const locationPathsFields = document.getElementById('location-paths-fields');
-                if (locationPathsFields) {
-                    locationPathsFields.style.display = 'block';
-                }
+                // 显示路径匹配输入框
+                document.querySelectorAll('#location-path-input-wrapper, #location-backend-path-input-wrapper').forEach(wrapper => {
+                    wrapper.style.display = 'flex';
+                });
+                // 显示后端路径输入框
+                document.querySelectorAll('#backend-path-input-wrapper').forEach(wrapper => {
+                    wrapper.style.display = 'flex';
+                });
                 // 显示后端服务器配置区域
                 const upstreamFields = document.getElementById('upstream-fields');
                 if (upstreamFields) {
@@ -81,27 +84,20 @@ const pageSize = 20;
                 createListenPort.setAttribute('required', 'required');
                 // 为隐藏的字段移除required属性
                 createTcpUdpListenPort.removeAttribute('required');
-                // 显示所有后端服务器列表中的路径匹配字段和代理路径字段
-                document.querySelectorAll('#backends-list .backend-location-path').forEach(field => {
-                    field.style.display = 'none'; // 隐藏后端服务器列表中的匹配路径字段，使用独立的路径匹配列表
-                });
-                document.querySelectorAll('#backends-list .backend-path').forEach(field => {
-                    field.style.display = 'block';
-                    field.addEventListener('input', checkBackendPaths);
-                });
-                // 重新检查代理路径一致性
-                checkBackendPaths();
                 // 同步监听端口和监听地址的值
                 document.getElementById('create-tcp-udp-listen-port').value = document.getElementById('create-listen-port').value;
                 document.getElementById('create-tcp-udp-listen-address').value = document.getElementById('create-listen-address').value;
             } else if (proxyType === 'tcp' || proxyType === 'udp') {
                 httpFields.style.display = 'none';
                 tcpUdpFields.style.display = 'flex';
-                // 隐藏路径匹配列表（在config-subsection中）
-                const locationPathsFields = document.getElementById('location-paths-fields');
-                if (locationPathsFields) {
-                    locationPathsFields.style.display = 'none';
-                }
+                // 隐藏路径匹配输入框
+                document.querySelectorAll('#location-path-input-wrapper, #location-backend-path-input-wrapper').forEach(wrapper => {
+                    wrapper.style.display = 'none';
+                });
+                // 隐藏后端路径输入框
+                document.querySelectorAll('#backend-path-input-wrapper').forEach(wrapper => {
+                    wrapper.style.display = 'none';
+                });
                 // 显示后端服务器配置区域（TCP/UDP也需要）
                 const upstreamFields = document.getElementById('upstream-fields');
                 if (upstreamFields) {
@@ -111,22 +107,6 @@ const pageSize = 20;
                 createListenPort.removeAttribute('required');
                 // 为显示的字段添加required属性
                 createTcpUdpListenPort.setAttribute('required', 'required');
-                // 隐藏所有后端服务器列表中的路径匹配字段和代理路径字段
-                document.querySelectorAll('#backends-list .backend-location-path').forEach(field => {
-                    field.style.display = 'none';
-                });
-                document.querySelectorAll('#backends-list .backend-path').forEach(field => {
-                    field.style.display = 'none';
-                });
-                // 移除错误提示
-                const errorDiv = document.getElementById('backends-list')?.querySelector('.backend-path-error');
-                if (errorDiv) {
-                    errorDiv.remove();
-                }
-                // 移除错误样式
-                document.querySelectorAll('#backends-list .backend-path').forEach(field => {
-                    field.classList.remove('backend-path-error');
-                });
                 // 同步监听端口和监听地址的值
                 document.getElementById('create-listen-port').value = document.getElementById('create-tcp-udp-listen-port').value;
                 document.getElementById('create-listen-address').value = document.getElementById('create-tcp-udp-listen-address').value;
@@ -141,46 +121,57 @@ const pageSize = 20;
         
         // 切换后端类型相关字段
         
-        // 添加后端服务器
+        // 添加后端服务器配置项
         function addBackend() {
-            const list = document.getElementById('backends-list');
+            const list = document.getElementById('config-items-list');
+            if (!list) return;
+            
             const proxyType = document.getElementById('create-proxy-type').value;
             const item = document.createElement('div');
-            item.className = 'backend-item';
+            item.className = 'config-item';
             
-            // HTTP/HTTPS代理显示路径匹配字段（在IP地址前）和代理路径字段，TCP/UDP代理不显示
-            const locationPathField = proxyType === 'http' 
-                ? '<input type="text" placeholder="匹配路径：/PATH" class="backend-location-path" title="匹配路径：/PATH" >'
-                : '<input type="text" placeholder="匹配路径：/PATH" class="backend-location-path" title="匹配路径：/PATH" style="display: none;">';
-            const backendPathField = proxyType === 'http' 
-                ? '<input type="text" placeholder="目标路径：/PATH" class="backend-path" title="目标路径：/PATH">'
-                : '<input type="text" placeholder="目标路径：/PATH" class="backend-path" title="目标路径：/PATH" style="display: none;">';
+            let locationPathWrapper = '';
+            if (proxyType === 'http') {
+                locationPathWrapper = `
+                    <div class="input-with-add">
+                        <input type="text" placeholder="匹配路径：/PATH" class="location-path-input" title="匹配路径：/PATH">
+                        <button type="button" class="btn-add" onclick="addLocationPath()" title="添加路径匹配">+</button>
+                    </div>
+                    <div class="input-with-add">
+                        <input type="text" placeholder="目标路径：/PATH（可选）" class="location-backend-path-input" title="目标路径：/PATH（可选）">
+                        <button type="button" class="btn-add" onclick="addLocationPath()" title="添加路径匹配">+</button>
+                    </div>
+                `;
+            }
             
             item.innerHTML = `
-                ${locationPathField}
-                <input type="text" placeholder="IP地址" class="backend-address">
-                <input type="number" placeholder="端口" class="backend-port" min="1" max="65535">
-                ${backendPathField}
-                <input type="number" placeholder="权重" class="backend-weight" value="1" min="1">
-                <button type="button" class="btn btn-danger" onclick="removeBackend(this)">删除</button>
+                <div class="config-item-row">
+                    ${locationPathWrapper}
+                    <div class="input-with-add">
+                        <input type="text" placeholder="IP地址" class="backend-address">
+                        <button type="button" class="btn-add" onclick="addBackend()" title="添加后端服务器">+</button>
+                    </div>
+                    <div class="input-with-add">
+                        <input type="number" placeholder="端口" class="backend-port" min="1" max="65535">
+                        <button type="button" class="btn-add" onclick="addBackend()" title="添加后端服务器">+</button>
+                    </div>
+                    <div class="input-with-add" style="display: ${proxyType === 'http' ? 'flex' : 'none'};">
+                        <input type="text" placeholder="目标路径：/PATH" class="backend-path" title="目标路径：/PATH">
+                        <button type="button" class="btn-add" onclick="addBackend()" title="添加后端服务器">+</button>
+                    </div>
+                    <div class="input-with-add">
+                        <input type="number" placeholder="权重" class="backend-weight" value="1" min="1">
+                        <button type="button" class="btn-add" onclick="addBackend()" title="添加后端服务器">+</button>
+                    </div>
+                    <button type="button" class="btn btn-danger btn-sm" onclick="removeConfigItem(this)">删除</button>
+                </div>
             `;
             list.appendChild(item);
-            
-            // 如果是HTTP代理，添加路径输入框的事件监听
-            if (proxyType === 'http') {
-                const locationPathInput = item.querySelector('.backend-location-path');
-                const backendPathInput = item.querySelector('.backend-path');
-                // 路径匹配字段：同步所有后端服务器的路径匹配值
-                if (locationPathInput) {
-                    locationPathInput.addEventListener('input', function() {
-                        syncLocationPaths();
-                    });
-                }
-                // 代理路径字段：检查一致性
-                if (backendPathInput) {
-                    backendPathInput.addEventListener('input', checkBackendPaths);
-                }
-            }
+        }
+        
+        // 删除后端服务器（保留用于向后兼容）
+        function removeBackend(button) {
+            removeConfigItem(button);
         }
         
         function addEditBackend() {
@@ -245,33 +236,71 @@ const pageSize = 20;
             }
         }
         
-        // 添加路径匹配
+        // 添加路径匹配配置项
         function addLocationPath() {
-            const list = document.getElementById('location-paths-list');
+            const list = document.getElementById('config-items-list');
             if (!list) return;
             
+            const proxyType = document.getElementById('create-proxy-type').value;
             const item = document.createElement('div');
-            item.className = 'location-path-item';
+            item.className = 'config-item';
+            
+            let locationPathWrapper = '';
+            if (proxyType === 'http') {
+                locationPathWrapper = `
+                    <div class="input-with-add">
+                        <input type="text" placeholder="匹配路径：/PATH" class="location-path-input" title="匹配路径：/PATH">
+                        <button type="button" class="btn-add" onclick="addLocationPath()" title="添加路径匹配">+</button>
+                    </div>
+                    <div class="input-with-add">
+                        <input type="text" placeholder="目标路径：/PATH（可选）" class="location-backend-path-input" title="目标路径：/PATH（可选）">
+                        <button type="button" class="btn-add" onclick="addLocationPath()" title="添加路径匹配">+</button>
+                    </div>
+                `;
+            }
+            
             item.innerHTML = `
-                <input type="text" placeholder="匹配路径：/PATH" class="location-path-input" title="匹配路径：/PATH">
-                <input type="text" placeholder="目标路径：/PATH（可选）" class="location-backend-path-input" title="目标路径：/PATH（可选）">
-                <button type="button" class="btn btn-danger" onclick="removeLocationPath(this)">删除</button>
+                <div class="config-item-row">
+                    ${locationPathWrapper}
+                    <div class="input-with-add">
+                        <input type="text" placeholder="IP地址" class="backend-address">
+                        <button type="button" class="btn-add" onclick="addBackend()" title="添加后端服务器">+</button>
+                    </div>
+                    <div class="input-with-add">
+                        <input type="number" placeholder="端口" class="backend-port" min="1" max="65535">
+                        <button type="button" class="btn-add" onclick="addBackend()" title="添加后端服务器">+</button>
+                    </div>
+                    <div class="input-with-add" style="display: ${proxyType === 'http' ? 'flex' : 'none'};">
+                        <input type="text" placeholder="目标路径：/PATH" class="backend-path" title="目标路径：/PATH">
+                        <button type="button" class="btn-add" onclick="addBackend()" title="添加后端服务器">+</button>
+                    </div>
+                    <div class="input-with-add">
+                        <input type="number" placeholder="权重" class="backend-weight" value="1" min="1">
+                        <button type="button" class="btn-add" onclick="addBackend()" title="添加后端服务器">+</button>
+                    </div>
+                    <button type="button" class="btn btn-danger btn-sm" onclick="removeConfigItem(this)">删除</button>
+                </div>
             `;
             list.appendChild(item);
         }
         
-        // 删除路径匹配
-        function removeLocationPath(button) {
-            const item = button.closest('.location-path-item');
+        // 删除配置项
+        function removeConfigItem(button) {
+            const item = button.closest('.config-item');
             if (item) {
-                const list = document.getElementById('location-paths-list');
+                const list = document.getElementById('config-items-list');
                 if (list && list.children.length > 1) {
                     item.remove();
                 } else {
                     // 至少保留一个
-                    alert('至少需要保留一个路径匹配');
+                    alert('至少需要保留一个配置项');
                 }
             }
+        }
+        
+        // 删除路径匹配（保留用于向后兼容）
+        function removeLocationPath(button) {
+            removeConfigItem(button);
         }
         
         // 添加编辑路径匹配
@@ -763,21 +792,44 @@ const pageSize = 20;
                 const serverName = document.getElementById('create-server-name').value.trim();
                 proxyData.server_name = serverName || null;
                 
-                // 收集路径匹配列表
-                const locationPathsList = document.getElementById('location-paths-list');
+                // 从融合的配置列表中收集路径匹配和后端服务器数据
+                const configItemsList = document.getElementById('config-items-list');
                 const locationPaths = [];
-                if (locationPathsList) {
-                    const items = locationPathsList.querySelectorAll('.location-path-item');
-                    items.forEach(item => {
+                const backends = [];
+                
+                if (configItemsList) {
+                    const configItems = configItemsList.querySelectorAll('.config-item');
+                    configItems.forEach(item => {
+                        // 收集路径匹配
                         const locationPathInput = item.querySelector('.location-path-input');
-                        const backendPathInput = item.querySelector('.location-backend-path-input');
+                        const locationBackendPathInput = item.querySelector('.location-backend-path-input');
                         if (locationPathInput && locationPathInput.value.trim()) {
                             const locationPath = locationPathInput.value.trim();
-                            const backendPath = backendPathInput ? backendPathInput.value.trim() : '';
+                            const backendPath = locationBackendPathInput ? locationBackendPathInput.value.trim() : '';
                             locationPaths.push({
                                 location_path: locationPath,
                                 backend_path: backendPath || null
                             });
+                        }
+                        
+                        // 收集后端服务器
+                        const address = item.querySelector('.backend-address')?.value;
+                        const port = item.querySelector('.backend-port')?.value;
+                        const weight = item.querySelector('.backend-weight')?.value || '1';
+                        const backendPathField = item.querySelector('.backend-path');
+                        const backendPath = backendPathField ? backendPathField.value.trim() : '';
+                        
+                        if (address && port) {
+                            const backend = {
+                                backend_address: address,
+                                backend_port: parseInt(port),
+                                weight: parseInt(weight) || 1
+                            };
+                            // HTTP/HTTPS代理时，如果有路径，添加到后端配置中
+                            if (proxyData.proxy_type === 'http' && backendPath) {
+                                backend.backend_path = backendPath;
+                            }
+                            backends.push(backend);
                         }
                     });
                 }
@@ -792,30 +844,35 @@ const pageSize = 20;
                     proxyData.location_path = '/';
                     proxyData.location_paths = null;
                 }
+                
+                proxyData.backends = backends;
             } else if (proxyData.proxy_type === 'tcp' || proxyData.proxy_type === 'udp') {
                 // TCP/UDP 代理不支持监听域名，设置为 null
                 proxyData.server_name = null;
-            }
-            
-            // 获取后端服务器列表
-            const backends = [];
-            const backendItems = document.querySelectorAll('#backends-list .backend-item');
-            backendItems.forEach(item => {
-                const address = item.querySelector('.backend-address').value;
-                const port = parseInt(item.querySelector('.backend-port').value);
-                const weight = parseInt(item.querySelector('.backend-weight').value) || 1;
-                const pathField = item.querySelector('.backend-path');
-                const path = pathField ? pathField.value.trim() : '';
-                if (address && port) {
-                    const backend = {backend_address: address, backend_port: port, weight: weight};
-                    // HTTP/HTTPS代理时，如果有路径，添加到后端配置中
-                    if (proxyData.proxy_type === 'http' && path) {
-                        backend.backend_path = path;
-                    }
-                    backends.push(backend);
+                
+                // 从融合的配置列表中收集后端服务器数据
+                const configItemsList = document.getElementById('config-items-list');
+                const backends = [];
+                
+                if (configItemsList) {
+                    const configItems = configItemsList.querySelectorAll('.config-item');
+                    configItems.forEach(item => {
+                        const address = item.querySelector('.backend-address')?.value;
+                        const port = item.querySelector('.backend-port')?.value;
+                        const weight = item.querySelector('.backend-weight')?.value || '1';
+                        
+                        if (address && port) {
+                            backends.push({
+                                backend_address: address,
+                                backend_port: parseInt(port),
+                                weight: parseInt(weight) || 1
+                            });
+                        }
+                    });
                 }
-            });
-            proxyData.backends = backends;
+                
+                proxyData.backends = backends;
+            }
             proxyData.load_balance = document.getElementById('create-load-balance').value;
             
             try {
@@ -1277,22 +1334,49 @@ const pageSize = 20;
             }
             const proxyType = document.getElementById('create-proxy-type').value;
             
-            // 重置路径匹配列表
-            const locationPathsList = document.getElementById('location-paths-list');
-            if (locationPathsList) {
-                locationPathsList.innerHTML = `
-                    <div class="location-path-item">
+            // 重置配置列表
+            const configItemsList = document.getElementById('config-items-list');
+            if (configItemsList) {
+                const locationPathWrapper = proxyType === 'http' ? `
+                    <div class="input-with-add">
                         <input type="text" placeholder="匹配路径：/PATH" class="location-path-input" title="匹配路径：/PATH">
+                        <button type="button" class="btn-add" onclick="addLocationPath()" title="添加路径匹配">+</button>
+                    </div>
+                    <div class="input-with-add">
                         <input type="text" placeholder="目标路径：/PATH（可选）" class="location-backend-path-input" title="目标路径：/PATH（可选）">
-                        <button type="button" class="btn btn-danger" onclick="removeLocationPath(this)">删除</button>
+                        <button type="button" class="btn-add" onclick="addLocationPath()" title="添加路径匹配">+</button>
+                    </div>
+                ` : '';
+                
+                const backendPathWrapper = proxyType === 'http' ? `
+                    <div class="input-with-add">
+                        <input type="text" placeholder="目标路径：/PATH" class="backend-path" title="目标路径：/PATH">
+                        <button type="button" class="btn-add" onclick="addBackend()" title="添加后端服务器">+</button>
+                    </div>
+                ` : '';
+                
+                configItemsList.innerHTML = `
+                    <div class="config-item">
+                        <div class="config-item-row">
+                            ${locationPathWrapper}
+                            <div class="input-with-add">
+                                <input type="text" placeholder="IP地址" class="backend-address">
+                                <button type="button" class="btn-add" onclick="addBackend()" title="添加后端服务器">+</button>
+                            </div>
+                            <div class="input-with-add">
+                                <input type="number" placeholder="端口" class="backend-port" min="1" max="65535">
+                                <button type="button" class="btn-add" onclick="addBackend()" title="添加后端服务器">+</button>
+                            </div>
+                            ${backendPathWrapper}
+                            <div class="input-with-add">
+                                <input type="number" placeholder="权重" class="backend-weight" value="1" min="1">
+                                <button type="button" class="btn-add" onclick="addBackend()" title="添加后端服务器">+</button>
+                            </div>
+                            <button type="button" class="btn btn-danger btn-sm" onclick="removeConfigItem(this)">删除</button>
+                        </div>
                     </div>
                 `;
             }
-            
-            const backendPathField = proxyType === 'http' 
-                ? '<input type="text" placeholder="目标路径：/PATH" class="backend-path" title="目标路径：/PATH">'
-                : '<input type="text" placeholder="目标路径：/PATH" class="backend-path" title="目标路径：/PATH" style="display: none;">';
-            document.getElementById('backends-list').innerHTML = `<div class="backend-item"><input type="text" placeholder="IP地址" class="backend-address"><input type="number" placeholder="端口" class="backend-port" min="1" max="65535">${backendPathField}<input type="number" placeholder="权重" class="backend-weight" value="1" min="1"><button type="button" class="btn btn-danger" onclick="removeBackend(this)">删除</button></div>`;
             toggleProxyFields();
             // 清空规则列表，只保留一个空规则条目
             const rulesList = document.getElementById('rules-list');

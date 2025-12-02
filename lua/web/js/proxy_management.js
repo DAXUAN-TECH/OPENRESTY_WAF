@@ -1655,10 +1655,10 @@ const pageSize = 20;
                             <option value="">请选择规则条目</option>
                         </select>
                         <div class="rule-item-actions">
+                            <button type="button" class="btn btn-primary btn-sm" onclick="addRule()" style="display: inline-block !important; visibility: visible !important; opacity: 1 !important; background-color: #4CAF50 !important; color: white !important; padding: 8px 16px !important; min-width: 80px !important; height: 36px !important; border: 2px solid #4CAF50 !important; border-radius: 4px !important; font-size: 14px !important; font-weight: bold !important; cursor: pointer !important;">添加</button>
                             <button type="button" class="btn-icon btn-remove-icon" onclick="removeRule(this)" title="删除">−</button>
                         </div>
                     </div>
-                    <button type="button" class="btn btn-primary btn-sm" onclick="addRule()" style="display: inline-block !important; visibility: visible !important; opacity: 1 !important; background-color: #4CAF50 !important; color: white !important; padding: 8px 16px !important; min-width: 80px !important; height: 36px !important; border: 2px solid #4CAF50 !important; border-radius: 4px !important; font-size: 14px !important; font-weight: bold !important; cursor: pointer !important; margin-top: 8px !important;">添加</button>
                 `;
             }
         }
@@ -1692,10 +1692,10 @@ const pageSize = 20;
                                 <option value="">请选择规则条目</option>
                             </select>
                             <div class="rule-item-actions">
+                                <button type="button" class="btn btn-primary btn-sm" onclick="addRule()" style="display: inline-block !important; visibility: visible !important; opacity: 1 !important; background-color: #4CAF50 !important; color: white !important; padding: 8px 16px !important; min-width: 80px !important; height: 36px !important; border: 2px solid #4CAF50 !important; border-radius: 4px !important; font-size: 14px !important; font-weight: bold !important; cursor: pointer !important;">添加</button>
                                 <button type="button" class="btn-icon btn-remove-icon" onclick="removeRule(this)" title="删除">−</button>
                             </div>
                         </div>
-                        <button type="button" class="btn btn-primary btn-sm" onclick="addRule()" style="display: inline-block !important; visibility: visible !important; opacity: 1 !important; background-color: #4CAF50 !important; color: white !important; padding: 8px 16px !important; min-width: 80px !important; height: 36px !important; border: 2px solid #4CAF50 !important; border-radius: 4px !important; font-size: 14px !important; font-weight: bold !important; cursor: pointer !important; margin-top: 8px !important;">添加</button>
                     `;
                 }
                 // 如果规则列表未加载，先加载
@@ -1930,12 +1930,6 @@ const pageSize = 20;
             const rulesList = document.getElementById(listId);
             if (!rulesList) return;
             
-            // 移除现有的添加按钮（如果存在）
-            const existingAddButton = rulesList.querySelector('button.btn-primary.btn-sm');
-            if (existingAddButton && existingAddButton.textContent === '添加') {
-                existingAddButton.remove();
-            }
-            
             const ruleItem = document.createElement('div');
             ruleItem.className = 'rule-item';
             ruleItem.innerHTML = `
@@ -1950,19 +1944,11 @@ const pageSize = 20;
                     <option value="">请选择规则条目</option>
                 </select>
                 <div class="rule-item-actions">
+                    <button type="button" class="btn btn-primary btn-sm" onclick="addRule('${listId}')" style="display: inline-block !important; visibility: visible !important; opacity: 1 !important; background-color: #4CAF50 !important; color: white !important; padding: 8px 16px !important; min-width: 80px !important; height: 36px !important; border: 2px solid #4CAF50 !important; border-radius: 4px !important; font-size: 14px !important; font-weight: bold !important; cursor: pointer !important;">添加</button>
                     <button type="button" class="btn-icon btn-remove-icon" onclick="removeRule(this)" title="删除">−</button>
                 </div>
             `;
             rulesList.appendChild(ruleItem);
-            
-            // 在最后一个rule-item下面添加"添加"按钮
-            const addButton = document.createElement('button');
-            addButton.type = 'button';
-            addButton.className = 'btn btn-primary btn-sm';
-            addButton.textContent = '添加';
-            addButton.style.cssText = 'display: inline-block !important; visibility: visible !important; opacity: 1 !important; background-color: #4CAF50 !important; color: white !important; padding: 8px 16px !important; min-width: 80px !important; height: 36px !important; border: 2px solid #4CAF50 !important; border-radius: 4px !important; font-size: 14px !important; font-weight: bold !important; cursor: pointer !important; margin-top: 8px !important;';
-            addButton.onclick = function() { addRule(listId); };
-            rulesList.appendChild(addButton);
         }
         
         // 删除规则条目（支持创建和编辑）

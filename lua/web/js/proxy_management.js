@@ -955,24 +955,22 @@ const pageSize = 20;
                     div.textContent = text;
                     return div.innerHTML;
                 };
-                // 调试日志：检查proxy.rules的数据
-                if (proxy.rules) {
-                    console.log('proxy.rules type:', typeof proxy.rules, 'isArray:', Array.isArray(proxy.rules), 'length:', proxy.rules.length);
-                    console.log('proxy.rules content:', JSON.stringify(proxy.rules));
-                }
+                // 检查proxy.rules是否存在且是数组
                 if (proxy.rules && Array.isArray(proxy.rules) && proxy.rules.length > 0) {
                     // 显示所有规则的名称，每行一个
                     const ruleNames = proxy.rules.map(rule => {
+                        // 兼容不同的字段名格式（rule_name 或 ruleName）
                         const name = rule.rule_name || rule.ruleName || '';
                         return escapeHtmlFn(name);
-                    });
-                    rulesDisplay = ruleNames.join('<br>');
+                    }).filter(name => name !== ''); // 过滤空名称
+                    rulesDisplay = ruleNames.length > 0 ? ruleNames.join('<br>') : '-';
                     // 显示所有规则的类型，每行一个
                     const ruleTypes = proxy.rules.map(rule => {
+                        // 兼容不同的字段名格式（rule_type 或 ruleType）
                         const type = rule.rule_type || rule.ruleType || '';
                         return escapeHtmlFn(getRuleTypeName(type) || '');
-                    });
-                    ruleTypesDisplay = ruleTypes.join('<br>');
+                    }).filter(type => type !== ''); // 过滤空类型
+                    ruleTypesDisplay = ruleTypes.length > 0 ? ruleTypes.join('<br>') : '-';
                 } else if (proxy.rule_name) {
                     // 向后兼容：如果没有rules数组，使用rule_name和rule_type
                     rulesDisplay = escapeHtmlFn(proxy.rule_name);

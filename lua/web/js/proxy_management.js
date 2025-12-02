@@ -164,10 +164,10 @@ const pageSize = 20;
                     <div class="location-backends">
                         <div class="backend-row">
                             <div class="input-with-add address-input">
-                                <input type="text" placeholder="IP地址" class="backend-address">
+                <input type="text" placeholder="IP地址" class="backend-address">
                             </div>
                             <div class="input-with-add port-input">
-                                <input type="number" placeholder="端口" class="backend-port" min="1" max="65535">
+                <input type="number" placeholder="端口" class="backend-port" min="1" max="65535">
                             </div>
                             ${proxyType === 'http' ? `
                             <div class="input-with-add location-backend-path-input-wrapper">
@@ -175,7 +175,7 @@ const pageSize = 20;
                             </div>
                             ` : ''}
                             <div class="input-with-add input-weight">
-                                <input type="number" placeholder="权重" class="backend-weight" value="1" min="1">
+                <input type="number" placeholder="权重" class="backend-weight" value="1" min="1">
                             </div>
                             <div class="backend-row-actions">
                                 <button type="button" class="btn-icon btn-add-icon" onclick="addBackendRow(this)" title="添加">+</button>
@@ -202,7 +202,9 @@ const pageSize = 20;
                 if (locationItems.length > 1) {
                     locationItem.remove();
                 } else {
-                    alert('至少需要保留一个location');
+                    showConfirmModal('提示', '至少需要保留一个location', function() {
+                        closeConfirmModal();
+                    });
                 }
             }
         }
@@ -274,7 +276,9 @@ const pageSize = 20;
                 if (backendRows.length > 1) {
                     backendRow.remove();
                 } else {
-                    alert('至少需要保留一个后端服务器配置');
+                    showConfirmModal('提示', '至少需要保留一个后端服务器配置', function() {
+                        closeConfirmModal();
+                    });
                 }
             }
         }
@@ -965,10 +969,10 @@ const pageSize = 20;
             } else if (proxyData.proxy_type === 'tcp' || proxyData.proxy_type === 'udp') {
                 // TCP/UDP 代理不支持监听域名，设置为 null
                 proxyData.server_name = null;
-                
+            
                 // 从location结构中收集后端服务器数据（TCP/UDP）
                 const configSection = document.querySelector('#upstream-fields .config-section');
-                const backends = [];
+            const backends = [];
                 
                 if (configSection) {
                     // 遍历所有location-item
@@ -995,7 +999,7 @@ const pageSize = 20;
                                 const port = portInputs[i]?.value?.trim();
                                 const weight = weightInputs[i]?.value || '1';
                                 
-                                if (address && port) {
+                if (address && port) {
                                     backends.push({
                                         backend_address: address,
                                         backend_port: parseInt(port),
@@ -1007,7 +1011,7 @@ const pageSize = 20;
                     });
                 }
                 
-                proxyData.backends = backends;
+            proxyData.backends = backends;
             }
             proxyData.load_balance = document.getElementById('create-load-balance').value;
             

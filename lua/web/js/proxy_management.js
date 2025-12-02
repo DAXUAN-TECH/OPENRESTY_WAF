@@ -67,21 +67,23 @@ const pageSize = 20;
             if (proxyType === 'http') {
                 httpFields.style.display = 'flex';
                 tcpUdpFields.style.display = 'none';
+                // 显示路径匹配列表
+                const locationPathsFields = document.getElementById('location-paths-fields');
+                if (locationPathsFields) {
+                    locationPathsFields.style.display = 'block';
+                }
                 // 为显示的字段添加required属性
                 createListenPort.setAttribute('required', 'required');
                 // 为隐藏的字段移除required属性
                 createTcpUdpListenPort.removeAttribute('required');
                 // 显示所有后端服务器列表中的路径匹配字段和代理路径字段
                 document.querySelectorAll('#backends-list .backend-location-path').forEach(field => {
-                    field.style.display = 'block';
-                    field.addEventListener('input', syncLocationPaths);
+                    field.style.display = 'none'; // 隐藏后端服务器列表中的匹配路径字段，使用独立的路径匹配列表
                 });
                 document.querySelectorAll('#backends-list .backend-path').forEach(field => {
                     field.style.display = 'block';
                     field.addEventListener('input', checkBackendPaths);
                 });
-                // 同步路径匹配值
-                syncLocationPaths();
                 // 重新检查代理路径一致性
                 checkBackendPaths();
                 // 同步监听端口和监听地址的值
@@ -90,6 +92,11 @@ const pageSize = 20;
             } else if (proxyType === 'tcp' || proxyType === 'udp') {
                 httpFields.style.display = 'none';
                 tcpUdpFields.style.display = 'flex';
+                // 隐藏路径匹配列表
+                const locationPathsFields = document.getElementById('location-paths-fields');
+                if (locationPathsFields) {
+                    locationPathsFields.style.display = 'none';
+                }
                 // 为隐藏的字段移除required属性
                 createListenPort.removeAttribute('required');
                 // 为显示的字段添加required属性
@@ -225,6 +232,64 @@ const pageSize = 20;
             } catch (e) {
                 // 忽略错误，避免影响其他功能
                 console.debug('checkBackendPaths error:', e);
+            }
+        }
+        
+        // 添加路径匹配
+        function addLocationPath() {
+            const list = document.getElementById('location-paths-list');
+            if (!list) return;
+            
+            const item = document.createElement('div');
+            item.className = 'location-path-item';
+            item.innerHTML = `
+                <input type="text" placeholder="匹配路径：/PATH" class="location-path-input" title="匹配路径：/PATH">
+                <input type="text" placeholder="目标路径：/PATH（可选）" class="location-backend-path-input" title="目标路径：/PATH（可选）">
+                <button type="button" class="btn btn-danger" onclick="removeLocationPath(this)">删除</button>
+            `;
+            list.appendChild(item);
+        }
+        
+        // 删除路径匹配
+        function removeLocationPath(button) {
+            const item = button.closest('.location-path-item');
+            if (item) {
+                const list = document.getElementById('location-paths-list');
+                if (list && list.children.length > 1) {
+                    item.remove();
+                } else {
+                    // 至少保留一个
+                    alert('至少需要保留一个路径匹配');
+                }
+            }
+        }
+        
+        // 添加编辑路径匹配
+        function addEditLocationPath() {
+            const list = document.getElementById('edit-location-paths-list');
+            if (!list) return;
+            
+            const item = document.createElement('div');
+            item.className = 'location-path-item';
+            item.innerHTML = `
+                <input type="text" placeholder="匹配路径：/PATH" class="location-path-input" title="匹配路径：/PATH">
+                <input type="text" placeholder="目标路径：/PATH（可选）" class="location-backend-path-input" title="目标路径：/PATH（可选）">
+                <button type="button" class="btn btn-danger" onclick="removeEditLocationPath(this)">删除</button>
+            `;
+            list.appendChild(item);
+        }
+        
+        // 删除编辑路径匹配
+        function removeEditLocationPath(button) {
+            const item = button.closest('.location-path-item');
+            if (item) {
+                const list = document.getElementById('edit-location-paths-list');
+                if (list && list.children.length > 1) {
+                    item.remove();
+                } else {
+                    // 至少保留一个
+                    alert('至少需要保留一个路径匹配');
+                }
             }
         }
         
@@ -687,9 +752,36 @@ const pageSize = 20;
             if (proxyData.proxy_type === 'http') {
                 const serverName = document.getElementById('create-server-name').value.trim();
                 proxyData.server_name = serverName || null;
-                // 从第一个后端服务器的路径匹配输入框获取location_path
-                const firstLocationPathInput = document.querySelector('#backends-list .backend-location-path');
-                proxyData.location_path = firstLocationPathInput ? (firstLocationPathInput.value.trim() || '/') : '/';
+                
+                // 收集路径匹配列表
+                const locationPathsList = document.getElementById('location-paths-list');
+                const locationPaths = [];
+                if (locationPathsList) {
+                    const items = locationPathsList.querySelectorAll('.location-path-item');
+                    items.forEach(item => {
+                        const locationPathInput = item.querySelector('.location-path-input');
+                        const backendPathInput = item.querySelector('.location-backend-path-input');
+                        if (locationPathInput && locationPathInput.value.trim()) {
+                            const locationPath = locationPathInput.value.trim();
+                            const backendPath = backendPathInput ? backendPathInput.value.trim() : '';
+                            locationPaths.push({
+                                location_path: locationPath,
+                                backend_path: backendPath || null
+                            });
+                        }
+                    });
+                }
+                
+                // 如果location_paths有值，使用它；否则使用location_path（向后兼容）
+                if (locationPaths.length > 0) {
+                    proxyData.location_paths = locationPaths;
+                    // 为了向后兼容，也设置location_path为第一个值
+                    proxyData.location_path = locationPaths[0].location_path;
+                } else {
+                    // 向后兼容：如果没有location_paths，使用location_path
+                    proxyData.location_path = '/';
+                    proxyData.location_paths = null;
+                }
             } else if (proxyData.proxy_type === 'tcp' || proxyData.proxy_type === 'udp') {
                 // TCP/UDP 代理不支持监听域名，设置为 null
                 proxyData.server_name = null;
@@ -809,6 +901,11 @@ const pageSize = 20;
                     if (proxy.proxy_type === 'http') {
                         document.getElementById('edit-http-fields').style.display = 'flex';
                         document.getElementById('edit-tcp-udp-fields').style.display = 'none';
+                        // 显示路径匹配列表
+                        const editLocationPathsFields = document.getElementById('edit-location-paths-fields');
+                        if (editLocationPathsFields) {
+                            editLocationPathsFields.style.display = 'block';
+                        }
                         // 为显示的字段添加required属性
                         editListenPort.setAttribute('required', 'required');
                         // 为隐藏的字段移除required属性
@@ -816,6 +913,11 @@ const pageSize = 20;
                     } else if (proxy.proxy_type === 'tcp' || proxy.proxy_type === 'udp') {
                         document.getElementById('edit-http-fields').style.display = 'none';
                         document.getElementById('edit-tcp-udp-fields').style.display = 'flex';
+                        // 隐藏路径匹配列表
+                        const editLocationPathsFields = document.getElementById('edit-location-paths-fields');
+                        if (editLocationPathsFields) {
+                            editLocationPathsFields.style.display = 'none';
+                        }
                         // 为隐藏的字段移除required属性
                         editListenPort.removeAttribute('required');
                         // 为显示的字段添加required属性
@@ -826,6 +928,33 @@ const pageSize = 20;
                         // 当没有选择代理类型时，移除所有required属性
                         editListenPort.removeAttribute('required');
                         editTcpUdpListenPort.removeAttribute('required');
+                    }
+                    
+                    // 加载路径匹配列表（HTTP代理）
+                    if (proxy.proxy_type === 'http') {
+                        const locationPathsList = document.getElementById('edit-location-paths-list');
+                        if (locationPathsList) {
+                            locationPathsList.innerHTML = '';
+                            // 如果location_paths有值，使用它；否则使用location_path（向后兼容）
+                            if (proxy.location_paths && Array.isArray(proxy.location_paths) && proxy.location_paths.length > 0) {
+                                proxy.location_paths.forEach(loc => {
+                                    addEditLocationPath();
+                                    const items = locationPathsList.querySelectorAll('.location-path-item');
+                                    const lastItem = items[items.length - 1];
+                                    lastItem.querySelector('.location-path-input').value = loc.location_path || '';
+                                    const backendPathInput = lastItem.querySelector('.location-backend-path-input');
+                                    if (backendPathInput) {
+                                        backendPathInput.value = loc.backend_path || '';
+                                    }
+                                });
+                            } else {
+                                // 向后兼容：如果没有location_paths，使用location_path
+                                addEditLocationPath();
+                                const items = locationPathsList.querySelectorAll('.location-path-item');
+                                const lastItem = items[items.length - 1];
+                                lastItem.querySelector('.location-path-input').value = proxy.location_path || '/';
+                            }
+                        }
                     }
                     
                     // 加载后端服务器列表
@@ -839,11 +968,6 @@ const pageSize = 20;
                             lastItem.querySelector('.backend-address').value = backend.backend_address;
                             lastItem.querySelector('.backend-port').value = backend.backend_port;
                             lastItem.querySelector('.backend-weight').value = backend.weight || 1;
-                            // 设置路径匹配字段（第一个后端服务器使用location_path，其他使用相同的值）
-                            const locationPathField = lastItem.querySelector('.backend-location-path');
-                            if (locationPathField && proxy.proxy_type === 'http') {
-                                locationPathField.value = proxy.location_path || '/';
-                            }
                             // 设置代理路径字段（如果存在）
                             const pathField = lastItem.querySelector('.backend-path');
                             if (pathField && backend.backend_path) {
@@ -865,16 +989,14 @@ const pageSize = 20;
                     
                     // 根据代理类型显示/隐藏路径字段
                     if (proxy.proxy_type === 'http') {
+                        // 隐藏后端服务器列表中的匹配路径字段，使用独立的路径匹配列表
                         document.querySelectorAll('#edit-backends-list .backend-location-path').forEach(field => {
-                            field.style.display = 'block';
-                            field.addEventListener('input', syncEditLocationPaths);
+                            field.style.display = 'none';
                         });
                         document.querySelectorAll('#edit-backends-list .backend-path').forEach(field => {
                             field.style.display = 'block';
                             field.addEventListener('input', checkEditBackendPaths);
                         });
-                        // 同步路径匹配值
-                        syncEditLocationPaths();
                         // 重新检查代理路径一致性
                         checkEditBackendPaths();
                     } else {
@@ -952,9 +1074,36 @@ const pageSize = 20;
                 proxyData.listen_address = document.getElementById('edit-listen-address').value;
                 const serverName = document.getElementById('edit-server-name').value.trim();
                 proxyData.server_name = serverName || null;
-                // 从第一个后端服务器的路径匹配输入框获取location_path
-                const firstLocationPathInput = document.querySelector('#edit-backends-list .backend-location-path');
-                proxyData.location_path = firstLocationPathInput ? (firstLocationPathInput.value.trim() || '/') : '/';
+                
+                // 收集路径匹配列表
+                const locationPathsList = document.getElementById('edit-location-paths-list');
+                const locationPaths = [];
+                if (locationPathsList) {
+                    const items = locationPathsList.querySelectorAll('.location-path-item');
+                    items.forEach(item => {
+                        const locationPathInput = item.querySelector('.location-path-input');
+                        const backendPathInput = item.querySelector('.location-backend-path-input');
+                        if (locationPathInput && locationPathInput.value.trim()) {
+                            const locationPath = locationPathInput.value.trim();
+                            const backendPath = backendPathInput ? backendPathInput.value.trim() : '';
+                            locationPaths.push({
+                                location_path: locationPath,
+                                backend_path: backendPath || null
+                            });
+                        }
+                    });
+                }
+                
+                // 如果location_paths有值，使用它；否则使用location_path（向后兼容）
+                if (locationPaths.length > 0) {
+                    proxyData.location_paths = locationPaths;
+                    // 为了向后兼容，也设置location_path为第一个值
+                    proxyData.location_path = locationPaths[0].location_path;
+                } else {
+                    // 向后兼容：如果没有location_paths，使用location_path
+                    proxyData.location_path = '/';
+                    proxyData.location_paths = null;
+                }
             } else if (proxyType === 'tcp' || proxyType === 'udp') {
                 proxyData.listen_port = parseInt(document.getElementById('edit-tcp-udp-listen-port').value);
                 proxyData.listen_address = document.getElementById('edit-tcp-udp-listen-address').value;
@@ -1117,13 +1266,23 @@ const pageSize = 20;
                 proxyTypeSelect.value = 'http';
             }
             const proxyType = document.getElementById('create-proxy-type').value;
-            const locationPathField = proxyType === 'http' 
-                ? '<input type="text" placeholder="匹配路径：/PATH" class="backend-location-path" title="匹配路径：/PATH" >'
-                : '<input type="text" placeholder="匹配路径：/PATH" class="backend-location-path" title="匹配路径：/PATH" style="display: none;">';
+            
+            // 重置路径匹配列表
+            const locationPathsList = document.getElementById('location-paths-list');
+            if (locationPathsList) {
+                locationPathsList.innerHTML = `
+                    <div class="location-path-item">
+                        <input type="text" placeholder="匹配路径：/PATH" class="location-path-input" title="匹配路径：/PATH">
+                        <input type="text" placeholder="目标路径：/PATH（可选）" class="location-backend-path-input" title="目标路径：/PATH（可选）">
+                        <button type="button" class="btn btn-danger" onclick="removeLocationPath(this)">删除</button>
+                    </div>
+                `;
+            }
+            
             const backendPathField = proxyType === 'http' 
                 ? '<input type="text" placeholder="目标路径：/PATH" class="backend-path" title="目标路径：/PATH">'
                 : '<input type="text" placeholder="目标路径：/PATH" class="backend-path" title="目标路径：/PATH" style="display: none;">';
-            document.getElementById('backends-list').innerHTML = `<div class="backend-item">${locationPathField}<input type="text" placeholder="IP地址" class="backend-address"><input type="number" placeholder="端口" class="backend-port" min="1" max="65535">${backendPathField}<input type="number" placeholder="权重" class="backend-weight" value="1" min="1"><button type="button" class="btn btn-danger" onclick="removeBackend(this)">删除</button></div>`;
+            document.getElementById('backends-list').innerHTML = `<div class="backend-item"><input type="text" placeholder="IP地址" class="backend-address"><input type="number" placeholder="端口" class="backend-port" min="1" max="65535">${backendPathField}<input type="number" placeholder="权重" class="backend-weight" value="1" min="1"><button type="button" class="btn btn-danger" onclick="removeBackend(this)">删除</button></div>`;
             toggleProxyFields();
             // 清空规则列表，只保留一个空规则条目
             const rulesList = document.getElementById('rules-list');

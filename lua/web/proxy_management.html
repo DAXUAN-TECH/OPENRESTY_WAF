@@ -119,6 +119,19 @@
                     </div>
                 </div>
                 
+                <div class="form-group" id="location-paths-fields" style="display: none;">
+                    <label>路径匹配列表（HTTP/HTTPS代理）</label>
+                    <div class="location-paths-list" id="location-paths-list">
+                        <div class="location-path-item">
+                            <input type="text" placeholder="匹配路径：/PATH" class="location-path-input" title="匹配路径：/PATH">
+                            <input type="text" placeholder="目标路径：/PATH（可选）" class="location-backend-path-input" title="目标路径：/PATH（可选）">
+                            <button type="button" class="btn btn-danger" onclick="removeLocationPath(this)">删除</button>
+                        </div>
+                    </div>
+                    <button type="button" class="btn btn-primary" onclick="addLocationPath()">添加路径匹配</button>
+                    <small style="color: #666; display: block; margin-top: 4px;">可以添加多个路径匹配，每个路径匹配可以设置不同的目标路径</small>
+                </div>
+                
                 <div class="form-group" id="upstream-fields">
                     <label>后端服务器列表</label>
                     <div class="backends-list" id="backends-list">
@@ -241,6 +254,19 @@
                         <label>监听地址</label>
                         <input type="text" id="edit-tcp-udp-listen-address">
                     </div>
+                </div>
+                
+                <div class="form-group" id="edit-location-paths-fields" style="display: none;">
+                    <label>路径匹配列表（HTTP/HTTPS代理）</label>
+                    <div class="location-paths-list" id="edit-location-paths-list">
+                        <div class="location-path-item">
+                            <input type="text" placeholder="匹配路径：/PATH" class="location-path-input" title="匹配路径：/PATH">
+                            <input type="text" placeholder="目标路径：/PATH（可选）" class="location-backend-path-input" title="目标路径：/PATH（可选）">
+                            <button type="button" class="btn btn-danger" onclick="removeEditLocationPath(this)">删除</button>
+                        </div>
+                    </div>
+                    <button type="button" class="btn btn-primary" onclick="addEditLocationPath()">添加路径匹配</button>
+                    <small style="color: #666; display: block; margin-top: 4px;">可以添加多个路径匹配，每个路径匹配可以设置不同的目标路径</small>
                 </div>
                 
                 <div class="form-group" id="edit-upstream-fields">

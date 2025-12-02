@@ -796,11 +796,29 @@
         }
         
         /* 编辑代理弹出框特定样式（与创建代理保持一致） */
+        #edit-modal .form-group {
+            margin-bottom: 20px;
+        }
+        
+        #edit-modal .form-group:last-child {
+            margin-bottom: 0;
+        }
+        
         #edit-modal .form-group input,
         #edit-modal .form-group select,
         #edit-modal .form-group textarea {
             width: 100%;
             max-width: 500px;
+            padding: 8px 12px;
+            font-size: 14px;
+        }
+        
+        #edit-modal .form-group label {
+            display: block;
+            margin-bottom: 6px;
+            font-weight: 600;
+            color: #333;
+            font-size: 14px;
         }
         
         /* 代理名称输入框缩短二分之一 */
@@ -851,16 +869,58 @@
         #edit-modal #edit-http-fields {
             display: flex;
             gap: 15px;
+            justify-content: space-between;
         }
         
-        #edit-modal #edit-http-fields .form-group {
+        /* 监听域名form-group：左侧，占据剩余空间 */
+        #edit-modal #edit-http-fields .form-group:nth-child(1) {
             flex: 1;
+        }
+        
+        /* 监听端口form-group：中间，固定宽度，居中显示 */
+        #edit-modal #edit-http-fields .form-group:nth-child(2) {
+            flex: 0 0 auto;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        
+        /* 监听地址form-group：右侧，与监听域名宽度一致 */
+        #edit-modal #edit-http-fields .form-group:nth-child(3) {
+            flex: 1;
+        }
+        
+        /* 监听地址输入框与代理类型输入框对齐（宽度一致） */
+        #edit-modal #edit-listen-address {
+            width: 50% !important;
+            max-width: 250px !important;
+        }
+        
+        /* 监听地址的form-group设置固定宽度，与代理类型的form-group对齐 */
+        #edit-modal #edit-http-fields .form-group:nth-child(3) {
+            flex: 0 0 50%;
+            max-width: 50%;
+        }
+        
+        /* 编辑代理TCP/UDP：监听端口输入框同代理名称输入框一样宽 */
+        #edit-modal #edit-tcp-udp-fields #edit-tcp-udp-listen-port {
+            width: 50% !important;
+            max-width: 250px !important;
         }
         
         /* 编辑代理TCP/UDP：监听地址输入框同代理类型输入框一样宽 */
         #edit-modal #edit-tcp-udp-fields #edit-tcp-udp-listen-address {
             width: 50% !important;
             max-width: 250px !important;
+        }
+        
+        /* 编辑代理form-row中的form-group样式 */
+        #edit-modal .form-group .form-row .form-group {
+            flex: 1;
+        }
+        
+        #edit-modal .form-group .form-row .form-group:last-child {
+            flex: 2;
         }
         
         /* 负载均衡算法输入框宽度（在form-row中，增加宽度，至少显示四个汉字，再扩宽一个汉字） */

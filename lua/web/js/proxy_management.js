@@ -71,12 +71,18 @@ const pageSize = 20;
                 createListenPort.setAttribute('required', 'required');
                 // 为隐藏的字段移除required属性
                 createTcpUdpListenPort.removeAttribute('required');
-                // 显示所有后端服务器列表中的路径字段
+                // 显示所有后端服务器列表中的路径匹配字段和代理路径字段
+                document.querySelectorAll('#backends-list .backend-location-path').forEach(field => {
+                    field.style.display = 'block';
+                    field.addEventListener('input', syncLocationPaths);
+                });
                 document.querySelectorAll('#backends-list .backend-path').forEach(field => {
                     field.style.display = 'block';
                     field.addEventListener('input', checkBackendPaths);
                 });
-                // 重新检查路径一致性
+                // 同步路径匹配值
+                syncLocationPaths();
+                // 重新检查代理路径一致性
                 checkBackendPaths();
                 // 同步监听端口和监听地址的值
                 document.getElementById('create-tcp-udp-listen-port').value = document.getElementById('create-listen-port').value;
@@ -88,7 +94,10 @@ const pageSize = 20;
                 createListenPort.removeAttribute('required');
                 // 为显示的字段添加required属性
                 createTcpUdpListenPort.setAttribute('required', 'required');
-                // 隐藏所有后端服务器列表中的路径字段
+                // 隐藏所有后端服务器列表中的路径匹配字段和代理路径字段
+                document.querySelectorAll('#backends-list .backend-location-path').forEach(field => {
+                    field.style.display = 'none';
+                });
                 document.querySelectorAll('#backends-list .backend-path').forEach(field => {
                     field.style.display = 'none';
                 });
@@ -122,15 +131,19 @@ const pageSize = 20;
             const item = document.createElement('div');
             item.className = 'backend-item';
             
-            // HTTP/HTTPS代理显示路径字段，TCP/UDP代理不显示
-            const pathField = proxyType === 'http' 
-                ? '<input type="text" placeholder="/path" class="backend-path" title="/path">'
-                : '<input type="text" placeholder="/path" class="backend-path" style="display: none;">';
+            // HTTP/HTTPS代理显示路径匹配字段（在IP地址前）和代理路径字段，TCP/UDP代理不显示
+            const locationPathField = proxyType === 'http' 
+                ? '<input type="text" placeholder="匹配路径：/PATH" class="backend-location-path" title="匹配路径：/PATH" value="/">'
+                : '<input type="text" placeholder="匹配路径：/PATH" class="backend-location-path" title="匹配路径：/PATH" style="display: none;">';
+            const backendPathField = proxyType === 'http' 
+                ? '<input type="text" placeholder="代理路径：/PATH" class="backend-path" title="代理路径：/PATH">'
+                : '<input type="text" placeholder="代理路径：/PATH" class="backend-path" title="代理路径：/PATH" style="display: none;">';
             
             item.innerHTML = `
+                ${locationPathField}
                 <input type="text" placeholder="IP地址" class="backend-address">
                 <input type="number" placeholder="端口" class="backend-port" min="1" max="65535">
-                ${pathField}
+                ${backendPathField}
                 <input type="number" placeholder="权重" class="backend-weight" value="1" min="1">
                 <button type="button" class="btn btn-danger" onclick="removeBackend(this)">删除</button>
             `;
@@ -138,9 +151,17 @@ const pageSize = 20;
             
             // 如果是HTTP代理，添加路径输入框的事件监听
             if (proxyType === 'http') {
-                const pathInput = item.querySelector('.backend-path');
-                if (pathInput) {
-                    pathInput.addEventListener('input', checkBackendPaths);
+                const locationPathInput = item.querySelector('.backend-location-path');
+                const backendPathInput = item.querySelector('.backend-path');
+                // 路径匹配字段：同步所有后端服务器的路径匹配值
+                if (locationPathInput) {
+                    locationPathInput.addEventListener('input', function() {
+                        syncLocationPaths();
+                    });
+                }
+                // 代理路径字段：检查一致性
+                if (backendPathInput) {
+                    backendPathInput.addEventListener('input', checkBackendPaths);
                 }
             }
         }
@@ -153,15 +174,19 @@ const pageSize = 20;
             const item = document.createElement('div');
             item.className = 'backend-item';
             
-            // HTTP/HTTPS代理显示路径字段，TCP/UDP代理不显示
-            const pathField = proxyType === 'http' 
-                ? '<input type="text" placeholder="/path" class="backend-path" title="/path">'
-                : '<input type="text" placeholder="/path" class="backend-path" style="display: none;">';
+            // HTTP/HTTPS代理显示路径匹配字段（在IP地址前）和代理路径字段，TCP/UDP代理不显示
+            const locationPathField = proxyType === 'http' 
+                ? '<input type="text" placeholder="匹配路径：/PATH" class="backend-location-path" title="匹配路径：/PATH" value="/">'
+                : '<input type="text" placeholder="匹配路径：/PATH" class="backend-location-path" title="匹配路径：/PATH" style="display: none;">';
+            const backendPathField = proxyType === 'http' 
+                ? '<input type="text" placeholder="代理路径：/PATH" class="backend-path" title="代理路径：/PATH">'
+                : '<input type="text" placeholder="代理路径：/PATH" class="backend-path" title="代理路径：/PATH" style="display: none;">';
             
             item.innerHTML = `
+                ${locationPathField}
                 <input type="text" placeholder="IP地址" class="backend-address">
                 <input type="number" placeholder="端口" class="backend-port" min="1" max="65535">
-                ${pathField}
+                ${backendPathField}
                 <input type="number" placeholder="权重" class="backend-weight" value="1" min="1">
                 <button type="button" class="btn btn-danger" onclick="removeBackend(this)">删除</button>
             `;
@@ -169,9 +194,17 @@ const pageSize = 20;
             
             // 如果是HTTP代理，添加路径输入框的事件监听
             if (proxyType === 'http') {
-                const pathInput = item.querySelector('.backend-path');
-                if (pathInput) {
-                    pathInput.addEventListener('input', checkEditBackendPaths);
+                const locationPathInput = item.querySelector('.backend-location-path');
+                const backendPathInput = item.querySelector('.backend-path');
+                // 路径匹配字段：同步所有后端服务器的路径匹配值
+                if (locationPathInput) {
+                    locationPathInput.addEventListener('input', function() {
+                        syncEditLocationPaths();
+                    });
+                }
+                // 代理路径字段：检查一致性
+                if (backendPathInput) {
+                    backendPathInput.addEventListener('input', checkEditBackendPaths);
                 }
             }
         }
@@ -192,6 +225,59 @@ const pageSize = 20;
             } catch (e) {
                 // 忽略错误，避免影响其他功能
                 console.debug('checkBackendPaths error:', e);
+            }
+        }
+        
+        // 同步创建代理时所有后端服务器的路径匹配值（使用第一个的值）
+        function syncLocationPaths() {
+            try {
+                const list = document.getElementById('backends-list');
+                if (!list) return;
+                
+                const proxyType = document.getElementById('create-proxy-type');
+                if (!proxyType || proxyType.value !== 'http') return;
+                
+                const locationPathInputs = list.querySelectorAll('.backend-location-path');
+                if (locationPathInputs.length === 0) return;
+                
+                // 获取第一个路径匹配值
+                const firstValue = locationPathInputs[0] ? locationPathInputs[0].value.trim() || '/' : '/';
+                
+                // 同步所有路径匹配输入框的值
+                locationPathInputs.forEach(input => {
+                    if (input.style.display !== 'none') {
+                        input.value = firstValue;
+                    }
+                });
+            } catch (e) {
+                console.debug('syncLocationPaths error:', e);
+            }
+        }
+        
+        // 同步编辑代理时所有后端服务器的路径匹配值（使用第一个的值）
+        function syncEditLocationPaths() {
+            try {
+                const list = document.getElementById('edit-backends-list');
+                if (!list) return;
+                
+                const displayValue = document.getElementById('edit-proxy-type').value;
+                const proxyType = currentEditingProxy ? currentEditingProxy.proxy_type : getProxyTypeFromName(displayValue);
+                if (proxyType !== 'http') return;
+                
+                const locationPathInputs = list.querySelectorAll('.backend-location-path');
+                if (locationPathInputs.length === 0) return;
+                
+                // 获取第一个路径匹配值
+                const firstValue = locationPathInputs[0] ? locationPathInputs[0].value.trim() || '/' : '/';
+                
+                // 同步所有路径匹配输入框的值
+                locationPathInputs.forEach(input => {
+                    if (input.style.display !== 'none') {
+                        input.value = firstValue;
+                    }
+                });
+            } catch (e) {
+                console.debug('syncEditLocationPaths error:', e);
             }
         }
         
@@ -591,7 +677,9 @@ const pageSize = 20;
             if (proxyData.proxy_type === 'http') {
                 const serverName = document.getElementById('create-server-name').value.trim();
                 proxyData.server_name = serverName || null;
-                proxyData.location_path = document.getElementById('create-location-path').value || '/';
+                // 从第一个后端服务器的路径匹配输入框获取location_path
+                const firstLocationPathInput = document.querySelector('#backends-list .backend-location-path');
+                proxyData.location_path = firstLocationPathInput ? (firstLocationPathInput.value.trim() || '/') : '/';
             } else if (proxyData.proxy_type === 'tcp' || proxyData.proxy_type === 'udp') {
                 // TCP/UDP 代理不支持监听域名，设置为 null
                 proxyData.server_name = null;
@@ -665,7 +753,7 @@ const pageSize = 20;
                         document.getElementById('edit-listen-port').value = proxy.listen_port;
                         document.getElementById('edit-listen-address').value = proxy.listen_address || '0.0.0.0';
                         document.getElementById('edit-server-name').value = proxy.server_name || '';
-                        document.getElementById('edit-location-path').value = proxy.location_path || '/';
+                        // location_path 将在填充后端服务器列表时设置到第一个后端服务器的路径匹配输入框
                     } else if (proxy.proxy_type === 'tcp' || proxy.proxy_type === 'udp') {
                         document.getElementById('edit-tcp-udp-listen-port').value = proxy.listen_port;
                         document.getElementById('edit-tcp-udp-listen-address').value = proxy.listen_address || '0.0.0.0';
@@ -734,14 +822,19 @@ const pageSize = 20;
                     const list = document.getElementById('edit-backends-list');
                     list.innerHTML = '';
                     if (proxy.backends && proxy.backends.length > 0) {
-                        proxy.backends.forEach(backend => {
+                        proxy.backends.forEach((backend, index) => {
                             addEditBackend();
                             const items = list.querySelectorAll('.backend-item');
                             const lastItem = items[items.length - 1];
                             lastItem.querySelector('.backend-address').value = backend.backend_address;
                             lastItem.querySelector('.backend-port').value = backend.backend_port;
                             lastItem.querySelector('.backend-weight').value = backend.weight || 1;
-                            // 设置路径字段（如果存在）
+                            // 设置路径匹配字段（第一个后端服务器使用location_path，其他使用相同的值）
+                            const locationPathField = lastItem.querySelector('.backend-location-path');
+                            if (locationPathField && proxy.proxy_type === 'http') {
+                                locationPathField.value = proxy.location_path || '/';
+                            }
+                            // 设置代理路径字段（如果存在）
                             const pathField = lastItem.querySelector('.backend-path');
                             if (pathField && backend.backend_path) {
                                 pathField.value = backend.backend_path;
@@ -750,15 +843,29 @@ const pageSize = 20;
                     } else {
                         // 如果没有后端服务器，至少添加一个空的后端项
                         addEditBackend();
+                        // 设置路径匹配字段
+                        const firstItem = list.querySelector('.backend-item');
+                        if (firstItem && proxy.proxy_type === 'http') {
+                            const locationPathField = firstItem.querySelector('.backend-location-path');
+                            if (locationPathField) {
+                                locationPathField.value = proxy.location_path || '/';
+                            }
+                        }
                     }
                     
                     // 根据代理类型显示/隐藏路径字段
                     if (proxy.proxy_type === 'http') {
+                        document.querySelectorAll('#edit-backends-list .backend-location-path').forEach(field => {
+                            field.style.display = 'block';
+                            field.addEventListener('input', syncEditLocationPaths);
+                        });
                         document.querySelectorAll('#edit-backends-list .backend-path').forEach(field => {
                             field.style.display = 'block';
                             field.addEventListener('input', checkEditBackendPaths);
                         });
-                        // 重新检查路径一致性
+                        // 同步路径匹配值
+                        syncEditLocationPaths();
+                        // 重新检查代理路径一致性
                         checkEditBackendPaths();
                     } else {
                         document.querySelectorAll('#edit-backends-list .backend-path').forEach(field => {
@@ -835,7 +942,9 @@ const pageSize = 20;
                 proxyData.listen_address = document.getElementById('edit-listen-address').value;
                 const serverName = document.getElementById('edit-server-name').value.trim();
                 proxyData.server_name = serverName || null;
-                proxyData.location_path = document.getElementById('edit-location-path').value || '/';
+                // 从第一个后端服务器的路径匹配输入框获取location_path
+                const firstLocationPathInput = document.querySelector('#edit-backends-list .backend-location-path');
+                proxyData.location_path = firstLocationPathInput ? (firstLocationPathInput.value.trim() || '/') : '/';
             } else if (proxyType === 'tcp' || proxyType === 'udp') {
                 proxyData.listen_port = parseInt(document.getElementById('edit-tcp-udp-listen-port').value);
                 proxyData.listen_address = document.getElementById('edit-tcp-udp-listen-address').value;
@@ -993,10 +1102,13 @@ const pageSize = 20;
         function resetCreateForm() {
             document.getElementById('create-form').reset();
             const proxyType = document.getElementById('create-proxy-type').value;
-            const pathField = proxyType === 'http' 
-                ? '<input type="text" placeholder="/path" class="backend-path" title="/path">'
-                : '<input type="text" placeholder="路径（HTTP/HTTPS）" class="backend-path" style="display: none;">';
-            document.getElementById('backends-list').innerHTML = `<div class="backend-item"><input type="text" placeholder="IP地址" class="backend-address"><input type="number" placeholder="端口" class="backend-port" min="1" max="65535">${pathField}<input type="number" placeholder="权重" class="backend-weight" value="1" min="1"><button type="button" class="btn btn-danger" onclick="removeBackend(this)">删除</button></div>`;
+            const locationPathField = proxyType === 'http' 
+                ? '<input type="text" placeholder="匹配路径：/PATH" class="backend-location-path" title="匹配路径：/PATH" value="/">'
+                : '<input type="text" placeholder="匹配路径：/PATH" class="backend-location-path" title="匹配路径：/PATH" style="display: none;">';
+            const backendPathField = proxyType === 'http' 
+                ? '<input type="text" placeholder="代理路径：/PATH" class="backend-path" title="代理路径：/PATH">'
+                : '<input type="text" placeholder="代理路径：/PATH" class="backend-path" title="代理路径：/PATH" style="display: none;">';
+            document.getElementById('backends-list').innerHTML = `<div class="backend-item">${locationPathField}<input type="text" placeholder="IP地址" class="backend-address"><input type="number" placeholder="端口" class="backend-port" min="1" max="65535">${backendPathField}<input type="number" placeholder="权重" class="backend-weight" value="1" min="1"><button type="button" class="btn btn-danger" onclick="removeBackend(this)">删除</button></div>`;
             toggleProxyFields();
             // 清空规则列表，只保留一个空规则条目
             const rulesList = document.getElementById('rules-list');

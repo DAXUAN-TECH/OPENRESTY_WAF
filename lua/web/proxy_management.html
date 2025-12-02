@@ -103,10 +103,6 @@
                         <label>监听端口 *</label>
                         <input type="number" id="create-listen-port" required min="1" max="65535" placeholder="80">
                     </div>
-                    <div class="form-group" id="http-path-fields">
-                        <label>路径匹配（HTTP代理）</label>
-                        <input type="text" id="create-location-path" value="/" placeholder="/">
-                    </div>
                     <div class="form-group">
                         <label>监听地址</label>
                         <input type="text" id="create-listen-address" value="0.0.0.0" placeholder="0.0.0.0">
@@ -128,9 +124,10 @@
                     <label>后端服务器列表</label>
                     <div class="backends-list" id="backends-list">
                         <div class="backend-item">
+                            <input type="text" placeholder="匹配路径：/PATH" class="backend-location-path" title="匹配路径：/PATH" style="display: none;">
                             <input type="text" placeholder="IP地址" class="backend-address">
                             <input type="number" placeholder="端口" class="backend-port" min="1" max="65535">
-                            <input type="text" placeholder="/path" class="backend-path" title="/path" style="display: none;">
+                            <input type="text" placeholder="代理路径：/PATH" class="backend-path" title="代理路径：/PATH" style="display: none;">
                             <input type="number" placeholder="权重" class="backend-weight" value="1" min="1">
                             <button type="button" class="btn btn-danger" onclick="removeBackend(this)">删除</button>
                         </div>
@@ -229,10 +226,6 @@
                     <div class="form-group">
                         <label>监听端口 *</label>
                         <input type="number" id="edit-listen-port" required min="1" max="65535">
-                    </div>
-                    <div class="form-group" id="edit-http-path-fields">
-                        <label>路径匹配（HTTP代理）</label>
-                        <input type="text" id="edit-location-path">
                     </div>
                     <div class="form-group">
                         <label>监听地址</label>

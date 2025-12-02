@@ -657,16 +657,34 @@
             font-size: 12px;
         }
         
+        /* IP地址输入框：保持flex: 1，占据剩余空间 */
+        .backend-item .backend-address {
+            flex: 1;
+            min-width: 120px;
+        }
+        
+        /* 路径匹配输入框：设置合适的宽度 */
+        .backend-item .backend-location-path {
+            flex: 0 0 150px;
+            max-width: 150px;
+        }
+        
         /* 后端服务器列表中的端口输入框缩短二分之一（保留原来的1/2宽度） */
         .backend-item .backend-port {
-            flex: 0 0 50%;
-            max-width: 50%;
+            flex: 0 0 80px;
+            max-width: 80px;
+        }
+        
+        /* 目标路径输入框：设置合适的宽度 */
+        .backend-item .backend-path {
+            flex: 0 0 150px;
+            max-width: 150px;
         }
         
         /* 权重输入框缩短三分之二（保留原来的1/3宽度） */
         .backend-item .backend-weight {
-            flex: 0 0 33.33%;
-            max-width: 33.33%;
+            flex: 0 0 60px;
+            max-width: 60px;
         }
         
         .tcp-udp-mode .backend-address-field,

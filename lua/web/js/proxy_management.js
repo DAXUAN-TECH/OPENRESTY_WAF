@@ -945,6 +945,22 @@ const pageSize = 20;
                     backendDisplay = backendList.join('<br>');
                 }
                 
+                // 格式化防护规则显示：选择几个就显示几个，每行显示一个规则
+                let rulesDisplay = '-';
+                let ruleTypesDisplay = '-';
+                if (proxy.rules && Array.isArray(proxy.rules) && proxy.rules.length > 0) {
+                    // 显示所有规则的名称，每行一个
+                    const ruleNames = proxy.rules.map(rule => escapeHtml(rule.rule_name || ''));
+                    rulesDisplay = ruleNames.join('<br>');
+                    // 显示所有规则的类型，每行一个
+                    const ruleTypes = proxy.rules.map(rule => escapeHtml(getRuleTypeName(rule.rule_type) || ''));
+                    ruleTypesDisplay = ruleTypes.join('<br>');
+                } else if (proxy.rule_name) {
+                    // 向后兼容：如果没有rules数组，使用rule_name和rule_type
+                    rulesDisplay = escapeHtml(proxy.rule_name);
+                    ruleTypesDisplay = escapeHtml(getRuleTypeName(proxy.rule_type) || '-');
+                }
+                
                 return `
                 <tr>
                     <td>${proxy.id}</td>
@@ -953,8 +969,8 @@ const pageSize = 20;
                     <td>${proxy.listen_address}:${proxy.listen_port}</td>
                     <td>${proxy.server_name || '-'}</td>
                     <td>${backendDisplay}</td>
-                    <td>${proxy.rule_name || '-'}</td>
-                    <td>${getRuleTypeName(proxy.rule_type) || '-'}</td>
+                    <td>${rulesDisplay}</td>
+                    <td>${ruleTypesDisplay}</td>
                     <td>${getStatusBadge(proxy.status)}</td>
                     <td>${formatDateTime(proxy.created_at)}</td>
                     <td>

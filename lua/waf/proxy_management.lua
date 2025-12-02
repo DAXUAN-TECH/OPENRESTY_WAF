@@ -433,22 +433,28 @@ function _M.list_proxies(params)
         
         -- 根据ip_rule_ids查询规则信息（用于列表显示）
         if rule_ids and #rule_ids > 0 then
-            -- 查询第一个规则的名称和类型（用于列表显示）
-            local rule_info_sql = [[
-                SELECT rule_name, rule_type 
+            -- 查询所有规则的名称和类型（用于列表显示，每行显示一个规则）
+            local rule_ids_str = table.concat(rule_ids, ",")
+            local rule_info_sql = string.format([[
+                SELECT id, rule_name, rule_type 
                 FROM waf_block_rules 
-                WHERE id = ? AND status = 1 
-                LIMIT 1
-            ]]
-            local rule_info = mysql_pool.query(rule_info_sql, rule_ids[1])
+                WHERE id IN (%s) AND status = 1 
+                ORDER BY FIELD(id, %s)
+            ]], rule_ids_str, rule_ids_str)
+            local rule_info = mysql_pool.query(rule_info_sql)
             if rule_info and #rule_info > 0 then
+                -- 保存所有规则的详细信息
+                proxy.rules = rule_info
+                -- 为了向后兼容，保留第一个规则的名称和类型
                 proxy.rule_name = rule_info[1].rule_name
                 proxy.rule_type = rule_info[1].rule_type
             else
+                proxy.rules = {}
                 proxy.rule_name = nil
                 proxy.rule_type = nil
             end
         else
+            proxy.rules = {}
             proxy.rule_name = nil
             proxy.rule_type = nil
         end

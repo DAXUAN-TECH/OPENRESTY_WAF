@@ -406,9 +406,9 @@
             max-width: 50%;
         }
         
-        /* 监听端口输入框宽度（确保数字不被遮挡） */
+        /* 监听端口输入框宽度（确保数字不被遮挡，居中显示） */
         #create-proxy-modal #create-listen-port {
-            width: 30% !important;
+            width: 150px !important;
             max-width: 150px !important;
         }
         
@@ -489,9 +489,24 @@
         #create-proxy-modal #http-fields {
             display: flex;
             gap: 15px;
+            justify-content: space-between;
         }
         
-        #create-proxy-modal #http-fields .form-group {
+        /* 监听域名form-group：左侧，占据剩余空间 */
+        #create-proxy-modal #http-fields .form-group:nth-child(1) {
+            flex: 1;
+        }
+        
+        /* 监听端口form-group：中间，固定宽度，居中显示 */
+        #create-proxy-modal #http-fields .form-group:nth-child(2) {
+            flex: 0 0 auto;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        
+        /* 监听地址form-group：右侧，与监听域名宽度一致 */
+        #create-proxy-modal #http-fields .form-group:nth-child(3) {
             flex: 1;
         }
         

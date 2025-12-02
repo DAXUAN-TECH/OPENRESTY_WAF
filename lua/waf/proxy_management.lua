@@ -411,8 +411,11 @@ function _M.list_proxies(params)
             if ok and decoded_rule_ids and type(decoded_rule_ids) == "table" then
                 rule_ids = decoded_rule_ids
                 proxy.ip_rule_ids = decoded_rule_ids
+                -- 调试日志：记录解析的规则ID
+                ngx.log(ngx.DEBUG, "proxy_id=", proxy.id, ", decoded rule_ids: ", cjson.encode(rule_ids), ", count: ", #rule_ids)
             else
                 proxy.ip_rule_ids = nil
+                ngx.log(ngx.WARN, "proxy_id=", proxy.id, ", failed to decode ip_rule_ids: ", tostring(proxy.ip_rule_ids))
             end
         else
             proxy.ip_rule_ids = nil

@@ -928,6 +928,8 @@
             border-radius: 4px;
             border: 1px solid #e0e0e0;
             flex-wrap: nowrap;
+            overflow: visible;
+            min-width: 0;
         }
         
         .rule-item select {
@@ -936,23 +938,21 @@
         }
         
         .rule-item select.rule-type {
-            flex: 1 1 auto;
-            min-width: 0;
+            flex: 0 1 auto;
+            min-width: 150px;
+            max-width: 250px;
             padding: 8px;
             border: 1px solid #ddd;
             border-radius: 4px;
-            width: 50% !important;
-            max-width: 250px !important;
         }
         
         .rule-item select.rule-id {
-            flex: 1 1 auto;
-            min-width: 0;
+            flex: 0 1 auto;
+            min-width: 150px;
+            max-width: 250px;
             padding: 8px;
             border: 1px solid #ddd;
             border-radius: 4px;
-            width: 50% !important;
-            max-width: 250px !important;
         }
         
         /* 编辑代理防护规则：请选择规则条目下拉框缩短二分之一 */

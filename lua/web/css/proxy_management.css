@@ -386,10 +386,40 @@
         
         .location-content {
             margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        
+        .location-path-section {
+            flex: 0 0 200px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 60px;
+        }
+        
+        .location-path-input-wrapper {
+            width: 100%;
+        }
+        
+        .location-path-input-wrapper[style*="display: none"] {
+            display: none !important;
+        }
+        
+        .location-divider {
+            width: 1px;
+            background-color: #e0e0e0;
+            align-self: stretch;
+            flex-shrink: 0;
+            margin: 0 5px;
         }
         
         .location-backends {
-            margin-top: 10px;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-height: 60px;
         }
         
         .backend-row {

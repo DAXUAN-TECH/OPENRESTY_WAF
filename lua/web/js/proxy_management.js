@@ -157,7 +157,10 @@ const pageSize = 20;
             
             locationItem.innerHTML = `
                 <div class="location-content">
-                    ${locationPathHtml}
+                    <div class="location-path-section">
+                        ${locationPathHtml}
+                    </div>
+                    <div class="location-divider"></div>
                     <div class="location-backends">
                         <div class="backend-row">
                             <div class="input-with-add address-input">
@@ -169,7 +172,7 @@ const pageSize = 20;
                                 <button type="button" class="btn-add" onclick="addInputFieldInLocation('port', this)" title="添加端口">+</button>
                             </div>
                             ${proxyType === 'http' ? `
-                            <div class="input-with-add">
+                            <div class="input-with-add location-backend-path-input-wrapper">
                                 <input type="text" placeholder="目标路径：/PATH（可选）" class="location-backend-path-input" title="目标路径：/PATH（可选）">
                                 <button type="button" class="btn-add" onclick="addInputFieldInLocation('location-backend-path', this)" title="添加目标路径">+</button>
                             </div>

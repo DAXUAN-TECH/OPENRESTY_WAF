@@ -175,7 +175,26 @@ function _M.list()
     if #result.proxies > 0 then
         -- 使用 ipairs 确保只复制数组部分
         for i = 1, #result.proxies do
-            final_proxies[i] = result.proxies[i]
+            local proxy = result.proxies[i]
+            -- 确保每个proxy的rules字段是数组格式（如果存在）
+            if proxy.rules and type(proxy.rules) == "table" then
+                local rules_array = {}
+                -- 如果是数组，直接复制
+                if #proxy.rules > 0 then
+                    for j = 1, #proxy.rules do
+                        rules_array[j] = proxy.rules[j]
+                    end
+                else
+                    -- 如果不是数组，尝试转换为数组
+                    local idx = 1
+                    for _, rule in pairs(proxy.rules) do
+                        rules_array[idx] = rule
+                        idx = idx + 1
+                    end
+                end
+                proxy.rules = rules_array
+            end
+            final_proxies[i] = proxy
         end
     end
     result.proxies = final_proxies

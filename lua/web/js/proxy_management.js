@@ -82,7 +82,7 @@ const pageSize = 20;
                 document.querySelectorAll('#backend-path-input-wrapper').forEach(wrapper => {
                     wrapper.style.display = 'flex';
                 });
-                // 显示后端服务器配置区域
+                // 显示服务器配置区域
                 const upstreamFields = document.getElementById('upstream-fields');
                 if (upstreamFields) {
                     upstreamFields.style.display = 'block';
@@ -112,7 +112,7 @@ const pageSize = 20;
                 document.querySelectorAll('#backend-path-input-wrapper').forEach(wrapper => {
                     wrapper.style.display = 'none';
                 });
-                // 显示后端服务器配置区域（TCP/UDP也需要）
+                // 显示服务器配置区域（TCP/UDP也需要）
                 const upstreamFields = document.getElementById('upstream-fields');
                 if (upstreamFields) {
                     upstreamFields.style.display = 'block';
@@ -276,7 +276,7 @@ const pageSize = 20;
                 if (backendRows.length > 1) {
                     backendRow.remove();
                 } else {
-                    showConfirmModal('提示', '至少需要保留一个后端服务器配置', function() {
+                    showConfirmModal('提示', '至少需要保留一个服务器配置', function() {
                         closeConfirmModal();
                     });
                 }
@@ -521,7 +521,7 @@ const pageSize = 20;
                 if (backendRows.length > 1) {
                     backendRow.remove();
                 } else {
-                    showConfirmModal('提示', '至少需要保留一个后端服务器配置', function() {
+                    showConfirmModal('提示', '至少需要保留一个服务器配置', function() {
                         closeConfirmModal();
                     });
                 }
@@ -1053,7 +1053,7 @@ const pageSize = 20;
                                 weightInputs.length
                             );
                             
-                            // 收集每个后端服务器配置
+                            // 收集每个服务器配置
                             for (let i = 0; i < maxCount; i++) {
                                 const address = addressInputs[i]?.value?.trim();
                                 const port = portInputs[i]?.value?.trim();
@@ -1120,7 +1120,7 @@ const pageSize = 20;
                                 weightInputs.length
                             );
                             
-                            // 收集每个后端服务器配置
+                            // 收集每个服务器配置
                             for (let i = 0; i < maxCount; i++) {
                                 const address = addressInputs[i]?.value?.trim();
                                 const port = portInputs[i]?.value?.trim();
@@ -1254,7 +1254,7 @@ const pageSize = 20;
                         editTcpUdpListenPort.removeAttribute('required');
                     }
                     
-                    // 加载后端服务器配置（使用新的location结构）
+                    // 加载服务器配置（使用新的location结构）
                     const configSection = document.getElementById('edit-config-section');
                     if (configSection) {
                         configSection.innerHTML = '';

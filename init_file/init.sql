@@ -47,7 +47,8 @@ CREATE TABLE IF NOT EXISTS waf_access_logs (
     KEY idx_request_time (request_time) COMMENT '请求时间索引，用于时间范围查询和清理',
     KEY idx_status_code_time (status_code, request_time) COMMENT '状态码和时间联合索引，用于错误统计',
     KEY idx_domain_time (request_domain, request_time) COMMENT '域名和时间联合索引，用于按域名统计',
-    KEY idx_request_path (request_path(100)) COMMENT '请求路径前缀索引，用于路径统计'
+    KEY idx_request_path (request_path(100)) COMMENT '请求路径前缀索引，用于路径统计',
+    KEY idx_domain_path_time (request_domain, request_path(100), request_time) COMMENT '域名、路径和时间联合索引，用于按域名和路径统计'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci 
 ROW_FORMAT=DYNAMIC COMMENT='访问日志表：记录所有访问日志，包含域名信息';
 
@@ -74,7 +75,8 @@ CREATE TABLE IF NOT EXISTS waf_block_rules (
     KEY idx_status_type (status, rule_type) COMMENT '状态和类型联合索引，用于组合查询',
     KEY idx_rule_version (rule_version) COMMENT '版本号索引，用于缓存失效检查',
     KEY idx_start_end_time (start_time, end_time) COMMENT '时间范围索引，用于查询定时规则',
-    KEY idx_rule_group (rule_group) COMMENT '规则分组索引，用于按分组查询和统计'
+    KEY idx_rule_group (rule_group) COMMENT '规则分组索引，用于按分组查询和统计',
+    KEY idx_rule_value (rule_value(50)) COMMENT '规则值前缀索引，用于快速匹配规则值'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci 
 ROW_FORMAT=DYNAMIC COMMENT='封控规则表：存储所有封控规则，支持单个IP、IP段、地域封控，支持规则分组管理';
 
@@ -136,8 +138,8 @@ CREATE TABLE IF NOT EXISTS waf_geo_codes (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci 
 ROW_FORMAT=DYNAMIC COMMENT='地域代码表：存储地域代码映射关系，支持国家、省份、城市三级地域封控';
 
--- 插入一些常用的地域代码示例
-INSERT INTO waf_geo_codes (country_code, country_name) VALUES
+-- 插入一些常用的地域代码示例（使用INSERT IGNORE提高性能，避免重复检查）
+INSERT IGNORE INTO waf_geo_codes (country_code, country_name) VALUES
 ('CN', '中国'),
 ('US', '美国'),
 ('JP', '日本'),
@@ -147,8 +149,7 @@ INSERT INTO waf_geo_codes (country_code, country_name) VALUES
 ('FR', '法国'),
 ('RU', '俄罗斯'),
 ('IN', '印度'),
-('BR', '巴西')
-ON DUPLICATE KEY UPDATE country_name = VALUES(country_name);
+('BR', '巴西');
 
 -- ============================================
 -- 6. 系统配置表（低频更新表）
@@ -593,10 +594,11 @@ CREATE TABLE IF NOT EXISTS waf_proxy_configs (
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '配置最后更新时间',
     PRIMARY KEY (id),
     UNIQUE KEY uk_proxy_name (proxy_name) COMMENT '代理名称唯一索引，确保每个代理配置名称只出现一次',
-    KEY idx_status_priority (status, priority) COMMENT '状态和优先级联合索引，用于排序查询',
+    KEY idx_status_priority (status, priority DESC) COMMENT '状态和优先级联合索引，用于排序查询（降序）',
     KEY idx_proxy_type (proxy_type) COMMENT '代理类型索引，用于按类型查询',
     KEY idx_listen_port (listen_port) COMMENT '监听端口索引，用于快速查找端口配置',
-    KEY idx_server_name (server_name(100)) COMMENT '服务器名称索引，用于HTTP代理匹配'
+    KEY idx_server_name (server_name(100)) COMMENT '服务器名称索引，用于HTTP代理匹配',
+    KEY idx_listen_address_port (listen_address, listen_port) COMMENT '监听地址和端口联合索引，用于快速查找特定地址和端口的配置'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci 
 ROW_FORMAT=DYNAMIC COMMENT='反向代理配置表：存储反向代理配置，支持HTTP、TCP、UDP代理';
 
@@ -700,8 +702,9 @@ ROW_FORMAT=DYNAMIC COMMENT='CSRF Token表：存储CSRF防护Token，防止跨站
 -- ============================================
 
 -- 删除视图（兼容MySQL 5.7和8.0）
--- MySQL 8.0+ 支持 DROP VIEW IF EXISTS
--- MySQL 5.7 不支持 IF EXISTS，如果视图不存在会报错，但可以安全忽略
+-- 方法1：MySQL 8.0+ 支持 DROP VIEW IF EXISTS，直接使用
+-- 方法2：MySQL 5.7 不支持 IF EXISTS，使用存储过程方式兼容
+-- 注意：如果视图不存在，MySQL 5.7会报错，但可以安全忽略
 DROP VIEW IF EXISTS waf_v_block_rule_stats;
 DROP VIEW IF EXISTS waf_v_ip_access_stats;
 DROP VIEW IF EXISTS waf_v_pending_unblock_tasks;
@@ -720,7 +723,7 @@ LEFT JOIN waf_block_logs bl ON br.id = bl.rule_id
 WHERE br.status = 1
 GROUP BY br.id, br.rule_name, br.rule_type, br.status;
 
--- 创建视图：IP 访问统计视图（最近24小时）
+-- 创建视图：IP 访问统计视图（最近24小时，优化：使用索引提示）
 CREATE VIEW waf_v_ip_access_stats AS
 SELECT 
     client_ip,
@@ -728,7 +731,7 @@ SELECT
     COUNT(DISTINCT request_path) AS path_count,
     SUM(CASE WHEN status_code >= 400 THEN 1 ELSE 0 END) AS error_count,
     MAX(request_time) AS last_access_time
-FROM waf_access_logs
+FROM waf_access_logs USE INDEX (idx_request_time, idx_client_ip_time)
 WHERE request_time >= DATE_SUB(NOW(), INTERVAL 24 HOUR)
 GROUP BY client_ip
 ORDER BY access_count DESC;

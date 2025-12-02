@@ -1692,7 +1692,7 @@ const pageSize = 20;
                                 <option value="">请选择规则条目</option>
                             </select>
                             <div class="rule-item-actions">
-                                <button type="button" class="btn btn-primary btn-sm" onclick="addRule()" style="display: inline-block !important; visibility: visible !important; opacity: 1 !important; background-color: #4CAF50 !important; color: white !important; padding: 8px 16px !important; min-width: 80px !important; height: 36px !important; border: 2px solid #4CAF50 !important; border-radius: 4px !important; font-size: 14px !important; font-weight: bold !important; cursor: pointer !important;">添加</button>
+                                <button type="button" class="btn-icon btn-add-icon" onclick="addRule()" title="添加">+</button>
                                 <button type="button" class="btn-icon btn-remove-icon" onclick="removeRule(this)" title="删除">−</button>
                             </div>
                         </div>
@@ -1959,8 +1959,8 @@ const pageSize = 20;
                 if (rulesList) {
                     const ruleItems = rulesList.querySelectorAll('.rule-item');
                     if (ruleItems.length > 1) {
-                        ruleItem.remove();
-                        // 更新所有规则条目的选择框（移除已删除的规则）
+                ruleItem.remove();
+                // 更新所有规则条目的选择框（移除已删除的规则）
                         updateAllRuleSelects(rulesList.id);
                     } else {
                         // 至少保留一条规则

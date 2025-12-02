@@ -457,8 +457,8 @@ const pageSize = 20;
                     </div>
                 </div>
                 <div class="location-actions">
-                    <button type="button" class="btn-icon btn-add-icon" onclick="addEditLocation()" title="添加location">+</button>
-                    <button type="button" class="btn-icon btn-remove-icon" onclick="removeEditLocation(this)" title="删除location">−</button>
+                    <button type="button" class="btn btn-primary btn-sm" onclick="addEditLocation()">添加location</button>
+                    <button type="button" class="btn btn-danger btn-sm" onclick="removeEditLocation(this)">删除location</button>
                 </div>
             `;
             configSection.appendChild(locationItem);

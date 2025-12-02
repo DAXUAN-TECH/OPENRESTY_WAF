@@ -927,6 +927,7 @@
         #edit-modal .form-row #edit-proxy-connect-timeout {
             width: 15% !important;
             max-width: 75px !important;
+            min-width: 75px !important;
         }
         
         /* 发送超时、读取超时输入框宽度（扩宽一倍以显示字符） */

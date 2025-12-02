@@ -1006,13 +1006,19 @@
             opacity: 1;
         }
         
-        .rule-item-actions .btn-primary {
+        .rule-item-actions .btn-primary,
+        .rule-item .rule-item-actions .btn-primary,
+        #rules-list .rule-item-actions .btn-primary,
+        #create-proxy-modal .rule-item-actions .btn-primary,
+        #edit-rules-list .rule-item-actions .btn-primary,
+        #edit-modal .rule-item-actions .btn-primary {
             background-color: #4CAF50 !important;
             color: white !important;
-            border: none !important;
+            border: 2px solid #4CAF50 !important;
             border-radius: 4px !important;
-            padding: 6px 12px !important;
-            font-size: 13px !important;
+            padding: 8px 16px !important;
+            font-size: 14px !important;
+            font-weight: bold !important;
             cursor: pointer !important;
             flex-shrink: 0 !important;
             white-space: nowrap !important;
@@ -1020,11 +1026,14 @@
             visibility: visible !important;
             opacity: 1 !important;
             position: relative !important;
-            z-index: 100 !important;
+            z-index: 1000 !important;
             width: auto !important;
-            min-width: 60px !important;
-            height: auto !important;
-            line-height: normal !important;
+            min-width: 80px !important;
+            max-width: none !important;
+            height: 36px !important;
+            line-height: 20px !important;
+            box-sizing: border-box !important;
+            margin: 0 !important;
         }
         
         .rule-item-actions .btn-primary:hover {

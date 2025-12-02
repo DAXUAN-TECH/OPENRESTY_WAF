@@ -372,6 +372,29 @@
             overflow: visible !important;
         }
         
+        /* 确保config-section中的按钮可见 */
+        .config-section .rules-list > .btn-primary,
+        .config-section .rules-list > button.btn-primary,
+        .config-section #rules-list > .btn-primary,
+        .config-section #rules-list > button.btn-primary {
+            display: inline-block !important;
+            visibility: visible !important;
+            opacity: 1 !important;
+            background-color: #4CAF50 !important;
+            color: white !important;
+            padding: 8px 16px !important;
+            min-width: 80px !important;
+            height: 36px !important;
+            border: 2px solid #4CAF50 !important;
+            border-radius: 4px !important;
+            font-size: 14px !important;
+            font-weight: bold !important;
+            cursor: pointer !important;
+            margin-top: 8px !important;
+            position: relative !important;
+            z-index: 100 !important;
+        }
+        
         /* Location项样式 */
         .location-item {
             background: white;

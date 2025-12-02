@@ -1961,6 +1961,11 @@ const pageSize = 20;
                 if (rulesList) {
                     const ruleItems = rulesList.querySelectorAll('.rule-item');
                     if (ruleItems.length > 1) {
+                        // 删除rule-item下面的添加按钮（如果存在）
+                        const nextSibling = ruleItem.nextSibling;
+                        if (nextSibling && nextSibling.tagName === 'BUTTON' && nextSibling.textContent === '添加') {
+                            nextSibling.remove();
+                        }
                         ruleItem.remove();
                         // 更新所有规则条目的选择框（移除已删除的规则）
                         updateAllRuleSelects(rulesList.id);
@@ -1971,6 +1976,11 @@ const pageSize = 20;
                         });
                     }
                 } else {
+                    // 删除rule-item下面的添加按钮（如果存在）
+                    const nextSibling = ruleItem.nextSibling;
+                    if (nextSibling && nextSibling.tagName === 'BUTTON' && nextSibling.textContent === '添加') {
+                        nextSibling.remove();
+                    }
                     ruleItem.remove();
                     // 更新所有规则条目的选择框（移除已删除的规则）
                     updateAllRuleSelects('rules-list');

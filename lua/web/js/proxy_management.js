@@ -121,21 +121,84 @@ const pageSize = 20;
         
         // 切换后端类型相关字段
         
-        // 添加后端服务器配置项
+        // 添加单个输入框（根据类型）
+        function addInputField(type, button) {
+            const configSection = document.querySelector('#upstream-fields .config-section');
+            if (!configSection) return;
+            
+            const proxyType = document.getElementById('create-proxy-type').value;
+            
+            // 找到按钮所在的input-with-add容器
+            const currentContainer = button.closest('.input-with-add');
+            if (!currentContainer) return;
+            
+            // 创建新的输入框容器
+            const newDiv = document.createElement('div');
+            
+            switch(type) {
+                case 'location-path':
+                    if (proxyType !== 'http') return;
+                    newDiv.className = 'input-with-add';
+                    newDiv.innerHTML = `
+                        <input type="text" placeholder="匹配路径：/PATH" class="location-path-input" title="匹配路径：/PATH">
+                        <button type="button" class="btn-add" onclick="addInputField('location-path', this)" title="添加路径匹配">+</button>
+                    `;
+                    break;
+                case 'location-backend-path':
+                    if (proxyType !== 'http') return;
+                    newDiv.className = 'input-with-add';
+                    newDiv.innerHTML = `
+                        <input type="text" placeholder="目标路径：/PATH（可选）" class="location-backend-path-input" title="目标路径：/PATH（可选）">
+                        <button type="button" class="btn-add" onclick="addInputField('location-backend-path', this)" title="添加目标路径">+</button>
+                    `;
+                    break;
+                case 'address':
+                    newDiv.className = 'input-with-add';
+                    newDiv.innerHTML = `
+                        <input type="text" placeholder="IP地址" class="backend-address">
+                        <button type="button" class="btn-add" onclick="addInputField('address', this)" title="添加IP地址">+</button>
+                    `;
+                    break;
+                case 'port':
+                    newDiv.className = 'input-with-add port-input';
+                    newDiv.innerHTML = `
+                        <input type="number" placeholder="端口" class="backend-port" min="1" max="65535">
+                        <button type="button" class="btn-add" onclick="addInputField('port', this)" title="添加端口">+</button>
+                    `;
+                    break;
+                case 'weight':
+                    newDiv.className = 'input-with-add input-weight';
+                    newDiv.innerHTML = `
+                        <input type="number" placeholder="权重" class="backend-weight" value="1" min="1">
+                        <button type="button" class="btn-add" onclick="addInputField('weight', this)" title="添加权重">+</button>
+                    `;
+                    break;
+                default:
+                    return;
+            }
+            
+            // 在当前容器后面插入新容器
+            const nextSibling = currentContainer.nextSibling;
+            if (nextSibling) {
+                configSection.insertBefore(newDiv, nextSibling);
+            } else {
+                configSection.appendChild(newDiv);
+            }
+        }
+        
+        // 添加后端服务器配置项（保留用于初始化）
         function addBackend() {
             const configSection = document.querySelector('#upstream-fields .config-section');
             if (!configSection) return;
             
             const proxyType = document.getElementById('create-proxy-type').value;
             
-            let locationPathWrapper = '';
-            let locationBackendPathWrapper = '';
             if (proxyType === 'http') {
                 const locationPathDiv = document.createElement('div');
                 locationPathDiv.className = 'input-with-add';
                 locationPathDiv.innerHTML = `
                     <input type="text" placeholder="匹配路径：/PATH" class="location-path-input" title="匹配路径：/PATH">
-                    <button type="button" class="btn-add" onclick="addLocationPath()" title="添加路径匹配">+</button>
+                    <button type="button" class="btn-add" onclick="addInputField('location-path', this)" title="添加路径匹配">+</button>
                 `;
                 configSection.appendChild(locationPathDiv);
                 
@@ -143,7 +206,7 @@ const pageSize = 20;
                 locationBackendPathDiv.className = 'input-with-add';
                 locationBackendPathDiv.innerHTML = `
                     <input type="text" placeholder="目标路径：/PATH（可选）" class="location-backend-path-input" title="目标路径：/PATH（可选）">
-                    <button type="button" class="btn-add" onclick="addLocationPath()" title="添加路径匹配">+</button>
+                    <button type="button" class="btn-add" onclick="addInputField('location-backend-path', this)" title="添加目标路径">+</button>
                 `;
                 configSection.appendChild(locationBackendPathDiv);
             }
@@ -152,15 +215,15 @@ const pageSize = 20;
             addressDiv.className = 'input-with-add';
             addressDiv.innerHTML = `
                 <input type="text" placeholder="IP地址" class="backend-address">
-                <button type="button" class="btn-add" onclick="addBackend()" title="添加后端服务器">+</button>
+                <button type="button" class="btn-add" onclick="addInputField('address', this)" title="添加IP地址">+</button>
             `;
             configSection.appendChild(addressDiv);
             
             const portDiv = document.createElement('div');
-            portDiv.className = 'input-with-add';
+            portDiv.className = 'input-with-add port-input';
             portDiv.innerHTML = `
                 <input type="number" placeholder="端口" class="backend-port" min="1" max="65535">
-                <button type="button" class="btn-add" onclick="addBackend()" title="添加后端服务器">+</button>
+                <button type="button" class="btn-add" onclick="addInputField('port', this)" title="添加端口">+</button>
             `;
             configSection.appendChild(portDiv);
             
@@ -168,7 +231,7 @@ const pageSize = 20;
             weightDiv.className = 'input-with-add input-weight';
             weightDiv.innerHTML = `
                 <input type="number" placeholder="权重" class="backend-weight" value="1" min="1">
-                <button type="button" class="btn-add" onclick="addBackend()" title="添加后端服务器">+</button>
+                <button type="button" class="btn-add" onclick="addInputField('weight', this)" title="添加权重">+</button>
             `;
             configSection.appendChild(weightDiv);
             
@@ -247,61 +310,9 @@ const pageSize = 20;
             }
         }
         
-        // 添加路径匹配配置项
+        // 添加路径匹配配置项（保留用于向后兼容，实际使用addInputField）
         function addLocationPath() {
-            const configSection = document.querySelector('#upstream-fields .config-section');
-            if (!configSection) return;
-            
-            const proxyType = document.getElementById('create-proxy-type').value;
-            
-            if (proxyType === 'http') {
-                const locationPathDiv = document.createElement('div');
-                locationPathDiv.className = 'input-with-add';
-                locationPathDiv.innerHTML = `
-                    <input type="text" placeholder="匹配路径：/PATH" class="location-path-input" title="匹配路径：/PATH">
-                    <button type="button" class="btn-add" onclick="addLocationPath()" title="添加路径匹配">+</button>
-                `;
-                configSection.appendChild(locationPathDiv);
-                
-                const locationBackendPathDiv = document.createElement('div');
-                locationBackendPathDiv.className = 'input-with-add';
-                locationBackendPathDiv.innerHTML = `
-                    <input type="text" placeholder="目标路径：/PATH（可选）" class="location-backend-path-input" title="目标路径：/PATH（可选）">
-                    <button type="button" class="btn-add" onclick="addLocationPath()" title="添加路径匹配">+</button>
-                `;
-                configSection.appendChild(locationBackendPathDiv);
-            }
-            
-            const addressDiv = document.createElement('div');
-            addressDiv.className = 'input-with-add';
-            addressDiv.innerHTML = `
-                <input type="text" placeholder="IP地址" class="backend-address">
-                <button type="button" class="btn-add" onclick="addBackend()" title="添加后端服务器">+</button>
-            `;
-            configSection.appendChild(addressDiv);
-            
-            const portDiv = document.createElement('div');
-            portDiv.className = 'input-with-add';
-            portDiv.innerHTML = `
-                <input type="number" placeholder="端口" class="backend-port" min="1" max="65535">
-                <button type="button" class="btn-add" onclick="addBackend()" title="添加后端服务器">+</button>
-            `;
-            configSection.appendChild(portDiv);
-            
-            const weightDiv = document.createElement('div');
-            weightDiv.className = 'input-with-add input-weight';
-            weightDiv.innerHTML = `
-                <input type="number" placeholder="权重" class="backend-weight" value="1" min="1">
-                <button type="button" class="btn-add" onclick="addBackend()" title="添加后端服务器">+</button>
-            `;
-            configSection.appendChild(weightDiv);
-            
-            const deleteBtn = document.createElement('button');
-            deleteBtn.type = 'button';
-            deleteBtn.className = 'btn btn-danger btn-sm';
-            deleteBtn.textContent = '删除';
-            deleteBtn.onclick = function() { removeConfigItem(this); };
-            configSection.appendChild(deleteBtn);
+            addInputField('location-path', event?.target || document.querySelector('.btn-add'));
         }
         
         // 删除配置项
@@ -1468,7 +1479,7 @@ const pageSize = 20;
                     locationPathDiv.className = 'input-with-add';
                     locationPathDiv.innerHTML = `
                         <input type="text" placeholder="匹配路径：/PATH" class="location-path-input" title="匹配路径：/PATH">
-                        <button type="button" class="btn-add" onclick="addLocationPath()" title="添加路径匹配">+</button>
+                        <button type="button" class="btn-add" onclick="addInputField('location-path', this)" title="添加路径匹配">+</button>
                     `;
                     configSection.appendChild(locationPathDiv);
                     
@@ -1476,7 +1487,7 @@ const pageSize = 20;
                     locationBackendPathDiv.className = 'input-with-add';
                     locationBackendPathDiv.innerHTML = `
                         <input type="text" placeholder="目标路径：/PATH（可选）" class="location-backend-path-input" title="目标路径：/PATH（可选）">
-                        <button type="button" class="btn-add" onclick="addLocationPath()" title="添加路径匹配">+</button>
+                        <button type="button" class="btn-add" onclick="addInputField('location-backend-path', this)" title="添加目标路径">+</button>
                     `;
                     configSection.appendChild(locationBackendPathDiv);
                 }
@@ -1485,15 +1496,15 @@ const pageSize = 20;
                 addressDiv.className = 'input-with-add';
                 addressDiv.innerHTML = `
                     <input type="text" placeholder="IP地址" class="backend-address">
-                    <button type="button" class="btn-add" onclick="addBackend()" title="添加后端服务器">+</button>
+                    <button type="button" class="btn-add" onclick="addInputField('address', this)" title="添加IP地址">+</button>
                 `;
                 configSection.appendChild(addressDiv);
                 
                 const portDiv = document.createElement('div');
-                portDiv.className = 'input-with-add';
+                portDiv.className = 'input-with-add port-input';
                 portDiv.innerHTML = `
                     <input type="number" placeholder="端口" class="backend-port" min="1" max="65535">
-                    <button type="button" class="btn-add" onclick="addBackend()" title="添加后端服务器">+</button>
+                    <button type="button" class="btn-add" onclick="addInputField('port', this)" title="添加端口">+</button>
                 `;
                 configSection.appendChild(portDiv);
                 
@@ -1501,7 +1512,7 @@ const pageSize = 20;
                 weightDiv.className = 'input-with-add input-weight';
                 weightDiv.innerHTML = `
                     <input type="number" placeholder="权重" class="backend-weight" value="1" min="1">
-                    <button type="button" class="btn-add" onclick="addBackend()" title="添加后端服务器">+</button>
+                    <button type="button" class="btn-add" onclick="addInputField('weight', this)" title="添加权重">+</button>
                 `;
                 configSection.appendChild(weightDiv);
                 

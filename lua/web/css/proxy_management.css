@@ -407,19 +407,33 @@
             min-width: 120px;
         }
         
-        /* 权重输入框固定宽度（缩短一半） */
+        /* 端口输入框容器固定宽度 */
+        .input-with-add.port-input {
+            flex: 0 0 80px;
+            min-width: 80px;
+            max-width: 80px;
+        }
+        
+        /* 权重输入框固定宽度 */
         .input-with-add.input-weight {
-            flex: 0 0 40px;
-            min-width: 40px;
-            max-width: 40px;
+            flex: 0 0 60px;
+            min-width: 60px;
+            max-width: 60px;
         }
         
         .input-with-add input {
             width: 100%;
-            padding: 6px 10px;
+            padding: 6px 8px;
             font-size: 13px;
             border: 1px solid #ddd;
             border-radius: 4px;
+            box-sizing: border-box;
+        }
+        
+        /* 权重输入框的input，减少padding确保数字显示 */
+        .input-with-add.input-weight input {
+            padding: 6px 4px;
+            text-align: center;
         }
         
         .btn-add {

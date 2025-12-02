@@ -124,23 +124,23 @@
                     <div class="config-section">
                         <div class="input-with-add" id="location-path-input-wrapper" style="display: none;">
                             <input type="text" placeholder="匹配路径：/PATH" class="location-path-input" title="匹配路径：/PATH">
-                            <button type="button" class="btn-add" onclick="addLocationPath()" title="添加路径匹配">+</button>
+                            <button type="button" class="btn-add" onclick="addInputField('location-path', this)" title="添加路径匹配">+</button>
                         </div>
                         <div class="input-with-add">
                             <input type="text" placeholder="IP地址" class="backend-address">
-                            <button type="button" class="btn-add" onclick="addBackend()" title="添加后端服务器">+</button>
+                            <button type="button" class="btn-add" onclick="addInputField('address', this)" title="添加IP地址">+</button>
                         </div>
-                        <div class="input-with-add">
+                        <div class="input-with-add port-input">
                             <input type="number" placeholder="端口" class="backend-port" min="1" max="65535">
-                            <button type="button" class="btn-add" onclick="addBackend()" title="添加后端服务器">+</button>
+                            <button type="button" class="btn-add" onclick="addInputField('port', this)" title="添加端口">+</button>
                         </div>
                         <div class="input-with-add" id="location-backend-path-input-wrapper" style="display: none;">
                             <input type="text" placeholder="目标路径：/PATH（可选）" class="location-backend-path-input" title="目标路径：/PATH（可选）">
-                            <button type="button" class="btn-add" onclick="addLocationPath()" title="添加路径匹配">+</button>
+                            <button type="button" class="btn-add" onclick="addInputField('location-backend-path', this)" title="添加目标路径">+</button>
                         </div>
                         <div class="input-with-add input-weight">
                             <input type="number" placeholder="权重" class="backend-weight" value="1" min="1">
-                            <button type="button" class="btn-add" onclick="addBackend()" title="添加后端服务器">+</button>
+                            <button type="button" class="btn-add" onclick="addInputField('weight', this)" title="添加权重">+</button>
                         </div>
                         <button type="button" class="btn btn-danger btn-sm" onclick="removeConfigItem(this)">删除</button>
                     </div>

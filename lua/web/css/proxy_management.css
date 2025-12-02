@@ -896,12 +896,6 @@
             max-width: 250px !important;
         }
         
-        /* 监听地址的form-group设置固定宽度，与代理类型的form-group对齐 */
-        #edit-modal #edit-http-fields .form-group:nth-child(3) {
-            flex: 0 0 50%;
-            max-width: 50%;
-        }
-        
         /* 编辑代理TCP/UDP：监听端口输入框同代理名称输入框一样宽 */
         #edit-modal #edit-tcp-udp-fields #edit-tcp-udp-listen-port {
             width: 50% !important;

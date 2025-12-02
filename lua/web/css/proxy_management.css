@@ -706,10 +706,10 @@
             max-width: 250px !important;
         }
         
-        /* 负载均衡算法输入框宽度（在form-row中，增加宽度，至少显示四个汉字） */
+        /* 负载均衡算法输入框宽度（在form-row中，增加宽度，至少显示四个汉字，再扩宽一个汉字） */
         #create-proxy-modal .form-row #create-load-balance {
-            width: 70% !important;
-            max-width: 450px !important;
+            width: 75% !important;
+            max-width: 480px !important;
         }
         
         /* 连接超时、发送超时、读取超时输入框宽度（在form-row中，减少宽度） */
@@ -813,10 +813,10 @@
             max-width: 250px !important;
         }
         
-        /* 负载均衡算法输入框宽度（在form-row中，增加宽度，至少显示四个汉字） */
+        /* 负载均衡算法输入框宽度（在form-row中，增加宽度，至少显示四个汉字，再扩宽一个汉字） */
         #edit-modal .form-row #edit-load-balance {
-            width: 70% !important;
-            max-width: 450px !important;
+            width: 75% !important;
+            max-width: 480px !important;
         }
         
         /* 连接超时、发送超时、读取超时输入框宽度（在form-row中，减少宽度） */

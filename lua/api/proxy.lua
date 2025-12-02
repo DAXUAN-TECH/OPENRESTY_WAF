@@ -187,13 +187,32 @@ function _M.list()
                         if rule then
                             rules_array[j] = {
                                 id = rule.id or rule.ID,
-                                rule_name = rule.rule_name or rule.RULE_NAME or rule.ruleName,
-                                rule_type = rule.rule_type or rule.RULE_TYPE or rule.ruleType
+                                rule_name = rule.rule_name or rule.RULE_NAME or rule.ruleName or "",
+                                rule_type = rule.rule_type or rule.RULE_TYPE or rule.ruleType or ""
                             }
                         end
                     end
+                    -- 测试 JSON 序列化，确保 rules 是数组格式
+                    local cjson = require "cjson"
+                    local test_json = cjson.encode(rules_array)
+                    -- 检查 JSON 字符串是否以 [ 开头（数组）而不是 { 开头（对象）
+                    if not test_json:match("^%[") then
+                        ngx.log(ngx.ERR, "proxy_id=", proxy.id, ", WARNING: rules JSON does not start with [, it starts with: ", test_json:sub(1, 1))
+                        -- 强制重新构建为数组
+                        rules_array = {}
+                        for j = 1, #proxy.rules do
+                            local rule = proxy.rules[j]
+                            if rule then
+                                table.insert(rules_array, {
+                                    id = rule.id or rule.ID,
+                                    rule_name = rule.rule_name or rule.RULE_NAME or rule.ruleName or "",
+                                    rule_type = rule.rule_type or rule.RULE_TYPE or rule.ruleType or ""
+                                })
+                            end
+                        end
+                    end
                     -- 调试日志：记录规则数量
-                    ngx.log(ngx.DEBUG, "proxy_id=", proxy.id, ", rules_array length: ", #rules_array)
+                    ngx.log(ngx.INFO, "proxy_id=", proxy.id, ", rules_array length: ", #rules_array, ", JSON: ", test_json:sub(1, 200))
                 else
                     -- 如果不是数组，尝试转换为数组
                     local idx = 1
@@ -201,8 +220,8 @@ function _M.list()
                         if rule then
                             rules_array[idx] = {
                                 id = rule.id or rule.ID,
-                                rule_name = rule.rule_name or rule.RULE_NAME or rule.ruleName,
-                                rule_type = rule.rule_type or rule.RULE_TYPE or rule.ruleType
+                                rule_name = rule.rule_name or rule.RULE_NAME or rule.ruleName or "",
+                                rule_type = rule.rule_type or rule.RULE_TYPE or rule.ruleType or ""
                             }
                             idx = idx + 1
                         end

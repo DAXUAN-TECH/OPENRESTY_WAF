@@ -923,11 +923,14 @@
             max-width: 480px !important;
         }
         
-        /* 连接超时、发送超时、读取超时输入框宽度（在form-row中，减少宽度） */
+        /* 连接超时、发送超时、读取超时输入框宽度（在form-row中，减少宽度，与创建代理保持一致） */
         #edit-modal .form-row #edit-proxy-connect-timeout {
             width: 15% !important;
             max-width: 75px !important;
             min-width: 75px !important;
+            padding: 8px 12px !important;
+            text-align: left !important;
+            box-sizing: border-box !important;
         }
         
         /* 发送超时、读取超时输入框宽度（扩宽一倍以显示字符） */

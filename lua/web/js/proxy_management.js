@@ -128,7 +128,7 @@ const pageSize = 20;
             
             const proxyType = document.getElementById('create-proxy-type').value;
             const item = document.createElement('div');
-            item.className = 'config-item';
+            item.className = 'config-item-row';
             
             let locationPathWrapper = '';
             let locationBackendPathWrapper = '';
@@ -148,23 +148,21 @@ const pageSize = 20;
             }
             
             item.innerHTML = `
-                <div class="config-item-row">
-                    ${locationPathWrapper}
-                    <div class="input-with-add">
-                        <input type="text" placeholder="IP地址" class="backend-address">
-                        <button type="button" class="btn-add" onclick="addBackend()" title="添加后端服务器">+</button>
-                    </div>
-                    <div class="input-with-add">
-                        <input type="number" placeholder="端口" class="backend-port" min="1" max="65535">
-                        <button type="button" class="btn-add" onclick="addBackend()" title="添加后端服务器">+</button>
-                    </div>
-                    ${locationBackendPathWrapper}
-                    <div class="input-with-add input-weight">
-                        <input type="number" placeholder="权重" class="backend-weight" value="1" min="1">
-                        <button type="button" class="btn-add" onclick="addBackend()" title="添加后端服务器">+</button>
-                    </div>
-                    <button type="button" class="btn btn-danger btn-sm" onclick="removeConfigItem(this)">删除</button>
+                ${locationPathWrapper}
+                <div class="input-with-add">
+                    <input type="text" placeholder="IP地址" class="backend-address">
+                    <button type="button" class="btn-add" onclick="addBackend()" title="添加后端服务器">+</button>
                 </div>
+                <div class="input-with-add">
+                    <input type="number" placeholder="端口" class="backend-port" min="1" max="65535">
+                    <button type="button" class="btn-add" onclick="addBackend()" title="添加后端服务器">+</button>
+                </div>
+                ${locationBackendPathWrapper}
+                <div class="input-with-add input-weight">
+                    <input type="number" placeholder="权重" class="backend-weight" value="1" min="1">
+                    <button type="button" class="btn-add" onclick="addBackend()" title="添加后端服务器">+</button>
+                </div>
+                <button type="button" class="btn btn-danger btn-sm" onclick="removeConfigItem(this)">删除</button>
             `;
             configSection.appendChild(item);
         }
@@ -243,7 +241,7 @@ const pageSize = 20;
             
             const proxyType = document.getElementById('create-proxy-type').value;
             const item = document.createElement('div');
-            item.className = 'config-item';
+            item.className = 'config-item-row';
             
             let locationPathWrapper = '';
             let locationBackendPathWrapper = '';
@@ -263,33 +261,31 @@ const pageSize = 20;
             }
             
             item.innerHTML = `
-                <div class="config-item-row">
-                    ${locationPathWrapper}
-                    <div class="input-with-add">
-                        <input type="text" placeholder="IP地址" class="backend-address">
-                        <button type="button" class="btn-add" onclick="addBackend()" title="添加后端服务器">+</button>
-                    </div>
-                    <div class="input-with-add">
-                        <input type="number" placeholder="端口" class="backend-port" min="1" max="65535">
-                        <button type="button" class="btn-add" onclick="addBackend()" title="添加后端服务器">+</button>
-                    </div>
-                    ${locationBackendPathWrapper}
-                    <div class="input-with-add input-weight">
-                        <input type="number" placeholder="权重" class="backend-weight" value="1" min="1">
-                        <button type="button" class="btn-add" onclick="addBackend()" title="添加后端服务器">+</button>
-                    </div>
-                    <button type="button" class="btn btn-danger btn-sm" onclick="removeConfigItem(this)">删除</button>
+                ${locationPathWrapper}
+                <div class="input-with-add">
+                    <input type="text" placeholder="IP地址" class="backend-address">
+                    <button type="button" class="btn-add" onclick="addBackend()" title="添加后端服务器">+</button>
                 </div>
+                <div class="input-with-add">
+                    <input type="number" placeholder="端口" class="backend-port" min="1" max="65535">
+                    <button type="button" class="btn-add" onclick="addBackend()" title="添加后端服务器">+</button>
+                </div>
+                ${locationBackendPathWrapper}
+                <div class="input-with-add input-weight">
+                    <input type="number" placeholder="权重" class="backend-weight" value="1" min="1">
+                    <button type="button" class="btn-add" onclick="addBackend()" title="添加后端服务器">+</button>
+                </div>
+                <button type="button" class="btn btn-danger btn-sm" onclick="removeConfigItem(this)">删除</button>
             `;
             configSection.appendChild(item);
         }
         
         // 删除配置项
         function removeConfigItem(button) {
-            const item = button.closest('.config-item');
+            const item = button.closest('.config-item-row');
             if (item) {
                 const configSection = document.querySelector('#upstream-fields .config-section');
-                if (configSection && configSection.querySelectorAll('.config-item').length > 1) {
+                if (configSection && configSection.querySelectorAll('.config-item-row').length > 1) {
                     item.remove();
                 } else {
                     // 至少保留一个
@@ -798,7 +794,7 @@ const pageSize = 20;
                 const backends = [];
                 
                 if (configSection) {
-                    const configItems = configSection.querySelectorAll('.config-item');
+                    const configItems = configSection.querySelectorAll('.config-item-row');
                     configItems.forEach(item => {
                         // 收集路径匹配
                         const locationPathInput = item.querySelector('.location-path-input');
@@ -848,7 +844,7 @@ const pageSize = 20;
                 const backends = [];
                 
                 if (configSection) {
-                    const configItems = configSection.querySelectorAll('.config-item');
+                    const configItems = configSection.querySelectorAll('.config-item-row');
                     configItems.forEach(item => {
                         const address = item.querySelector('.backend-address')?.value;
                         const port = item.querySelector('.backend-port')?.value;
@@ -1345,24 +1341,22 @@ const pageSize = 20;
                 ` : '';
                 
                 configSection.innerHTML = `
-                    <div class="config-item">
-                        <div class="config-item-row">
-                            ${locationPathWrapper}
-                            <div class="input-with-add">
-                                <input type="text" placeholder="IP地址" class="backend-address">
-                                <button type="button" class="btn-add" onclick="addBackend()" title="添加后端服务器">+</button>
-                            </div>
-                            <div class="input-with-add">
-                                <input type="number" placeholder="端口" class="backend-port" min="1" max="65535">
-                                <button type="button" class="btn-add" onclick="addBackend()" title="添加后端服务器">+</button>
-                            </div>
-                            ${locationBackendPathWrapper}
-                            <div class="input-with-add input-weight">
-                                <input type="number" placeholder="权重" class="backend-weight" value="1" min="1">
-                                <button type="button" class="btn-add" onclick="addBackend()" title="添加后端服务器">+</button>
-                            </div>
-                            <button type="button" class="btn btn-danger btn-sm" onclick="removeConfigItem(this)">删除</button>
+                    <div class="config-item-row">
+                        ${locationPathWrapper}
+                        <div class="input-with-add">
+                            <input type="text" placeholder="IP地址" class="backend-address">
+                            <button type="button" class="btn-add" onclick="addBackend()" title="添加后端服务器">+</button>
                         </div>
+                        <div class="input-with-add">
+                            <input type="number" placeholder="端口" class="backend-port" min="1" max="65535">
+                            <button type="button" class="btn-add" onclick="addBackend()" title="添加后端服务器">+</button>
+                        </div>
+                        ${locationBackendPathWrapper}
+                        <div class="input-with-add input-weight">
+                            <input type="number" placeholder="权重" class="backend-weight" value="1" min="1">
+                            <button type="button" class="btn-add" onclick="addBackend()" title="添加后端服务器">+</button>
+                        </div>
+                        <button type="button" class="btn btn-danger btn-sm" onclick="removeConfigItem(this)">删除</button>
                     </div>
                 `;
             }

@@ -388,6 +388,12 @@
             max-width: 250px !important;
         }
         
+        /* 监听地址输入框与代理类型输入框对齐（宽度一致） */
+        #create-proxy-modal #create-listen-address {
+            width: 50% !important;
+            max-width: 250px !important;
+        }
+        
         /* 监听端口输入框缩短二分之一（在form-row中，从100%缩短到50%） */
         #create-proxy-modal #create-listen-port {
             width: 25% !important;

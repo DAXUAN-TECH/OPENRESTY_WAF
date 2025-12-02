@@ -1069,10 +1069,12 @@ const pageSize = 20;
                                         });
                                     }
                                     
-                                    // 添加到backends
+                                    // 添加到backends，关联location_path
                                     backends.push({
+                                        location_path: locationPath || null,
                                         backend_address: address,
                                         backend_port: parseInt(port),
+                                        backend_path: locationBackendPath || null,
                                         weight: parseInt(weight) || 1
                                     });
                                 }

@@ -606,6 +606,7 @@ ROW_FORMAT=DYNAMIC COMMENT='反向代理配置表：存储反向代理配置，�
 CREATE TABLE IF NOT EXISTS waf_proxy_backends (
     id INT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '主键ID，自增',
     proxy_id INT UNSIGNED NOT NULL COMMENT '代理配置ID（关联waf_proxy_configs表）',
+    location_path VARCHAR(255) DEFAULT NULL COMMENT 'Location路径（HTTP/HTTPS代理时使用，标识该后端服务器属于哪个location，用于为每个location生成独立的upstream配置）',
     backend_address VARCHAR(255) NOT NULL COMMENT '后端服务器地址（IP地址或域名）',
     backend_port INT UNSIGNED NOT NULL COMMENT '后端服务器端口',
     backend_path VARCHAR(255) DEFAULT NULL COMMENT '后端路径（HTTP/HTTPS代理时使用，代理到后端的特定路径，如:/path，留空则代理到根路径）',
@@ -619,10 +620,11 @@ CREATE TABLE IF NOT EXISTS waf_proxy_backends (
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '记录最后更新时间',
     PRIMARY KEY (id),
     KEY idx_proxy_id_status (proxy_id, status) COMMENT '代理ID和状态联合索引，用于查询特定代理的启用后端',
+    KEY idx_proxy_id_location_path (proxy_id, location_path) COMMENT '代理ID和Location路径联合索引，用于查询特定location的后端服务器',
     -- 外键约束：代理配置删除时自动删除其所有后端服务器
     FOREIGN KEY (proxy_id) REFERENCES waf_proxy_configs(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci 
-ROW_FORMAT=DYNAMIC COMMENT='反向代理后端服务器表：存储upstream类型的多个后端服务器配置';
+ROW_FORMAT=DYNAMIC COMMENT='反向代理后端服务器表：存储upstream类型的多个后端服务器配置，支持为每个location配置独立的后端服务器';
 
 -- 插入反向代理功能开关
 INSERT INTO waf_feature_switches (feature_key, feature_name, description, enable, config_source) VALUES
@@ -756,6 +758,12 @@ ORDER BY scheduled_time ASC;
 -- 注意：如果backen字段不存在或backend_path字段已存在，此语句会失败，需要手动注释或删除
 -- ALTER TABLE waf_proxy_configs 
 -- CHANGE COLUMN backen backend_path VARCHAR(255) DEFAULT NULL COMMENT '后端路径（HTTP代理时使用，代理到后端的特定路径，如/aaa，留空则代理到根路径，注意：后端服务器路径存储在waf_proxy_backends表中）';
+
+-- 反向代理后端服务器表：添加location_path字段（如果不存在）
+-- 注意：如果字段已存在，此语句会失败，需要手动注释或删除
+-- ALTER TABLE waf_proxy_backends 
+-- ADD COLUMN location_path VARCHAR(255) DEFAULT NULL COMMENT 'Location路径（HTTP/HTTPS代理时使用，标识该后端服务器属于哪个location，用于为每个location生成独立的upstream配置）' AFTER proxy_id,
+-- ADD KEY idx_proxy_id_location_path (proxy_id, location_path) COMMENT '代理ID和Location路径联合索引，用于查询特定location的后端服务器';
 
 -- 访问日志表：添加域名字段（如果不存在）
 -- 注意：如果字段已存在，此语句会失败，需要手动注释或删除

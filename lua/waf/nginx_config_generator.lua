@@ -48,13 +48,16 @@ local function escape_nginx_value(value)
     return value
 end
 
--- 生成upstream配置
-local function generate_upstream_config(proxy, backends)
+-- 生成upstream配置（用于单个location）
+local function generate_upstream_config_for_location(proxy, backends, upstream_name)
     if not backends or #backends == 0 then
-        return ""
+        return nil
     end
     
-    local upstream_name = "upstream_" .. proxy.id
+    if not upstream_name then
+        upstream_name = "upstream_" .. proxy.id
+    end
+    
     local config = "upstream " .. upstream_name .. " {\n"
     
     -- 负载均衡算法
@@ -109,7 +112,22 @@ local function generate_upstream_config(proxy, backends)
     end
     
     config = config .. "}\n\n"
-    return config, upstream_name
+    return config
+end
+
+-- 生成upstream配置（向后兼容，用于单个upstream）
+local function generate_upstream_config(proxy, backends)
+    if not backends or #backends == 0 then
+        return "", nil
+    end
+    
+    local upstream_name = "upstream_" .. proxy.id
+    local config = generate_upstream_config_for_location(proxy, backends, upstream_name)
+    if config then
+        return config, upstream_name
+    else
+        return "", nil
+    end
 end
 
 -- 生成HTTP server块配置
@@ -199,55 +217,67 @@ local function generate_http_server_config(proxy, upstream_name, backends)
     -- 如果location_paths有值，生成多个location块；否则使用单个location块（向后兼容）
     local location_paths = proxy.location_paths
     if location_paths and type(location_paths) == "table" and #location_paths > 0 then
-        -- 生成多个location块
-        for _, loc in ipairs(location_paths) do
+        -- 生成多个location块，每个location使用独立的upstream配置
+        for loc_index, loc in ipairs(location_paths) do
             if loc.location_path and loc.location_path ~= "" then
                 config = config .. "\n    location " .. escape_nginx_value(loc.location_path) .. " {\n"
                 
+                -- 为每个location使用独立的upstream配置
+                local location_upstream_name = "upstream_" .. proxy.id .. "_loc_" .. loc_index
+                
+                -- 筛选属于当前location的后端服务器
+                local location_backends = {}
+                if backends then
+                    for _, backend in ipairs(backends) do
+                        local backend_location_path = null_to_nil(backend.location_path)
+                        if backend_location_path == loc.location_path then
+                            table.insert(location_backends, backend)
+                        end
+                    end
+                end
+                
                 -- 代理到后端
-                if upstream_name then
+                if #location_backends > 0 then
                     -- 使用location配置中的backend_path，如果没有则使用后端服务器的backend_path
                     local backend_path = loc.backend_path
                     if not backend_path or backend_path == "" then
                         -- 检查后端服务器是否有路径配置
-                        if backends and #backends > 0 then
-                            local first_path = backends[1].backend_path
-                            if first_path == nil or first_path == cjson.null then
-                                first_path = nil
-                            elseif type(first_path) == "string" and first_path:match("^%s*$") then
-                                first_path = nil
+                        local first_path = location_backends[1].backend_path
+                        if first_path == nil or first_path == cjson.null then
+                            first_path = nil
+                        elseif type(first_path) == "string" and first_path:match("^%s*$") then
+                            first_path = nil
+                        end
+                        
+                        local all_same = true
+                        if first_path and first_path ~= "" then
+                            for i = 2, #location_backends do
+                                local path = location_backends[i].backend_path
+                                if path == nil or path == cjson.null then
+                                    path = nil
+                                elseif type(path) == "string" and path:match("^%s*$") then
+                                    path = nil
+                                end
+                                if path ~= first_path then
+                                    all_same = false
+                                    break
+                                end
                             end
-                            
-                            local all_same = true
-                            if first_path and first_path ~= "" then
-                                for i = 2, #backends do
-                                    local path = backends[i].backend_path
-                                    if path == nil or path == cjson.null then
-                                        path = nil
-                                    elseif type(path) == "string" and path:match("^%s*$") then
-                                        path = nil
-                                    end
-                                    if path ~= first_path then
-                                        all_same = false
-                                        break
-                                    end
-                                end
-                                if all_same then
-                                    backend_path = first_path
-                                end
+                            if all_same then
+                                backend_path = first_path
                             end
                         end
                     end
                     
                     -- 如果后端服务器有路径，在proxy_pass中添加路径
                     if backend_path and backend_path ~= "" then
-                        config = config .. "        proxy_pass http://" .. upstream_name .. escape_nginx_value(backend_path) .. ";\n"
+                        config = config .. "        proxy_pass http://" .. location_upstream_name .. escape_nginx_value(backend_path) .. ";\n"
                     else
                         -- 如果后端服务器没有路径，直接代理到根路径
-                        config = config .. "        proxy_pass http://" .. upstream_name .. ";\n"
+                        config = config .. "        proxy_pass http://" .. location_upstream_name .. ";\n"
                     end
                 else
-                    ngx.log(ngx.ERR, "generate_http_config: no upstream config for proxy_id=", proxy.id, ", proxy_name=", proxy.proxy_name)
+                    ngx.log(ngx.ERR, "generate_http_config: no backends for location=", loc.location_path, ", proxy_id=", proxy.id, ", proxy_name=", proxy.proxy_name)
                     config = config .. "        # 错误：缺少后端服务器配置\n"
                     config = config .. "        return 503;\n"
                 end
@@ -720,84 +750,150 @@ function _M.generate_all_configs()
         local upstream_name = nil
         local upstream_config = nil
         
-        -- 从数据库查询多个后端服务器
+        -- 从数据库查询多个后端服务器（包含location_path字段）
         local backends_sql = [[
-            SELECT id, backend_address, backend_port, backend_path, weight, max_fails, fail_timeout,
+            SELECT id, location_path, backend_address, backend_port, backend_path, weight, max_fails, fail_timeout,
                    backup, down, status
             FROM waf_proxy_backends
             WHERE proxy_id = ? AND status = 1
-            ORDER BY weight DESC, id ASC
+            ORDER BY location_path, weight DESC, id ASC
         ]]
         backends, _ = mysql_pool.query(backends_sql, proxy.id)
         
-        -- 生成upstream配置（如果有后端服务器）
-        if backends and #backends > 0 then
-            if proxy.proxy_type == "http" then
-                upstream_config, upstream_name = generate_upstream_config(proxy, backends)
-            else
-                upstream_config, upstream_name = generate_stream_upstream_config(proxy, backends)
+        -- 对于HTTP/HTTPS代理，如果使用location_paths，为每个location生成独立的upstream配置
+        if proxy.proxy_type == "http" and proxy.location_paths and type(proxy.location_paths) == "table" and #proxy.location_paths > 0 then
+            -- 为每个location生成独立的upstream配置
+            local upstream_dir = project_root .. "/conf.d/upstream/http_https"
+            local dir_ok = path_utils.ensure_dir(upstream_dir)
+            if not dir_ok then
+                ngx.log(ngx.ERR, "无法创建upstream目录: ", upstream_dir)
+                return false, "无法创建upstream目录: " .. upstream_dir
             end
             
-            -- 生成独立的upstream配置文件
-            if upstream_config and upstream_name then
-                -- 根据代理类型确定upstream配置文件目录
-                local upstream_subdir = ""
-                local upstream_filename = ""
-                if proxy.proxy_type == "http" then
-                    upstream_subdir = "http_https"
-                    -- HTTP/HTTPS upstream文件名使用 http_upstream_ 前缀
-                    upstream_filename = "http_upstream_" .. proxy.id .. ".conf"
-                else
-                    upstream_subdir = "tcp_udp"
-                    -- TCP/UDP upstream文件名保持 stream_upstream_ 前缀
-                    upstream_filename = upstream_name .. ".conf"
-                end
-                
-                local upstream_file = project_root .. "/conf.d/upstream/" .. upstream_subdir .. "/" .. upstream_filename
-                
-                -- 确保upstream子目录存在
-                local upstream_dir = project_root .. "/conf.d/upstream/" .. upstream_subdir
-                local dir_ok = path_utils.ensure_dir(upstream_dir)
-                if not dir_ok then
-                    ngx.log(ngx.ERR, "无法创建upstream目录: ", upstream_dir)
-                    return false, "无法创建upstream目录: " .. upstream_dir
-                end
-                
-                -- 检查目录是否存在且有写入权限
-                local test_file = io.open(upstream_dir .. "/.test_write", "w")
-                if test_file then
-                    test_file:close()
-                    os.remove(upstream_dir .. "/.test_write")
-                else
-                    ngx.log(ngx.ERR, "upstream目录无写入权限: ", upstream_dir, ", 请检查目录权限（应为 755 且所有者应为 nobody）")
-                    return false, "upstream目录无写入权限: " .. upstream_dir
-                end
-                
-                local upstream_fd = io.open(upstream_file, "w")
-                if upstream_fd then
-                    local upstream_file_content = "# ============================================\n"
-                    upstream_file_content = upstream_file_content .. "# Upstream配置: " .. escape_nginx_value(proxy.proxy_name) .. " (代理ID: " .. proxy.id .. ")\n"
-                    upstream_file_content = upstream_file_content .. "# 类型: " .. string.upper(proxy.proxy_type) .. "\n"
-                    upstream_file_content = upstream_file_content .. "# 后端类型: 多个后端（负载均衡）\n"
-                    upstream_file_content = upstream_file_content .. "# 自动生成，请勿手动修改\n"
-                    upstream_file_content = upstream_file_content .. "# ============================================\n\n"
-                    upstream_file_content = upstream_file_content .. upstream_config
-                    upstream_fd:write(upstream_file_content)
-                    upstream_fd:close()
-                    ngx.log(ngx.INFO, "生成upstream配置文件: ", upstream_file, " (后端类型: ", proxy.backend_type, ")")
-                else
-                    -- 尝试获取更详细的错误信息
-                    local err_msg = "无法创建upstream配置文件: " .. upstream_file
-                    -- 检查文件是否已存在但无法写入
-                    local test_read = io.open(upstream_file, "r")
-                    if test_read then
-                        test_read:close()
-                        err_msg = err_msg .. " (文件已存在但无写入权限，请检查文件权限)"
-                    else
-                        err_msg = err_msg .. " (可能原因：目录不存在、权限不足、磁盘空间不足或inode不足)"
+            -- 检查目录是否有写入权限
+            local test_file = io.open(upstream_dir .. "/.test_write", "w")
+            if test_file then
+                test_file:close()
+                os.remove(upstream_dir .. "/.test_write")
+            else
+                ngx.log(ngx.ERR, "upstream目录无写入权限: ", upstream_dir)
+                return false, "upstream目录无写入权限: " .. upstream_dir
+            end
+            
+            -- 为每个location生成upstream配置
+            for loc_index, loc in ipairs(proxy.location_paths) do
+                if loc.location_path and loc.location_path ~= "" then
+                    -- 筛选属于当前location的后端服务器
+                    local location_backends = {}
+                    for _, backend in ipairs(backends or {}) do
+                        local backend_location_path = null_to_nil(backend.location_path)
+                        if backend_location_path == loc.location_path then
+                            table.insert(location_backends, backend)
+                        end
                     end
-                    ngx.log(ngx.ERR, err_msg, ", 项目根目录: ", project_root, ", upstream目录: ", upstream_dir)
-                    return false, err_msg
+                    
+                    -- 如果该location有后端服务器，生成upstream配置
+                    if #location_backends > 0 then
+                        -- 生成upstream名称：upstream_{proxy_id}_loc_{index}
+                        local location_upstream_name = "upstream_" .. proxy.id .. "_loc_" .. loc_index
+                        local location_upstream_config = generate_upstream_config_for_location(proxy, location_backends, location_upstream_name)
+                        
+                        if location_upstream_config then
+                            -- 生成独立的upstream配置文件
+                            local location_upstream_filename = "http_upstream_" .. proxy.id .. "_loc_" .. loc_index .. ".conf"
+                            local location_upstream_file = upstream_dir .. "/" .. location_upstream_filename
+                            
+                            local upstream_fd = io.open(location_upstream_file, "w")
+                            if upstream_fd then
+                                local upstream_file_content = "# ============================================\n"
+                                upstream_file_content = upstream_file_content .. "# Upstream配置: " .. escape_nginx_value(proxy.proxy_name) .. " (代理ID: " .. proxy.id .. ")\n"
+                                upstream_file_content = upstream_file_content .. "# Location路径: " .. escape_nginx_value(loc.location_path) .. "\n"
+                                upstream_file_content = upstream_file_content .. "# 类型: " .. string.upper(proxy.proxy_type) .. "\n"
+                                upstream_file_content = upstream_file_content .. "# 后端类型: 多个后端（负载均衡）\n"
+                                upstream_file_content = upstream_file_content .. "# 自动生成，请勿手动修改\n"
+                                upstream_file_content = upstream_file_content .. "# ============================================\n\n"
+                                upstream_file_content = upstream_file_content .. location_upstream_config
+                                upstream_fd:write(upstream_file_content)
+                                upstream_fd:close()
+                                ngx.log(ngx.INFO, "生成location upstream配置文件: ", location_upstream_file, " (location: ", loc.location_path, ")")
+                            else
+                                ngx.log(ngx.ERR, "无法创建location upstream配置文件: ", location_upstream_file)
+                                return false, "无法创建location upstream配置文件: " .. location_upstream_file
+                            end
+                        end
+                    end
+                end
+            end
+        else
+            -- 向后兼容：如果没有location_paths或不是HTTP代理，使用原来的逻辑（单个upstream配置）
+            if backends and #backends > 0 then
+                if proxy.proxy_type == "http" then
+                    upstream_config, upstream_name = generate_upstream_config(proxy, backends)
+                else
+                    upstream_config, upstream_name = generate_stream_upstream_config(proxy, backends)
+                end
+                
+                -- 生成独立的upstream配置文件
+                if upstream_config and upstream_name then
+                    -- 根据代理类型确定upstream配置文件目录
+                    local upstream_subdir = ""
+                    local upstream_filename = ""
+                    if proxy.proxy_type == "http" then
+                        upstream_subdir = "http_https"
+                        -- HTTP/HTTPS upstream文件名使用 http_upstream_ 前缀
+                        upstream_filename = "http_upstream_" .. proxy.id .. ".conf"
+                    else
+                        upstream_subdir = "tcp_udp"
+                        -- TCP/UDP upstream文件名保持 stream_upstream_ 前缀
+                        upstream_filename = upstream_name .. ".conf"
+                    end
+                    
+                    local upstream_file = project_root .. "/conf.d/upstream/" .. upstream_subdir .. "/" .. upstream_filename
+                    
+                    -- 确保upstream子目录存在
+                    local upstream_dir = project_root .. "/conf.d/upstream/" .. upstream_subdir
+                    local dir_ok = path_utils.ensure_dir(upstream_dir)
+                    if not dir_ok then
+                        ngx.log(ngx.ERR, "无法创建upstream目录: ", upstream_dir)
+                        return false, "无法创建upstream目录: " .. upstream_dir
+                    end
+                    
+                    -- 检查目录是否存在且有写入权限
+                    local test_file = io.open(upstream_dir .. "/.test_write", "w")
+                    if test_file then
+                        test_file:close()
+                        os.remove(upstream_dir .. "/.test_write")
+                    else
+                        ngx.log(ngx.ERR, "upstream目录无写入权限: ", upstream_dir, ", 请检查目录权限（应为 755 且所有者应为 nobody）")
+                        return false, "upstream目录无写入权限: " .. upstream_dir
+                    end
+                    
+                    local upstream_fd = io.open(upstream_file, "w")
+                    if upstream_fd then
+                        local upstream_file_content = "# ============================================\n"
+                        upstream_file_content = upstream_file_content .. "# Upstream配置: " .. escape_nginx_value(proxy.proxy_name) .. " (代理ID: " .. proxy.id .. ")\n"
+                        upstream_file_content = upstream_file_content .. "# 类型: " .. string.upper(proxy.proxy_type) .. "\n"
+                        upstream_file_content = upstream_file_content .. "# 后端类型: 多个后端（负载均衡）\n"
+                        upstream_file_content = upstream_file_content .. "# 自动生成，请勿手动修改\n"
+                        upstream_file_content = upstream_file_content .. "# ============================================\n\n"
+                        upstream_file_content = upstream_file_content .. upstream_config
+                        upstream_fd:write(upstream_file_content)
+                        upstream_fd:close()
+                        ngx.log(ngx.INFO, "生成upstream配置文件: ", upstream_file, " (后端类型: ", proxy.backend_type, ")")
+                    else
+                        -- 尝试获取更详细的错误信息
+                        local err_msg = "无法创建upstream配置文件: " .. upstream_file
+                        -- 检查文件是否已存在但无法写入
+                        local test_read = io.open(upstream_file, "r")
+                        if test_read then
+                            test_read:close()
+                            err_msg = err_msg .. " (文件已存在但无写入权限，请检查文件权限)"
+                        else
+                            err_msg = err_msg .. " (可能原因：目录不存在、权限不足、磁盘空间不足或inode不足)"
+                        end
+                        ngx.log(ngx.ERR, err_msg, ", 项目根目录: ", project_root, ", upstream目录: ", upstream_dir)
+                        return false, err_msg
+                    end
                 end
             end
         end

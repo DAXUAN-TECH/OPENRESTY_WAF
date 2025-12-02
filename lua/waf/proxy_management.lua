@@ -305,16 +305,19 @@ function _M.create_proxy(proxy_data)
         for _, backend in ipairs(proxy_data.backends) do
             local backend_sql = [[
                 INSERT INTO waf_proxy_backends
-                (proxy_id, backend_address, backend_port, backend_path, weight, max_fails, fail_timeout, backup, down, status)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (proxy_id, location_path, backend_address, backend_port, backend_path, weight, max_fails, fail_timeout, backup, down, status)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ]]
-            -- 只有HTTP/HTTPS代理才允许有backend_path，TCP/UDP代理应该为nil
+            -- 只有HTTP/HTTPS代理才允许有location_path和backend_path，TCP/UDP代理应该为nil
+            local location_path = nil
             local backend_path = nil
             if proxy_data.proxy_type == "http" then
+                location_path = null_to_nil(backend.location_path)
                 backend_path = null_to_nil(backend.backend_path)
             end
             mysql_pool.insert(backend_sql,
                 insert_id,
+                location_path,
                 backend.backend_address,
                 backend.backend_port,
                 backend_path,

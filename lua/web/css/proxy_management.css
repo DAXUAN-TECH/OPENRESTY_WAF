@@ -936,6 +936,36 @@
             width: 100%;
         }
         
+        /* 防护规则添加按钮样式，确保在rules-list中可见 */
+        .rules-list > .btn-primary,
+        .rules-list > button.btn-primary,
+        #rules-list > .btn-primary,
+        #rules-list > button.btn-primary {
+            display: inline-block !important;
+            visibility: visible !important;
+            opacity: 1 !important;
+            background-color: #4CAF50 !important;
+            color: white !important;
+            padding: 8px 16px !important;
+            min-width: 80px !important;
+            height: 36px !important;
+            border: 2px solid #4CAF50 !important;
+            border-radius: 4px !important;
+            font-size: 14px !important;
+            font-weight: bold !important;
+            cursor: pointer !important;
+            margin-top: 8px !important;
+            position: relative !important;
+            z-index: 100 !important;
+        }
+        
+        .rules-list > .btn-primary:hover,
+        .rules-list > button.btn-primary:hover,
+        #rules-list > .btn-primary:hover,
+        #rules-list > button.btn-primary:hover {
+            background-color: #45a049 !important;
+        }
+        
         .rule-item {
             display: flex !important;
             gap: 8px;

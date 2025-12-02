@@ -388,10 +388,10 @@
             max-width: 250px !important;
         }
         
-        /* 监听端口输入框缩短二分之一（在form-row中） */
+        /* 监听端口输入框缩短二分之一（在form-row中，从100%缩短到50%） */
         #create-proxy-modal #create-listen-port {
-            width: 50% !important;
-            max-width: 250px !important;
+            width: 25% !important;
+            max-width: 125px !important;
         }
         
         /* TCP/UDP代理：监听端口输入框同代理名称输入框一样宽 */
@@ -655,6 +655,12 @@
         .backend-item .backend-location-path::placeholder,
         .backend-item .backend-path::placeholder {
             font-size: 12px;
+        }
+        
+        /* 后端服务器列表中的端口输入框缩短二分之一（保留原来的1/2宽度） */
+        .backend-item .backend-port {
+            flex: 0 0 50%;
+            max-width: 50%;
         }
         
         /* 权重输入框缩短三分之二（保留原来的1/3宽度） */

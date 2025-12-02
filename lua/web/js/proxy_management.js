@@ -1938,7 +1938,7 @@ const pageSize = 20;
                     <option value="">请选择规则条目</option>
                 </select>
                 <div class="rule-item-actions">
-                    <button type="button" class="btn-icon btn-add-icon" onclick="addRule('${listId}')" title="添加防护规则">+</button>
+                    <button type="button" class="btn btn-primary btn-sm" onclick="addRule('${listId}')">添加</button>
                     <button type="button" class="btn-icon btn-remove-icon" onclick="removeRule(this)" title="删除">−</button>
                 </div>
             `;

@@ -700,8 +700,8 @@
         #create-proxy-modal .form-row #create-proxy-connect-timeout,
         #create-proxy-modal .form-row #create-proxy-send-timeout,
         #create-proxy-modal .form-row #create-proxy-read-timeout {
-            width: 30% !important;
-            max-width: 150px !important;
+            width: 15% !important;
+            max-width: 75px !important;
         }
         
         /* 防护规则筛选框样式 */
@@ -802,8 +802,8 @@
         #edit-modal .form-row #edit-proxy-connect-timeout,
         #edit-modal .form-row #edit-proxy-send-timeout,
         #edit-modal .form-row #edit-proxy-read-timeout {
-            width: 30% !important;
-            max-width: 150px !important;
+            width: 15% !important;
+            max-width: 75px !important;
         }
         
         /* 分页样式 */

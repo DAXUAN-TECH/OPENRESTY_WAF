@@ -1950,9 +1950,23 @@ const pageSize = 20;
             const ruleItem = button.closest('.rule-item');
             if (ruleItem) {
                 const rulesList = ruleItem.closest('.rules-list');
-                ruleItem.remove();
-                // 更新所有规则条目的选择框（移除已删除的规则）
-                updateAllRuleSelects(rulesList ? rulesList.id : 'rules-list');
+                if (rulesList) {
+                    const ruleItems = rulesList.querySelectorAll('.rule-item');
+                    if (ruleItems.length > 1) {
+                        ruleItem.remove();
+                        // 更新所有规则条目的选择框（移除已删除的规则）
+                        updateAllRuleSelects(rulesList.id);
+                    } else {
+                        // 至少保留一条规则
+                        showConfirmModal('提示', '至少需要保留一条规则', function() {
+                            closeConfirmModal();
+                        });
+                    }
+                } else {
+                    ruleItem.remove();
+                    // 更新所有规则条目的选择框（移除已删除的规则）
+                    updateAllRuleSelects('rules-list');
+                }
             }
         }
         

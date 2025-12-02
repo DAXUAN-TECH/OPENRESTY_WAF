@@ -179,9 +179,17 @@ function _M.list()
             -- 确保每个proxy的rules字段是数组格式（如果存在）
             if proxy.rules and type(proxy.rules) == "table" then
                 local rules_array = {}
-                -- 如果是数组，直接复制
-                if #proxy.rules > 0 then
-                    for j = 1, #proxy.rules do
+                -- 检查是否是数组（使用ipairs可以遍历数组部分）
+                local is_array = false
+                local array_count = 0
+                for _ in ipairs(proxy.rules) do
+                    array_count = array_count + 1
+                    is_array = true
+                end
+                
+                if is_array and array_count > 0 then
+                    -- 是数组，直接复制
+                    for j = 1, array_count do
                         local rule = proxy.rules[j]
                         -- 确保rule对象字段名正确
                         if rule then
@@ -197,10 +205,10 @@ function _M.list()
                     local test_json = cjson.encode(rules_array)
                     -- 检查 JSON 字符串是否以 [ 开头（数组）而不是 { 开头（对象）
                     if not test_json:match("^%[") then
-                        ngx.log(ngx.ERR, "proxy_id=", proxy.id, ", WARNING: rules JSON does not start with [, it starts with: ", test_json:sub(1, 1))
+                        ngx.log(ngx.ERR, "proxy_id=", proxy.id, ", WARNING: rules JSON does not start with [, it starts with: ", test_json:sub(1, 1), ", JSON: ", test_json:sub(1, 200))
                         -- 强制重新构建为数组
                         rules_array = {}
-                        for j = 1, #proxy.rules do
+                        for j = 1, array_count do
                             local rule = proxy.rules[j]
                             if rule then
                                 table.insert(rules_array, {
@@ -212,9 +220,9 @@ function _M.list()
                         end
                     end
                     -- 调试日志：记录规则数量
-                    ngx.log(ngx.INFO, "proxy_id=", proxy.id, ", rules_array length: ", #rules_array, ", JSON: ", test_json:sub(1, 200))
+                    ngx.log(ngx.INFO, "proxy_id=", proxy.id, ", rules_array length: ", #rules_array, ", JSON preview: ", test_json:sub(1, 200))
                 else
-                    -- 如果不是数组，尝试转换为数组
+                    -- 不是数组，尝试转换为数组
                     local idx = 1
                     for _, rule in pairs(proxy.rules) do
                         if rule then
@@ -226,8 +234,14 @@ function _M.list()
                             idx = idx + 1
                         end
                     end
+                    ngx.log(ngx.WARN, "proxy_id=", proxy.id, ", proxy.rules is not an array, converted to array, length: ", #rules_array)
                 end
                 proxy.rules = rules_array
+            else
+                -- 如果没有rules字段，记录日志
+                if proxy.ip_rule_ids and type(proxy.ip_rule_ids) == "table" and #proxy.ip_rule_ids > 0 then
+                    ngx.log(ngx.WARN, "proxy_id=", proxy.id, ", has ip_rule_ids but no rules field, ip_rule_ids: ", cjson.encode(proxy.ip_rule_ids))
+                end
             end
             final_proxies[i] = proxy
         end

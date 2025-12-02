@@ -160,7 +160,7 @@ const pageSize = 20;
                     ${locationPathHtml}
                     <div class="location-backends">
                         <div class="backend-row">
-                            <div class="input-with-add">
+                            <div class="input-with-add address-input">
                                 <input type="text" placeholder="IP地址" class="backend-address">
                                 <button type="button" class="btn-add" onclick="addInputFieldInLocation('address', this)" title="添加IP地址">+</button>
                             </div>
@@ -216,7 +216,7 @@ const pageSize = 20;
             
             switch(type) {
                 case 'address':
-                    newDiv.className = 'input-with-add';
+                    newDiv.className = 'input-with-add address-input';
                     newDiv.innerHTML = `
                         <input type="text" placeholder="IP地址" class="backend-address">
                         <button type="button" class="btn-add" onclick="addInputFieldInLocation('address', this)" title="添加IP地址">+</button>

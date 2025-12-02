@@ -396,11 +396,12 @@
             display: flex;
             gap: 8px;
             align-items: flex-start;
-            flex-wrap: wrap;
+            flex-wrap: nowrap;
             margin-bottom: 8px;
             padding: 8px;
             background: #f8f9fa;
             border-radius: 4px;
+            overflow-x: auto;
         }
         
         .backend-row:last-child {
@@ -444,7 +445,20 @@
             flex-direction: column;
             gap: 4px;
             flex: 1;
-            min-width: 120px;
+            min-width: 150px;
+            flex-shrink: 0;
+        }
+        
+        /* IP地址输入框：占据更多空间 */
+        .input-with-add.address-input {
+            flex: 2;
+            min-width: 180px;
+        }
+        
+        /* 目标路径输入框：中等宽度 */
+        .input-with-add.location-backend-path-input-wrapper {
+            flex: 1.5;
+            min-width: 150px;
         }
         
         /* 端口输入框容器固定宽度 */

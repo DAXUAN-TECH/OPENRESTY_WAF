@@ -978,6 +978,25 @@
         
         .rule-item .btn {
             padding: 8px 16px;
+            display: inline-block;
+            visibility: visible;
+            opacity: 1;
+        }
+        
+        .rule-item-actions .btn-primary {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 6px 12px;
+            font-size: 13px;
+            cursor: pointer;
+            flex-shrink: 0;
+            white-space: nowrap;
+        }
+        
+        .rule-item-actions .btn-primary:hover {
+            background-color: #45a049;
         }
         
         .location-path-item {

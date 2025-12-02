@@ -372,7 +372,8 @@ CREATE TABLE IF NOT EXISTS waf_auto_block_logs (
     PRIMARY KEY (id),
     KEY idx_client_ip_status (client_ip, status) COMMENT 'IP和状态联合索引，用于查询特定IP的当前封控状态',
     KEY idx_status_unblock_time (status, auto_unblock_time) COMMENT '状态和解封时间联合索引，用于查询待解封的记录',
-    KEY idx_block_reason (block_reason) COMMENT '封控原因索引，用于按原因统计'
+    KEY idx_block_reason (block_reason) COMMENT '封控原因索引，用于按原因统计',
+    KEY idx_created_at (created_at) COMMENT '创建时间索引，用于按时间范围查询和清理'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci 
 ROW_FORMAT=DYNAMIC COMMENT='自动封控记录表：记录由自动封控功能触发的封控记录，包含封控原因和触发阈值';
 
@@ -388,7 +389,8 @@ CREATE TABLE IF NOT EXISTS waf_trusted_proxies (
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '记录最后更新时间',
     PRIMARY KEY (id),
     KEY idx_status (status) COMMENT '状态索引，用于快速查询启用的代理',
-    KEY idx_proxy_ip (proxy_ip) COMMENT '代理IP索引，用于快速匹配'
+    KEY idx_proxy_ip (proxy_ip) COMMENT '代理IP索引，用于快速匹配',
+    KEY idx_status_proxy_ip (status, proxy_ip) COMMENT '状态和代理IP联合索引，用于查询启用的代理IP'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci 
 ROW_FORMAT=DYNAMIC COMMENT='受信任代理IP表：存储受信任的代理服务器IP，用于安全获取客户端真实IP';
 
@@ -507,7 +509,8 @@ CREATE TABLE IF NOT EXISTS waf_users (
     PRIMARY KEY (id),
     UNIQUE KEY uk_username (username) COMMENT '用户名唯一索引，确保每个用户名只出现一次',
     KEY idx_status_role (status, role) COMMENT '状态和角色联合索引，用于权限查询',
-    KEY idx_password_must_change (password_must_change) COMMENT '密码必须修改标识索引，用于查询需要修改密码的用户'
+    KEY idx_password_must_change (password_must_change) COMMENT '密码必须修改标识索引，用于查询需要修改密码的用户',
+    KEY idx_last_login_time (last_login_time) COMMENT '最后登录时间索引，用于查询最近登录的用户'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci 
 ROW_FORMAT=DYNAMIC COMMENT='用户表：存储系统用户信息，支持角色权限和双因素认证，不再使用硬编码的默认用户';
 
@@ -819,7 +822,8 @@ CREATE TABLE IF NOT EXISTS waf_system_access_whitelist (
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '记录最后更新时间',
     PRIMARY KEY (id),
     KEY idx_status_ip (status, ip_address(20)) COMMENT '状态和IP地址联合索引，用于快速查询启用的白名单',
-    KEY idx_ip_address (ip_address(20)) COMMENT 'IP地址索引，用于快速匹配IP'
+    KEY idx_ip_address (ip_address(20)) COMMENT 'IP地址索引，用于快速匹配IP',
+    KEY idx_created_at (created_at) COMMENT '创建时间索引，用于按时间范围查询'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci 
 ROW_FORMAT=DYNAMIC COMMENT='系统访问白名单表：存储允许访问WAF管理系统的IP地址，开启时只有白名单内的IP才能访问';
 

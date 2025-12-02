@@ -962,8 +962,16 @@
         /* 防护规则添加按钮样式，确保在rules-list中可见 */
         .rules-list > .btn-primary,
         .rules-list > button.btn-primary,
+        .rules-list > button.btn-primary.btn-sm,
         #rules-list > .btn-primary,
-        #rules-list > button.btn-primary {
+        #rules-list > button.btn-primary,
+        #rules-list > button.btn-primary.btn-sm,
+        #create-proxy-modal .rules-list > .btn-primary,
+        #create-proxy-modal .rules-list > button.btn-primary,
+        #create-proxy-modal .rules-list > button.btn-primary.btn-sm,
+        #create-proxy-modal #rules-list > .btn-primary,
+        #create-proxy-modal #rules-list > button.btn-primary,
+        #create-proxy-modal #rules-list > button.btn-primary.btn-sm {
             display: inline-block !important;
             visibility: visible !important;
             opacity: 1 !important;
@@ -980,12 +988,23 @@
             margin-top: 8px !important;
             position: relative !important;
             z-index: 100 !important;
+            width: auto !important;
+            max-width: none !important;
+            box-sizing: border-box !important;
         }
         
         .rules-list > .btn-primary:hover,
         .rules-list > button.btn-primary:hover,
+        .rules-list > button.btn-primary.btn-sm:hover,
         #rules-list > .btn-primary:hover,
-        #rules-list > button.btn-primary:hover {
+        #rules-list > button.btn-primary:hover,
+        #rules-list > button.btn-primary.btn-sm:hover,
+        #create-proxy-modal .rules-list > .btn-primary:hover,
+        #create-proxy-modal .rules-list > button.btn-primary:hover,
+        #create-proxy-modal .rules-list > button.btn-primary.btn-sm:hover,
+        #create-proxy-modal #rules-list > .btn-primary:hover,
+        #create-proxy-modal #rules-list > button.btn-primary:hover,
+        #create-proxy-modal #rules-list > button.btn-primary.btn-sm:hover {
             background-color: #45a049 !important;
         }
         

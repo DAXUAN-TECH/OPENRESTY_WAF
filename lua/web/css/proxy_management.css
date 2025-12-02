@@ -811,6 +811,18 @@
             max-width: 500px;
             padding: 8px 12px;
             font-size: 14px;
+            box-sizing: border-box;
+        }
+        
+        /* 编辑代理form-row样式（与创建代理保持一致） */
+        #edit-modal .form-row {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+        
+        #edit-modal .form-row .form-group {
+            flex: 1;
         }
         
         #edit-modal .form-group label {

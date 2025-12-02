@@ -955,12 +955,23 @@ const pageSize = 20;
                     div.textContent = text;
                     return div.innerHTML;
                 };
+                // 调试日志：检查proxy.rules的数据
+                if (proxy.rules) {
+                    console.log('proxy.rules type:', typeof proxy.rules, 'isArray:', Array.isArray(proxy.rules), 'length:', proxy.rules.length);
+                    console.log('proxy.rules content:', JSON.stringify(proxy.rules));
+                }
                 if (proxy.rules && Array.isArray(proxy.rules) && proxy.rules.length > 0) {
                     // 显示所有规则的名称，每行一个
-                    const ruleNames = proxy.rules.map(rule => escapeHtmlFn(rule.rule_name || ''));
+                    const ruleNames = proxy.rules.map(rule => {
+                        const name = rule.rule_name || rule.ruleName || '';
+                        return escapeHtmlFn(name);
+                    });
                     rulesDisplay = ruleNames.join('<br>');
                     // 显示所有规则的类型，每行一个
-                    const ruleTypes = proxy.rules.map(rule => escapeHtmlFn(getRuleTypeName(rule.rule_type) || ''));
+                    const ruleTypes = proxy.rules.map(rule => {
+                        const type = rule.rule_type || rule.ruleType || '';
+                        return escapeHtmlFn(getRuleTypeName(type) || '');
+                    });
                     ruleTypesDisplay = ruleTypes.join('<br>');
                 } else if (proxy.rule_name) {
                     // 向后兼容：如果没有rules数组，使用rule_name和rule_type

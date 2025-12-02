@@ -375,8 +375,16 @@
         /* 确保config-section中的按钮可见 */
         .config-section .rules-list > .btn-primary,
         .config-section .rules-list > button.btn-primary,
+        .config-section .rules-list > button.btn-primary.btn-sm,
         .config-section #rules-list > .btn-primary,
-        .config-section #rules-list > button.btn-primary {
+        .config-section #rules-list > button.btn-primary,
+        .config-section #rules-list > button.btn-primary.btn-sm,
+        #create-proxy-modal .config-section .rules-list > .btn-primary,
+        #create-proxy-modal .config-section .rules-list > button.btn-primary,
+        #create-proxy-modal .config-section .rules-list > button.btn-primary.btn-sm,
+        #create-proxy-modal .config-section #rules-list > .btn-primary,
+        #create-proxy-modal .config-section #rules-list > button.btn-primary,
+        #create-proxy-modal .config-section #rules-list > button.btn-primary.btn-sm {
             display: inline-block !important;
             visibility: visible !important;
             opacity: 1 !important;
@@ -393,6 +401,9 @@
             margin-top: 8px !important;
             position: relative !important;
             z-index: 100 !important;
+            width: auto !important;
+            max-width: none !important;
+            box-sizing: border-box !important;
         }
         
         /* Location项样式 */

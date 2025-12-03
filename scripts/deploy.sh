@@ -226,19 +226,6 @@ else
     echo -e "${BLUE}✓ 已存在: conf.d/upstream/${NC}"
 fi
 
-if [ ! -d "${PROJECT_ROOT}/conf.d/upstream/http_https" ]; then
-    mkdir -p "${PROJECT_ROOT}/conf.d/upstream/http_https"
-    echo -e "${GREEN}✓ 已创建: conf.d/upstream/http_https/${NC}"
-else
-    echo -e "${BLUE}✓ 已存在: conf.d/upstream/http_https/${NC}"
-fi
-
-if [ ! -d "${PROJECT_ROOT}/conf.d/upstream/tcp_udp" ]; then
-    mkdir -p "${PROJECT_ROOT}/conf.d/upstream/tcp_udp"
-    echo -e "${GREEN}✓ 已创建: conf.d/upstream/tcp_udp/${NC}"
-else
-    echo -e "${BLUE}✓ 已存在: conf.d/upstream/tcp_udp/${NC}"
-fi
 
 if [ ! -d "${PROJECT_ROOT}/conf.d/vhost_conf/http_https" ]; then
     mkdir -p "${PROJECT_ROOT}/conf.d/vhost_conf/http_https"
@@ -285,8 +272,8 @@ echo -e "${BLUE}    - conf.d/stream_set/*.conf${NC}"
 echo -e "${BLUE}    - conf.d/vhost_conf/waf.conf${NC}"
 echo -e "${BLUE}    - conf.d/vhost_conf/http_https/proxy_http_*.conf${NC}"
 echo -e "${BLUE}    - conf.d/vhost_conf/tcp_udp/proxy_stream_*.conf${NC}"
-echo -e "${BLUE}    - conf.d/upstream/http_https/http_upstream_*.conf${NC}"
-echo -e "${BLUE}    - conf.d/upstream/tcp_udp/stream_upstream_*.conf${NC}"
+echo -e "${BLUE}    - conf.d/upstream/http_upstream_*.conf${NC}"
+echo -e "${BLUE}    - conf.d/upstream/stream_upstream_*.conf${NC}"
 
 # 删除 set $project_root 指令（某些 OpenResty 版本不支持在 http 块中使用 set）
 # 我们会在子配置文件中直接替换 $project_root 为实际路径
@@ -584,8 +571,7 @@ REQUIRED_PATHS=(
     "${PROJECT_ROOT}/conf.d/vhost_conf/http_https"
     "${PROJECT_ROOT}/conf.d/vhost_conf/tcp_udp"
     "${PROJECT_ROOT}/conf.d/upstream"
-    "${PROJECT_ROOT}/conf.d/upstream/http_https"
-    "${PROJECT_ROOT}/conf.d/upstream/tcp_udp"
+    "${PROJECT_ROOT}/conf.d/upstream"
     "${PROJECT_ROOT}/lua/waf"
 )
 
@@ -741,10 +727,8 @@ chown -R "$WAF_USER:$WAF_GROUP" "${PROJECT_ROOT}/conf.d/vhost_conf/tcp_udp" 2>/d
 chmod 755 "${PROJECT_ROOT}/conf.d/vhost_conf/tcp_udp" 2>/dev/null || true
 chown -R "$WAF_USER:$WAF_GROUP" "${PROJECT_ROOT}/conf.d/upstream" 2>/dev/null || true
 chmod -R 755 "${PROJECT_ROOT}/conf.d/upstream" 2>/dev/null || true
-chown -R "$WAF_USER:$WAF_GROUP" "${PROJECT_ROOT}/conf.d/upstream/http_https" 2>/dev/null || true
-chmod 755 "${PROJECT_ROOT}/conf.d/upstream/http_https" 2>/dev/null || true
-chown -R "$WAF_USER:$WAF_GROUP" "${PROJECT_ROOT}/conf.d/upstream/tcp_udp" 2>/dev/null || true
-chmod 755 "${PROJECT_ROOT}/conf.d/upstream/tcp_udp" 2>/dev/null || true
+chown -R "$WAF_USER:$WAF_GROUP" "${PROJECT_ROOT}/conf.d/upstream" 2>/dev/null || true
+chmod 755 "${PROJECT_ROOT}/conf.d/upstream" 2>/dev/null || true
 
 # 设置 lua 目录权限（确保 waf 用户可以读取）
 chown -R "$WAF_USER:$WAF_GROUP" "${PROJECT_ROOT}/lua" 2>/dev/null || true

@@ -637,12 +637,31 @@ const pageSize = 20;
         
         // 添加编辑后端行（用于编辑代理配置）
         function addEditBackendRow(button) {
-            const locationBackends = button ? button.closest('.location-backends') : null;
-            if (!locationBackends) {
-                // 如果没有button，可能是直接传入locationBackends元素
-                locationBackends = button;
+            // 兼容简化后的结构（TCP/UDP）和完整结构（HTTP）
+            let container;
+            if (button && typeof button.closest === 'function') {
+                // 如果 button 是 DOM 元素，尝试查找容器
+                const locationBackends = button.closest('.location-backends');
+                const locationItem = button.closest('.location-item');
+                if (locationBackends) {
+                    // HTTP 代理：使用 location-backends
+                    container = locationBackends;
+                } else if (locationItem) {
+                    // TCP/UDP 代理：直接使用 location-item
+                    container = locationItem;
+                } else {
+                    return;
+                }
+            } else if (button && button.nodeType === 1) {
+                // 如果 button 是 DOM 元素但不是按钮，可能是直接传入的容器
+                if (button.classList && (button.classList.contains('location-backends') || button.classList.contains('location-item'))) {
+                    container = button;
+                } else {
+                    return;
+                }
+            } else {
+                return;
             }
-            if (!locationBackends) return;
             
             const displayValue = document.getElementById('edit-proxy-type').value;
             const proxyType = currentEditingProxy ? currentEditingProxy.proxy_type : getProxyTypeFromName(displayValue);

@@ -67,8 +67,14 @@ const pageSize = 20;
             if (proxyType === 'http') {
                 httpFields.style.display = 'flex';
                 tcpUdpFields.style.display = 'none';
+                // HTTP 代理：移除 tcp-udp-mode 类名
+                const configSection = document.querySelector('#upstream-fields .config-section');
+                if (configSection) {
+                    configSection.classList.remove('tcp-udp-mode');
+                }
                 // HTTP 代理：显示 location-path-section、location-divider 和 location-actions
                 document.querySelectorAll('.location-item').forEach(locationItem => {
+                    locationItem.classList.remove('tcp-udp-mode');
                     const locationPathSection = locationItem.querySelector('.location-path-section');
                     if (locationPathSection) {
                         locationPathSection.style.display = 'flex';
@@ -110,7 +116,13 @@ const pageSize = 20;
                 httpFields.style.display = 'none';
                 tcpUdpFields.style.display = 'flex';
                 // TCP/UDP 代理：隐藏 location-path-section、location-divider 和 location-actions
+                // 同时为 location-item 和 config-section 添加 tcp-udp-mode 类名
+                const configSection = document.querySelector('#upstream-fields .config-section');
+                if (configSection) {
+                    configSection.classList.add('tcp-udp-mode');
+                }
                 document.querySelectorAll('.location-item').forEach(locationItem => {
+                    locationItem.classList.add('tcp-udp-mode');
                     const locationPathSection = locationItem.querySelector('.location-path-section');
                     if (locationPathSection) {
                         locationPathSection.style.display = 'none';

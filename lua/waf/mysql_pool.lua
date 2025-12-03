@@ -171,11 +171,27 @@ function _M.get_connection()
     }
 
     if not ok then
+        -- 安全关闭失败的连接（使用 pcall 避免在已关闭的 socket 上操作）
+        if db then
+            pcall(function() db:close() end)
+        end
+        
         -- 连接失败时，如果使用的是域名，清除缓存并重新解析（应对动态 IP 变化）
         local original_host = config.mysql.host
         if not original_host:match("^%d+%.%d+%.%d+%.%d+$") then
             local old_ip = resolved_host_cache.ip
-            ngx.log(ngx.WARN, "MySQL connection failed (host: ", mysql_host, "), clearing DNS cache and retrying with fresh resolution (original hostname: ", original_host, ")")
+            local error_type = "unknown"
+            if err then
+                if err:match("timeout") then
+                    error_type = "timeout"
+                elseif err:match("refused") or err:match("Connection refused") then
+                    error_type = "connection refused"
+                elseif err:match("No route to host") then
+                    error_type = "no route to host"
+                end
+            end
+            
+            ngx.log(ngx.WARN, "MySQL connection failed (host: ", mysql_host, ", error: ", error_type, "), clearing DNS cache and retrying with fresh resolution (original hostname: ", original_host, ")")
             _M.clear_dns_cache()
             
             -- 重新解析域名（强制刷新，获取最新 IP）
@@ -187,9 +203,6 @@ function _M.get_connection()
             end
             
             -- 创建新连接并重试
-            if db then
-                db:close()
-            end
             db, err = mysql:new()
             if db then
                 db:set_timeout(config.mysql.pool_timeout)
@@ -205,13 +218,28 @@ function _M.get_connection()
                 
                 if ok then
                     ngx.log(ngx.INFO, "MySQL connection retry successful with new IP: ", mysql_host)
+                else
+                    -- 重试也失败，安全关闭
+                    pcall(function() db:close() end)
                 end
             end
+        else
+            -- 如果使用的是 IP 地址，不需要重试 DNS 解析，直接返回错误
+            pcall(function() db:close() end)
         end
         
         if not ok then
-            ngx.log(ngx.ERR, "failed to connect to MySQL after retry: ", err, ": ", errcode, " ", sqlstate, " (host: ", mysql_host, ", original: ", original_host, ")")
-            return nil, err
+            local error_msg = err or "unknown error"
+            local error_details = ""
+            if errcode then
+                error_details = " (errcode: " .. tostring(errcode)
+                if sqlstate then
+                    error_details = error_details .. ", sqlstate: " .. tostring(sqlstate)
+                end
+                error_details = error_details .. ")"
+            end
+            ngx.log(ngx.ERR, "failed to connect to MySQL after retry: ", error_msg, error_details, " (host: ", mysql_host, ", original: ", original_host, ")")
+            return nil, error_msg
         end
     end
 

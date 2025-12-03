@@ -8,6 +8,7 @@ local config = require "config"
 local auth = require "waf.auth"
 local path_utils = require "waf.path_utils"
 local web_utils = require "web.web_utils"
+local error_pages = require "waf.error_pages"
 
 local _M = {}
 
@@ -281,9 +282,7 @@ function _M.route()
         local web_dir = project_root .. "/lua/web/"
         if not normalized_path:match("^" .. web_dir:gsub("%%", "%%%%"):gsub("%-", "%%-")) then
             ngx.log(ngx.ERR, "Security check failed: path traversal attempt: ", file_path)
-            ngx.status = 403
-            ngx.header.content_type = "text/plain; charset=utf-8"
-            ngx.say("Forbidden: invalid path")
+            error_pages.return_403(ngx.var.remote_addr, "路径安全检查失败")
             return
         end
         
@@ -348,9 +347,7 @@ function _M.route()
     if path == "/admin/rules" then
         -- 检查功能开关（防护管理功能必须启用）
         if not feature_switches.is_enabled("rule_management_ui") then
-            ngx.status = 403
-            ngx.header.content_type = "text/html; charset=utf-8"
-            ngx.say("<html><body><h1>403 Forbidden</h1><p>防护管理界面功能已禁用</p></body></html>")
+            error_pages.return_403(ngx.var.remote_addr, "防护管理界面功能已禁用")
             return
         end
         return serve_html_with_layout("rule_management.html", "防护管理", session)
@@ -366,9 +363,7 @@ function _M.route()
     if path == "/admin/stats" then
         -- 检查功能开关
         if not feature_switches.is_enabled("stats") then
-            ngx.status = 403
-            ngx.header.content_type = "text/html; charset=utf-8"
-            ngx.say("<html><body><h1>403 Forbidden</h1><p>统计报表功能已禁用</p></body></html>")
+            error_pages.return_403(ngx.var.remote_addr, "统计报表功能已禁用")
             return
         end
         return serve_html_with_layout("stats.html", "统计报表", session)
@@ -378,9 +373,7 @@ function _M.route()
     if path == "/admin/dashboard" or path == "/admin/monitor" then
         -- 检查功能开关
         if not feature_switches.is_enabled("monitor") then
-            ngx.status = 403
-            ngx.header.content_type = "text/html; charset=utf-8"
-            ngx.say("<html><body><h1>403 Forbidden</h1><p>Dashboard功能已禁用</p></body></html>")
+            error_pages.return_403(ngx.var.remote_addr, "Dashboard功能已禁用")
             return
         end
         return serve_html_with_layout("dashboard.html", "Dashboard", session)
@@ -390,9 +383,7 @@ function _M.route()
     if path == "/admin/proxy" then
         -- 检查功能开关
         if not feature_switches.is_enabled("proxy_management") then
-            ngx.status = 403
-            ngx.header.content_type = "text/html; charset=utf-8"
-            ngx.say("<html><body><h1>403 Forbidden</h1><p>代理管理功能已禁用</p></body></html>")
+            error_pages.return_403(ngx.var.remote_addr, "代理管理功能已禁用")
             return
         end
         return serve_html_with_layout("proxy_management.html", "代理管理", session)

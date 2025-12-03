@@ -15,6 +15,7 @@ local redis_cache = require "waf.redis_cache"
 local serializer = require "waf.serializer"
 local feature_switches = require "waf.feature_switches"
 local log_queue = require "waf.log_queue"
+local error_pages = require "waf.error_pages"
 local config = require "config"
 local cjson = require "cjson"
 
@@ -881,10 +882,7 @@ function _M.check(rule_id)
                 end
                 
                 -- 返回 403
-                ngx.status = 403
-                ngx.header.content_type = "text/html; charset=utf-8"
-                ngx.say(config.block.block_page)
-                ngx.exit(403)
+                error_pages.return_403(client_ip, "已被封控")
             end
             -- 白名单匹配或规则不匹配，允许通过
             return
@@ -957,10 +955,7 @@ function _M.check(rule_id)
     end
     
     -- 返回 403
-    ngx.status = 403
-    ngx.header.content_type = "text/html; charset=utf-8"
-    ngx.say(config.block.block_page)
-    ngx.exit(403)
+    error_pages.return_403(client_ip, "已被封控")
     end
     
     -- 未匹配任何规则，允许通过
@@ -1022,27 +1017,7 @@ function _M.check_multiple(rule_ids)
                 end
                 
                 -- 返回403错误
-                ngx.status = 403
-                ngx.header.content_type = "text/html; charset=utf-8"
-                local ip_display = client_ip or "unknown"
-                local path_utils = require "waf.path_utils"
-                local project_root = path_utils.get_project_root()
-                if project_root then
-                    local html_file_path = project_root .. "/conf.d/web/403_waf.html"
-                    local html_file = io.open(html_file_path, "r")
-                    if html_file then
-                        local html_content = html_file:read("*all")
-                        html_file:close()
-                        if html_content then
-                            html_content = html_content:gsub("{{IP_ADDRESS}}", ip_display)
-                            ngx.say(html_content)
-                            ngx.exit(403)
-                            return
-                        end
-                    end
-                end
-                ngx.say("<!DOCTYPE html><html><head><meta charset='UTF-8'><title>访问被拒绝</title></head><body><h1>403 Forbidden</h1><p>您的IP地址（" .. ip_display .. "）已被封控。</p></body></html>")
-                ngx.exit(403)
+                error_pages.return_403(client_ip, "已被封控")
                 return
             end
         end
@@ -1073,27 +1048,7 @@ function _M.check_multiple(rule_ids)
                         end
                         
                         -- 返回403错误
-                        ngx.status = 403
-                        ngx.header.content_type = "text/html; charset=utf-8"
-                        local ip_display = client_ip or "unknown"
-                        local path_utils = require "waf.path_utils"
-                        local project_root = path_utils.get_project_root()
-                        if project_root then
-                            local html_file_path = project_root .. "/conf.d/web/403_waf.html"
-                            local html_file = io.open(html_file_path, "r")
-                            if html_file then
-                                local html_content = html_file:read("*all")
-                                html_file:close()
-                                if html_content then
-                                    html_content = html_content:gsub("{{IP_ADDRESS}}", ip_display)
-                                    ngx.say(html_content)
-                                    ngx.exit(403)
-                                    return
-                                end
-                            end
-                        end
-                        ngx.say("<!DOCTYPE html><html><head><meta charset='UTF-8'><title>访问被拒绝</title></head><body><h1>403 Forbidden</h1><p>您的IP地址（" .. ip_display .. "）已被封控。</p></body></html>")
-                        ngx.exit(403)
+                        error_pages.return_403(client_ip, "已被封控")
                         return
                     end
                 end

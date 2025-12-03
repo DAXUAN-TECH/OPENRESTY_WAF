@@ -1695,8 +1695,10 @@ const pageSize = 20;
                             locationPath = locationPathInput.value.trim() || '/';
                         }
                         
-                        // 先收集该location下的所有后端服务器
-                        const backendRows = locationBackends ? locationBackends.querySelectorAll('.backend-row') : [];
+                        // 先收集该location下的所有后端服务器（兼容简化后的结构）
+                        // HTTP 代理：backend-row 在 location-backends 内
+                        // TCP/UDP 代理：backend-row 直接是 location-item 的子元素
+                        const backendRows = locationBackends ? locationBackends.querySelectorAll('.backend-row') : locationItem.querySelectorAll('.backend-row');
                         const locationBackendsList = [];
                         
                         backendRows.forEach(backendRow => {

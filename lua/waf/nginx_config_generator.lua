@@ -498,6 +498,61 @@ local function generate_http_server_config(proxy, upstream_name, backends, proje
     config = config .. "    }\n"
             end
         end
+        
+        -- 添加默认location（location /）作为兜底，处理不匹配任何location的请求
+        -- 注意：这个location必须在所有其他location之后，优先级最低
+        -- 如果所有location都有后端服务器，使用第一个location的upstream作为默认
+        if location_paths and #location_paths > 0 and backends and #backends > 0 then
+            -- 找到第一个有后端服务器的location
+            local default_location = nil
+            local default_upstream_name = nil
+            for _, loc in ipairs(location_paths) do
+                if loc.location_path and loc.location_path ~= "" then
+                    -- 检查这个location是否有后端服务器
+                    local has_backends = false
+                    for _, backend in ipairs(backends) do
+                        local backend_location_path = null_to_nil(backend.location_path)
+                        if backend_location_path == loc.location_path then
+                            has_backends = true
+                            break
+                        end
+                    end
+                    if has_backends then
+                        default_location = loc
+                        local proxy_name_safe = sanitize_upstream_name(proxy.proxy_name)
+                        local location_path_safe = sanitize_upstream_name(loc.location_path)
+                        default_upstream_name = "upstream_" .. proxy_name_safe .. "_" .. location_path_safe
+                        break
+                    end
+                end
+            end
+            
+            -- 如果找到了默认location，生成默认location块
+            if default_location and default_upstream_name then
+                config = config .. "\n    # 默认location（处理不匹配任何location的请求）\n"
+                config = config .. "    location / {\n"
+                config = config .. "        proxy_pass http://" .. default_upstream_name .. ";\n"
+                config = config .. "\n        # 请求头设置\n"
+                config = config .. "        proxy_set_header Host $host;\n"
+                config = config .. "        proxy_set_header X-Real-IP $remote_addr;\n"
+                config = config .. "        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n"
+                config = config .. "        proxy_set_header X-Forwarded-Proto $scheme;\n"
+                config = config .. "        proxy_set_header Connection \"\";\n"
+                config = config .. "\n        # HTTP版本\n"
+                config = config .. "        proxy_http_version 1.1;\n"
+                config = config .. "\n        # 超时设置\n"
+                if proxy.proxy_connect_timeout then
+                    config = config .. "        proxy_connect_timeout " .. proxy.proxy_connect_timeout .. "s;\n"
+                end
+                if proxy.proxy_send_timeout then
+                    config = config .. "        proxy_send_timeout " .. proxy.proxy_send_timeout .. "s;\n"
+                end
+                if proxy.proxy_read_timeout then
+                    config = config .. "        proxy_read_timeout " .. proxy.proxy_read_timeout .. "s;\n"
+                end
+                config = config .. "    }\n"
+            end
+        end
     else
         -- 如果没有location_paths，记录错误并返回503
         ngx.log(ngx.ERR, "generate_http_config: no location_paths for proxy_id=", proxy.id, ", proxy_name=", proxy.proxy_name)

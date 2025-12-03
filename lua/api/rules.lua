@@ -161,7 +161,36 @@ function _M.list()
     -- 创建一个新的数组，只包含数字索引的元素
     local final_rules = {}
     local array_length = #result.rules
-    if array_length > 0 then
+    
+    -- 检查是否有非数字键（在复制之前）
+    local has_non_numeric_key = false
+    local max_numeric_index = 0
+    for k, v in pairs(result.rules) do
+        if type(k) == "number" and k > 0 and k <= array_length then
+            if k > max_numeric_index then
+                max_numeric_index = k
+            end
+        else
+            has_non_numeric_key = true
+        end
+    end
+    
+    -- 如果有非数字键，需要重新构建为纯数组
+    if has_non_numeric_key then
+        local temp_array = {}
+        for k, v in pairs(result.rules) do
+            if type(k) == "number" and k > 0 then
+                table.insert(temp_array, {key = k, value = v})
+            end
+        end
+        -- 按 key 排序
+        table.sort(temp_array, function(a, b) return a.key < b.key end)
+        -- 转换为数组
+        for _, item in ipairs(temp_array) do
+            table.insert(final_rules, item.value)
+        end
+        array_length = #final_rules
+    elseif array_length > 0 then
         -- 使用 ipairs 确保只复制数组部分
         for i = 1, array_length do
             final_rules[i] = result.rules[i]
@@ -178,15 +207,16 @@ function _M.list()
     if not test_json:match("^%[") then
         ngx.log(ngx.ERR, "WARNING: rules JSON does not start with [, it starts with: ", test_json:sub(1, 1), ", JSON: ", test_json:sub(1, 200))
         -- 如果不是数组格式，尝试重新构建
-        -- 先检查是否有非数字键
-        local has_non_numeric_key = false
+        -- 再次检查是否有非数字键
+        local has_non_numeric_key2 = false
+        local final_array_length = #final_rules
         for k, _ in pairs(final_rules) do
-            if type(k) ~= "number" or k < 1 or k > array_length then
-                has_non_numeric_key = true
+            if type(k) ~= "number" or k < 1 or k > final_array_length then
+                has_non_numeric_key2 = true
                 break
             end
         end
-        if has_non_numeric_key then
+        if has_non_numeric_key2 then
             -- 有非数字键，需要重新构建为纯数组
             local clean_rules = {}
             local temp_array = {}

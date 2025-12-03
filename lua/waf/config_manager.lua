@@ -138,7 +138,21 @@ function _M.set_config(config_key, config_value, description)
         return true
     end
     
-    local error_msg = err or "unknown error"
+    -- 将错误信息转换为字符串（处理table类型错误）
+    local error_msg = "unknown error"
+    if err then
+        if type(err) == "table" then
+            -- 如果是table，尝试使用cjson编码，如果失败则使用tostring
+            local ok_json, json_str = pcall(cjson.encode, err)
+            if ok_json and json_str then
+                error_msg = json_str
+            else
+                error_msg = tostring(err)
+            end
+        else
+            error_msg = tostring(err)
+        end
+    end
     ngx.log(ngx.ERR, "config_manager.set_config: ", config_key, " 更新失败: ", error_msg)
     return false, error_msg
 end

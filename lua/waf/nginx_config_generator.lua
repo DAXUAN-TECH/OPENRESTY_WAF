@@ -229,15 +229,26 @@ local function generate_http_server_config(proxy, upstream_name, backends, proje
     config = config .. "    client_max_body_size 10m;\n"
 
     -- 如果启用SSL并开启强制HTTPS跳转，则将HTTP请求重定向到HTTPS
+    -- 注意：强制跳转规则必须在SSL配置之前，确保HTTP请求在SSL配置生效前就被重定向
     -- 调试日志：记录SSL和强制跳转状态
-    ngx.log(ngx.DEBUG, "generate_http_server_config: proxy_id=", proxy.id, ", ssl_enable=", tostring(proxy.ssl_enable), 
-            " (type: ", type(proxy.ssl_enable), "), force_https_redirect=", tostring(proxy.force_https_redirect),
-            " (type: ", type(proxy.force_https_redirect), ")")
-    if proxy.ssl_enable == 1 and proxy.force_https_redirect == 1 then
+    ngx.log(ngx.INFO, "generate_http_server_config: proxy_id=", proxy.id, ", proxy_name=", proxy.proxy_name or "nil",
+            ", ssl_enable=", tostring(proxy.ssl_enable), " (type: ", type(proxy.ssl_enable), ")",
+            ", force_https_redirect=", tostring(proxy.force_https_redirect), " (type: ", type(proxy.force_https_redirect), ")")
+    
+    -- 确保数值类型正确
+    local ssl_enable_num = tonumber(proxy.ssl_enable) or 0
+    local force_https_redirect_num = tonumber(proxy.force_https_redirect) or 0
+    
+    ngx.log(ngx.INFO, "generate_http_server_config: 转换后 - ssl_enable=", ssl_enable_num, ", force_https_redirect=", force_https_redirect_num)
+    
+    if ssl_enable_num == 1 and force_https_redirect_num == 1 then
         ngx.log(ngx.INFO, "generate_http_server_config: 为代理 ", proxy.id, " (", proxy.proxy_name, ") 添加强制HTTPS跳转规则")
+        config = config .. "\n    # 强制跳转到HTTPS\n"
         config = config .. "    if ($scheme = http) {\n"
         config = config .. "        return 301 https://$host$request_uri;\n"
         config = config .. "    }\n"
+    else
+        ngx.log(ngx.INFO, "generate_http_server_config: 代理 ", proxy.id, " 不满足强制跳转条件 - ssl_enable=", ssl_enable_num, ", force_https_redirect=", force_https_redirect_num)
     end
     
     -- SSL配置

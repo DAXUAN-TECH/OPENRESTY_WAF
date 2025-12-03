@@ -466,7 +466,7 @@ end
 -- 生成单个HTTP代理的server配置（不包含upstream）
 local function generate_http_proxy_file(proxy, upstream_name, backends)
     local config = "# ============================================\n"
-    config = config .. "# 代理配置: " .. escape_nginx_value(proxy.proxy_name) .. " (ID: " .. proxy.id .. ")\n"
+    config = config .. "# 代理配置: " .. escape_nginx_value(proxy.proxy_name) .. " (ID: " .. tostring(proxy.id) .. ")\n"
     config = config .. "# 自动生成，请勿手动修改\n"
     config = config .. "# ============================================\n\n"
     
@@ -479,7 +479,7 @@ end
 -- 生成单个Stream代理的server配置（不包含upstream）
 local function generate_stream_proxy_file(proxy, upstream_name)
     local config = "# ============================================\n"
-    config = config .. "# 代理配置: " .. escape_nginx_value(proxy.proxy_name) .. " (ID: " .. proxy.id .. ")\n"
+    config = config .. "# 代理配置: " .. escape_nginx_value(proxy.proxy_name) .. " (ID: " .. tostring(proxy.id) .. ")\n"
     config = config .. "# 类型: " .. string.upper(proxy.proxy_type) .. "\n"
     config = config .. "# 自动生成，请勿手动修改\n"
     config = config .. "# ============================================\n\n"
@@ -987,7 +987,7 @@ function _M.generate_all_configs()
             -- 生成HTTP代理server配置文件
             local config_content = generate_http_proxy_file(proxy, upstream_name, backends)
             -- HTTP/HTTPS server配置放在 vhost_conf/http_https 子目录
-            local config_file = project_root .. "/conf.d/vhost_conf/http_https/proxy_http_" .. proxy.id .. ".conf"
+            local config_file = project_root .. "/conf.d/vhost_conf/http_https/proxy_http_" .. tostring(proxy.id) .. ".conf"
             
             -- 确保vhost_conf/http_https目录存在
             local http_dir = project_root .. "/conf.d/vhost_conf/http_https"
@@ -1030,7 +1030,7 @@ function _M.generate_all_configs()
             -- 生成Stream代理server配置文件
             local config_content = generate_stream_proxy_file(proxy, upstream_name)
             -- TCP/UDP server配置放在 vhost_conf/tcp_udp 子目录
-            local config_file = project_root .. "/conf.d/vhost_conf/tcp_udp/proxy_stream_" .. proxy.id .. ".conf"
+            local config_file = project_root .. "/conf.d/vhost_conf/tcp_udp/proxy_stream_" .. tostring(proxy.id) .. ".conf"
             
             -- 确保vhost_conf/tcp_udp目录存在
             local tcp_dir = project_root .. "/conf.d/vhost_conf/tcp_udp"

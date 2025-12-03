@@ -186,7 +186,7 @@ local function generate_upstream_config(proxy, backends)
     local upstream_name = "upstream_" .. tostring(proxy.id)
     local config = generate_upstream_config_for_location(proxy, backends, upstream_name)
     if config then
-        return config, upstream_name
+    return config, upstream_name
     else
         return "", nil
     end
@@ -219,10 +219,69 @@ local function generate_http_server_config(proxy, upstream_name, backends)
     config = config .. "    client_max_body_size 10m;\n"
     
     -- SSL配置
-    if proxy.ssl_enable == 1 and proxy.ssl_cert_path and proxy.ssl_key_path then
+    if proxy.ssl_enable == 1 and proxy.ssl_pem and proxy.ssl_key then
+        -- 生成SSL证书和密钥文件路径
+        local cert_dir = project_root .. "/conf.d/cert"
+        local dir_ok = path_utils.ensure_dir(cert_dir)
+        if not dir_ok then
+            ngx.log(ngx.ERR, "无法创建SSL证书目录: ", cert_dir)
+            return nil, "无法创建SSL证书目录: " .. cert_dir
+        end
+        
+        -- 使用 server_name 作为文件名
+        -- server_name 可能包含多个域名（空格分隔），使用第一个域名作为文件名
+        local server_name_for_file = proxy.server_name
+        if server_name_for_file and server_name_for_file ~= "" and server_name_for_file ~= cjson.null then
+            -- 如果包含多个域名，使用第一个域名
+            local first_domain = server_name_for_file:match("^%s*([^%s]+)")
+            if first_domain then
+                server_name_for_file = first_domain
+            end
+        else
+            -- 如果 server_name 为空，使用 proxy_name 作为备用
+            server_name_for_file = proxy.proxy_name
+            if not server_name_for_file or server_name_for_file == "" then
+                -- 如果 proxy_name 也为空，使用 proxy_id 作为最后备用
+                server_name_for_file = tostring(proxy.id)
+            end
+        end
+        
+        -- 清理文件名，确保安全
+        local server_name_safe = sanitize_filename(server_name_for_file)
+        if not server_name_safe or server_name_safe == "" then
+            server_name_safe = "default"
+        end
+        
+        local cert_filename = "proxy_" .. server_name_safe .. ".pem"
+        local key_filename = "proxy_" .. server_name_safe .. ".key"
+        local cert_path = cert_dir .. "/" .. cert_filename
+        local key_path = cert_dir .. "/" .. key_filename
+        
+        -- 写入SSL证书文件
+        local cert_file, err = io.open(cert_path, "w")
+        if cert_file then
+            cert_file:write(proxy.ssl_pem)
+            cert_file:close()
+            ngx.log(ngx.INFO, "SSL证书文件已写入: ", cert_path)
+        else
+            ngx.log(ngx.ERR, "Failed to write SSL certificate file: ", err or "unknown error")
+            return nil, "Failed to write SSL certificate file: " .. (err or "unknown error")
+        end
+        
+        -- 写入SSL密钥文件
+        local key_file, err = io.open(key_path, "w")
+        if key_file then
+            key_file:write(proxy.ssl_key)
+            key_file:close()
+            ngx.log(ngx.INFO, "SSL密钥文件已写入: ", key_path)
+        else
+            ngx.log(ngx.ERR, "Failed to write SSL key file: ", err or "unknown error")
+            return nil, "Failed to write SSL key file: " .. (err or "unknown error")
+        end
+        
         config = config .. "\n    # SSL配置\n"
-        config = config .. "    ssl_certificate     " .. escape_nginx_value(proxy.ssl_cert_path) .. ";\n"
-        config = config .. "    ssl_certificate_key " .. escape_nginx_value(proxy.ssl_key_path) .. ";\n"
+        config = config .. "    ssl_certificate     " .. escape_nginx_value(cert_path) .. ";\n"
+        config = config .. "    ssl_certificate_key " .. escape_nginx_value(key_path) .. ";\n"
         config = config .. "    ssl_protocols TLSv1.2 TLSv1.3;\n"
         config = config .. "    ssl_ciphers 'ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384';\n"
         config = config .. "    ssl_prefer_server_ciphers off;\n"
@@ -300,41 +359,41 @@ local function generate_http_server_config(proxy, upstream_name, backends)
                         end
                     end
                 end
-                
-                -- 代理到后端
+    
+    -- 代理到后端
                 if #location_backends > 0 then
                     -- 使用location配置中的backend_path，如果没有则使用后端服务器的backend_path
                     local backend_path = loc.backend_path
                     if not backend_path or backend_path == "" then
-                        -- 检查后端服务器是否有路径配置
+        -- 检查后端服务器是否有路径配置
                         local first_path = location_backends[1].backend_path
-                        if first_path == nil or first_path == cjson.null then
-                            first_path = nil
-                        elseif type(first_path) == "string" and first_path:match("^%s*$") then
-                            first_path = nil
-                        end
-                        
-                        local all_same = true
-                        if first_path and first_path ~= "" then
+            if first_path == nil or first_path == cjson.null then
+                first_path = nil
+            elseif type(first_path) == "string" and first_path:match("^%s*$") then
+                first_path = nil
+            end
+            
+            local all_same = true
+            if first_path and first_path ~= "" then
                             for i = 2, #location_backends do
                                 local path = location_backends[i].backend_path
-                                if path == nil or path == cjson.null then
-                                    path = nil
-                                elseif type(path) == "string" and path:match("^%s*$") then
-                                    path = nil
-                                end
-                                if path ~= first_path then
-                                    all_same = false
-                                    break
-                                end
-                            end
-                            if all_same then
-                                backend_path = first_path
-                            end
-                        end
+                    if path == nil or path == cjson.null then
+                        path = nil
+                    elseif type(path) == "string" and path:match("^%s*$") then
+                        path = nil
                     end
-                    
-                    -- 如果后端服务器有路径，在proxy_pass中添加路径
+                    if path ~= first_path then
+                        all_same = false
+                        break
+                    end
+                end
+                if all_same then
+                    backend_path = first_path
+                end
+            end
+        end
+        
+        -- 如果后端服务器有路径，在proxy_pass中添加路径
                     -- 确保 backend_path 正确转换为字符串，并且只有在非空时才拼接
                     local backend_path_str = nil
                     -- 先处理 cjson.null
@@ -354,38 +413,38 @@ local function generate_http_server_config(proxy, upstream_name, backends)
                     else
                         -- 没有目标路径，直接代理到根路径
                         config = config .. "        proxy_pass http://" .. location_upstream_name .. ";\n"
-                    end
-                else
+        end
+    else
                     ngx.log(ngx.ERR, "generate_http_config: no backends for location=", loc.location_path, ", proxy_id=", proxy.id, ", proxy_name=", proxy.proxy_name)
-                    config = config .. "        # 错误：缺少后端服务器配置\n"
-                    config = config .. "        return 503;\n"
-                end
-                
-                -- 请求头设置
-                config = config .. "\n        # 请求头设置\n"
-                config = config .. "        proxy_set_header Host $host;\n"
-                config = config .. "        proxy_set_header X-Real-IP $remote_addr;\n"
-                config = config .. "        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n"
-                config = config .. "        proxy_set_header X-Forwarded-Proto $scheme;\n"
-                config = config .. "        proxy_set_header Connection \"\";\n"
-                
-                -- HTTP版本
-                config = config .. "\n        # HTTP版本\n"
-                config = config .. "        proxy_http_version 1.1;\n"
-                
-                -- 超时设置
-                config = config .. "\n        # 超时设置\n"
-                if proxy.proxy_connect_timeout then
-                    config = config .. "        proxy_connect_timeout " .. proxy.proxy_connect_timeout .. "s;\n"
-                end
-                if proxy.proxy_send_timeout then
-                    config = config .. "        proxy_send_timeout " .. proxy.proxy_send_timeout .. "s;\n"
-                end
-                if proxy.proxy_read_timeout then
-                    config = config .. "        proxy_read_timeout " .. proxy.proxy_read_timeout .. "s;\n"
-                end
-                
-                config = config .. "    }\n"
+        config = config .. "        # 错误：缺少后端服务器配置\n"
+        config = config .. "        return 503;\n"
+    end
+    
+    -- 请求头设置
+    config = config .. "\n        # 请求头设置\n"
+    config = config .. "        proxy_set_header Host $host;\n"
+    config = config .. "        proxy_set_header X-Real-IP $remote_addr;\n"
+    config = config .. "        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n"
+    config = config .. "        proxy_set_header X-Forwarded-Proto $scheme;\n"
+    config = config .. "        proxy_set_header Connection \"\";\n"
+    
+    -- HTTP版本
+    config = config .. "\n        # HTTP版本\n"
+    config = config .. "        proxy_http_version 1.1;\n"
+    
+    -- 超时设置
+    config = config .. "\n        # 超时设置\n"
+    if proxy.proxy_connect_timeout then
+        config = config .. "        proxy_connect_timeout " .. proxy.proxy_connect_timeout .. "s;\n"
+    end
+    if proxy.proxy_send_timeout then
+        config = config .. "        proxy_send_timeout " .. proxy.proxy_send_timeout .. "s;\n"
+    end
+    if proxy.proxy_read_timeout then
+        config = config .. "        proxy_read_timeout " .. proxy.proxy_read_timeout .. "s;\n"
+    end
+    
+    config = config .. "    }\n"
             end
         end
     else
@@ -540,14 +599,18 @@ local function generate_stream_server_config(proxy, upstream_name)
 end
 
 -- 生成单个HTTP代理的server配置（不包含upstream）
-local function generate_http_proxy_file(proxy, upstream_name, backends)
+local function generate_http_proxy_file(proxy, upstream_name, backends, project_root)
     local config = "# ============================================\n"
     config = config .. "# 代理配置: " .. escape_nginx_value(proxy.proxy_name) .. " (ID: " .. tostring(proxy.id) .. ")\n"
     config = config .. "# 自动生成，请勿手动修改\n"
     config = config .. "# ============================================\n\n"
     
     -- 写入server配置（upstream配置已单独生成）
-    config = config .. generate_http_server_config(proxy, upstream_name, backends)
+    local server_config, err = generate_http_server_config(proxy, upstream_name, backends, project_root)
+    if not server_config then
+        return nil, err
+    end
+    config = config .. server_config
     
     return config
 end
@@ -567,9 +630,10 @@ local function generate_stream_proxy_file(proxy, upstream_name)
 end
 
 -- 清理已删除或禁用的代理的配置文件
-local function cleanup_orphaned_files(project_root, active_proxy_ids, active_proxy_names, active_location_files)
+local function cleanup_orphaned_files(project_root, active_proxy_ids, active_proxy_names, active_location_files, active_proxies)
     active_proxy_names = active_proxy_names or {}
     active_location_files = active_location_files or {}
+    active_proxies = active_proxies or {}
     local deleted_count = 0
     local failed_count = 0
     
@@ -596,13 +660,13 @@ local function cleanup_orphaned_files(project_root, active_proxy_ids, active_pro
             end
             
             if not is_active then
-                local ok, err = os.remove(file)
-                if ok then
+                    local ok, err = os.remove(file)
+                    if ok then
                     ngx.log(ngx.INFO, "删除已删除或禁用的代理的HTTP upstream配置文件: ", file)
-                    deleted_count = deleted_count + 1
-                else
-                    ngx.log(ngx.WARN, "删除upstream配置文件失败: ", file, ", 错误: ", err or "unknown")
-                    failed_count = failed_count + 1
+                        deleted_count = deleted_count + 1
+                    else
+                        ngx.log(ngx.WARN, "删除upstream配置文件失败: ", file, ", 错误: ", err or "unknown")
+                        failed_count = failed_count + 1
                 end
             end
         end
@@ -627,13 +691,13 @@ local function cleanup_orphaned_files(project_root, active_proxy_ids, active_pro
             end
             
             if not is_active then
-                local ok, err = os.remove(file)
-                if ok then
+                    local ok, err = os.remove(file)
+                    if ok then
                     ngx.log(ngx.INFO, "删除已删除或禁用的代理的HTTP server配置文件: ", file)
-                    deleted_count = deleted_count + 1
-                else
-                    ngx.log(ngx.WARN, "删除server配置文件失败: ", file, ", 错误: ", err or "unknown")
-                    failed_count = failed_count + 1
+                        deleted_count = deleted_count + 1
+                    else
+                        ngx.log(ngx.WARN, "删除server配置文件失败: ", file, ", 错误: ", err or "unknown")
+                        failed_count = failed_count + 1
                 end
             end
         end
@@ -660,13 +724,13 @@ local function cleanup_orphaned_files(project_root, active_proxy_ids, active_pro
             end
             
             if not is_active then
-                local ok, err = os.remove(file)
-                if ok then
+                    local ok, err = os.remove(file)
+                    if ok then
                     ngx.log(ngx.INFO, "删除已删除或禁用的代理的Stream upstream配置文件: ", file)
-                    deleted_count = deleted_count + 1
-                else
-                    ngx.log(ngx.WARN, "删除upstream配置文件失败: ", file, ", 错误: ", err or "unknown")
-                    failed_count = failed_count + 1
+                        deleted_count = deleted_count + 1
+                    else
+                        ngx.log(ngx.WARN, "删除upstream配置文件失败: ", file, ", 错误: ", err or "unknown")
+                        failed_count = failed_count + 1
                 end
             end
         end
@@ -693,13 +757,13 @@ local function cleanup_orphaned_files(project_root, active_proxy_ids, active_pro
             end
             
             if not is_active then
-                local ok, err = os.remove(file)
-                if ok then
+                    local ok, err = os.remove(file)
+                    if ok then
                     ngx.log(ngx.INFO, "删除已删除或禁用的代理的Stream server配置文件: ", file)
-                    deleted_count = deleted_count + 1
-                else
-                    ngx.log(ngx.WARN, "删除server配置文件失败: ", file, ", 错误: ", err or "unknown")
-                    failed_count = failed_count + 1
+                        deleted_count = deleted_count + 1
+                    else
+                        ngx.log(ngx.WARN, "删除server配置文件失败: ", file, ", 错误: ", err or "unknown")
+                        failed_count = failed_count + 1
                 end
             end
         end
@@ -970,25 +1034,25 @@ function _M.generate_all_configs()
             end
         else
             -- 向后兼容：如果没有location_paths或不是HTTP代理，使用原来的逻辑（单个upstream配置）
-            if backends and #backends > 0 then
-                if proxy.proxy_type == "http" then
-                    upstream_config, upstream_name = generate_upstream_config(proxy, backends)
-                else
-                    upstream_config, upstream_name = generate_stream_upstream_config(proxy, backends)
-                end
-                
-                -- 生成独立的upstream配置文件
-                if upstream_config and upstream_name then
+        if backends and #backends > 0 then
+            if proxy.proxy_type == "http" then
+                upstream_config, upstream_name = generate_upstream_config(proxy, backends)
+            else
+                upstream_config, upstream_name = generate_stream_upstream_config(proxy, backends)
+            end
+            
+            -- 生成独立的upstream配置文件
+            if upstream_config and upstream_name then
                     -- 根据代理类型确定upstream配置文件目录和文件名
-                    local upstream_subdir = ""
-                    local upstream_filename = ""
-                    if proxy.proxy_type == "http" then
-                        upstream_subdir = "http_https"
+                local upstream_subdir = ""
+                local upstream_filename = ""
+                if proxy.proxy_type == "http" then
+                    upstream_subdir = "http_https"
                         -- HTTP/HTTPS upstream文件名使用新格式：http_upstream_$proxy_name.conf
                         local proxy_name_safe = sanitize_filename(proxy.proxy_name)
                         upstream_filename = "http_upstream_" .. proxy_name_safe .. ".conf"
-                    else
-                        upstream_subdir = "tcp_udp"
+                else
+                    upstream_subdir = "tcp_udp"
                         -- TCP/UDP upstream文件名使用新格式：stream_upstream_$proxy_name.conf 或 tcp_upstream_$proxy_name.conf 或 udp_upstream_$proxy_name.conf
                         local proxy_name_safe = sanitize_filename(proxy.proxy_name)
                         local proxy_type_prefix = "stream"
@@ -998,12 +1062,12 @@ function _M.generate_all_configs()
                             proxy_type_prefix = "udp"
                         end
                         upstream_filename = proxy_type_prefix .. "_upstream_" .. proxy_name_safe .. ".conf"
-                    end
-                    
-                    local upstream_file = project_root .. "/conf.d/upstream/" .. upstream_subdir .. "/" .. upstream_filename
-                    
-                    -- 确保upstream子目录存在
-                    local upstream_dir = project_root .. "/conf.d/upstream/" .. upstream_subdir
+                end
+                
+                local upstream_file = project_root .. "/conf.d/upstream/" .. upstream_subdir .. "/" .. upstream_filename
+                
+                -- 确保upstream子目录存在
+                local upstream_dir = project_root .. "/conf.d/upstream/" .. upstream_subdir
                     
                     -- 确保父目录存在且有正确权限
                     local upstream_parent_dir = project_root .. "/conf.d/upstream"
@@ -1013,16 +1077,16 @@ function _M.generate_all_configs()
                         return false, "无法创建upstream父目录: " .. upstream_parent_dir
                     end
                     
-                    local dir_ok = path_utils.ensure_dir(upstream_dir)
-                    if not dir_ok then
-                        ngx.log(ngx.ERR, "无法创建upstream目录: ", upstream_dir)
-                        return false, "无法创建upstream目录: " .. upstream_dir
-                    end
-                    
-                    -- 检查目录是否存在且有写入权限
+                local dir_ok = path_utils.ensure_dir(upstream_dir)
+                if not dir_ok then
+                    ngx.log(ngx.ERR, "无法创建upstream目录: ", upstream_dir)
+                    return false, "无法创建upstream目录: " .. upstream_dir
+                end
+                
+                -- 检查目录是否存在且有写入权限
                     local test_file, err_msg = io.open(upstream_dir .. "/.test_write", "w")
-                    if test_file then
-                        test_file:close()
+                if test_file then
+                    test_file:close()
                         local remove_ok, remove_err = os.remove(upstream_dir .. "/.test_write")
                         if not remove_ok then
                             ngx.log(ngx.WARN, "无法删除测试文件: ", upstream_dir .. "/.test_write", ", 错误: ", tostring(remove_err))
@@ -1089,33 +1153,33 @@ function _M.generate_all_configs()
                             ", 修复建议: chown -R waf:waf ", upstream_dir, " && chmod 755 ", upstream_dir,
                             fix_suggestion)
                         return false, "upstream目录无写入权限: " .. upstream_dir .. " (错误: " .. detailed_err .. ", 进程用户: " .. current_user .. user_mismatch .. ")"
-                    end
-                    
-                    local upstream_fd = io.open(upstream_file, "w")
-                    if upstream_fd then
-                        local upstream_file_content = "# ============================================\n"
+                end
+                
+                local upstream_fd = io.open(upstream_file, "w")
+                if upstream_fd then
+                    local upstream_file_content = "# ============================================\n"
                         upstream_file_content = upstream_file_content .. "# Upstream配置: " .. escape_nginx_value(proxy.proxy_name) .. " (代理ID: " .. tostring(proxy.id) .. ")\n"
-                        upstream_file_content = upstream_file_content .. "# 类型: " .. string.upper(proxy.proxy_type) .. "\n"
-                        upstream_file_content = upstream_file_content .. "# 后端类型: 多个后端（负载均衡）\n"
-                        upstream_file_content = upstream_file_content .. "# 自动生成，请勿手动修改\n"
-                        upstream_file_content = upstream_file_content .. "# ============================================\n\n"
-                        upstream_file_content = upstream_file_content .. upstream_config
-                        upstream_fd:write(upstream_file_content)
-                        upstream_fd:close()
-                        ngx.log(ngx.INFO, "生成upstream配置文件: ", upstream_file, " (后端类型: ", proxy.backend_type, ")")
+                    upstream_file_content = upstream_file_content .. "# 类型: " .. string.upper(proxy.proxy_type) .. "\n"
+                    upstream_file_content = upstream_file_content .. "# 后端类型: 多个后端（负载均衡）\n"
+                    upstream_file_content = upstream_file_content .. "# 自动生成，请勿手动修改\n"
+                    upstream_file_content = upstream_file_content .. "# ============================================\n\n"
+                    upstream_file_content = upstream_file_content .. upstream_config
+                    upstream_fd:write(upstream_file_content)
+                    upstream_fd:close()
+                    ngx.log(ngx.INFO, "生成upstream配置文件: ", upstream_file, " (后端类型: ", proxy.backend_type, ")")
+                else
+                    -- 尝试获取更详细的错误信息
+                    local err_msg = "无法创建upstream配置文件: " .. upstream_file
+                    -- 检查文件是否已存在但无法写入
+                    local test_read = io.open(upstream_file, "r")
+                    if test_read then
+                        test_read:close()
+                        err_msg = err_msg .. " (文件已存在但无写入权限，请检查文件权限)"
                     else
-                        -- 尝试获取更详细的错误信息
-                        local err_msg = "无法创建upstream配置文件: " .. upstream_file
-                        -- 检查文件是否已存在但无法写入
-                        local test_read = io.open(upstream_file, "r")
-                        if test_read then
-                            test_read:close()
-                            err_msg = err_msg .. " (文件已存在但无写入权限，请检查文件权限)"
-                        else
-                            err_msg = err_msg .. " (可能原因：目录不存在、权限不足、磁盘空间不足或inode不足)"
-                        end
-                        ngx.log(ngx.ERR, err_msg, ", 项目根目录: ", project_root, ", upstream目录: ", upstream_dir)
-                        return false, err_msg
+                        err_msg = err_msg .. " (可能原因：目录不存在、权限不足、磁盘空间不足或inode不足)"
+                    end
+                    ngx.log(ngx.ERR, err_msg, ", 项目根目录: ", project_root, ", upstream目录: ", upstream_dir)
+                    return false, err_msg
                     end
                 end
             end
@@ -1124,7 +1188,11 @@ function _M.generate_all_configs()
         -- 根据代理类型生成对应的server配置文件
         if proxy.proxy_type == "http" then
             -- 生成HTTP代理server配置文件
-            local config_content = generate_http_proxy_file(proxy, upstream_name, backends)
+            local config_content, err = generate_http_proxy_file(proxy, upstream_name, backends, project_root)
+            if not config_content then
+                ngx.log(ngx.ERR, "生成HTTP代理配置文件失败: ", err or "unknown error")
+                return false, "生成HTTP代理配置文件失败: " .. (err or "unknown error")
+            end
             -- HTTP/HTTPS server配置放在 vhost_conf/http_https 子目录
             -- 新命名格式：proxy_http_$proxy_name.conf
             local proxy_name_safe = sanitize_filename(proxy.proxy_name)
@@ -1224,7 +1292,7 @@ function _M.generate_all_configs()
     -- 清理已删除或禁用的代理的配置文件
     -- 注意：active_proxy_ids 只包含 status = 1 的代理ID
     -- 所以禁用的代理（status = 0）和已删除的代理的配置文件都会被清理
-    cleanup_orphaned_files(project_root, active_proxy_ids, active_proxy_names, active_location_files)
+    cleanup_orphaned_files(project_root, active_proxy_ids, active_proxy_names, active_location_files, proxies)
     
     ngx.log(ngx.INFO, "nginx配置生成成功: 共生成 " .. #proxies .. " 个代理配置文件")
     return true, "配置生成成功，共生成 " .. #proxies .. " 个代理配置文件"

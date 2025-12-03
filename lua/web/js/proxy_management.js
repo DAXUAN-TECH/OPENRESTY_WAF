@@ -1877,7 +1877,15 @@ const pageSize = 20;
                     body: JSON.stringify(proxyData)
                 });
                 
-                const data = await response.json();
+                const text = await response.text();
+                let data;
+                try {
+                    data = JSON.parse(text);
+                } catch (e) {
+                    // 后端可能返回HTML错误页或非JSON内容，给出更明确的提示，避免“Unexpected token '<'”这类前端报错
+                    showAlert('网络错误: 后端返回非JSON响应（可能是错误页），内容前200字符为：' + text.slice(0, 200), 'error');
+                    return;
+                }
                 
                 if (data.success) {
                     showAlert('代理配置更新成功');

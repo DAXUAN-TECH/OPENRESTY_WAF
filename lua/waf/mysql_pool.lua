@@ -161,22 +161,40 @@ function _M.get_connection()
     local mysql_host = resolve_hostname(config.mysql.host)
 
     -- 直接调用 connect；如果网络/服务异常会返回超时错误
-    local ok, err, errcode, sqlstate = db:connect{
-        host = mysql_host,
-        port = config.mysql.port,
-        database = config.mysql.database,
-        user = config.mysql.user,
-        password = config.mysql.password,
-        max_packet_size = config.mysql.max_packet_size,
-        charset = "utf8mb4",
-    }
+    -- 使用 pcall 包装 connect 调用，避免在超时时出现 "attempt to send data on a closed socket" 错误
+    local connect_ok, connect_result = pcall(function()
+        return db:connect{
+            host = mysql_host,
+            port = config.mysql.port,
+            database = config.mysql.database,
+            user = config.mysql.user,
+            password = config.mysql.password,
+            max_packet_size = config.mysql.max_packet_size,
+            charset = "utf8mb4",
+        }
+    end)
+    
+    local ok, err, errcode, sqlstate
+    if connect_ok then
+        -- pcall 成功，获取连接结果
+        ok, err, errcode, sqlstate = connect_result
+    else
+        -- pcall 失败，说明 connect 过程中抛出了异常（可能是 socket 已关闭）
+        ok = false
+        err = connect_result or "connection failed with exception"
+        ngx.log(ngx.WARN, "MySQL connect() threw an exception: ", tostring(connect_result))
+    end
 
     if not ok then
         -- 安全关闭失败的连接（使用 pcall 避免在已关闭的 socket 上操作）
         if db then
-            local _, close_err = pcall(function() db:close() end)
-            if close_err then
-                ngx.log(ngx.DEBUG, "Failed to close MySQL connection (expected if socket already closed): ", tostring(close_err))
+            local close_ok, close_err = pcall(function() 
+                -- 尝试关闭连接，但如果socket已经关闭，这可能会失败，这是正常的
+                db:close()
+            end)
+            if not close_ok or close_err then
+                -- 关闭失败是预期的（socket可能已经关闭），只记录DEBUG日志
+                ngx.log(ngx.DEBUG, "Failed to close MySQL connection (expected if socket already closed): ", tostring(close_err or "unknown"))
             end
         end
         
@@ -210,24 +228,41 @@ function _M.get_connection()
             db, err = mysql:new()
             if db then
                 db:set_timeout(config.mysql.pool_timeout)
-                ok, err, errcode, sqlstate = db:connect{
-                    host = mysql_host,
-                    port = config.mysql.port,
-                    database = config.mysql.database,
-                    user = config.mysql.user,
-                    password = config.mysql.password,
-                    max_packet_size = config.mysql.max_packet_size,
-                    charset = "utf8mb4",
-                }
+                -- 使用 pcall 包装重试连接，避免在超时时出现 "attempt to send data on a closed socket" 错误
+                local retry_connect_ok, retry_connect_result = pcall(function()
+                    return db:connect{
+                        host = mysql_host,
+                        port = config.mysql.port,
+                        database = config.mysql.database,
+                        user = config.mysql.user,
+                        password = config.mysql.password,
+                        max_packet_size = config.mysql.max_packet_size,
+                        charset = "utf8mb4",
+                    }
+                end)
+                
+                if retry_connect_ok then
+                    -- pcall 成功，获取连接结果
+                    ok, err, errcode, sqlstate = retry_connect_result
+                else
+                    -- pcall 失败，说明 connect 过程中抛出了异常（可能是 socket 已关闭）
+                    ok = false
+                    err = retry_connect_result or "connection retry failed with exception"
+                    ngx.log(ngx.WARN, "MySQL retry connect() threw an exception: ", tostring(retry_connect_result))
+                end
                 
                 if ok then
                     ngx.log(ngx.INFO, "MySQL connection retry successful with new IP: ", mysql_host)
                 else
                     -- 重试也失败，安全关闭
                     if db then
-                        local _, close_err = pcall(function() db:close() end)
-                        if close_err then
-                            ngx.log(ngx.DEBUG, "Failed to close MySQL retry connection (expected if socket already closed): ", tostring(close_err))
+                        local close_ok, close_err = pcall(function() 
+                            -- 尝试关闭连接，但如果socket已经关闭，这可能会失败，这是正常的
+                            db:close()
+                        end)
+                        if not close_ok or close_err then
+                            -- 关闭失败是预期的（socket可能已经关闭），只记录DEBUG日志
+                            ngx.log(ngx.DEBUG, "Failed to close MySQL retry connection (expected if socket already closed): ", tostring(close_err or "unknown"))
                         end
                     end
                 end

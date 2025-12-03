@@ -152,8 +152,6 @@ let features = [];
                 'rate_limit_api': 'API速率限制',
                 'proxy_trusted_check': '受信任代理检查',
                 // 注意：系统访问白名单已从功能管理中移除，保留在系统设置中管理
-                // 网络优化
-                'brotli': 'Brotli压缩',
                 // 界面功能
                 'stats': '统计报表',
                 'monitor': '监控面板',

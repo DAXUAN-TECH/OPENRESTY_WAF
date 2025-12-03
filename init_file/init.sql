@@ -316,8 +316,6 @@ INSERT INTO waf_system_config (config_key, config_value, description) VALUES
 -- 共享内存优化配置
 ('shared_memory_optimizer_enable', '1', '是否启用共享内存优化（使用Redis替代部分共享内存，1-启用，0-禁用）'),
 ('shared_memory_redis_fallback_enable', '1', '是否启用Redis回退机制（Redis失败时回退到共享内存，1-启用，0-禁用）'),
--- 网络优化配置
-('brotli_enable', '0', '是否启用Brotli压缩（需要ngx_brotli模块，1-启用，0-禁用）'),
 -- 系统访问白名单配置（从waf_system_access_whitelist_config表合并）
 ('system_access_whitelist_enabled', '0', '是否启用系统访问白名单（1-启用，0-禁用，开启时只有白名单内的IP才能访问管理系统）'),
 -- 管理端 HTTPS 与域名配置
@@ -481,8 +479,6 @@ INSERT INTO waf_feature_switches (feature_key, feature_name, description, enable
 ('rate_limit_api', 'API速率限制', 'API接口速率限制功能', 1, 'database'),
 ('proxy_trusted_check', '受信任代理检查', '受信任代理检查功能，安全获取客户端真实IP', 1, 'database'),
 -- 注意：系统访问白名单功能已从功能管理中移除，保留在系统设置中管理
--- 网络优化
-('brotli', 'Brotli压缩', 'Brotli压缩功能（需要ngx_brotli模块）', 0, 'database'),
 -- 界面功能
 ('stats', '统计报表', '封控统计报表功能，提供封控数据统计和分析', 1, 'database'),
 ('monitor', '监控面板', '实时监控面板功能，显示系统运行状态和关键指标', 1, 'database'),

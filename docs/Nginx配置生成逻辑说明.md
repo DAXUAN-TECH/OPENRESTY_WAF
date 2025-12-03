@@ -26,8 +26,8 @@
   - `location_paths`：路径匹配列表（JSON格式，支持多个location）
   - `load_balance`：负载均衡算法
   - `ssl_enable`：是否启用SSL
-  - `ssl_cert_path`：SSL证书路径
-  - `ssl_key_path`：SSL私钥路径
+  - `ssl_pem`：SSL证书内容（PEM格式）
+  - `ssl_key`：SSL私钥内容（KEY格式）
   - `proxy_connect_timeout`：连接超时
   - `proxy_send_timeout`：发送超时
   - `proxy_read_timeout`：读取超时
@@ -79,7 +79,7 @@
 -- 从数据库查询所有 status = 1 的代理配置
 SELECT id, proxy_name, proxy_type, listen_port, listen_address, server_name, 
        location_path, location_paths, backend_type, load_balance,
-       ssl_enable, ssl_cert_path, ssl_key_path,
+       ssl_enable, ssl_pem, ssl_key,
        proxy_timeout, proxy_connect_timeout, proxy_send_timeout, proxy_read_timeout,
        status
 FROM waf_proxy_configs

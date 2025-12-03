@@ -42,10 +42,26 @@ function _M.create()
         return
     end
     
-    local result, err = proxy_management.create_proxy(proxy_data)
+    -- 使用 xpcall 包裹 create_proxy，防止 Lua 运行时错误直接导致 500 HTML 错误页
+    local ok_call, result_or_err, err = xpcall(function()
+        return proxy_management.create_proxy(proxy_data)
+    end, debug.traceback)
+    
+    if not ok_call then
+        local trace = result_or_err or "unknown runtime error"
+        ngx.log(ngx.ERR, "proxy_management.create_proxy runtime error: ", trace)
+        -- 记录审计日志（失败）
+        local proxy_name = proxy_data and proxy_data.proxy_name or "unknown"
+        audit_log.log_proxy_action("create", nil, proxy_name, false, trace)
+        api_utils.json_response({error = "内部错误: " .. tostring(trace)}, 500)
+        return
+    end
+    
+    local result, err = result_or_err, err
     if err then
         -- 记录审计日志（失败）
-        audit_log.log_proxy_action("create", nil, proxy_data.proxy_name, false, err)
+        local proxy_name = proxy_data and proxy_data.proxy_name or "unknown"
+        audit_log.log_proxy_action("create", nil, proxy_name, false, err)
         api_utils.json_response({error = err}, 400)
         return
     end

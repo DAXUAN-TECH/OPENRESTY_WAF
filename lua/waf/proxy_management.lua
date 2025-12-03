@@ -90,6 +90,21 @@ local function validate_proxy_config(proxy_data)
         return false, "代理名称长度不能超过100个字符"
     end
     
+    -- 验证SSL配置（仅HTTP/HTTPS代理）
+    if proxy_data.proxy_type == "http" then
+        local ssl_enable = proxy_data.ssl_enable or 0
+        if ssl_enable == 1 then
+            local ssl_pem = null_to_nil(proxy_data.ssl_pem)
+            local ssl_key = null_to_nil(proxy_data.ssl_key)
+            if not ssl_pem or ssl_pem == "" then
+                return false, "启用SSL时，SSL证书内容不能为空"
+            end
+            if not ssl_key or ssl_key == "" then
+                return false, "启用SSL时，SSL密钥内容不能为空"
+            end
+        end
+    end
+    
     return true, nil
 end
 

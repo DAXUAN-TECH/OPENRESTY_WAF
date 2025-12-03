@@ -1296,6 +1296,27 @@ const pageSize = 20;
                 proxyData.force_https_redirect = force_https_redirect;
                 proxyData.ssl_enable = ssl_enable;
                 
+                // 收集SSL证书和密钥（如果启用SSL）
+                if (ssl_enable === 1) {
+                    const sslPemEl = document.getElementById('create-ssl-pem');
+                    const sslKeyEl = document.getElementById('create-ssl-key');
+                    const ssl_pem = sslPemEl ? sslPemEl.value.trim() : '';
+                    const ssl_key = sslKeyEl ? sslKeyEl.value.trim() : '';
+                    
+                    // 基础校验：开启SSL时必须填写PEM和KEY
+                    if (!ssl_pem || !ssl_key) {
+                        showAlert('启用SSL时，SSL证书和密钥不能为空', 'error');
+                        return;
+                    }
+                    
+                    proxyData.ssl_pem = ssl_pem;
+                    proxyData.ssl_key = ssl_key;
+                } else {
+                    // 未启用SSL时，不发送SSL相关字段
+                    proxyData.ssl_pem = null;
+                    proxyData.ssl_key = null;
+                }
+                
                 // 从location结构中收集路径匹配和后端服务器数据
                 const configSection = document.querySelector('#upstream-fields .config-section');
                 const locationPaths = [];
@@ -1758,7 +1779,7 @@ const pageSize = 20;
                     return;
                 }
             }
-
+            
             const proxyData = {
                 proxy_name: document.getElementById('edit-proxy-name').value,
                 backend_type: 'upstream',

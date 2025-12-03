@@ -236,7 +236,17 @@ local function generate_http_server_config(proxy, upstream_name, backends, proje
     end
     
     -- SSL配置
-    if proxy.ssl_enable == 1 and proxy.ssl_pem and proxy.ssl_key then
+    if proxy.ssl_enable == 1 then
+        -- 验证SSL证书和密钥是否存在
+        if not proxy.ssl_pem or proxy.ssl_pem == "" or proxy.ssl_pem == cjson.null then
+            ngx.log(ngx.ERR, "启用SSL但SSL证书内容为空")
+            return nil, "启用SSL时，SSL证书内容不能为空"
+        end
+        if not proxy.ssl_key or proxy.ssl_key == "" or proxy.ssl_key == cjson.null then
+            ngx.log(ngx.ERR, "启用SSL但SSL密钥内容为空")
+            return nil, "启用SSL时，SSL密钥内容不能为空"
+        end
+        
         -- 生成SSL证书和密钥文件路径
         local cert_dir = project_root .. "/conf.d/cert"
         local dir_ok = path_utils.ensure_dir(cert_dir)

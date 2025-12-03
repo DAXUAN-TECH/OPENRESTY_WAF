@@ -321,6 +321,11 @@ INSERT INTO waf_system_config (config_key, config_value, description) VALUES
 ('brotli_enable', '0', '是否启用Brotli压缩（需要ngx_brotli模块，1-启用，0-禁用）'),
 -- 系统访问白名单配置（从waf_system_access_whitelist_config表合并）
 ('system_access_whitelist_enabled', '0', '是否启用系统访问白名单（1-启用，0-禁用，开启时只有白名单内的IP才能访问管理系统）'),
+-- 管理端 HTTPS 与域名配置
+('admin_ssl_enable', '0', '是否为管理端启用HTTPS（1-启用，0-禁用，启用后监听443并加载管理端证书）'),
+('admin_server_name', 'localhost', '管理端访问域名（例如：waf-admin.example.com，多域名请用空格分隔）'),
+('admin_ssl_pem', '', '管理端SSL证书内容（PEM格式）'),
+('admin_ssl_key', '', '管理端SSL私钥内容（KEY格式）'),
 -- 缓存版本控制配置（从waf_cache_versions表合并）
 ('cache_version_rules', '1', '规则缓存版本号（用于缓存失效）'),
 ('cache_version_whitelist', '1', '白名单缓存版本号（用于缓存失效）'),

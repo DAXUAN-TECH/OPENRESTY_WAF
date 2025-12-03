@@ -4,6 +4,7 @@ let currentPage = 1;
         
         // 切换标签页
         function switchTab(tab) {
+            const tabs = document.querySelectorAll('.tab');
             document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
             document.querySelectorAll('.tab-content').forEach(c => {
                 c.classList.remove('active');
@@ -11,11 +12,21 @@ let currentPage = 1;
             });
             
             if (tab === 'whitelist') {
-                document.querySelectorAll('.tab')[0].classList.add('active');
+                if (tabs[0]) {
+                    tabs[0].classList.add('active');
+                }
                 const whitelistTab = document.getElementById('whitelist-tab');
                 whitelistTab.classList.add('active');
                 whitelistTab.style.display = 'block';
                 loadWhitelist();
+            } else if (tab === 'admin_ssl') {
+                if (tabs[1]) {
+                    tabs[1].classList.add('active');
+                }
+                const adminSslTab = document.getElementById('admin-ssl-tab');
+                adminSslTab.classList.add('active');
+                adminSslTab.style.display = 'block';
+                loadAdminSslConfig();
             }
         }
         
@@ -105,6 +116,37 @@ let currentPage = 1;
                 tbody.innerHTML = '<tr><td colspan="7" class="empty">加载失败</td></tr>';
             }
         }
+
+        // 加载管理端 SSL 与域名配置
+        async function loadAdminSslConfig() {
+            try {
+                const response = await fetch('/api/system/admin-ssl/config');
+                if (!response.ok) {
+                    if (response.status === 401) {
+                        window.location.reload();
+                        return;
+                    }
+                    throw new Error('HTTP ' + response.status);
+                }
+                const data = await response.json();
+                if (data && data.success && data.data) {
+                    const cfg = data.data;
+                    const enableEl = document.getElementById('admin-ssl-enable');
+                    const nameEl = document.getElementById('admin-server-name');
+                    const pemEl = document.getElementById('admin-ssl-pem');
+                    const keyEl = document.getElementById('admin-ssl-key');
+                    if (enableEl) enableEl.checked = cfg.ssl_enable == 1;
+                    if (nameEl) nameEl.value = cfg.server_name || '';
+                    if (pemEl) pemEl.value = cfg.ssl_pem || '';
+                    if (keyEl) keyEl.value = cfg.ssl_key || '';
+                } else {
+                    showAlert((data && data.error) || '加载管理端SSL配置失败', 'error');
+                }
+            } catch (e) {
+                console.error('loadAdminSslConfig error:', e);
+                showAlert('加载管理端SSL配置失败: ' + e.message, 'error');
+            }
+        }
         
         // 渲染分页
         function renderPagination(container, pagination, loadFn) {
@@ -158,6 +200,93 @@ let currentPage = 1;
             // 防止body滚动
             document.body.style.overflow = 'hidden';
         }
+
+        // 保存管理端 SSL 与域名配置
+        async function saveAdminSslConfig() {
+            const enableEl = document.getElementById('admin-ssl-enable');
+            const nameEl = document.getElementById('admin-server-name');
+            const pemEl = document.getElementById('admin-ssl-pem');
+            const keyEl = document.getElementById('admin-ssl-key');
+
+            const sslEnable = enableEl && enableEl.checked ? 1 : 0;
+            const serverName = nameEl ? nameEl.value.trim() : '';
+            const sslPem = pemEl ? pemEl.value.trim() : '';
+            const sslKey = keyEl ? keyEl.value.trim() : '';
+
+            if (sslEnable === 1) {
+                if (!serverName) {
+                    showAlert('启用管理端HTTPS时，管理端域名不能为空', 'error');
+                    return;
+                }
+                if (!sslPem) {
+                    showAlert('启用管理端HTTPS时，SSL证书内容不能为空', 'error');
+                    return;
+                }
+                if (!sslKey) {
+                    showAlert('启用管理端HTTPS时，SSL私钥内容不能为空', 'error');
+                    return;
+                }
+            }
+
+            const btn = document.querySelector('#admin-ssl-tab .form-actions .btn-primary');
+            if (btn) {
+                btn.disabled = true;
+                btn.textContent = '保存中...';
+            }
+
+            try {
+                const params = new URLSearchParams();
+                params.append('ssl_enable', String(sslEnable));
+                params.append('server_name', serverName);
+                params.append('ssl_pem', sslPem);
+                params.append('ssl_key', sslKey);
+
+                const response = await fetch('/api/system/admin-ssl/config', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: params.toString(),
+                });
+
+                const text = await response.text();
+                let data;
+                try {
+                    data = JSON.parse(text);
+                } catch (e) {
+                    console.error('saveAdminSslConfig JSON parse error:', e, 'raw:', text);
+                    showAlert('保存失败: 后端返回非JSON响应', 'error');
+                    return;
+                }
+
+                if (response.ok && data.success) {
+                    showAlert(data.message || '保存成功', 'success');
+                    // 保存成功后重新加载一次，以确保表单与后端状态一致
+                    loadAdminSslConfig();
+                } else {
+                    showAlert(data.error || '保存失败', 'error');
+                }
+            } catch (e) {
+                console.error('saveAdminSslConfig error:', e);
+                showAlert('保存失败: ' + e.message, 'error');
+            } finally {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.textContent = '保存';
+                }
+            }
+        }
+
+        // 页面初始化
+        document.addEventListener('DOMContentLoaded', () => {
+            // 默认加载白名单标签页，同时预加载一次管理端SSL配置以便快速切换
+            try {
+                loadWhitelist();
+                loadAdminSslConfig();
+            } catch (e) {
+                console.error('init system_settings error:', e);
+            }
+        });
         
         // 编辑白名单
         async function editWhitelist(id) {

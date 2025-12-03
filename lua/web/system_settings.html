@@ -14,6 +14,7 @@
         
         <div class="tabs">
             <button class="tab active" onclick="switchTab('whitelist')">系统访问白名单</button>
+            <button class="tab" onclick="switchTab('admin_ssl')">管理端SSL/域名</button>
         </div>
         
         <div id="alert-container"></div>
@@ -59,6 +60,36 @@
             
             <!-- 分页 -->
             <div class="pagination" id="whitelist-pagination"></div>
+        </div>
+
+        <!-- 管理端 SSL 与域名配置 -->
+        <div id="admin-ssl-tab" class="tab-content">
+            <div class="form-group">
+                <label>启用管理端 HTTPS</label>
+                <div style="display:flex;align-items:center;gap:10px;">
+                    <input type="checkbox" id="admin-ssl-enable">
+                    <span style="font-size:13px;color:#666;">开启后，将在管理端监听 443 端口并加载下方配置的证书</span>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>管理端域名</label>
+                <input type="text" id="admin-server-name" placeholder="例如：waf-admin.example.com，多域名请用空格分隔">
+                <small style="color:#666;font-size:12px;display:block;margin-top:4px;">此域名将用于 Nginx 的 server_name 配置，建议与证书中的域名保持一致。</small>
+            </div>
+            <div class="form-group">
+                <label>SSL证书 (PEM格式)</label>
+                <textarea id="admin-ssl-pem" rows="8" placeholder="粘贴管理端HTTPS使用的证书内容（包含 -----BEGIN CERTIFICATE----- / -----END CERTIFICATE-----）"></textarea>
+            </div>
+            <div class="form-group">
+                <label>SSL私钥 (KEY格式)</label>
+                <textarea id="admin-ssl-key" rows="8" placeholder="粘贴管理端HTTPS使用的私钥内容（包含 -----BEGIN PRIVATE KEY----- / -----END PRIVATE KEY-----）"></textarea>
+            </div>
+            <div class="form-actions">
+                <button type="button" class="btn btn-primary" onclick="saveAdminSslConfig()">保存</button>
+            </div>
+            <small style="color:#666;font-size:12px;display:block;margin-top:10px;">
+                提示：保存后系统会自动测试并重新加载 Nginx 配置，如有语法错误将返回详细错误信息，请根据提示修正配置。
+            </small>
         </div>
     </div>
     

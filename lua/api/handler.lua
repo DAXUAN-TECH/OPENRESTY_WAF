@@ -638,6 +638,18 @@ function _M.route_system(path, method)
             return
         end
     end
+
+    -- 获取/更新管理端 SSL 与域名配置
+    if path == "/api/system/admin-ssl/config" then
+        if method == "GET" then
+            return system_api.get_admin_ssl_config()
+        elseif method == "POST" then
+            return system_api.update_admin_ssl_config()
+        else
+            api_utils.json_response({error = "Method not allowed"}, 405)
+            return
+        end
+    end
     
     -- 未匹配的系统路由
     api_utils.json_response({

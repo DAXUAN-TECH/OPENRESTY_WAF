@@ -6,6 +6,7 @@ local api_utils = require "api.utils"
 local cjson = require "cjson"
 local path_utils = require "waf.path_utils"
 local audit_log = require "waf.audit_log"
+local config_manager = require "waf.config_manager"
 
 local _M = {}
 
@@ -33,6 +34,118 @@ local function is_executable(path)
     end
     
     return false
+end
+
+-- 管理端 SSL 文件名清理（用于生成证书/配置文件名）
+local function sanitize_filename(name)
+    if not name or name == "" then
+        return "default"
+    end
+    -- 使用小写，并将非法字符替换为下划线，避免路径和Nginx语法问题
+    name = tostring(name):lower()
+    name = name:gsub("[^a-z0-9._%-]", "_")
+    name = name:gsub("_+", "_")
+    return name
+end
+
+-- 写入/更新管理端 SSL 相关文件
+-- 参数：
+--   enabled: 0/1
+--   server_name: 管理端域名（可包含多个域名，用空格分隔）
+--   ssl_pem, ssl_key: 证书/私钥内容（PEM/KEY）
+local function write_admin_ssl_files(enabled, server_name, ssl_pem, ssl_key)
+    local project_root = path_utils.get_project_root()
+    if not project_root or project_root == "" then
+        return false, "无法获取项目根目录（project_root）"
+    end
+
+    -- 目标目录：证书目录 & vhost_conf 目录
+    local cert_dir = project_root .. "/conf.d/cert"
+    local vhost_dir = project_root .. "/conf.d/vhost_conf"
+
+    if not path_utils.ensure_dir(cert_dir) then
+        return false, "无法创建管理端SSL证书目录: " .. cert_dir
+    end
+    if not path_utils.ensure_dir(vhost_dir) then
+        return false, "无法创建管理端vhost目录: " .. vhost_dir
+    end
+
+    local admin_conf_path = vhost_dir .. "/waf_admin_ssl.conf"
+
+    -- 如果未启用 SSL，则写入一个占位配置文件，仅包含注释，避免 include 报错
+    enabled = tonumber(enabled) or 0
+    if enabled ~= 1 then
+        local f, err = io.open(admin_conf_path, "w")
+        if not f then
+            return false, "写入管理端SSL配置文件失败: " .. (err or "unknown error")
+        end
+        f:write("# 管理端未启用HTTPS（由系统设置关闭）\n")
+        f:write("# 如需启用，请在系统设置中开启管理端SSL，并配置证书与域名。\n")
+        f:close()
+        return true
+    end
+
+    -- 启用 SSL 时必须有 server_name / 证书 / 私钥
+    if not server_name or server_name == "" then
+        return false, "启用管理端HTTPS时，域名(server_name)不能为空"
+    end
+    if not ssl_pem or ssl_pem == "" then
+        return false, "启用管理端HTTPS时，SSL证书内容不能为空"
+    end
+    if not ssl_key or ssl_key == "" then
+        return false, "启用管理端HTTPS时，SSL私钥内容不能为空"
+    end
+
+    -- 取第一个域名用于文件名，避免空格等字符
+    local first_domain = server_name:match("^%s*([^%s]+)")
+    local server_name_for_file = first_domain or server_name
+    local server_name_safe = sanitize_filename(server_name_for_file)
+    if not server_name_safe or server_name_safe == "" then
+        server_name_safe = "admin"
+    end
+
+    local cert_filename = "admin_" .. server_name_safe .. ".pem"
+    local key_filename  = "admin_" .. server_name_safe .. ".key"
+    local cert_path = cert_dir .. "/" .. cert_filename
+    local key_path  = cert_dir .. "/" .. key_filename
+
+    -- 写入证书文件
+    local cert_file, cerr = io.open(cert_path, "w")
+    if not cert_file then
+        return false, "写入管理端SSL证书文件失败: " .. (cerr or "unknown error")
+    end
+    cert_file:write(ssl_pem)
+    cert_file:close()
+
+    -- 写入私钥文件
+    local key_file, kerr = io.open(key_path, "w")
+    if not key_file then
+        return false, "写入管理端SSL私钥文件失败: " .. (kerr or "unknown error")
+    end
+    key_file:write(ssl_key)
+    key_file:close()
+
+    -- 写入管理端 server 的附加 SSL 配置（由 waf.conf include）
+    local conf, ferr = io.open(admin_conf_path, "w")
+    if not conf then
+        return false, "写入管理端SSL配置文件失败: " .. (ferr or "unknown error")
+    end
+
+    -- 这里的指令会被直接插入 waf.conf 的 server 块中
+    conf:write("# 本文件由系统设置自动生成，请勿手工修改\n")
+    conf:write("# 管理端 HTTPS 配置\n")
+    conf:write("    listen 443 ssl;\n")
+    conf:write("    server_name " .. server_name .. ";\n")
+    conf:write("    ssl_certificate     " .. cert_path .. ";\n")
+    conf:write("    ssl_certificate_key " .. key_path .. ";\n")
+    conf:write("    ssl_protocols TLSv1.2 TLSv1.3;\n")
+    conf:write("    ssl_ciphers 'ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384';\n")
+    conf:write("    ssl_prefer_server_ciphers off;\n")
+    conf:write("    ssl_session_cache shared:SSL:10m;\n")
+    conf:write("    ssl_session_timeout 10m;\n")
+    conf:close()
+
+    return true
 end
 
 -- 查找OpenResty/Nginx可执行文件（可移植性实现）
@@ -310,6 +423,121 @@ function _M.test_nginx_config()
         success = true,
         message = "OpenResty配置测试通过",
         output = test_output
+    })
+end
+
+-- 获取管理端 SSL 与域名配置
+function _M.get_admin_ssl_config()
+    -- 从waf_system_config表读取配置
+    local enabled = config_manager.get_config("admin_ssl_enable", "0")
+    local server_name = config_manager.get_config("admin_server_name", "localhost")
+    local ssl_pem = config_manager.get_config("admin_ssl_pem", "")
+    local ssl_key = config_manager.get_config("admin_ssl_key", "")
+
+    api_utils.json_response({
+        success = true,
+        data = {
+            ssl_enable = tonumber(enabled) or 0,
+            server_name = server_name or "",
+            ssl_pem = ssl_pem or "",
+            ssl_key = ssl_key or ""
+        }
+    })
+end
+
+-- 更新管理端 SSL 与域名配置
+function _M.update_admin_ssl_config()
+    if ngx.req.get_method() ~= "POST" then
+        api_utils.json_response({ error = "Method not allowed" }, 405)
+        return
+    end
+
+    local args = api_utils.get_args()
+    local ssl_enable = args.ssl_enable
+    local server_name = args.server_name or ""
+    local ssl_pem = args.ssl_pem or ""
+    local ssl_key = args.ssl_key or ""
+
+    if ssl_enable == nil then
+        api_utils.json_response({ error = "ssl_enable 参数不能为空" }, 400)
+        return
+    end
+
+    local enable_num = tonumber(ssl_enable)
+    if enable_num ~= 0 and enable_num ~= 1 then
+        api_utils.json_response({ error = "ssl_enable 参数必须是0或1" }, 400)
+        return
+    end
+
+    -- 启用 SSL 时做严格校验
+    if enable_num == 1 then
+        if not server_name or server_name == "" then
+            api_utils.json_response({ error = "启用管理端HTTPS时，必须配置管理端域名" }, 400)
+            return
+        end
+        if not ssl_pem or ssl_pem == "" then
+            api_utils.json_response({ error = "启用管理端HTTPS时，必须填写SSL证书（PEM内容）" }, 400)
+            return
+        end
+        if not ssl_key or ssl_key == "" then
+            api_utils.json_response({ error = "启用管理端HTTPS时，必须填写SSL私钥（KEY内容）" }, 400)
+            return
+        end
+    end
+
+    -- 先写入数据库配置（确保状态持久化）
+    local ok1, err1 = config_manager.set_config("admin_ssl_enable", enable_num, "是否为管理端启用HTTPS（1-启用，0-禁用）")
+    if not ok1 then
+        api_utils.json_response({ error = "更新 admin_ssl_enable 失败: " .. tostring(err1) }, 500)
+        return
+    end
+
+    local ok2, err2 = config_manager.set_config("admin_server_name", server_name, "管理端访问域名（例如：waf-admin.example.com，多域名请用空格分隔）")
+    if not ok2 then
+        api_utils.json_response({ error = "更新 admin_server_name 失败: " .. tostring(err2) }, 500)
+        return
+    end
+
+    local ok3, err3 = config_manager.set_config("admin_ssl_pem", ssl_pem, "管理端SSL证书内容（PEM格式）")
+    if not ok3 then
+        api_utils.json_response({ error = "更新 admin_ssl_pem 失败: " .. tostring(err3) }, 500)
+        return
+    end
+
+    local ok4, err4 = config_manager.set_config("admin_ssl_key", ssl_key, "管理端SSL私钥内容（KEY格式）")
+    if not ok4 then
+        api_utils.json_response({ error = "更新 admin_ssl_key 失败: " .. tostring(err4) }, 500)
+        return
+    end
+
+    -- 写入/更新实际的证书文件与 waf_admin_ssl.conf
+    local ok_files, err_files = write_admin_ssl_files(enable_num, server_name, ssl_pem, ssl_key)
+    if not ok_files then
+        api_utils.json_response({ error = "写入管理端SSL文件失败: " .. tostring(err_files) }, 500)
+        return
+    end
+
+    -- 记录审计日志
+    local action_desc = enable_num == 1 and ("启用管理端HTTPS，域名: " .. server_name) or "关闭管理端HTTPS"
+    audit_log.log_system_action("update_admin_ssl", "更新管理端HTTPS配置", true, action_desc)
+
+    -- 异步触发 nginx 重载（避免阻塞当前请求）
+    ngx.timer.at(0, function()
+        local ok_reload, result = _M.reload_nginx_internal()
+        if not ok_reload then
+            ngx.log(ngx.WARN, "更新管理端HTTPS配置后自动触发nginx重载失败: ", result or "unknown error")
+        else
+            ngx.log(ngx.INFO, "更新管理端HTTPS配置后自动触发nginx重载成功")
+        end
+    end)
+
+    api_utils.json_response({
+        success = true,
+        message = "管理端HTTPS配置已更新，nginx配置正在重新加载",
+        data = {
+            ssl_enable = enable_num,
+            server_name = server_name
+        }
     })
 end
 

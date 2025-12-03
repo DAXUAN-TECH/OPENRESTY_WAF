@@ -254,12 +254,14 @@ function _M.list()
             end
             final_rules = clean_rules
             -- 再次测试（使用 encode_empty_table_as_object(false)）
-            if cjson.encode_empty_table_as_object then
+            pcall(function()
                 cjson.encode_empty_table_as_object(false)
-            end
+            end)
             test_json = cjson.encode(final_rules)
-            if cjson.encode_empty_table_as_object then
-                cjson.encode_empty_table_as_object(old_encode_empty_table_as_object)
+            if old_value ~= nil then
+                pcall(function()
+                    cjson.encode_empty_table_as_object(old_value)
+                end)
             end
             if not test_json:match("^%[") then
                 ngx.log(ngx.ERR, "FATAL: rules JSON still not an array after cleanup, setting to empty array")

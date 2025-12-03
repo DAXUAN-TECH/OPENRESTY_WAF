@@ -618,10 +618,13 @@ local function check_specific_rule(client_ip, rule_id)
                     ", client_ip: ", client_ip, ", rule_value: ", rule_value)
             return true, rule
         else
-            -- 白名单不匹配，不在白名单中（但不一定被封控，可能在其他白名单中）
+            -- 白名单不匹配，不在白名单中
+            -- 注意：即使IP不匹配，也要返回规则信息（matched_rule），以便check_multiple知道存在白名单规则
+            -- 返回false表示IP不匹配，但返回rule表示规则存在
             ngx.log(ngx.INFO, "check_specific_rule: IP白名单不匹配，rule_id: ", rule_id, 
-                    ", client_ip: ", client_ip, ", rule_value: ", rule_value)
-            return false, nil
+                    ", client_ip: ", client_ip, ", rule_value: ", rule_value, 
+                    ", 但规则存在，需要检查是否还有其他白名单规则")
+            return false, rule  -- 返回false表示不匹配，但返回rule表示规则存在
         end
     elseif rule_type == "ip_blacklist" then
         -- IP黑名单：检查单个IP、CIDR格式、IP范围格式（支持多选，用逗号分隔）

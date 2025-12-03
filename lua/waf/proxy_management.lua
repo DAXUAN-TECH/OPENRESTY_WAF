@@ -71,9 +71,12 @@ local function validate_proxy_config(proxy_data)
         end
         -- 只有HTTP/HTTPS代理才允许有backend_path，TCP/UDP代理不应该有backend_path
         if proxy_data.proxy_type ~= "http" then
-            if backend.backend_path and backend.backend_path ~= "" then
+            local backend_path = null_to_nil(backend.backend_path)
+            if backend_path and backend_path ~= "" then
                 return false, string.format("第%d个后端服务器：TCP/UDP代理不支持后端路径配置", i)
             end
+            -- 清除 TCP/UDP 代理的 backend_path 字段（如果存在）
+            backend.backend_path = nil
         end
     end
     

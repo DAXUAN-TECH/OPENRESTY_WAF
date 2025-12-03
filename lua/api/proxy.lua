@@ -357,7 +357,21 @@ function _M.update()
     local old_proxy = proxy_management.get_proxy(proxy_id)
     local proxy_name = old_proxy and old_proxy.proxy_name or proxy_data.proxy_name or ""
     
-    local result, err = proxy_management.update_proxy(proxy_id, proxy_data)
+    -- 使用 xpcall 包裹 update_proxy，防止 Lua 运行时错误直接导致 500 HTML 错误页
+    local ok_call, result_or_err, err = xpcall(function()
+        return proxy_management.update_proxy(proxy_id, proxy_data)
+    end, debug.traceback)
+    
+    if not ok_call then
+        local trace = result_or_err or "unknown runtime error"
+        ngx.log(ngx.ERR, "proxy_management.update_proxy runtime error: ", trace)
+        -- 记录审计日志（失败）
+        audit_log.log_proxy_action("update", proxy_id, proxy_name, false, trace)
+        api_utils.json_response({error = "内部错误: " .. tostring(trace)}, 500)
+        return
+    end
+    
+    local result, err = result_or_err, err
     if err then
         -- 记录审计日志（失败）
         audit_log.log_proxy_action("update", proxy_id, proxy_name, false, err)

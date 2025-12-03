@@ -525,7 +525,9 @@ local function generate_stream_proxy_file(proxy, upstream_name)
 end
 
 -- 清理已删除或禁用的代理的配置文件
-local function cleanup_orphaned_files(project_root, active_proxy_ids)
+local function cleanup_orphaned_files(project_root, active_proxy_ids, active_proxy_names, active_location_files)
+    active_proxy_names = active_proxy_names or {}
+    active_location_files = active_location_files or {}
     local deleted_count = 0
     local failed_count = 0
     
@@ -1177,7 +1179,7 @@ function _M.generate_all_configs()
     -- 清理已删除或禁用的代理的配置文件
     -- 注意：active_proxy_ids 只包含 status = 1 的代理ID
     -- 所以禁用的代理（status = 0）和已删除的代理的配置文件都会被清理
-    cleanup_orphaned_files(project_root, active_proxy_ids, active_proxy_names)
+    cleanup_orphaned_files(project_root, active_proxy_ids, active_proxy_names, active_location_files)
     
     ngx.log(ngx.INFO, "nginx配置生成成功: 共生成 " .. #proxies .. " 个代理配置文件")
     return true, "配置生成成功，共生成 " .. #proxies .. " 个代理配置文件"

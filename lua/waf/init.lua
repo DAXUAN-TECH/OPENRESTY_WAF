@@ -362,6 +362,50 @@ function _M.init_worker()
                     -- 如果不是连接错误，或者已达到最大重试次数，记录错误但不阻止系统运行
                     if retry_count >= max_retries then
                         ngx.log(ngx.ERR, "Failed to generate proxy configs after ", max_retries, " retries: ", error_msg)
+                        
+                        -- 检查是否有已有配置文件，如果有，说明系统可以继续使用已有配置
+                        local http_config_dir = project_root .. "/conf.d/vhost_conf/http_https"
+                        local tcp_config_dir = project_root .. "/conf.d/vhost_conf/tcp_udp"
+                        local has_existing_configs = false
+                        
+                        -- 检查HTTP/HTTPS代理配置文件
+                        local http_dir = io.open(http_config_dir, "r")
+                        if http_dir then
+                            http_dir:close()
+                            -- 检查是否有配置文件
+                            local test_file = io.popen("ls " .. http_config_dir .. "/proxy_http_*.conf 2>/dev/null | head -1")
+                            if test_file then
+                                local first_file = test_file:read("*line")
+                                test_file:close()
+                                if first_file and first_file ~= "" then
+                                    has_existing_configs = true
+                                end
+                            end
+                        end
+                        
+                        -- 检查TCP/UDP代理配置文件
+                        if not has_existing_configs then
+                            local tcp_dir = io.open(tcp_config_dir, "r")
+                            if tcp_dir then
+                                tcp_dir:close()
+                                local test_file = io.popen("ls " .. tcp_config_dir .. "/proxy_stream_*.conf 2>/dev/null | head -1")
+                                if test_file then
+                                    local first_file = test_file:read("*line")
+                                    test_file:close()
+                                    if first_file and first_file ~= "" then
+                                        has_existing_configs = true
+                                    end
+                                end
+                            end
+                        end
+                        
+                        if has_existing_configs then
+                            ngx.log(ngx.WARN, "检测到已有配置文件，系统将继续使用已有配置，服务不会中断")
+                            ngx.log(ngx.WARN, "请尽快修复数据库连接问题，以便更新配置。数据库连接恢复后，配置会自动更新")
+                        else
+                            ngx.log(ngx.ERR, "未检测到已有配置文件，代理配置可能不可用")
+                            ngx.log(ngx.ERR, "请尽快修复数据库连接问题，以便生成代理配置")
+                        end
                     else
                         ngx.log(ngx.WARN, "Failed to generate proxy configs: ", error_msg)
                     end

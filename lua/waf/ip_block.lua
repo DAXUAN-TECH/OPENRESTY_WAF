@@ -1028,13 +1028,20 @@ end
 -- 检查多个规则ID（用于反向代理关联的多个规则）
 -- @param rule_ids 规则ID数组
 function _M.check_multiple(rule_ids)
+    ngx.log(ngx.INFO, "check_multiple: 开始检查，rule_ids type: ", type(rule_ids), 
+            ", rule_ids value: ", rule_ids and (type(rule_ids) == "table" and cjson.encode(rule_ids) or tostring(rule_ids)) or "nil",
+            ", is table: ", (rule_ids and type(rule_ids) == "table") and "yes" or "no",
+            ", table length: ", (rule_ids and type(rule_ids) == "table") and tostring(#rule_ids) or "N/A")
+    
     if not rule_ids or type(rule_ids) ~= "table" or #rule_ids == 0 then
+        ngx.log(ngx.WARN, "check_multiple: rule_ids为空或无效，跳过检查")
         return
     end
     
     -- 检查IP封控功能是否启用（优先从数据库读取）
     local ip_block_enabled = feature_switches.is_enabled("ip_block")
     if not ip_block_enabled or not config.block.enable then
+        ngx.log(ngx.INFO, "check_multiple: IP封控功能未启用，跳过检查")
         return
     end
     
@@ -1044,12 +1051,15 @@ function _M.check_multiple(rule_ids)
     -- 获取客户端IP
     local client_ip = ip_utils.get_real_ip() or ngx.var.remote_addr
     if not client_ip or client_ip == "" then
+        ngx.log(ngx.WARN, "check_multiple: 无法获取客户端IP，跳过检查")
         return
     end
     
+    ngx.log(ngx.INFO, "check_multiple: 客户端IP: ", client_ip, ", 规则ID数量: ", #rule_ids)
+    
     -- 验证IP格式
     if not ip_utils.is_valid_ip(client_ip) then
-        ngx.log(ngx.WARN, "invalid client IP: ", client_ip)
+        ngx.log(ngx.WARN, "check_multiple: invalid client IP: ", client_ip)
         return
     end
     

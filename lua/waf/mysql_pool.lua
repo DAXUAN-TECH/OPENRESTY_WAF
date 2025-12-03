@@ -160,65 +160,25 @@ function _M.get_connection()
     -- 解析 host（如果是域名，解析为 IP 地址；如果是 IP，直接使用）
     local mysql_host = resolve_hostname(config.mysql.host)
 
-    -- 使用 xpcall 包装 connect 调用，捕获所有错误（包括 OpenResty 内部抛出的 socket 错误）
-    local ok, err, errcode, sqlstate
-    local connect_success, connect_result = xpcall(function()
-        local result_ok, result_err, result_errcode, result_sqlstate = db:connect{
-            host = mysql_host,
-            port = config.mysql.port,
-            database = config.mysql.database,
-            user = config.mysql.user,
-            password = config.mysql.password,
-            max_packet_size = config.mysql.max_packet_size,
-            charset = "utf8mb4",
-        }
-        -- 将多个返回值打包成表
-        return {ok = result_ok, err = result_err, errcode = result_errcode, sqlstate = result_sqlstate}
-    end, function(err_msg)
-        -- 错误处理函数，捕获所有错误（包括 "attempt to send data on a closed socket"）
-        -- 返回错误信息
-        return {ok = false, err = tostring(err_msg), errcode = nil, sqlstate = nil}
-    end)
-    
-    if connect_success and type(connect_result) == "table" then
-        -- connect 调用成功，解包返回值
-        ok = connect_result.ok
-        err = connect_result.err
-        errcode = connect_result.errcode
-        sqlstate = connect_result.sqlstate
-    else
-        -- connect 调用本身失败（可能是 Lua 错误或 C 函数错误）
-        ok = false
-        err = (type(connect_result) == "table" and connect_result.err) or tostring(connect_result) or "connect call failed"
-        errcode = nil
-        sqlstate = nil
-    end
+    -- 直接调用 connect；如果网络/服务异常会返回超时错误
+    local ok, err, errcode, sqlstate = db:connect{
+        host = mysql_host,
+        port = config.mysql.port,
+        database = config.mysql.database,
+        user = config.mysql.user,
+        password = config.mysql.password,
+        max_packet_size = config.mysql.max_packet_size,
+        charset = "utf8mb4",
+    }
 
     if not ok then
         -- 安全关闭失败的连接（使用 pcall 避免在已关闭的 socket 上操作）
-        -- 注意：connect 失败后，socket 可能已经处于关闭状态，必须使用 pcall 安全关闭
-        -- 使用 xpcall 捕获所有错误，包括 Lua 错误和 C 函数错误
-        local close_ok, close_err = xpcall(function()
-            if db then
-                -- 尝试安全关闭，即使 socket 已经关闭也不会报错
-                local success = pcall(function()
-                    db:close()
-                end)
-                -- 无论成功与否，都将 db 设为 nil，避免后续操作
-                db = nil
+        if db then
+            local _, close_err = pcall(function() db:close() end)
+            if close_err then
+                ngx.log(ngx.DEBUG, "Failed to close MySQL connection (expected if socket already closed): ", tostring(close_err))
             end
-        end, function(err_msg)
-            -- 错误处理函数，捕获所有错误
-            return err_msg
-        end)
-        
-        if not close_ok and close_err then
-            -- 关闭失败是预期的（socket 可能已经关闭），只记录 debug 日志
-            ngx.log(ngx.DEBUG, "Failed to close MySQL connection (expected if socket already closed): ", tostring(close_err))
         end
-        
-        -- 确保 db 为 nil，避免后续代码误用
-        db = nil
         
         -- 连接失败时，如果使用的是域名，清除缓存并重新解析（应对动态 IP 变化）
         local original_host = config.mysql.host
@@ -250,54 +210,26 @@ function _M.get_connection()
             db, err = mysql:new()
             if db then
                 db:set_timeout(config.mysql.pool_timeout)
-                -- 使用 xpcall 包装重试的 connect 调用
-                local retry_connect_success, retry_connect_result = xpcall(function()
-                    local result_ok, result_err, result_errcode, result_sqlstate = db:connect{
-                        host = mysql_host,
-                        port = config.mysql.port,
-                        database = config.mysql.database,
-                        user = config.mysql.user,
-                        password = config.mysql.password,
-                        max_packet_size = config.mysql.max_packet_size,
-                        charset = "utf8mb4",
-                    }
-                    -- 将多个返回值打包成表
-                    return {ok = result_ok, err = result_err, errcode = result_errcode, sqlstate = result_sqlstate}
-                end, function(err_msg)
-                    return {ok = false, err = tostring(err_msg), errcode = nil, sqlstate = nil}
-                end)
-                
-                if retry_connect_success and type(retry_connect_result) == "table" then
-                    ok = retry_connect_result.ok
-                    err = retry_connect_result.err
-                    errcode = retry_connect_result.errcode
-                    sqlstate = retry_connect_result.sqlstate
-                else
-                    ok = false
-                    err = (type(retry_connect_result) == "table" and retry_connect_result.err) or tostring(retry_connect_result) or "retry connect call failed"
-                    errcode = nil
-                    sqlstate = nil
-                end
+                ok, err, errcode, sqlstate = db:connect{
+                    host = mysql_host,
+                    port = config.mysql.port,
+                    database = config.mysql.database,
+                    user = config.mysql.user,
+                    password = config.mysql.password,
+                    max_packet_size = config.mysql.max_packet_size,
+                    charset = "utf8mb4",
+                }
                 
                 if ok then
                     ngx.log(ngx.INFO, "MySQL connection retry successful with new IP: ", mysql_host)
                 else
                     -- 重试也失败，安全关闭
-                    local close_ok, close_err = xpcall(function()
-                        if db then
-                            pcall(function()
-                                db:close()
-                            end)
-                            db = nil
+                    if db then
+                        local _, close_err = pcall(function() db:close() end)
+                        if close_err then
+                            ngx.log(ngx.DEBUG, "Failed to close MySQL retry connection (expected if socket already closed): ", tostring(close_err))
                         end
-                    end, function(err_msg)
-                        return err_msg
-                    end)
-                    if not close_ok and close_err then
-                        ngx.log(ngx.DEBUG, "Failed to close MySQL retry connection (expected if socket already closed): ", tostring(close_err))
                     end
-                    -- 确保 db 为 nil
-                    db = nil
                 end
             end
         else
@@ -351,15 +283,24 @@ function _M.query(sql, ...)
     
     if not res then
         ngx.log(ngx.ERR, "bad result: ", err, ": ", errcode, ": ", sqlstate)
-        db:close()
+        -- 安全关闭连接，避免在已关闭的 socket 上再次操作
+        if db then
+            pcall(function() db:close() end)
+        end
         return nil, err
     end
 
-    -- 将连接放回连接池
-    local ok, err = db:set_keepalive(10000, config.mysql.pool_size)
-    if not ok then
-        ngx.log(ngx.ERR, "failed to set keepalive: ", err)
-        db:close()
+    -- 将连接放回连接池（使用 pcall 避免在已关闭的 socket 上操作）
+    local ok_keepalive, err_keepalive = pcall(function()
+        return db:set_keepalive(10000, config.mysql.pool_size)
+    end)
+    if not ok_keepalive then
+        ngx.log(ngx.DEBUG, "failed to set keepalive (possibly already closed): ", tostring(err_keepalive))
+    else
+        local ok, err = ok_keepalive, err_keepalive
+        if not ok then
+            ngx.log(ngx.ERR, "failed to set keepalive: ", err)
+        end
     end
 
     return res, nil
@@ -381,16 +322,25 @@ function _M.insert(sql, ...)
     local res, err, errcode, sqlstate = db:query(final_sql)
     if not res then
         ngx.log(ngx.ERR, "bad result: ", err, ": ", errcode, ": ", sqlstate)
-        db:close()
+        if db then
+            pcall(function() db:close() end)
+        end
         return nil, err
     end
 
     local insert_id = res.insert_id
 
-    local ok, err = db:set_keepalive(10000, config.mysql.pool_size)
-    if not ok then
-        ngx.log(ngx.ERR, "failed to set keepalive: ", err)
-        db:close()
+    -- 将连接放回连接池（使用 pcall 避免在已关闭的 socket 上操作）
+    local ok_keepalive, err_keepalive = pcall(function()
+        return db:set_keepalive(10000, config.mysql.pool_size)
+    end)
+    if not ok_keepalive then
+        ngx.log(ngx.DEBUG, "failed to set keepalive for insert (possibly already closed): ", tostring(err_keepalive))
+    else
+        local ok, err = ok_keepalive, err_keepalive
+        if not ok then
+            ngx.log(ngx.ERR, "failed to set keepalive for insert: ", err)
+        end
     end
 
     return insert_id, nil

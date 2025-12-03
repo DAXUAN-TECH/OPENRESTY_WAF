@@ -218,8 +218,16 @@ local function generate_http_server_config(proxy, upstream_name, backends, proje
     end
     
     -- 服务器名称
-    if proxy.server_name then
+    -- 注意：如果server_name为空，Nginx会匹配所有请求，但如果有default_server，优先级更高
+    -- 建议：HTTP/HTTPS代理必须配置server_name，否则无法正确匹配请求
+    if proxy.server_name and proxy.server_name ~= "" and proxy.server_name ~= cjson.null then
         config = config .. "    server_name  " .. escape_nginx_value(proxy.server_name) .. ";\n"
+    else
+        -- server_name为空时，记录警告日志
+        ngx.log(ngx.WARN, "generate_http_server_config: 代理 ", proxy.id, " (", proxy.proxy_name or "nil", ") 的server_name为空，生成的配置将匹配所有请求")
+        -- 如果server_name为空，使用下划线作为默认值（匹配所有域名，但不包括default_server）
+        -- 注意：这仍然可能导致匹配问题，建议用户填写正确的server_name
+        config = config .. "    server_name  _;\n"
     end
     
     -- 字符集

@@ -1091,8 +1091,11 @@ function _M.check_multiple(rule_ids)
             ngx.log(ngx.INFO, "check_multiple: 规则ID ", rule_id_num, " 检查结果 - is_matched: ", tostring(is_matched), 
                     ", matched_rule: ", matched_rule and (matched_rule.rule_type or "unknown") or "nil")
             
+            -- 注意：matched_rule存在表示规则存在且类型匹配，无论is_matched是否为true
+            -- 对于白名单规则，如果matched_rule存在，说明存在白名单规则，需要检查IP是否匹配
             if matched_rule then
                 if matched_rule.rule_type == "ip_whitelist" then
+                    -- 发现IP白名单规则，无论IP是否匹配，都标记为存在白名单规则
                     has_whitelist_rule = true
                     ngx.log(ngx.INFO, "check_multiple: 发现IP白名单规则，规则ID: ", rule_id_num, ", 规则名称: ", matched_rule.rule_name or "unknown", ", IP匹配: ", tostring(is_matched))
                     if is_matched then
@@ -1102,7 +1105,9 @@ function _M.check_multiple(rule_ids)
                         ngx.log(ngx.INFO, "check_multiple: IP ", client_ip, " is whitelisted by rule_id=", rule_id_num, ", rule_name=", matched_rule.rule_name or "unknown")
                         break
                     end
+                    -- 如果IP不匹配，继续检查其他规则（可能还有其他白名单规则）
                 elseif matched_rule.rule_type == "geo_whitelist" then
+                    -- 发现地域白名单规则，无论IP是否匹配，都标记为存在白名单规则
                     has_whitelist_rule = true
                     ngx.log(ngx.INFO, "check_multiple: 发现地域白名单规则，规则ID: ", rule_id_num, ", 规则名称: ", matched_rule.rule_name or "unknown")
                     -- 地域白名单检查（由geo_block模块处理）
@@ -1115,9 +1120,11 @@ function _M.check_multiple(rule_ids)
                         ngx.log(ngx.INFO, "check_multiple: IP ", client_ip, " is geo-whitelisted by rule_id=", rule_id_num, ", rule_name=", matched_rule.rule_name or "unknown")
                         break
                     end
+                    -- 如果IP不匹配，继续检查其他规则（可能还有其他白名单规则）
                 end
             else
-                ngx.log(ngx.INFO, "check_multiple: 规则ID ", rule_id_num, " 未匹配或规则不存在")
+                -- matched_rule为nil，说明规则不存在、已禁用、或类型不匹配（不是白名单规则）
+                ngx.log(ngx.INFO, "check_multiple: 规则ID ", rule_id_num, " 未匹配或规则不存在或不是白名单规则")
             end
         end
     end

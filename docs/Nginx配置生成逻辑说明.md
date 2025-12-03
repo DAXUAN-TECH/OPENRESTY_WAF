@@ -23,7 +23,6 @@
   - `listen_port`：监听端口
   - `listen_address`：监听地址
   - `server_name`：服务器名称（域名）
-  - `location_path`：路径匹配（向后兼容）
   - `location_paths`：路径匹配列表（JSON格式，支持多个location）
   - `load_balance`：负载均衡算法
   - `ssl_enable`：是否启用SSL
@@ -521,18 +520,16 @@ stream {
 - 后端服务器地址和端口验证
 - 代理类型验证（只允许 `http`、`tcp`、`udp`）
 
-## 十、向后兼容性
+## 十、重要说明
 
-### 10.1 单个 Location 支持
+### 10.1 location_paths 字段要求
 
-如果代理配置中没有 `location_paths` 字段或为空，系统会使用 `location_path` 字段（向后兼容），生成单个 location 块和单个 upstream 配置。
+所有HTTP/HTTPS代理必须配置 `location_paths` 字段。如果 `location_paths` 为空或不存在，Nginx配置生成时会返回503错误。
 
-### 10.2 字段兼容
+### 10.2 字段说明
 
-- `location_path`：旧字段，用于单个 location
-- `location_paths`：新字段，用于多个 location（JSON格式）
-
-如果 `location_paths` 为空，系统会自动使用 `location_path`。
+- `location_paths`：必需字段，用于多个 location（JSON格式）
+- `waf_proxy_configs.location_path` 字段已被完全删除，不再存在于数据库表中
 
 ## 十一、错误处理
 

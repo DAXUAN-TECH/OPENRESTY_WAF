@@ -56,7 +56,7 @@ SELECT '============================================' AS '';
 SET @sql1 = (
     SELECT IF(
         COUNT(*) = 0,
-        'ALTER TABLE waf_proxy_configs ADD COLUMN location_paths JSON DEFAULT NULL COMMENT ''路径匹配列表（HTTP代理时使用，JSON格式，存储多个location_path配置，格式：[{"location_path":"/api","backend_path":"/api"},{"location_path":"/v1","backend_path":"/v1"}]，如果为空则使用location_path字段）'' AFTER location_path;',
+        'ALTER TABLE waf_proxy_configs ADD COLUMN location_paths JSON DEFAULT NULL COMMENT ''路径匹配列表（HTTP代理时使用，JSON格式，存储多个location_path配置，格式：[{"location_path":"/api","backend_path":"/api"},{"location_path":"/v1","backend_path":"/v1"}]）'' AFTER server_name;',
         'SELECT ''Column location_paths already exists in waf_proxy_configs, skipping...'' AS message;'
     )
     FROM INFORMATION_SCHEMA.COLUMNS

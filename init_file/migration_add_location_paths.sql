@@ -12,8 +12,8 @@
 
 ALTER TABLE waf_proxy_configs 
 ADD COLUMN IF NOT EXISTS location_paths JSON DEFAULT NULL 
-COMMENT '路径匹配列表（HTTP代理时使用，JSON格式，存储多个location_path配置，格式：[{"location_path":"/api","backend_path":"/api"},{"location_path":"/v1","backend_path":"/v1"}]，如果为空则使用location_path字段）'
-AFTER location_path;
+COMMENT '路径匹配列表（HTTP代理时使用，JSON格式，存储多个location_path配置，格式：[{"location_path":"/api","backend_path":"/api"},{"location_path":"/v1","backend_path":"/v1"}]）'
+AFTER server_name;
 
 -- 方法2：如果 MySQL 版本不支持 IF NOT EXISTS，使用以下方式（先检查再添加）
 -- 注意：需要手动执行，或者使用存储过程
@@ -31,7 +31,7 @@ AFTER location_path;
 --       AND (column_name = @columnname)
 --   ) > 0,
 --   "SELECT 'Column already exists.';",
---   CONCAT('ALTER TABLE ', @tablename, ' ADD COLUMN ', @columnname, ' JSON DEFAULT NULL COMMENT ''路径匹配列表（HTTP代理时使用，JSON格式，存储多个location_path配置，格式：[{"location_path":"/api","backend_path":"/api"},{"location_path":"/v1","backend_path":"/v1"}]，如果为空则使用location_path字段）'' AFTER location_path;')
+--   CONCAT('ALTER TABLE ', @tablename, ' ADD COLUMN ', @columnname, ' JSON DEFAULT NULL COMMENT ''路径匹配列表（HTTP代理时使用，JSON格式，存储多个location_path配置，格式：[{"location_path":"/api","backend_path":"/api"},{"location_path":"/v1","backend_path":"/v1"}]）'' AFTER server_name;')
 -- ));
 -- PREPARE alterIfNotExists FROM @preparedStatement;
 -- EXECUTE alterIfNotExists;

@@ -770,6 +770,59 @@ local function cleanup_orphaned_files(project_root, active_proxy_ids, active_pro
         stream_server_files:close()
     end
     
+    -- SSL证书文件清理
+    -- 新命名格式：proxy_{server_name}.pem 和 proxy_{server_name}.key
+    local cert_dir = project_root .. "/conf.d/cert"
+    local cert_cmd = "find " .. cert_dir .. " -maxdepth 1 -name 'proxy_*.pem' -o -name 'proxy_*.key' 2>/dev/null"
+    local cert_files = io.popen(cert_cmd)
+    if cert_files then
+        -- 获取所有活跃代理的 server_name（用于匹配SSL证书文件）
+        local active_cert_files = {}
+        if active_proxies and type(active_proxies) == "table" then
+            for _, proxy in ipairs(active_proxies) do
+                if proxy.ssl_enable == 1 and proxy.ssl_pem and proxy.ssl_key then
+                    local server_name_for_file = proxy.server_name
+                    if server_name_for_file and server_name_for_file ~= "" and server_name_for_file ~= cjson.null then
+                        -- 如果包含多个域名，使用第一个域名
+                        local first_domain = server_name_for_file:match("^%s*([^%s]+)")
+                        if first_domain then
+                            local server_name_safe = sanitize_filename(first_domain)
+                            if server_name_safe and server_name_safe ~= "" then
+                                active_cert_files["proxy_" .. server_name_safe .. ".pem"] = true
+                                active_cert_files["proxy_" .. server_name_safe .. ".key"] = true
+                            end
+                        end
+                    else
+                        -- 如果 server_name 为空，使用 proxy_name
+                        if proxy.proxy_name then
+                            local proxy_name_safe = sanitize_filename(proxy.proxy_name)
+                            if proxy_name_safe and proxy_name_safe ~= "" then
+                                active_cert_files["proxy_" .. proxy_name_safe .. ".pem"] = true
+                                active_cert_files["proxy_" .. proxy_name_safe .. ".key"] = true
+                            end
+                        end
+                    end
+                end
+            end
+        end
+        
+        for file in cert_files:lines() do
+            local filename = file:match("([^/]+)$")  -- 获取文件名
+            -- 检查是否是活跃的文件
+            if not active_cert_files[filename] then
+                local ok, err = os.remove(file)
+                if ok then
+                    ngx.log(ngx.INFO, "删除已删除或禁用的代理的SSL证书文件: ", file)
+                    deleted_count = deleted_count + 1
+                else
+                    ngx.log(ngx.WARN, "删除SSL证书文件失败: ", file, ", 错误: ", err or "unknown")
+                    failed_count = failed_count + 1
+                end
+            end
+        end
+        cert_files:close()
+    end
+    
     if deleted_count > 0 then
         ngx.log(ngx.INFO, "清理完成: 删除了 ", deleted_count, " 个配置文件")
     end

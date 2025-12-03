@@ -210,11 +210,20 @@ function _M.list()
                     end
                     -- 测试 JSON 序列化，确保 rules 是数组格式
                     local cjson = require "cjson"
+                    -- 设置 cjson 将空表序列化为数组而不是对象
+                    local old_encode_empty_table_as_object = cjson.encode_empty_table_as_object
+                    if old_encode_empty_table_as_object then
+                        cjson.encode_empty_table_as_object(false)
+                    end
                     local test_json = cjson.encode(rules_array)
+                    -- 恢复原始设置
+                    if old_encode_empty_table_as_object then
+                        cjson.encode_empty_table_as_object(old_encode_empty_table_as_object)
+                    end
                     -- 检查 JSON 字符串是否以 [ 开头（数组）而不是 { 开头（对象）
                     if not test_json:match("^%[") then
                         ngx.log(ngx.ERR, "proxy_id=", proxy.id, ", WARNING: rules JSON does not start with [, it starts with: ", test_json:sub(1, 1), ", JSON: ", test_json:sub(1, 200))
-                        -- 强制重新构建为数组
+                        -- 强制重新构建为数组（使用 table.insert 确保是数组）
                         rules_array = {}
                         for j = 1, array_count do
                             local rule = proxy.rules[j]
@@ -224,6 +233,13 @@ function _M.list()
                                     rule_name = rule.rule_name or rule.RULE_NAME or rule.ruleName or "",
                                     rule_type = rule.rule_type or rule.RULE_TYPE or rule.ruleType or ""
                                 })
+                            end
+                        end
+                        -- 对于空数组，确保序列化为 []
+                        if #rules_array == 0 then
+                            -- 空数组，使用 encode_empty_table_as_object(false) 确保序列化为 []
+                            if cjson.encode_empty_table_as_object then
+                                cjson.encode_empty_table_as_object(false)
                             end
                         end
                     end

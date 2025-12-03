@@ -200,7 +200,16 @@ function _M.list()
     
     -- 测试 JSON 序列化，确保 rules 是数组格式
     local cjson = require "cjson"
+    -- 设置 cjson 将空表序列化为数组而不是对象
+    local old_encode_empty_table_as_object = cjson.encode_empty_table_as_object
+    if old_encode_empty_table_as_object then
+        cjson.encode_empty_table_as_object(false)
+    end
     local test_json = cjson.encode(final_rules)
+    -- 恢复原始设置
+    if old_encode_empty_table_as_object then
+        cjson.encode_empty_table_as_object(old_encode_empty_table_as_object)
+    end
     ngx.log(ngx.INFO, "Rules JSON serialization test: ", test_json:sub(1, 200))
     
     -- 检查 JSON 字符串是否以 [ 开头（数组）而不是 { 开头（对象）
@@ -230,16 +239,39 @@ function _M.list()
                 table.insert(clean_rules, item.value)
             end
             final_rules = clean_rules
-            -- 再次测试
+            -- 再次测试（使用 encode_empty_table_as_object(false)）
+            if cjson.encode_empty_table_as_object then
+                cjson.encode_empty_table_as_object(false)
+            end
             test_json = cjson.encode(final_rules)
+            if cjson.encode_empty_table_as_object then
+                cjson.encode_empty_table_as_object(old_encode_empty_table_as_object)
+            end
             if not test_json:match("^%[") then
                 ngx.log(ngx.ERR, "FATAL: rules JSON still not an array after cleanup, setting to empty array")
                 final_rules = {}
             end
         else
-            -- 没有非数字键，但序列化后不是数组，可能是 cjson 的问题，强制设置为空数组
-            ngx.log(ngx.ERR, "FATAL: rules has no non-numeric keys but JSON is not array, setting to empty array")
-            final_rules = {}
+            -- 没有非数字键，但序列化后不是数组，可能是 cjson 的问题
+            -- 对于空数组，确保使用 encode_empty_table_as_object(false)
+            if #final_rules == 0 then
+                if cjson.encode_empty_table_as_object then
+                    cjson.encode_empty_table_as_object(false)
+                end
+                -- 重新测试
+                test_json = cjson.encode(final_rules)
+                if cjson.encode_empty_table_as_object then
+                    cjson.encode_empty_table_as_object(old_encode_empty_table_as_object)
+                end
+                if not test_json:match("^%[") then
+                    ngx.log(ngx.ERR, "FATAL: empty rules JSON still not an array, this is a cjson configuration issue")
+                    -- 即使配置了 encode_empty_table_as_object(false)，仍然序列化为对象
+                    -- 这种情况下，我们保持空数组，让前端处理
+                end
+            else
+                ngx.log(ngx.ERR, "FATAL: rules has no non-numeric keys but JSON is not array, setting to empty array")
+                final_rules = {}
+            end
         end
     end
     result.rules = final_rules

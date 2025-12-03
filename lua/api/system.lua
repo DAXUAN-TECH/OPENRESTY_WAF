@@ -172,8 +172,21 @@ local function update_waf_conf_for_admin_ssl(enabled, server_name, force_https)
     enabled = tonumber(enabled) or 0
     local force_num = tonumber(force_https or 0) or 0
 
-    -- 1) 始终先移除旧版本可能遗留的 include 行，避免重复
+    -- 1) 始终先移除所有可能的 SSL 配置残留（无论格式如何）
+    -- 1.1) 移除 include waf_admin_ssl.conf 行（支持各种格式和缩进）
     content = content:gsub("\n%s*include%s+%$project_root/conf%.d/vhost_conf/waf_admin_ssl%.conf;%s*\n", "\n")
+    content = content:gsub("\n%s*include%s+%$project_root/conf%.d/vhost_conf/waf_admin_ssl%.conf;%s*", "\n")
+    -- 1.2) 移除直接写在 waf.conf 中的 listen 443 ssl 行（如果存在）
+    content = content:gsub("\n%s*listen%s+443%s+ssl;%s*\n", "\n")
+    content = content:gsub("\n%s*listen%s+443%s+ssl%s*;%s*", "\n")
+    -- 1.3) 移除直接写在 waf.conf 中的 ssl_certificate 相关行（如果存在）
+    content = content:gsub("\n%s*ssl_certificate%s+.-;%s*\n", "\n")
+    content = content:gsub("\n%s*ssl_certificate_key%s+.-;%s*\n", "\n")
+    content = content:gsub("\n%s*ssl_protocols%s+.-;%s*\n", "\n")
+    content = content:gsub("\n%s*ssl_ciphers%s+.-;%s*\n", "\n")
+    content = content:gsub("\n%s*ssl_prefer_server_ciphers%s+.-;%s*\n", "\n")
+    content = content:gsub("\n%s*ssl_session_cache%s+.-;%s*\n", "\n")
+    content = content:gsub("\n%s*ssl_session_timeout%s+.-;%s*\n", "\n")
 
     -- 2) 如果启用 SSL，则插入 include 行
     if enabled == 1 then

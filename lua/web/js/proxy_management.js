@@ -1706,6 +1706,32 @@ const pageSize = 20;
                 });
             }
             
+            // 收集SSL配置
+            const editSslEnableEl = document.getElementById('edit-ssl-enable');
+            const editSslPemEl = document.getElementById('edit-ssl-pem');
+            const editSslKeyEl = document.getElementById('edit-ssl-key');
+
+            let ssl_enable = 0;
+            let ssl_pem = null;
+            let ssl_key = null;
+
+            if (editSslEnableEl) {
+                ssl_enable = editSslEnableEl.checked ? 1 : 0;
+            }
+            if (ssl_enable === 1) {
+                if (editSslPemEl) {
+                    ssl_pem = editSslPemEl.value.trim();
+                }
+                if (editSslKeyEl) {
+                    ssl_key = editSslKeyEl.value.trim();
+                }
+                // 基础校验：开启SSL时必须填写PEM和KEY
+                if (!ssl_pem || !ssl_key) {
+                    showAlert('启用SSL时，SSL证书和密钥不能为空', 'error');
+                    return;
+                }
+            }
+
             const proxyData = {
                 proxy_name: document.getElementById('edit-proxy-name').value,
                 backend_type: 'upstream',
@@ -1714,7 +1740,11 @@ const pageSize = 20;
                 proxy_send_timeout: parseInt(document.getElementById('edit-proxy-send-timeout').value) || 60,
                 proxy_read_timeout: parseInt(document.getElementById('edit-proxy-read-timeout').value) || 60,
                 ip_rule_ids: ipRuleIds.length > 0 ? ipRuleIds : null,
-                status: currentEditingProxy ? currentEditingProxy.status : 1
+                status: currentEditingProxy ? currentEditingProxy.status : 1,
+                // SSL相关字段：后端会根据这些字段更新 waf_proxy_configs.ssl_enable / ssl_pem / ssl_key
+                ssl_enable: ssl_enable,
+                ssl_pem: ssl_pem,
+                ssl_key: ssl_key
             };
             
             if (proxyType === 'http') {

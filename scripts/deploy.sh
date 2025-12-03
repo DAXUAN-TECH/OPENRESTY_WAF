@@ -739,6 +739,16 @@ chown -R "$WAF_USER:$WAF_GROUP" "${PROJECT_ROOT}/conf.d/vhost_conf/http_https" 2
 chmod 755 "${PROJECT_ROOT}/conf.d/vhost_conf/http_https" 2>/dev/null || true
 chown -R "$WAF_USER:$WAF_GROUP" "${PROJECT_ROOT}/conf.d/vhost_conf/tcp_udp" 2>/dev/null || true
 chmod 755 "${PROJECT_ROOT}/conf.d/vhost_conf/tcp_udp" 2>/dev/null || true
+
+# 确保管理端配置文件可由 waf 用户读写（生成/更新 SSL 配置时需要）
+if [ -f "${PROJECT_ROOT}/conf.d/vhost_conf/waf.conf" ]; then
+    chown "$WAF_USER:$WAF_GROUP" "${PROJECT_ROOT}/conf.d/vhost_conf/waf.conf" 2>/dev/null || true
+    chmod 644 "${PROJECT_ROOT}/conf.d/vhost_conf/waf.conf" 2>/dev/null || true
+fi
+if [ -f "${PROJECT_ROOT}/conf.d/vhost_conf/waf_admin_ssl.conf" ]; then
+    chown "$WAF_USER:$WAF_GROUP" "${PROJECT_ROOT}/conf.d/vhost_conf/waf_admin_ssl.conf" 2>/dev/null || true
+    chmod 644 "${PROJECT_ROOT}/conf.d/vhost_conf/waf_admin_ssl.conf" 2>/dev/null || true
+fi
 chown -R "$WAF_USER:$WAF_GROUP" "${PROJECT_ROOT}/conf.d/upstream/http_https" 2>/dev/null || true
 chmod 755 "${PROJECT_ROOT}/conf.d/upstream/http_https" 2>/dev/null || true
 chown -R "$WAF_USER:$WAF_GROUP" "${PROJECT_ROOT}/conf.d/upstream/tcp_udp" 2>/dev/null || true

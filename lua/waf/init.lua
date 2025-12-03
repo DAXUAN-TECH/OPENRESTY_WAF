@@ -215,38 +215,9 @@ function _M.init_worker()
         end
     end
     
-    -- 初始化规则备份定时器
-    if config.rule_backup and config.rule_backup.enable then
-        local rule_backup = require "waf.rule_backup"
-        local backup_interval = config.rule_backup.backup_interval or 300
-        
-        local function periodic_backup(premature)
-            if premature then
-                return
-            end
-            
-            local ok, result = rule_backup.backup_rules()
-            if ok then
-                ngx.log(ngx.INFO, "Rules backed up: ", result)
-            else
-                ngx.log(ngx.ERR, "Rule backup failed: ", result)
-            end
-            
-            -- 设置下一次定时器
-            local ok, err = ngx.timer.at(backup_interval, periodic_backup)
-            if not ok then
-                ngx.log(ngx.ERR, "failed to create backup timer: ", err)
-            end
-        end
-        
-        -- 启动定时器
-        local ok, err = ngx.timer.at(backup_interval, periodic_backup)
-        if not ok then
-            ngx.log(ngx.ERR, "failed to create initial backup timer: ", err)
-        else
-            ngx.log(ngx.INFO, "Rule backup timer initialized")
-        end
-    end
+    -- 规则备份定时器已移除
+    -- 现在只在规则新增、删除、修改时触发备份（在rule_management.lua中调用）
+    -- 这样可以减少备份文件数量，只在规则变更时备份
     
     -- 初始化告警检查定时器
     if config.alert and config.alert.enable then

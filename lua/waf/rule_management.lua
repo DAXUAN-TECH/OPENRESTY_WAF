@@ -289,6 +289,17 @@ function _M.create_rule(rule_data)
         end
     end
     
+    -- 触发规则备份（异步执行，不阻塞响应）
+    local rule_backup = require "waf.rule_backup"
+    ngx.timer.at(0, function()
+        local ok, result = pcall(rule_backup.backup_rules)
+        if ok and result then
+            ngx.log(ngx.INFO, "Rules backed up after creation: ", result)
+        else
+            ngx.log(ngx.WARN, "Rule backup failed after creation: ", tostring(result))
+        end
+    end)
+    
     ngx.log(ngx.INFO, "rule created: ", insert_id)
     return {id = insert_id}, nil
 end
@@ -568,6 +579,17 @@ function _M.update_rule(rule_id, rule_data)
         end
     end
     
+    -- 触发规则备份（异步执行，不阻塞响应）
+    local rule_backup = require "waf.rule_backup"
+    ngx.timer.at(0, function()
+        local ok, result = pcall(rule_backup.backup_rules)
+        if ok and result then
+            ngx.log(ngx.INFO, "Rules backed up after update: ", result)
+        else
+            ngx.log(ngx.WARN, "Rule backup failed after update: ", tostring(result))
+        end
+    end)
+    
     ngx.log(ngx.INFO, "rule updated: ", rule_id)
     return {id = rule_id}, nil
 end
@@ -637,6 +659,17 @@ function _M.delete_rule(rule_id)
     if not ok2 then
         ngx.log(ngx.WARN, "Failed to notify rule deletion: ", tostring(err2))
     end
+    
+    -- 触发规则备份（异步执行，不阻塞响应）
+    local rule_backup = require "waf.rule_backup"
+    ngx.timer.at(0, function()
+        local ok, result = pcall(rule_backup.backup_rules)
+        if ok and result then
+            ngx.log(ngx.INFO, "Rules backed up after deletion: ", result)
+        else
+            ngx.log(ngx.WARN, "Rule backup failed after deletion: ", tostring(result))
+        end
+    end)
     
     ngx.log(ngx.INFO, "rule deleted: ", rule_id)
     return {id = rule_id}, nil

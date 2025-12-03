@@ -902,6 +902,9 @@ function _M.generate_all_configs()
                             local location_upstream_filename = "http_upstream_" .. proxy_name_safe .. "_" .. location_path_safe .. ".conf"
                             local location_upstream_file = upstream_dir .. "/" .. location_upstream_filename
                             
+                            -- 记录活跃的 location upstream 文件（用于清理）
+                            active_location_files[location_upstream_filename] = true
+                            
                             local upstream_fd = io.open(location_upstream_file, "w")
                             if upstream_fd then
                                 local upstream_file_content = "# ============================================\n"

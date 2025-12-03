@@ -112,7 +112,7 @@ function _M.set_config(config_key, config_value, description)
         ngx.log(ngx.INFO, "config_manager.set_config: ", config_key, " = ", value_str)
     end
     
-    local ok, err = pcall(function()
+    local ok, result = pcall(function()
         local sql = [[
             INSERT INTO waf_system_config (config_key, config_value, description)
             VALUES (?, ?, ?)
@@ -123,38 +123,44 @@ function _M.set_config(config_key, config_value, description)
         ]]
         local res, query_err = mysql_pool.query(sql, config_key, value_str, description)
         if not res then
+            -- 查询失败，返回错误信息
             return nil, query_err
         end
-        return res
+        -- 查询成功，返回结果（可能是table，包含affected_rows等信息）
+        return res, nil
     end)
     
-    if ok and not err then
-        -- 更新缓存
-        if cache then
-            local cache_key = CONFIG_CACHE_PREFIX .. config_key
-            cache:set(cache_key, value_str, CONFIG_CACHE_TTL)
-        end
-        ngx.log(ngx.INFO, "config_manager.set_config: ", config_key, " 更新成功")
-        return true
+    -- pcall成功时，result是查询结果（可能是table），err是nil或错误信息
+    -- pcall失败时，ok是false，result是错误信息
+    if not ok then
+        -- pcall失败，result是错误信息
+        local error_msg = tostring(result or "unknown error")
+        ngx.log(ngx.ERR, "config_manager.set_config: ", config_key, " 更新失败（pcall错误）: ", error_msg)
+        return false, error_msg
     end
     
-    -- 将错误信息转换为字符串（处理table类型错误）
-    local error_msg = "unknown error"
-    if err then
-        if type(err) == "table" then
-            -- 如果是table，尝试使用cjson编码，如果失败则使用tostring
-            local ok_json, json_str = pcall(cjson.encode, err)
-            if ok_json and json_str then
-                error_msg = json_str
-            else
-                error_msg = tostring(err)
-            end
-        else
-            error_msg = tostring(err)
-        end
+    -- pcall成功，检查查询结果
+    local query_result, query_err = result, nil
+    if type(result) == "table" and result[2] then
+        -- 如果result是table且有两个元素，说明是 (res, err) 的格式
+        query_result = result[1]
+        query_err = result[2]
     end
-    ngx.log(ngx.ERR, "config_manager.set_config: ", config_key, " 更新失败: ", error_msg)
-    return false, error_msg
+    
+    if query_err or not query_result then
+        -- 查询失败
+        local error_msg = tostring(query_err or "unknown error")
+        ngx.log(ngx.ERR, "config_manager.set_config: ", config_key, " 更新失败（查询错误）: ", error_msg)
+        return false, error_msg
+    end
+    
+    -- 查询成功，更新缓存
+    if cache then
+        local cache_key = CONFIG_CACHE_PREFIX .. config_key
+        cache:set(cache_key, value_str, CONFIG_CACHE_TTL)
+    end
+    ngx.log(ngx.INFO, "config_manager.set_config: ", config_key, " 更新成功")
+    return true
 end
 
 -- 批量获取配置

@@ -160,25 +160,59 @@ function _M.list()
     -- 强制转换为标准数组（确保 JSON 序列化时是数组）
     -- 创建一个新的数组，只包含数字索引的元素
     local final_rules = {}
-    if #result.rules > 0 then
+    local array_length = #result.rules
+    if array_length > 0 then
         -- 使用 ipairs 确保只复制数组部分
-        for i = 1, #result.rules do
+        for i = 1, array_length do
             final_rules[i] = result.rules[i]
         end
     end
-    result.rules = final_rules
+    -- 对于空数组，final_rules 已经是 {}，这是正确的
     
     -- 测试 JSON 序列化，确保 rules 是数组格式
     local cjson = require "cjson"
-    local test_json = cjson.encode(result.rules)
+    local test_json = cjson.encode(final_rules)
     ngx.log(ngx.INFO, "Rules JSON serialization test: ", test_json:sub(1, 200))
     
     -- 检查 JSON 字符串是否以 [ 开头（数组）而不是 { 开头（对象）
     if not test_json:match("^%[") then
-        ngx.log(ngx.ERR, "WARNING: rules JSON does not start with [, it starts with: ", test_json:sub(1, 1))
-        -- 强制设置为空数组
-        result.rules = {}
+        ngx.log(ngx.ERR, "WARNING: rules JSON does not start with [, it starts with: ", test_json:sub(1, 1), ", JSON: ", test_json:sub(1, 200))
+        -- 如果不是数组格式，尝试重新构建
+        -- 先检查是否有非数字键
+        local has_non_numeric_key = false
+        for k, _ in pairs(final_rules) do
+            if type(k) ~= "number" or k < 1 or k > array_length then
+                has_non_numeric_key = true
+                break
+            end
+        end
+        if has_non_numeric_key then
+            -- 有非数字键，需要重新构建为纯数组
+            local clean_rules = {}
+            local temp_array = {}
+            for k, v in pairs(final_rules) do
+                if type(k) == "number" and k > 0 then
+                    table.insert(temp_array, {key = k, value = v})
+                end
+            end
+            table.sort(temp_array, function(a, b) return a.key < b.key end)
+            for _, item in ipairs(temp_array) do
+                table.insert(clean_rules, item.value)
+            end
+            final_rules = clean_rules
+            -- 再次测试
+            test_json = cjson.encode(final_rules)
+            if not test_json:match("^%[") then
+                ngx.log(ngx.ERR, "FATAL: rules JSON still not an array after cleanup, setting to empty array")
+                final_rules = {}
+            end
+        else
+            -- 没有非数字键，但序列化后不是数组，可能是 cjson 的问题，强制设置为空数组
+            ngx.log(ngx.ERR, "FATAL: rules has no non-numeric keys but JSON is not array, setting to empty array")
+            final_rules = {}
+        end
     end
+    result.rules = final_rules
     
     api_utils.json_response({
         success = true,

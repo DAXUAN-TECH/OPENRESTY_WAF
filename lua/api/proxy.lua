@@ -180,14 +180,22 @@ function _M.list()
             if proxy.rules and type(proxy.rules) == "table" then
                 local rules_array = {}
                 -- 检查是否是数组（使用ipairs可以遍历数组部分）
+                -- 对于空数组 {}，ipairs 不会进入循环，但 #proxy.rules 会是 0，所以需要特殊处理
+                local array_count = #proxy.rules
                 local is_array = false
-                local array_count = 0
-                for _ in ipairs(proxy.rules) do
-                    array_count = array_count + 1
-                    is_array = true
+                
+                -- 检查是否有非数字键（如果有，说明不是纯数组）
+                local has_non_numeric_key = false
+                for k, _ in pairs(proxy.rules) do
+                    if type(k) ~= "number" or k < 1 or k > array_count then
+                        has_non_numeric_key = true
+                        break
+                    end
                 end
                 
-                if is_array and array_count > 0 then
+                -- 如果没有非数字键，且长度 >= 0，说明是数组（包括空数组）
+                if not has_non_numeric_key and array_count >= 0 then
+                    is_array = true
                     -- 是数组，直接复制
                     for j = 1, array_count do
                         local rule = proxy.rules[j]
@@ -220,7 +228,9 @@ function _M.list()
                         end
                     end
                     -- 调试日志：记录规则数量
-                    ngx.log(ngx.INFO, "proxy_id=", proxy.id, ", rules_array length: ", #rules_array, ", JSON preview: ", test_json:sub(1, 200))
+                    if array_count > 0 then
+                        ngx.log(ngx.INFO, "proxy_id=", proxy.id, ", rules_array length: ", #rules_array, ", JSON preview: ", test_json:sub(1, 200))
+                    end
                 else
                     -- 不是数组，尝试转换为数组
                     local idx = 1

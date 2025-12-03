@@ -48,6 +48,40 @@ local function escape_nginx_value(value)
     return value
 end
 
+-- 生成安全的文件名（转义特殊字符，避免文件系统问题）
+local function sanitize_filename(value)
+    if not value then
+        return ""
+    end
+    -- 转换为字符串
+    value = tostring(value)
+    -- 去除前导和尾随空格
+    value = value:gsub("^%s+", ""):gsub("%s+$", "")
+    -- 替换不允许的文件名字符
+    value = value:gsub("/", "_")  -- 路径分隔符
+    value = value:gsub("\\", "_")  -- 反斜杠
+    value = value:gsub(":", "_")  -- 冒号（Windows不支持）
+    value = value:gsub("*", "_")  -- 星号
+    value = value:gsub("?", "_")  -- 问号
+    value = value:gsub("\"", "_")  -- 双引号
+    value = value:gsub("<", "_")  -- 小于号
+    value = value:gsub(">", "_")  -- 大于号
+    value = value:gsub("|", "_")  -- 管道符
+    value = value:gsub(" ", "_")  -- 空格
+    value = value:gsub("\n", "_")  -- 换行符
+    value = value:gsub("\r", "_")  -- 回车符
+    value = value:gsub("\t", "_")  -- 制表符
+    -- 去除连续的下划线
+    value = value:gsub("_+", "_")
+    -- 去除开头和结尾的下划线
+    value = value:gsub("^_+", ""):gsub("_+$", "")
+    -- 如果为空，使用默认值
+    if value == "" then
+        value = "default"
+    end
+    return value
+end
+
 -- 生成upstream配置（用于单个location）
 local function generate_upstream_config_for_location(proxy, backends, upstream_name)
     if not backends or #backends == 0 then
@@ -496,23 +530,35 @@ local function cleanup_orphaned_files(project_root, active_proxy_ids)
     local failed_count = 0
     
     -- HTTP/HTTPS upstream配置文件
+    -- 新命名格式：http_upstream_$proxy_name_$location_path.conf 或 http_upstream_$proxy_name.conf
     local http_upstream_dir = project_root .. "/conf.d/upstream/http_https"
     local http_upstream_cmd = "find " .. http_upstream_dir .. " -maxdepth 1 -name 'http_upstream_*.conf' 2>/dev/null"
     local http_upstream_files = io.popen(http_upstream_cmd)
     if http_upstream_files then
         for file in http_upstream_files:lines() do
-            local proxy_id = file:match("http_upstream_(%d+)%.conf")
-            if proxy_id then
-                proxy_id = tonumber(proxy_id)
-                if not active_proxy_ids[proxy_id] then
-                    local ok, err = os.remove(file)
-                    if ok then
-                        ngx.log(ngx.INFO, "删除已删除或禁用的代理的HTTP upstream配置文件: ", file, " (代理ID: ", proxy_id, ")")
-                        deleted_count = deleted_count + 1
-                    else
-                        ngx.log(ngx.WARN, "删除upstream配置文件失败: ", file, ", 错误: ", err or "unknown")
-                        failed_count = failed_count + 1
+            local filename = file:match("([^/]+)$")  -- 获取文件名
+            -- 检查是否是活跃的文件（通过文件名匹配）
+            local is_active = false
+            if filename and active_location_files[filename] then
+                is_active = true
+            else
+                -- 检查是否是单upstream文件（格式：http_upstream_$proxy_name.conf）
+                for proxy_name, _ in pairs(active_proxy_names) do
+                    if filename == "http_upstream_" .. proxy_name .. ".conf" then
+                        is_active = true
+                        break
                     end
+                end
+            end
+            
+            if not is_active then
+                local ok, err = os.remove(file)
+                if ok then
+                    ngx.log(ngx.INFO, "删除已删除或禁用的代理的HTTP upstream配置文件: ", file)
+                    deleted_count = deleted_count + 1
+                else
+                    ngx.log(ngx.WARN, "删除upstream配置文件失败: ", file, ", 错误: ", err or "unknown")
+                    failed_count = failed_count + 1
                 end
             end
         end
@@ -520,23 +566,30 @@ local function cleanup_orphaned_files(project_root, active_proxy_ids)
     end
     
     -- HTTP/HTTPS server配置文件
+    -- 新命名格式：proxy_http_$proxy_name.conf
     local http_server_dir = project_root .. "/conf.d/vhost_conf/http_https"
     local http_server_cmd = "find " .. http_server_dir .. " -maxdepth 1 -name 'proxy_http_*.conf' 2>/dev/null"
     local http_server_files = io.popen(http_server_cmd)
     if http_server_files then
         for file in http_server_files:lines() do
-            local proxy_id = file:match("proxy_http_(%d+)%.conf")
-            if proxy_id then
-                proxy_id = tonumber(proxy_id)
-                if not active_proxy_ids[proxy_id] then
-                    local ok, err = os.remove(file)
-                    if ok then
-                        ngx.log(ngx.INFO, "删除已删除或禁用的代理的HTTP server配置文件: ", file, " (代理ID: ", proxy_id, ")")
-                        deleted_count = deleted_count + 1
-                    else
-                        ngx.log(ngx.WARN, "删除server配置文件失败: ", file, ", 错误: ", err or "unknown")
-                        failed_count = failed_count + 1
-                    end
+            local filename = file:match("([^/]+)$")  -- 获取文件名
+            -- 检查是否是活跃的文件（通过代理名称匹配）
+            local is_active = false
+            for proxy_name, _ in pairs(active_proxy_names) do
+                if filename == "proxy_http_" .. proxy_name .. ".conf" then
+                    is_active = true
+                    break
+                end
+            end
+            
+            if not is_active then
+                local ok, err = os.remove(file)
+                if ok then
+                    ngx.log(ngx.INFO, "删除已删除或禁用的代理的HTTP server配置文件: ", file)
+                    deleted_count = deleted_count + 1
+                else
+                    ngx.log(ngx.WARN, "删除server配置文件失败: ", file, ", 错误: ", err or "unknown")
+                    failed_count = failed_count + 1
                 end
             end
         end
@@ -544,23 +597,32 @@ local function cleanup_orphaned_files(project_root, active_proxy_ids)
     end
     
     -- TCP/UDP upstream配置文件
+    -- 新命名格式：stream_upstream_$proxy_name.conf 或 tcp_upstream_$proxy_name.conf 或 udp_upstream_$proxy_name.conf
     local stream_upstream_dir = project_root .. "/conf.d/upstream/tcp_udp"
-    local stream_upstream_cmd = "find " .. stream_upstream_dir .. " -maxdepth 1 -name 'stream_upstream_*.conf' 2>/dev/null"
+    local stream_upstream_cmd = "find " .. stream_upstream_dir .. " -maxdepth 1 -name '*_upstream_*.conf' 2>/dev/null"
     local stream_upstream_files = io.popen(stream_upstream_cmd)
     if stream_upstream_files then
         for file in stream_upstream_files:lines() do
-            local proxy_id = file:match("stream_upstream_(%d+)%.conf")
-            if proxy_id then
-                proxy_id = tonumber(proxy_id)
-                if not active_proxy_ids[proxy_id] then
-                    local ok, err = os.remove(file)
-                    if ok then
-                        ngx.log(ngx.INFO, "删除已删除或禁用的代理的Stream upstream配置文件: ", file, " (代理ID: ", proxy_id, ")")
-                        deleted_count = deleted_count + 1
-                    else
-                        ngx.log(ngx.WARN, "删除upstream配置文件失败: ", file, ", 错误: ", err or "unknown")
-                        failed_count = failed_count + 1
-                    end
+            local filename = file:match("([^/]+)$")  -- 获取文件名
+            -- 检查是否是活跃的文件（通过代理名称匹配）
+            local is_active = false
+            for proxy_name, _ in pairs(active_proxy_names) do
+                if filename == "stream_upstream_" .. proxy_name .. ".conf" or
+                   filename == "tcp_upstream_" .. proxy_name .. ".conf" or
+                   filename == "udp_upstream_" .. proxy_name .. ".conf" then
+                    is_active = true
+                    break
+                end
+            end
+            
+            if not is_active then
+                local ok, err = os.remove(file)
+                if ok then
+                    ngx.log(ngx.INFO, "删除已删除或禁用的代理的Stream upstream配置文件: ", file)
+                    deleted_count = deleted_count + 1
+                else
+                    ngx.log(ngx.WARN, "删除upstream配置文件失败: ", file, ", 错误: ", err or "unknown")
+                    failed_count = failed_count + 1
                 end
             end
         end
@@ -568,23 +630,32 @@ local function cleanup_orphaned_files(project_root, active_proxy_ids)
     end
     
     -- TCP/UDP server配置文件
+    -- 新命名格式：proxy_stream_$proxy_name.conf 或 proxy_tcp_$proxy_name.conf 或 proxy_udp_$proxy_name.conf
     local stream_server_dir = project_root .. "/conf.d/vhost_conf/tcp_udp"
-    local stream_server_cmd = "find " .. stream_server_dir .. " -maxdepth 1 -name 'proxy_stream_*.conf' 2>/dev/null"
+    local stream_server_cmd = "find " .. stream_server_dir .. " -maxdepth 1 -name 'proxy_*.conf' 2>/dev/null"
     local stream_server_files = io.popen(stream_server_cmd)
     if stream_server_files then
         for file in stream_server_files:lines() do
-            local proxy_id = file:match("proxy_stream_(%d+)%.conf")
-            if proxy_id then
-                proxy_id = tonumber(proxy_id)
-                if not active_proxy_ids[proxy_id] then
-                    local ok, err = os.remove(file)
-                    if ok then
-                        ngx.log(ngx.INFO, "删除已删除或禁用的代理的Stream server配置文件: ", file, " (代理ID: ", proxy_id, ")")
-                        deleted_count = deleted_count + 1
-                    else
-                        ngx.log(ngx.WARN, "删除server配置文件失败: ", file, ", 错误: ", err or "unknown")
-                        failed_count = failed_count + 1
-                    end
+            local filename = file:match("([^/]+)$")  -- 获取文件名
+            -- 检查是否是活跃的文件（通过代理名称匹配）
+            local is_active = false
+            for proxy_name, _ in pairs(active_proxy_names) do
+                if filename == "proxy_stream_" .. proxy_name .. ".conf" or
+                   filename == "proxy_tcp_" .. proxy_name .. ".conf" or
+                   filename == "proxy_udp_" .. proxy_name .. ".conf" then
+                    is_active = true
+                    break
+                end
+            end
+            
+            if not is_active then
+                local ok, err = os.remove(file)
+                if ok then
+                    ngx.log(ngx.INFO, "删除已删除或禁用的代理的Stream server配置文件: ", file)
+                    deleted_count = deleted_count + 1
+                else
+                    ngx.log(ngx.WARN, "删除server配置文件失败: ", file, ", 错误: ", err or "unknown")
+                    failed_count = failed_count + 1
                 end
             end
         end
@@ -663,13 +734,23 @@ function _M.generate_all_configs()
     
     if not proxies or #proxies == 0 then
         -- 如果没有启用的代理，清理所有代理配置文件
-        cleanup_orphaned_files(project_root, active_proxy_ids)
+        cleanup_orphaned_files(project_root, active_proxy_ids, {})
         return true, "没有启用的代理配置，已清理所有配置文件"
     end
+    
+    -- 构建活跃代理名称映射（用于清理已删除的配置文件，基于新命名格式）
+    local active_proxy_names = {}
+    -- 构建活跃代理的 location_path 映射（用于清理 location upstream 文件）
+    local active_location_files = {}
     
     -- 为每个代理生成独立的配置文件
     for _, proxy in ipairs(proxies) do
         active_proxy_ids[proxy.id] = true
+        -- 记录代理名称（用于新命名格式的文件清理）
+        local proxy_name_safe = sanitize_filename(proxy.proxy_name)
+        if proxy_name_safe and proxy_name_safe ~= "" then
+            active_proxy_names[proxy_name_safe] = true
+        end
         
         -- 解析location_paths JSON字段
         if proxy.location_paths then
@@ -813,7 +894,10 @@ function _M.generate_all_configs()
                         
                         if location_upstream_config then
                             -- 生成独立的upstream配置文件
-                            local location_upstream_filename = "http_upstream_" .. tostring(proxy.id) .. "_loc_" .. tostring(loc_index) .. ".conf"
+                            -- 新命名格式：http_upstream_$proxy_name_$location_path.conf
+                            local proxy_name_safe = sanitize_filename(proxy.proxy_name)
+                            local location_path_safe = sanitize_filename(loc.location_path)
+                            local location_upstream_filename = "http_upstream_" .. proxy_name_safe .. "_" .. location_path_safe .. ".conf"
                             local location_upstream_file = upstream_dir .. "/" .. location_upstream_filename
                             
                             local upstream_fd = io.open(location_upstream_file, "w")
@@ -853,12 +937,20 @@ function _M.generate_all_configs()
                     local upstream_filename = ""
                     if proxy.proxy_type == "http" then
                         upstream_subdir = "http_https"
-                        -- HTTP/HTTPS upstream文件名使用 http_upstream_ 前缀
-                        upstream_filename = "http_upstream_" .. tostring(proxy.id) .. ".conf"
+                        -- HTTP/HTTPS upstream文件名使用新格式：http_upstream_$proxy_name.conf
+                        local proxy_name_safe = sanitize_filename(proxy.proxy_name)
+                        upstream_filename = "http_upstream_" .. proxy_name_safe .. ".conf"
                     else
                         upstream_subdir = "tcp_udp"
-                        -- TCP/UDP upstream文件名保持 stream_upstream_ 前缀
-                        upstream_filename = upstream_name .. ".conf"
+                        -- TCP/UDP upstream文件名使用新格式：stream_upstream_$proxy_name.conf 或 tcp_upstream_$proxy_name.conf 或 udp_upstream_$proxy_name.conf
+                        local proxy_name_safe = sanitize_filename(proxy.proxy_name)
+                        local proxy_type_prefix = "stream"
+                        if proxy.proxy_type == "tcp" then
+                            proxy_type_prefix = "tcp"
+                        elseif proxy.proxy_type == "udp" then
+                            proxy_type_prefix = "udp"
+                        end
+                        upstream_filename = proxy_type_prefix .. "_upstream_" .. proxy_name_safe .. ".conf"
                     end
                     
                     local upstream_file = project_root .. "/conf.d/upstream/" .. upstream_subdir .. "/" .. upstream_filename
@@ -987,7 +1079,9 @@ function _M.generate_all_configs()
             -- 生成HTTP代理server配置文件
             local config_content = generate_http_proxy_file(proxy, upstream_name, backends)
             -- HTTP/HTTPS server配置放在 vhost_conf/http_https 子目录
-            local config_file = project_root .. "/conf.d/vhost_conf/http_https/proxy_http_" .. tostring(proxy.id) .. ".conf"
+            -- 新命名格式：proxy_http_$proxy_name.conf
+            local proxy_name_safe = sanitize_filename(proxy.proxy_name)
+            local config_file = project_root .. "/conf.d/vhost_conf/http_https/proxy_http_" .. proxy_name_safe .. ".conf"
             
             -- 确保vhost_conf/http_https目录存在
             local http_dir = project_root .. "/conf.d/vhost_conf/http_https"
@@ -1030,7 +1124,15 @@ function _M.generate_all_configs()
             -- 生成Stream代理server配置文件
             local config_content = generate_stream_proxy_file(proxy, upstream_name)
             -- TCP/UDP server配置放在 vhost_conf/tcp_udp 子目录
-            local config_file = project_root .. "/conf.d/vhost_conf/tcp_udp/proxy_stream_" .. tostring(proxy.id) .. ".conf"
+            -- 新命名格式：proxy_stream_$proxy_name.conf 或 proxy_tcp_$proxy_name.conf 或 proxy_udp_$proxy_name.conf
+            local proxy_name_safe = sanitize_filename(proxy.proxy_name)
+            local proxy_type_prefix = "stream"
+            if proxy.proxy_type == "tcp" then
+                proxy_type_prefix = "tcp"
+            elseif proxy.proxy_type == "udp" then
+                proxy_type_prefix = "udp"
+            end
+            local config_file = project_root .. "/conf.d/vhost_conf/tcp_udp/proxy_" .. proxy_type_prefix .. "_" .. proxy_name_safe .. ".conf"
             
             -- 确保vhost_conf/tcp_udp目录存在
             local tcp_dir = project_root .. "/conf.d/vhost_conf/tcp_udp"
@@ -1075,7 +1177,7 @@ function _M.generate_all_configs()
     -- 清理已删除或禁用的代理的配置文件
     -- 注意：active_proxy_ids 只包含 status = 1 的代理ID
     -- 所以禁用的代理（status = 0）和已删除的代理的配置文件都会被清理
-    cleanup_orphaned_files(project_root, active_proxy_ids)
+    cleanup_orphaned_files(project_root, active_proxy_ids, active_proxy_names)
     
     ngx.log(ngx.INFO, "nginx配置生成成功: 共生成 " .. #proxies .. " 个代理配置文件")
     return true, "配置生成成功，共生成 " .. #proxies .. " 个代理配置文件"

@@ -352,17 +352,22 @@ function _M.init_worker()
             return
         end
         
-        -- 检查是否有已存在的代理配置文件（检查HTTP/HTTPS和TCP/UDP目录）
-        local http_conf_dir = project_root .. "/conf.d/vhost_conf/http_https"
-        local tcp_conf_dir = project_root .. "/conf.d/vhost_conf/tcp_udp"
+        -- 检查是否有已存在的代理配置文件
+        -- 注意：generate_all_configs() 会同时生成 upstream 和 server 配置文件
+        -- 为了更准确地判断，我们同时检查 upstream 和 server 配置文件
+        -- 如果任一类型的配置文件存在，说明是reload，不需要重新生成
+        
+        local http_server_dir = project_root .. "/conf.d/vhost_conf/http_https"
+        local tcp_server_dir = project_root .. "/conf.d/vhost_conf/tcp_udp"
+        local http_upstream_dir = project_root .. "/conf.d/upstream/http_https"
+        local tcp_upstream_dir = project_root .. "/conf.d/upstream/tcp_udp"
         local config_exists = false
         
-        -- 检查HTTP/HTTPS配置文件
-        local http_dir = io.open(http_conf_dir, "r")
-        if http_dir then
-            http_dir:close()
-            -- 检查目录中是否有配置文件
-            local find_cmd = "find " .. http_conf_dir .. " -maxdepth 1 -name 'proxy_*.conf' 2>/dev/null | head -1"
+        -- 检查HTTP/HTTPS server配置文件
+        local http_server_dir_fd = io.open(http_server_dir, "r")
+        if http_server_dir_fd then
+            http_server_dir_fd:close()
+            local find_cmd = "find " .. http_server_dir .. " -maxdepth 1 -name 'proxy_*.conf' 2>/dev/null | head -1"
             local find_result = io.popen(find_cmd)
             if find_result then
                 local found_file = find_result:read("*line")
@@ -373,12 +378,46 @@ function _M.init_worker()
             end
         end
         
-        -- 如果HTTP/HTTPS没有，检查TCP/UDP配置文件
+        -- 如果HTTP/HTTPS server没有，检查HTTP/HTTPS upstream配置文件
         if not config_exists then
-            local tcp_dir = io.open(tcp_conf_dir, "r")
-            if tcp_dir then
-                tcp_dir:close()
-                local find_cmd = "find " .. tcp_conf_dir .. " -maxdepth 1 -name 'proxy_*.conf' 2>/dev/null | head -1"
+            local http_upstream_dir_fd = io.open(http_upstream_dir, "r")
+            if http_upstream_dir_fd then
+                http_upstream_dir_fd:close()
+                local find_cmd = "find " .. http_upstream_dir .. " -maxdepth 1 -name 'http_upstream_*.conf' 2>/dev/null | head -1"
+                local find_result = io.popen(find_cmd)
+                if find_result then
+                    local found_file = find_result:read("*line")
+                    find_result:close()
+                    if found_file and found_file ~= "" then
+                        config_exists = true
+                    end
+                end
+            end
+        end
+        
+        -- 如果HTTP/HTTPS都没有，检查TCP/UDP server配置文件
+        if not config_exists then
+            local tcp_server_dir_fd = io.open(tcp_server_dir, "r")
+            if tcp_server_dir_fd then
+                tcp_server_dir_fd:close()
+                local find_cmd = "find " .. tcp_server_dir .. " -maxdepth 1 -name 'proxy_*.conf' 2>/dev/null | head -1"
+                local find_result = io.popen(find_cmd)
+                if find_result then
+                    local found_file = find_result:read("*line")
+                    find_result:close()
+                    if found_file and found_file ~= "" then
+                        config_exists = true
+                    end
+                end
+            end
+        end
+        
+        -- 如果TCP/UDP server没有，检查TCP/UDP upstream配置文件
+        if not config_exists then
+            local tcp_upstream_dir_fd = io.open(tcp_upstream_dir, "r")
+            if tcp_upstream_dir_fd then
+                tcp_upstream_dir_fd:close()
+                local find_cmd = "find " .. tcp_upstream_dir .. " -maxdepth 1 -name '*_upstream_*.conf' 2>/dev/null | head -1"
                 local find_result = io.popen(find_cmd)
                 if find_result then
                     local found_file = find_result:read("*line")

@@ -356,9 +356,10 @@ function _M.route()
         return serve_html_with_layout("rule_management.html", "防护管理", session)
     end
     
-    -- 功能管理界面（必须可用，用于管理功能开关）
+    -- 功能管理界面（已合并到系统设置，重定向到系统设置的功能设置标签页）
     if path == "/admin/features" then
-        return serve_html_with_layout("features.html", "功能管理", session)
+        ngx.redirect("/admin/system?tab=features")
+        return
     end
     
     -- 统计报表界面

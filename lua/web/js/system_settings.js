@@ -27,6 +27,14 @@ let currentPage = 1;
                 adminSslTab.classList.add('active');
                 adminSslTab.style.display = 'block';
                 loadAdminSslConfig();
+            } else if (tab === 'features') {
+                if (tabs[2]) {
+                    tabs[2].classList.add('active');
+                }
+                const featuresTab = document.getElementById('features-tab');
+                featuresTab.classList.add('active');
+                featuresTab.style.display = 'block';
+                loadFeatures();
             }
         }
         
@@ -538,9 +546,190 @@ let currentPage = 1;
             return div.innerHTML;
         }
         
+        // ============================================
+        // 功能设置相关函数
+        // ============================================
+        let features = [];
+        
+        // 加载功能列表
+        async function loadFeatures() {
+            const container = document.getElementById('features-container');
+            if (!container) return;
+            
+            const escapeHtmlFn = window.escapeHtml || escapeHtml;
+            
+            try {
+                container.innerHTML = '<div class="loading">加载中...</div>';
+                
+                const response = await fetch('/api/features');
+                
+                if (!response.ok) {
+                    if (response.status === 401) {
+                        window.location.reload();
+                        return;
+                    }
+                    
+                    const errorText = await response.text();
+                    let errorData;
+                    try {
+                        errorData = JSON.parse(errorText);
+                        if (errorData && (
+                            errorData.error === 'Unauthorized' || 
+                            errorData.message === '请先登录' ||
+                            (typeof errorData.error === 'string' && errorData.error.toLowerCase().includes('unauthorized')) ||
+                            (typeof errorData.message === 'string' && errorData.message.includes('请先登录'))
+                        )) {
+                            window.location.reload();
+                            return;
+                        }
+                    } catch (e) {
+                        errorData = { error: errorText || `HTTP ${response.status}: ${response.statusText}` };
+                    }
+                    throw new Error(errorData.error || errorData.message || `HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    features = data.features || [];
+                    renderFeatures();
+                } else {
+                    const errorMsg = data.error || data.message || '加载失败';
+                    showAlert(errorMsg, 'error');
+                    container.innerHTML = '<div class="loading" style="color: #e74c3c;">' + escapeHtmlFn(errorMsg) + '</div>';
+                }
+            } catch (error) {
+                console.error('loadFeatures error:', error);
+                showAlert('网络错误: ' + error.message, 'error');
+                container.innerHTML = '<div class="loading" style="color: #e74c3c;">网络错误: ' + escapeHtmlFn(error.message) + '</div>';
+            }
+        }
+        
+        // 渲染功能列表
+        function renderFeatures() {
+            const container = document.getElementById('features-container');
+            if (!container) return;
+            
+            if (features.length === 0) {
+                container.innerHTML = '<div class="loading">暂无功能</div>';
+                return;
+            }
+            
+            container.className = 'features-list';
+            container.innerHTML = features.map(feature => `
+                <div class="feature-card">
+                    <div class="feature-header">
+                        <div>
+                            <span class="feature-name">${getFeatureName(feature.key)}</span>
+                            <span class="status-badge ${feature.enable ? 'status-enabled' : 'status-disabled'}">
+                                ${feature.enable ? '已启用' : '已禁用'}
+                            </span>
+                        </div>
+                        <label class="switch">
+                            <input type="checkbox" 
+                                   ${feature.enable ? 'checked' : ''} 
+                                   onchange="toggleFeature('${feature.key}', this.checked)">
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                    <div class="feature-description">${feature.description || ''}</div>
+                </div>
+            `).join('');
+        }
+        
+        // 获取功能中文名称
+        function getFeatureName(key) {
+            const names = {
+                // 核心功能
+                'ip_block': 'IP封控',
+                'geo_block': '地域封控',
+                'auto_block': '自动封控',
+                'whitelist': '白名单',
+                'block_enable': '封控功能',
+                // 日志和监控
+                'log_collect': '日志采集',
+                'metrics': '监控指标',
+                'alert': '告警功能',
+                'performance_monitor': '性能监控',
+                'pool_monitor': '连接池监控',
+                // 缓存相关
+                'cache_warmup': '缓存预热',
+                'cache_protection': '缓存穿透防护',
+                'cache_optimizer': '缓存策略优化',
+                'cache_tuner': '缓存自动调优',
+                'redis_cache': 'Redis二级缓存',
+                'shared_memory_optimizer': '共享内存优化',
+                'cache_invalidation': '缓存失效',
+                // 规则相关
+                'rule_backup': '规则备份',
+                'rule_notification': '规则更新通知',
+                'rule_management_ui': '规则管理界面',
+                // 系统功能
+                'fallback': '降级机制',
+                'config_validation': '配置验证',
+                'config_check_api': '配置检查API',
+                // 安全功能
+                'csrf': 'CSRF防护',
+                'rate_limit_login': '登录速率限制',
+                'rate_limit_api': 'API速率限制',
+                'proxy_trusted_check': '受信任代理检查',
+                // 界面功能
+                'stats': '统计报表',
+                'monitor': '监控面板',
+                'proxy_management': '反向代理管理'
+            };
+            return names[key] || key;
+        }
+        
+        // 切换功能开关
+        function toggleFeature(key, enabled) {
+            const feature = features.find(f => f.key === key);
+            if (feature) {
+                feature.enable = enabled;
+                renderFeatures();
+            }
+        }
+        
+        // 保存所有功能更改
+        async function saveAllFeatures() {
+            const featuresToUpdate = features.map(f => ({
+                key: f.key,
+                enable: f.enable
+            }));
+            
+            try {
+                const response = await fetch('/api/features/batch', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ features: featuresToUpdate })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showAlert('所有功能开关已保存');
+                    loadFeatures();
+                } else {
+                    showAlert(data.error || '保存失败', 'error');
+                }
+            } catch (error) {
+                showAlert('网络错误: ' + error.message, 'error');
+            }
+        }
+        
         // 页面加载时初始化
         window.addEventListener('DOMContentLoaded', function() {
-            loadWhitelist();
+            // 检查URL参数，决定显示哪个标签页
+            const urlParams = new URLSearchParams(window.location.search);
+            const tab = urlParams.get('tab');
+            
+            if (tab === 'features') {
+                switchTab('features');
+            } else {
+                loadWhitelist();
+            }
             
             // 点击模态框外部关闭
             window.onclick = function(event) {
@@ -554,7 +743,7 @@ let currentPage = 1;
             document.addEventListener('keydown', function(event) {
                 if (event.key === 'Escape') {
                     const modal = document.getElementById('edit-modal');
-                    if (modal.classList.contains('show')) {
+                    if (modal && modal.classList.contains('show')) {
                         closeEditModal();
                     }
                 }

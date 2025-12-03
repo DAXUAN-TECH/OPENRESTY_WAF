@@ -497,4 +497,47 @@
         input:checked + .slider::before {
             transform: translateX(26px);
         }
+        
+        /* 功能设置样式 */
+        .features-list {
+            display: grid;
+            gap: 20px;
+        }
+        
+        .feature-card {
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 20px;
+            background: #fafafa;
+            transition: all 0.3s;
+        }
+        
+        .feature-card:hover {
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        .feature-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        
+        .feature-name {
+            font-size: 18px;
+            font-weight: 600;
+            color: #333;
+        }
+        
+        .feature-description {
+            color: #666;
+            margin-bottom: 15px;
+            font-size: 14px;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
     

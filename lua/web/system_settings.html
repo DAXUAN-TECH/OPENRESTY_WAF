@@ -15,6 +15,7 @@
         <div class="tabs">
             <button class="tab active" onclick="switchTab('whitelist')">系统访问白名单</button>
             <button class="tab" onclick="switchTab('admin_ssl')">管理端SSL/域名</button>
+            <button class="tab" onclick="switchTab('features')">功能设置</button>
         </div>
         
         <div id="alert-container"></div>
@@ -103,6 +104,15 @@
             <small style="color:#666;font-size:12px;display:block;margin-top:10px;">
                 提示：保存后系统会自动测试并重新加载 Nginx 配置，如有语法错误将返回详细错误信息，请根据提示修正配置。
             </small>
+        </div>
+
+        <!-- 功能设置 -->
+        <div id="features-tab" class="tab-content">
+            <div id="features-container" class="loading">加载中...</div>
+            <div style="margin-top: 30px; text-align: right;">
+                <button class="btn btn-secondary" onclick="loadFeatures()">刷新</button>
+                <button class="btn btn-primary" onclick="saveAllFeatures()">保存所有更改</button>
+            </div>
         </div>
     </div>
     

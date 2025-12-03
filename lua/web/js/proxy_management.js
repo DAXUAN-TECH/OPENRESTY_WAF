@@ -73,8 +73,54 @@ const pageSize = 20;
                     configSection.classList.remove('tcp-udp-mode');
                 }
                 // HTTP 代理：显示 location-path-section、location-divider 和 location-actions
+                // 如果 location-content 不存在，需要重新创建（从简化结构恢复）
                 document.querySelectorAll('.location-item').forEach(locationItem => {
                     locationItem.classList.remove('tcp-udp-mode');
+                    // 如果 location-content 不存在，需要重新创建
+                    let locationContent = locationItem.querySelector('.location-content');
+                    if (!locationContent) {
+                        // 从简化结构恢复：创建 location-content 和 location-backends
+                        locationContent = document.createElement('div');
+                        locationContent.className = 'location-content';
+                        const locationBackends = document.createElement('div');
+                        locationBackends.className = 'location-backends';
+                        
+                        // 移动所有 backend-row 到 location-backends
+                        const backendRows = locationItem.querySelectorAll('.backend-row');
+                        backendRows.forEach(backendRow => {
+                            locationBackends.appendChild(backendRow);
+                        });
+                        
+                        // 创建 location-path-section 和 location-divider
+                        const locationPathSection = document.createElement('div');
+                        locationPathSection.className = 'location-path-section';
+                        const locationPathWrapper = document.createElement('div');
+                        locationPathWrapper.className = 'input-with-add location-path-input-wrapper';
+                        const locationPathInput = document.createElement('input');
+                        locationPathInput.type = 'text';
+                        locationPathInput.placeholder = '匹配路径：/PATH';
+                        locationPathInput.className = 'location-path-input';
+                        locationPathInput.title = '匹配路径：/PATH';
+                        locationPathWrapper.appendChild(locationPathInput);
+                        locationPathSection.appendChild(locationPathWrapper);
+                        
+                        const locationDivider = document.createElement('div');
+                        locationDivider.className = 'location-divider';
+                        
+                        // 组装 location-content
+                        locationContent.appendChild(locationPathSection);
+                        locationContent.appendChild(locationDivider);
+                        locationContent.appendChild(locationBackends);
+                        
+                        // 将 location-content 插入到 location-item 中（在 location-actions 之前）
+                        const locationActions = locationItem.querySelector('.location-actions');
+                        if (locationActions) {
+                            locationItem.insertBefore(locationContent, locationActions);
+                        } else {
+                            locationItem.appendChild(locationContent);
+                        }
+                    }
+                    
                     const locationPathSection = locationItem.querySelector('.location-path-section');
                     if (locationPathSection) {
                         locationPathSection.style.display = 'flex';
@@ -123,6 +169,20 @@ const pageSize = 20;
                 }
                 document.querySelectorAll('.location-item').forEach(locationItem => {
                     locationItem.classList.add('tcp-udp-mode');
+                    // TCP/UDP 代理：删除 location-content div，简化结构
+                    const locationContent = locationItem.querySelector('.location-content');
+                    if (locationContent) {
+                        const locationBackends = locationContent.querySelector('.location-backends');
+                        if (locationBackends) {
+                            // 将 location-backends 内的所有 backend-row 移动到 location-item
+                            const backendRows = locationBackends.querySelectorAll('.backend-row');
+                            backendRows.forEach(backendRow => {
+                                locationItem.insertBefore(backendRow, locationContent);
+                            });
+                        }
+                        // 删除 location-content div
+                        locationContent.remove();
+                    }
                     const locationPathSection = locationItem.querySelector('.location-path-section');
                     if (locationPathSection) {
                         locationPathSection.style.display = 'none';

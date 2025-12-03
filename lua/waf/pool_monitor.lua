@@ -76,27 +76,50 @@ function _M.test_connection()
     
     db:set_timeout(1000)  -- 1秒超时
     
-    local ok, err, errcode, sqlstate = db:connect{
-        host = config.mysql.host,
-        port = config.mysql.port,
-        database = config.mysql.database,
-        user = config.mysql.user,
-        password = config.mysql.password,
-        charset = "utf8mb4",
-    }
+    -- 使用 pcall 包装 connect 调用，避免在超时时出现 "attempt to send data on a closed socket" 错误
+    local connect_ok, connect_result = pcall(function()
+        return db:connect{
+            host = config.mysql.host,
+            port = config.mysql.port,
+            database = config.mysql.database,
+            user = config.mysql.user,
+            password = config.mysql.password,
+            charset = "utf8mb4",
+        }
+    end)
+    
+    local ok, err, errcode, sqlstate
+    if connect_ok then
+        -- pcall 成功，获取连接结果
+        ok, err, errcode, sqlstate = connect_result
+    else
+        -- pcall 失败，说明 connect 过程中抛出了异常（可能是 socket 已关闭）
+        ok = false
+        err = connect_result or "connection failed with exception"
+    end
     
     if not ok then
+        -- 安全关闭失败的连接
+        if db then
+            pcall(function() db:close() end)
+        end
         return false, err
     end
     
     -- 测试查询
     local res, err = db:query("SELECT 1")
     if not res then
-        db:close()
+        -- 安全关闭连接
+        if db then
+            pcall(function() db:close() end)
+        end
         return false, err
     end
     
-    db:close()
+    -- 安全关闭连接
+    if db then
+        pcall(function() db:close() end)
+    end
     return true, nil
 end
 

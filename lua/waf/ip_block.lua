@@ -14,6 +14,7 @@ local lru_cache = require "waf.lru_cache"
 local redis_cache = require "waf.redis_cache"
 local serializer = require "waf.serializer"
 local feature_switches = require "waf.feature_switches"
+local log_queue = require "waf.log_queue"
 local config = require "config"
 local cjson = require "cjson"
 
@@ -433,7 +434,7 @@ local function check_geo_block(client_ip)
     return geo_block.check(client_ip)
 end
 
--- 记录封控日志
+-- 记录封控日志（使用日志队列机制，支持重试和本地备份）
 local function log_block(client_ip, rule, block_reason)
     if not rule then
         ngx.log(ngx.WARN, "log_block: rule is nil, client_ip: ", client_ip)
@@ -450,14 +451,34 @@ local function log_block(client_ip, rule, block_reason)
     local user_agent = ngx.var.http_user_agent or ""
     block_reason = block_reason or "manual"
     
-    local sql = [[
-        INSERT INTO waf_block_logs (client_ip, rule_id, rule_name, block_time, request_path, user_agent, block_reason)
-        VALUES (?, ?, ?, NOW(), ?, ?, ?)
-    ]]
-
-    local ok, err = mysql_pool.insert(sql, client_ip, rule.id, rule.rule_name or "", request_path, user_agent, block_reason)
+    -- 构建日志数据
+    local log_data = {
+        client_ip = client_ip,
+        rule_id = rule.id,
+        rule_name = rule.rule_name or "",
+        request_path = request_path,
+        user_agent = user_agent,
+        block_reason = block_reason
+    }
+    
+    -- 使用 retry_write 机制（自动处理重试和本地备份）
+    -- retry_write 会先尝试直接写入，如果失败则添加到重试队列，由定时器处理
+    local log_entry = {
+        data = log_data,
+        type = "block",
+        timestamp = ngx.time(),
+        retry_count = 0
+    }
+    
+    local ok, err = log_queue.retry_write(log_entry)
     if err then
-        ngx.log(ngx.ERR, "block log insert error: ", err, ", client_ip: ", client_ip, ", rule_id: ", rule.id or "nil")
+        -- 写入失败，已添加到重试队列或写入本地备份
+        -- 只在非重试队列满的情况下记录错误（避免日志刷屏）
+        if err ~= "max_retry_exceeded" then
+            ngx.log(ngx.WARN, "block log insert failed, added to retry queue: ", err, ", client_ip: ", client_ip, ", rule_id: ", rule.id or "nil")
+        else
+            ngx.log(ngx.ERR, "block log insert failed after max retries, written to local backup: client_ip=", client_ip, ", rule_id: ", rule.id or "nil")
+        end
     else
         -- 记录成功日志（仅在调试模式下）
         if config.debug and config.debug.log_block_insert then

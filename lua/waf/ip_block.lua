@@ -604,10 +604,11 @@ local function check_specific_rule(client_ip, rule_id)
         
         if is_match then
             -- 白名单匹配，允许通过
-            return false, nil
-        else
-            -- 白名单不匹配，拒绝访问
+            -- 注意：返回true表示匹配成功（白名单），第二个返回值是规则信息
             return true, rule
+        else
+            -- 白名单不匹配，不在白名单中（但不一定被封控，可能在其他白名单中）
+            return false, nil
         end
     elseif rule_type == "ip_blacklist" then
         -- IP黑名单：检查单个IP、CIDR格式、IP范围格式（支持多选，用逗号分隔）

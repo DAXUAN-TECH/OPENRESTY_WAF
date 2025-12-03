@@ -193,8 +193,18 @@ local function generate_upstream_config(proxy, backends)
 end
 
 -- 生成HTTP server块配置
-local function generate_http_server_config(proxy, upstream_name, backends)
+-- 注意：需要传入 project_root，用于生成 SSL 证书/密钥文件路径
+local function generate_http_server_config(proxy, upstream_name, backends, project_root)
     local config = "server {\n"
+    
+    -- 兼容旧调用方式：如果未显式传入 project_root，则在函数内部获取
+    if not project_root or project_root == "" then
+        project_root = path_utils.get_project_root()
+        if not project_root or project_root == "" then
+            ngx.log(ngx.ERR, "generate_http_server_config: 无法获取项目根目录，project_root 为 nil 或空")
+            return nil, "无法获取项目根目录"
+        end
+    end
     
     -- 监听端口
     local listen_line = "    listen       " .. proxy.listen_port

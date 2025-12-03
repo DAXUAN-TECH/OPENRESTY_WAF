@@ -283,9 +283,34 @@ function _M.query(sql, ...)
     
     if not res then
         ngx.log(ngx.ERR, "bad result: ", err, ": ", errcode, ": ", sqlstate)
+        -- 检查错误类型，如果是连接相关错误，直接关闭连接
+        local is_connection_error = false
+        if err then
+            if err:match("timeout") or err:match("closed") or err:match("broken") or 
+               err:match("Connection refused") or err:match("No route to host") or
+               err:match("attempt to send data on a closed socket") then
+                is_connection_error = true
+            end
+        end
+        
         -- 安全关闭连接，避免在已关闭的 socket 上再次操作
         if db then
-            pcall(function() db:close() end)
+            local close_ok, close_err = pcall(function() 
+                if is_connection_error then
+                    -- 连接错误，直接关闭
+                    db:close()
+                else
+                    -- 非连接错误，尝试放回连接池
+                    local keepalive_ok, keepalive_err = db:set_keepalive(10000, config.mysql.pool_size)
+                    if not keepalive_ok then
+                        -- 放回连接池失败，关闭连接
+                        db:close()
+                    end
+                end
+            end)
+            if not close_ok and close_err then
+                ngx.log(ngx.DEBUG, "Failed to close/set_keepalive MySQL connection (expected if socket already closed): ", tostring(close_err))
+            end
         end
         return nil, err
     end
@@ -296,10 +321,18 @@ function _M.query(sql, ...)
     end)
     if not ok_keepalive then
         ngx.log(ngx.DEBUG, "failed to set keepalive (possibly already closed): ", tostring(err_keepalive))
+        -- 如果set_keepalive失败，尝试关闭连接
+        if db then
+            pcall(function() db:close() end)
+        end
     else
         local ok, err = ok_keepalive, err_keepalive
-    if not ok then
-        ngx.log(ngx.ERR, "failed to set keepalive: ", err)
+        if not ok then
+            ngx.log(ngx.ERR, "failed to set keepalive: ", err)
+            -- 如果set_keepalive失败，尝试关闭连接
+            if db then
+                pcall(function() db:close() end)
+            end
         end
     end
 
@@ -322,8 +355,34 @@ function _M.insert(sql, ...)
     local res, err, errcode, sqlstate = db:query(final_sql)
     if not res then
         ngx.log(ngx.ERR, "bad result: ", err, ": ", errcode, ": ", sqlstate)
+        -- 检查错误类型，如果是连接相关错误，直接关闭连接
+        local is_connection_error = false
+        if err then
+            if err:match("timeout") or err:match("closed") or err:match("broken") or 
+               err:match("Connection refused") or err:match("No route to host") or
+               err:match("attempt to send data on a closed socket") then
+                is_connection_error = true
+            end
+        end
+        
+        -- 安全关闭连接，避免在已关闭的 socket 上再次操作
         if db then
-            pcall(function() db:close() end)
+            local close_ok, close_err = pcall(function() 
+                if is_connection_error then
+                    -- 连接错误，直接关闭
+                    db:close()
+                else
+                    -- 非连接错误，尝试放回连接池
+                    local keepalive_ok, keepalive_err = db:set_keepalive(10000, config.mysql.pool_size)
+                    if not keepalive_ok then
+                        -- 放回连接池失败，关闭连接
+                        db:close()
+                    end
+                end
+            end)
+            if not close_ok and close_err then
+                ngx.log(ngx.DEBUG, "Failed to close/set_keepalive MySQL connection for insert (expected if socket already closed): ", tostring(close_err))
+            end
         end
         return nil, err
     end
@@ -336,10 +395,18 @@ function _M.insert(sql, ...)
     end)
     if not ok_keepalive then
         ngx.log(ngx.DEBUG, "failed to set keepalive for insert (possibly already closed): ", tostring(err_keepalive))
+        -- 如果set_keepalive失败，尝试关闭连接
+        if db then
+            pcall(function() db:close() end)
+        end
     else
         local ok, err = ok_keepalive, err_keepalive
-    if not ok then
+        if not ok then
             ngx.log(ngx.ERR, "failed to set keepalive for insert: ", err)
+            -- 如果set_keepalive失败，尝试关闭连接
+            if db then
+                pcall(function() db:close() end)
+            end
         end
     end
 
@@ -420,14 +487,57 @@ function _M.batch_insert(table_name, fields, values_list)
     local res, err, errcode, sqlstate = db:query(sql)
     if not res then
         ngx.log(ngx.ERR, "batch insert failed: ", err, ": ", errcode, ": ", sqlstate)
-        db:close()
+        -- 检查错误类型，如果是连接相关错误，直接关闭连接
+        local is_connection_error = false
+        if err then
+            if err:match("timeout") or err:match("closed") or err:match("broken") or 
+               err:match("Connection refused") or err:match("No route to host") or
+               err:match("attempt to send data on a closed socket") then
+                is_connection_error = true
+            end
+        end
+        
+        -- 安全关闭连接，避免在已关闭的 socket 上再次操作
+        if db then
+            local close_ok, close_err = pcall(function() 
+                if is_connection_error then
+                    -- 连接错误，直接关闭
+                    db:close()
+                else
+                    -- 非连接错误，尝试放回连接池
+                    local keepalive_ok, keepalive_err = db:set_keepalive(10000, config.mysql.pool_size)
+                    if not keepalive_ok then
+                        -- 放回连接池失败，关闭连接
+                        db:close()
+                    end
+                end
+            end)
+            if not close_ok and close_err then
+                ngx.log(ngx.DEBUG, "Failed to close/set_keepalive MySQL connection for batch_insert (expected if socket already closed): ", tostring(close_err))
+            end
+        end
         return nil, err
     end
 
-    local ok, err = db:set_keepalive(10000, config.mysql.pool_size)
-    if not ok then
-        ngx.log(ngx.ERR, "failed to set keepalive: ", err)
-        db:close()
+    -- 将连接放回连接池（使用 pcall 避免在已关闭的 socket 上操作）
+    local ok_keepalive, err_keepalive = pcall(function()
+        return db:set_keepalive(10000, config.mysql.pool_size)
+    end)
+    if not ok_keepalive then
+        ngx.log(ngx.ERR, "failed to set keepalive for batch_insert: ", tostring(err_keepalive))
+        -- 如果set_keepalive失败，尝试关闭连接
+        if db then
+            pcall(function() db:close() end)
+        end
+    else
+        local ok, err = ok_keepalive, err_keepalive
+        if not ok then
+            ngx.log(ngx.ERR, "failed to set keepalive for batch_insert: ", err)
+            -- 如果set_keepalive失败，尝试关闭连接
+            if db then
+                pcall(function() db:close() end)
+            end
+        end
     end
 
     return res, nil

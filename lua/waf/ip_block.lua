@@ -550,8 +550,25 @@ local function check_specific_rule(client_ip, rule_id)
     
     local res, err = mysql_pool.query(sql, rule_id)
     if err then
-        ngx.log(ngx.ERR, "check_specific_rule: 查询规则失败，rule_id: ", rule_id, ", error: ", err)
-        return false, nil
+        -- 检查错误类型，区分连接错误和其他错误
+        local is_connection_error = false
+        if err then
+            if err:match("timeout") or err:match("failed to connect") or err:match("closed") or 
+               err:match("broken") or err:match("Connection refused") or err:match("No route to host") or
+               err:match("attempt to send data on a closed socket") then
+                is_connection_error = true
+            end
+        end
+        
+        if is_connection_error then
+            -- 连接错误：采用fail-open策略，允许通过（避免因数据库故障导致服务不可用）
+            ngx.log(ngx.WARN, "check_specific_rule: MySQL连接失败，采用fail-open策略，允许通过。rule_id: ", rule_id, ", error: ", err)
+            return false, nil
+        else
+            -- 其他错误（如SQL语法错误等）：记录错误，允许通过（fail-open策略）
+            ngx.log(ngx.ERR, "check_specific_rule: 查询规则失败，rule_id: ", rule_id, ", error: ", err)
+            return false, nil
+        end
     end
     
     if not res or #res == 0 then

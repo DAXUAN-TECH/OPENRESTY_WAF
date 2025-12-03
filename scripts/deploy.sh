@@ -733,22 +733,16 @@ chmod -R 755 "${PROJECT_ROOT}/conf.d" 2>/dev/null || true
 find "${PROJECT_ROOT}/conf.d" -type f -name "*.conf" -exec chmod 644 {} \; 2>/dev/null || true
 
 # 特别确保 vhost_conf 和 upstream 目录有写入权限
+# 注意：使用 chown -R 递归处理，确保目录下所有文件（包括 waf.conf、waf_admin_ssl.conf 等）都归属 waf 用户
 chown -R "$WAF_USER:$WAF_GROUP" "${PROJECT_ROOT}/conf.d/vhost_conf" 2>/dev/null || true
 chmod -R 755 "${PROJECT_ROOT}/conf.d/vhost_conf" 2>/dev/null || true
+# 将所有 .conf 文件权限统一设置为 644（目录权限已在上面设置为 755）
+find "${PROJECT_ROOT}/conf.d/vhost_conf" -type f -name "*.conf" -exec chmod 644 {} \; 2>/dev/null || true
+
 chown -R "$WAF_USER:$WAF_GROUP" "${PROJECT_ROOT}/conf.d/vhost_conf/http_https" 2>/dev/null || true
 chmod 755 "${PROJECT_ROOT}/conf.d/vhost_conf/http_https" 2>/dev/null || true
 chown -R "$WAF_USER:$WAF_GROUP" "${PROJECT_ROOT}/conf.d/vhost_conf/tcp_udp" 2>/dev/null || true
 chmod 755 "${PROJECT_ROOT}/conf.d/vhost_conf/tcp_udp" 2>/dev/null || true
-
-# 确保管理端配置文件可由 waf 用户读写（生成/更新 SSL 配置时需要）
-if [ -f "${PROJECT_ROOT}/conf.d/vhost_conf/waf.conf" ]; then
-    chown "$WAF_USER:$WAF_GROUP" "${PROJECT_ROOT}/conf.d/vhost_conf/waf.conf" 2>/dev/null || true
-    chmod 644 "${PROJECT_ROOT}/conf.d/vhost_conf/waf.conf" 2>/dev/null || true
-fi
-if [ -f "${PROJECT_ROOT}/conf.d/vhost_conf/waf_admin_ssl.conf" ]; then
-    chown "$WAF_USER:$WAF_GROUP" "${PROJECT_ROOT}/conf.d/vhost_conf/waf_admin_ssl.conf" 2>/dev/null || true
-    chmod 644 "${PROJECT_ROOT}/conf.d/vhost_conf/waf_admin_ssl.conf" 2>/dev/null || true
-fi
 chown -R "$WAF_USER:$WAF_GROUP" "${PROJECT_ROOT}/conf.d/upstream/http_https" 2>/dev/null || true
 chmod 755 "${PROJECT_ROOT}/conf.d/upstream/http_https" 2>/dev/null || true
 chown -R "$WAF_USER:$WAF_GROUP" "${PROJECT_ROOT}/conf.d/upstream/tcp_udp" 2>/dev/null || true

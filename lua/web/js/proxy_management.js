@@ -155,7 +155,10 @@ const pageSize = 20;
                 `;
             }
             
-            locationItem.innerHTML = `
+            // TCP/UDP 代理不需要 location-path-section 和 location-divider
+            let locationContentHtml = '';
+            if (proxyType === 'http') {
+                locationContentHtml = `
                 <div class="location-content">
                     <div class="location-path-section">
                         ${locationPathHtml}
@@ -169,11 +172,9 @@ const pageSize = 20;
                             <div class="input-with-add port-input">
                 <input type="number" placeholder="端口" class="backend-port" min="1" max="65535">
                             </div>
-                            ${proxyType === 'http' ? `
                             <div class="input-with-add location-backend-path-input-wrapper">
                                 <input type="text" placeholder="目标路径：/PATH" class="location-backend-path-input" title="目标路径：/PATH">
                             </div>
-                            ` : ''}
                             <div class="input-with-add input-weight">
                 <input type="number" placeholder="权重" class="backend-weight" value="1" min="1">
                             </div>
@@ -188,7 +189,33 @@ const pageSize = 20;
                     <button type="button" class="btn btn-primary btn-sm" onclick="addLocation()">添加location</button>
                     <button type="button" class="btn btn-danger btn-sm" onclick="removeLocation(this)">删除location</button>
                 </div>
-            `;
+                `;
+            } else {
+                // TCP/UDP 代理：不包含 location-path-section、location-divider 和 location-actions
+                locationContentHtml = `
+                <div class="location-content">
+                    <div class="location-backends">
+                        <div class="backend-row">
+                            <div class="input-with-add address-input">
+                <input type="text" placeholder="IP地址" class="backend-address">
+                            </div>
+                            <div class="input-with-add port-input">
+                <input type="number" placeholder="端口" class="backend-port" min="1" max="65535">
+                            </div>
+                            <div class="input-with-add input-weight">
+                <input type="number" placeholder="权重" class="backend-weight" value="1" min="1">
+                            </div>
+                            <div class="backend-row-actions">
+                                <button type="button" class="btn-icon btn-add-icon" onclick="addBackendRow(this)" title="添加">+</button>
+                                <button type="button" class="btn-icon btn-remove-icon" onclick="removeBackendRow(this)" title="删除">−</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                `;
+            }
+            
+            locationItem.innerHTML = locationContentHtml;
             
             configSection.appendChild(locationItem);
         }

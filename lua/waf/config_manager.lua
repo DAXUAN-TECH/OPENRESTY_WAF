@@ -85,11 +85,31 @@ end
 
 -- 设置配置值（更新数据库和缓存）
 function _M.set_config(config_key, config_value, description)
+    if not config_key or config_key == "" then
+        return false, "config_key 不能为空"
+    end
+    
     local value_str = tostring(config_value)
     if type(config_value) == "table" then
         value_str = cjson.encode(config_value)
     elseif type(config_value) == "boolean" then
         value_str = config_value and "1" or "0"
+    end
+    
+    -- 调试日志：记录配置更新（不记录敏感信息，只记录长度）
+    local value_len = value_str and #value_str or 0
+    local sensitive_keys = {"ssl_pem", "ssl_key", "admin_ssl_pem", "admin_ssl_key"}
+    local is_sensitive = false
+    for _, key in ipairs(sensitive_keys) do
+        if config_key:match(key) then
+            is_sensitive = true
+            break
+        end
+    end
+    if is_sensitive then
+        ngx.log(ngx.INFO, "config_manager.set_config: ", config_key, " = [", value_len, " chars] (sensitive)")
+    else
+        ngx.log(ngx.INFO, "config_manager.set_config: ", config_key, " = ", value_str)
     end
     
     local ok, err = pcall(function()
@@ -101,7 +121,11 @@ function _M.set_config(config_key, config_value, description)
                 description = COALESCE(VALUES(description), description),
                 updated_at = CURRENT_TIMESTAMP
         ]]
-        return mysql_pool.query(sql, config_key, value_str, description)
+        local res, query_err = mysql_pool.query(sql, config_key, value_str, description)
+        if not res then
+            return nil, query_err
+        end
+        return res
     end)
     
     if ok and not err then
@@ -110,10 +134,13 @@ function _M.set_config(config_key, config_value, description)
             local cache_key = CONFIG_CACHE_PREFIX .. config_key
             cache:set(cache_key, value_str, CONFIG_CACHE_TTL)
         end
+        ngx.log(ngx.INFO, "config_manager.set_config: ", config_key, " 更新成功")
         return true
     end
     
-    return false, err
+    local error_msg = err or "unknown error"
+    ngx.log(ngx.ERR, "config_manager.set_config: ", config_key, " 更新失败: ", error_msg)
+    return false, error_msg
 end
 
 -- 批量获取配置

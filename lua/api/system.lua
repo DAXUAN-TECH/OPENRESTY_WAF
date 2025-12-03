@@ -559,12 +559,87 @@ function _M.update_admin_ssl_config()
         return
     end
 
-    local args = api_utils.get_args()
+    -- 读取请求体（必须在解析参数之前）
+    ngx.req.read_body()
+    local body = ngx.req.get_body_data()
+    
+    -- 手动解析URL编码的body（处理包含换行符的长文本，如SSL证书）
+    local args = {}
+    if body then
+        local content_type = ngx.req.get_headers()["Content-Type"] or ""
+        if content_type:match("application/x-www-form-urlencoded") then
+            -- 手动解析URL编码的body，支持包含换行符的长文本
+            -- 注意：URL编码的body格式为 key1=value1&key2=value2&...
+            -- 对于包含换行符的长文本，value会被URL编码，需要正确解析
+            local pos = 1
+            while pos <= #body do
+                local key_start = pos
+                local key_end = body:find("=", key_start)
+                if not key_end then
+                    break
+                end
+                local key = body:sub(key_start, key_end - 1)
+                local value_start = key_end + 1
+                local value_end = body:find("&", value_start)
+                if not value_end then
+                    value_end = #body + 1
+                end
+                local value = body:sub(value_start, value_end - 1)
+                
+                -- URL解码
+                key = ngx.unescape_uri(key)
+                value = ngx.unescape_uri(value)
+                
+                -- 存储参数（如果key已存在，取第一个值）
+                if not args[key] then
+                    args[key] = value
+                end
+                
+                pos = value_end + 1
+            end
+        else
+            -- 非form-urlencoded格式，使用标准get_args
+            args = api_utils.get_args()
+        end
+    else
+        -- 如果没有body，使用标准get_args
+        args = api_utils.get_args()
+    end
+    
+    -- 调试日志：记录接收到的参数（不记录敏感信息，只记录长度）
+    local arg_info = {}
+    for k, v in pairs(args) do
+        if type(v) == "string" then
+            arg_info[#arg_info + 1] = k .. "(" .. #v .. " chars)"
+        else
+            arg_info[#arg_info + 1] = k .. "(" .. type(v) .. ")"
+        end
+    end
+    ngx.log(ngx.INFO, "update_admin_ssl_config: received args: ", table.concat(arg_info, ", "))
+    
     local ssl_enable = args.ssl_enable
     local server_name = args.server_name or ""
     local ssl_pem = args.ssl_pem or ""
     local ssl_key = args.ssl_key or ""
     local force_https = args.force_https or args.admin_force_https
+    
+    -- 如果参数为空，尝试从URI参数获取（兼容性处理）
+    if not ssl_enable then
+        local uri_args = ngx.req.get_uri_args()
+        ssl_enable = uri_args.ssl_enable
+        if not server_name or server_name == "" then
+            server_name = uri_args.server_name or ""
+        end
+        if not ssl_pem or ssl_pem == "" then
+            ssl_pem = uri_args.ssl_pem or ""
+        end
+        if not ssl_key or ssl_key == "" then
+            ssl_key = uri_args.ssl_key or ""
+        end
+        if not force_https then
+            force_https = uri_args.force_https or uri_args.admin_force_https
+        end
+    end
 
     if ssl_enable == nil then
         api_utils.json_response({ error = "ssl_enable 参数不能为空" }, 400)
@@ -598,37 +673,56 @@ function _M.update_admin_ssl_config()
             return
         end
     end
+    
+    -- 调试日志：记录接收到的参数（不记录敏感信息，只记录长度）
+    ngx.log(ngx.INFO, "update_admin_ssl_config: ssl_enable=", tostring(ssl_enable), 
+            ", server_name=", server_name and #server_name or 0, " chars",
+            ", ssl_pem=", ssl_pem and #ssl_pem or 0, " chars",
+            ", ssl_key=", ssl_key and #ssl_key or 0, " chars",
+            ", force_https=", tostring(force_https))
 
     -- 先写入数据库配置（确保状态持久化）
+    ngx.log(ngx.INFO, "update_admin_ssl_config: 开始写入数据库配置...")
+    
     local ok1, err1 = config_manager.set_config("admin_ssl_enable", enable_num, "是否为管理端启用HTTPS（1-启用，0-禁用）")
     if not ok1 then
+        ngx.log(ngx.ERR, "update_admin_ssl_config: 更新 admin_ssl_enable 失败: ", tostring(err1))
         api_utils.json_response({ error = "更新 admin_ssl_enable 失败: " .. tostring(err1) }, 500)
         return
     end
+    ngx.log(ngx.INFO, "update_admin_ssl_config: admin_ssl_enable 更新成功")
 
     local ok2, err2 = config_manager.set_config("admin_server_name", server_name, "管理端访问域名（例如：waf-admin.example.com，多域名请用空格分隔）")
     if not ok2 then
+        ngx.log(ngx.ERR, "update_admin_ssl_config: 更新 admin_server_name 失败: ", tostring(err2))
         api_utils.json_response({ error = "更新 admin_server_name 失败: " .. tostring(err2) }, 500)
         return
     end
+    ngx.log(ngx.INFO, "update_admin_ssl_config: admin_server_name 更新成功 (", #server_name, " chars)")
 
     local ok3, err3 = config_manager.set_config("admin_ssl_pem", ssl_pem, "管理端SSL证书内容（PEM格式）")
     if not ok3 then
+        ngx.log(ngx.ERR, "update_admin_ssl_config: 更新 admin_ssl_pem 失败: ", tostring(err3))
         api_utils.json_response({ error = "更新 admin_ssl_pem 失败: " .. tostring(err3) }, 500)
         return
     end
+    ngx.log(ngx.INFO, "update_admin_ssl_config: admin_ssl_pem 更新成功 (", #ssl_pem, " chars)")
 
     local ok4, err4 = config_manager.set_config("admin_ssl_key", ssl_key, "管理端SSL私钥内容（KEY格式）")
     if not ok4 then
+        ngx.log(ngx.ERR, "update_admin_ssl_config: 更新 admin_ssl_key 失败: ", tostring(err4))
         api_utils.json_response({ error = "更新 admin_ssl_key 失败: " .. tostring(err4) }, 500)
         return
     end
+    ngx.log(ngx.INFO, "update_admin_ssl_config: admin_ssl_key 更新成功 (", #ssl_key, " chars)")
 
     local ok5, err5 = config_manager.set_config("admin_force_https", force_num, "是否强制将管理端HTTP重定向到HTTPS（1-开启，0-关闭）")
     if not ok5 then
+        ngx.log(ngx.ERR, "update_admin_ssl_config: 更新 admin_force_https 失败: ", tostring(err5))
         api_utils.json_response({ error = "更新 admin_force_https 失败: " .. tostring(err5) }, 500)
         return
     end
+    ngx.log(ngx.INFO, "update_admin_ssl_config: admin_force_https 更新成功")
 
     -- 写入/更新实际的证书文件与 waf_admin_ssl.conf
     local ok_files, err_files = write_admin_ssl_files(enable_num, server_name, ssl_pem, ssl_key, force_num)

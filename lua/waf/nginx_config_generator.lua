@@ -725,13 +725,52 @@ function _M.generate_all_configs()
             else
                 -- 获取更详细的错误信息
                 local detailed_err = err_msg or "unknown error"
-                -- 尝试获取当前用户信息（如果可能）
+                
+                -- 尝试获取目录权限信息（用于诊断）
+                local dir_info = ""
+                local stat_cmd = "stat -c '所有者:%U:%G 权限:%a 类型:%F' '" .. upstream_dir .. "' 2>&1"
+                local stat_file = io.popen(stat_cmd)
+                if stat_file then
+                    local stat_output = stat_file:read("*a")
+                    stat_file:close()
+                    if stat_output and stat_output ~= "" then
+                        dir_info = ", 目录信息: " .. stat_output:gsub("\n", " "):gsub("%s+", " ")
+                    end
+                end
+                
+                -- 尝试获取当前进程用户信息
                 local current_user = os.getenv("USER") or os.getenv("USERNAME") or "unknown"
+                local worker_pid_ok, worker_pid = pcall(function() return ngx.worker.pid() end)
+                local pid = (worker_pid_ok and worker_pid) or "$$"
+                local process_user_cmd = "ps -o user= -p " .. pid .. " 2>&1"
+                local process_user_file = io.popen(process_user_cmd)
+                if process_user_file then
+                    local process_user_output = process_user_file:read("*a")
+                    process_user_file:close()
+                    if process_user_output and process_user_output ~= "" then
+                        current_user = process_user_output:gsub("%s+", "")
+                    end
+                end
+                
+                -- 尝试获取父目录权限信息
+                local parent_info = ""
+                local parent_stat_cmd = "stat -c '所有者:%U:%G 权限:%a' '" .. upstream_parent_dir .. "' 2>&1"
+                local parent_stat_file = io.popen(parent_stat_cmd)
+                if parent_stat_file then
+                    local parent_stat_output = parent_stat_file:read("*a")
+                    parent_stat_file:close()
+                    if parent_stat_output and parent_stat_output ~= "" then
+                        parent_info = ", 父目录信息: " .. parent_stat_output:gsub("\n", " "):gsub("%s+", " ")
+                    end
+                end
+                
                 ngx.log(ngx.ERR, "upstream目录无写入权限: ", upstream_dir, 
                     ", 错误: ", detailed_err,
-                    ", 当前用户: ", current_user,
-                    ", 请检查目录权限（应为 755 且所有者应为 waf:waf 或运行 OpenResty 的用户）")
-                return false, "upstream目录无写入权限: " .. upstream_dir .. " (错误: " .. detailed_err .. ")"
+                    ", 进程用户: ", current_user,
+                    dir_info,
+                    parent_info,
+                    ", 修复建议: chown -R waf:waf ", upstream_dir, " && chmod 755 ", upstream_dir)
+                return false, "upstream目录无写入权限: " .. upstream_dir .. " (错误: " .. detailed_err .. ", 进程用户: " .. current_user .. ")"
             end
             
             -- 为每个location生成upstream配置
@@ -832,13 +871,52 @@ function _M.generate_all_configs()
                     else
                         -- 获取更详细的错误信息
                         local detailed_err = err_msg or "unknown error"
-                        -- 尝试获取当前用户信息（如果可能）
+                        
+                        -- 尝试获取目录权限信息（用于诊断）
+                        local dir_info = ""
+                        local stat_cmd = "stat -c '所有者:%U:%G 权限:%a 类型:%F' '" .. upstream_dir .. "' 2>&1"
+                        local stat_file = io.popen(stat_cmd)
+                        if stat_file then
+                            local stat_output = stat_file:read("*a")
+                            stat_file:close()
+                            if stat_output and stat_output ~= "" then
+                                dir_info = ", 目录信息: " .. stat_output:gsub("\n", " "):gsub("%s+", " ")
+                            end
+                        end
+                        
+                        -- 尝试获取当前进程用户信息
                         local current_user = os.getenv("USER") or os.getenv("USERNAME") or "unknown"
+                        local worker_pid_ok, worker_pid = pcall(function() return ngx.worker.pid() end)
+                        local pid = (worker_pid_ok and worker_pid) or "$$"
+                        local process_user_cmd = "ps -o user= -p " .. pid .. " 2>&1"
+                        local process_user_file = io.popen(process_user_cmd)
+                        if process_user_file then
+                            local process_user_output = process_user_file:read("*a")
+                            process_user_file:close()
+                            if process_user_output and process_user_output ~= "" then
+                                current_user = process_user_output:gsub("%s+", "")
+                            end
+                        end
+                        
+                        -- 尝试获取父目录权限信息
+                        local parent_info = ""
+                        local parent_stat_cmd = "stat -c '所有者:%U:%G 权限:%a' '" .. upstream_parent_dir .. "' 2>&1"
+                        local parent_stat_file = io.popen(parent_stat_cmd)
+                        if parent_stat_file then
+                            local parent_stat_output = parent_stat_file:read("*a")
+                            parent_stat_file:close()
+                            if parent_stat_output and parent_stat_output ~= "" then
+                                parent_info = ", 父目录信息: " .. parent_stat_output:gsub("\n", " "):gsub("%s+", " ")
+                            end
+                        end
+                        
                         ngx.log(ngx.ERR, "upstream目录无写入权限: ", upstream_dir, 
                             ", 错误: ", detailed_err,
-                            ", 当前用户: ", current_user,
-                            ", 请检查目录权限（应为 755 且所有者应为 waf:waf 或运行 OpenResty 的用户）")
-                        return false, "upstream目录无写入权限: " .. upstream_dir .. " (错误: " .. detailed_err .. ")"
+                            ", 进程用户: ", current_user,
+                            dir_info,
+                            parent_info,
+                            ", 修复建议: chown -R waf:waf ", upstream_dir, " && chmod 755 ", upstream_dir)
+                        return false, "upstream目录无写入权限: " .. upstream_dir .. " (错误: " .. detailed_err .. ", 进程用户: " .. current_user .. ")"
                     end
                     
                     local upstream_fd = io.open(upstream_file, "w")

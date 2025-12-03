@@ -1068,13 +1068,20 @@ function _M.check_multiple(rule_ids)
     local is_in_whitelist = false
     local whitelist_rule_name = nil
     
+    ngx.log(ngx.INFO, "check_multiple: 开始检查白名单规则，规则ID列表: ", cjson.encode(rule_ids))
+    
     for _, rule_id in ipairs(rule_ids) do
         local rule_id_num = tonumber(rule_id)
         if rule_id_num then
+            ngx.log(ngx.INFO, "check_multiple: 检查规则ID: ", rule_id_num)
             local is_matched, matched_rule = check_specific_rule(client_ip, rule_id_num)
+            ngx.log(ngx.INFO, "check_multiple: 规则ID ", rule_id_num, " 检查结果 - is_matched: ", tostring(is_matched), 
+                    ", matched_rule: ", matched_rule and (matched_rule.rule_type or "unknown") or "nil")
+            
             if matched_rule then
                 if matched_rule.rule_type == "ip_whitelist" then
                     has_whitelist_rule = true
+                    ngx.log(ngx.INFO, "check_multiple: 发现IP白名单规则，规则ID: ", rule_id_num, ", 规则名称: ", matched_rule.rule_name or "unknown", ", IP匹配: ", tostring(is_matched))
                     if is_matched then
                         -- 在白名单中
                         is_in_whitelist = true
@@ -1084,9 +1091,11 @@ function _M.check_multiple(rule_ids)
                     end
                 elseif matched_rule.rule_type == "geo_whitelist" then
                     has_whitelist_rule = true
+                    ngx.log(ngx.INFO, "check_multiple: 发现地域白名单规则，规则ID: ", rule_id_num, ", 规则名称: ", matched_rule.rule_name or "unknown")
                     -- 地域白名单检查（由geo_block模块处理）
                     local geo_block = require "waf.geo_block"
                     local is_allowed = geo_block.check_whitelist(client_ip, rule_id_num)
+                    ngx.log(ngx.INFO, "check_multiple: 地域白名单检查结果 - is_allowed: ", tostring(is_allowed))
                     if is_allowed then
                         is_in_whitelist = true
                         whitelist_rule_name = matched_rule.rule_name
@@ -1094,9 +1103,14 @@ function _M.check_multiple(rule_ids)
                         break
                     end
                 end
+            else
+                ngx.log(ngx.INFO, "check_multiple: 规则ID ", rule_id_num, " 未匹配或规则不存在")
             end
         end
     end
+    
+    ngx.log(ngx.INFO, "check_multiple: 白名单检查总结 - has_whitelist_rule: ", tostring(has_whitelist_rule), 
+            ", is_in_whitelist: ", tostring(is_in_whitelist))
     
     -- 如果存在白名单规则，但IP不在白名单中，拒绝访问
     if has_whitelist_rule and not is_in_whitelist then

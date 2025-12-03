@@ -99,8 +99,9 @@ local function sanitize_upstream_name(value)
     -- 去除开头和结尾的下划线
     value = value:gsub("^_+", ""):gsub("_+$", "")
     -- 确保以字母或下划线开头（nginx upstream 名称必须以字母或下划线开头）
+    -- 注意：不在函数内添加 "upstream_" 前缀，因为调用者会手动添加
     if value ~= "" and not value:match("^[%a_]") then
-        value = "upstream_" .. value
+        value = "up_" .. value  -- 使用短前缀，避免与调用者的 "upstream_" 前缀重复
     end
     -- 如果为空，使用默认值
     if value == "" then
@@ -334,12 +335,28 @@ local function generate_http_server_config(proxy, upstream_name, backends)
                     end
                     
                     -- 如果后端服务器有路径，在proxy_pass中添加路径
-                    -- 确保 backend_path 是字符串类型
-                    if backend_path and backend_path ~= "" then
-                        local backend_path_str = tostring(backend_path)
+                    -- 确保 backend_path 正确转换为字符串，并且只有在非空时才拼接
+                    local backend_path_str = nil
+                    if backend_path then
+                        -- 处理 cjson.null 和 nil
+                        if backend_path == cjson.null then
+                            backend_path_str = nil
+                        else
+                            backend_path_str = tostring(backend_path)
+                            -- 去除前后空格
+                            backend_path_str = backend_path_str:gsub("^%s+", ""):gsub("%s+$", "")
+                            -- 如果为空字符串，设置为 nil
+                            if backend_path_str == "" then
+                                backend_path_str = nil
+                            end
+                        end
+                    end
+                    
+                    if backend_path_str and backend_path_str ~= "" then
+                        -- 有目标路径，拼接路径
                         config = config .. "        proxy_pass http://" .. location_upstream_name .. escape_nginx_value(backend_path_str) .. ";\n"
                     else
-                        -- 如果后端服务器没有路径，直接代理到根路径
+                        -- 没有目标路径，直接代理到根路径
                         config = config .. "        proxy_pass http://" .. location_upstream_name .. ";\n"
                     end
                 else

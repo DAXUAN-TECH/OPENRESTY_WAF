@@ -80,14 +80,7 @@ end
 local function serve_html_with_layout(filename, page_title, session)
     local content = read_html_file(filename)
     if not content then
-        ngx.status = 404
-        ngx.header.content_type = "text/html; charset=utf-8"
-        ngx.say([[
-<html><body>
-<h1>404 Not Found</h1>
-<p>File not found: ]] .. escape_html(filename) .. [[</p>
-</body></html>
-        ]])
+        error_pages.return_404(filename, "文件不存在: " .. filename)
         return
     end
     

@@ -348,7 +348,17 @@ function _M.init_worker()
             if gen_ok then
                 ngx.log(ngx.INFO, "Proxy configs initialized: ", gen_err or "success")
             else
-                ngx.log(ngx.WARN, "Failed to initialize proxy configs: ", gen_err or "unknown error")
+                -- 记录详细错误信息，但不阻止系统运行
+                local error_msg = gen_err or "unknown error"
+                ngx.log(ngx.WARN, "Failed to initialize proxy configs: ", error_msg)
+                
+                -- 如果是 DNS 解析错误，提供解决建议
+                if error_msg:match("no resolver") or error_msg:match("failed to resolve") then
+                    ngx.log(ngx.WARN, "DNS resolution error detected. Please check:")
+                    ngx.log(ngx.WARN, "1. MySQL host configuration in lua/config.lua (use IP address instead of domain name if possible)")
+                    ngx.log(ngx.WARN, "2. resolver directive in nginx.conf (should be configured in http block)")
+                    ngx.log(ngx.WARN, "3. Network connectivity and DNS server availability")
+                end
             end
         else
             ngx.log(ngx.WARN, "nginx_config_generator module not available, skipping proxy config initialization")

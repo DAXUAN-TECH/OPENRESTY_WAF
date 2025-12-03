@@ -123,14 +123,14 @@ function _M.set_config(config_key, config_value, description)
         ]]
         local res, query_err = mysql_pool.query(sql, config_key, value_str, description)
         if not res then
-            -- 查询失败，返回错误信息
-            return nil, query_err
+            -- 查询失败，抛出错误以便pcall捕获
+            error(query_err or "MySQL query failed")
         end
-        -- 查询成功，返回结果（可能是table，包含affected_rows等信息）
-        return res, nil
+        -- 查询成功，返回true表示成功
+        return true
     end)
     
-    -- pcall成功时，result是查询结果（可能是table），err是nil或错误信息
+    -- pcall成功时，result是函数返回值（true表示成功）
     -- pcall失败时，ok是false，result是错误信息
     if not ok then
         -- pcall失败，result是错误信息
@@ -139,22 +139,15 @@ function _M.set_config(config_key, config_value, description)
         return false, error_msg
     end
     
-    -- pcall成功，检查查询结果
-    local query_result, query_err = result, nil
-    if type(result) == "table" and result[2] then
-        -- 如果result是table且有两个元素，说明是 (res, err) 的格式
-        query_result = result[1]
-        query_err = result[2]
-    end
-    
-    if query_err or not query_result then
-        -- 查询失败
-        local error_msg = tostring(query_err or "unknown error")
-        ngx.log(ngx.ERR, "config_manager.set_config: ", config_key, " 更新失败（查询错误）: ", error_msg)
+    -- pcall成功，检查返回值
+    if not result then
+        -- 函数返回false或nil，说明操作失败
+        local error_msg = "操作失败，返回值为空"
+        ngx.log(ngx.ERR, "config_manager.set_config: ", config_key, " 更新失败: ", error_msg)
         return false, error_msg
     end
     
-    -- 查询成功，更新缓存
+    -- 操作成功，更新缓存
     if cache then
         local cache_key = CONFIG_CACHE_PREFIX .. config_key
         cache:set(cache_key, value_str, CONFIG_CACHE_TTL)

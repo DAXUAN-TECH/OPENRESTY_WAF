@@ -470,19 +470,18 @@
         }
         
         /* TCP/UDP 代理：优化服务器配置布局，增加间距和留白 */
-        /* 使用类名选择器，更兼容 */
-        .location-item.tcp-udp-mode .location-content {
-            padding: 12px 0;
-        }
-        
-        .location-item.tcp-udp-mode .location-backends {
-            padding: 0 8px;
+        /* 简化结构后，backend-row 直接作为 location-item 的子元素 */
+        .location-item.tcp-udp-mode {
+            padding: 12px 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
         }
         
         .location-item.tcp-udp-mode .backend-row {
             gap: 12px;
             padding: 12px 16px;
-            margin-bottom: 12px;
+            margin-bottom: 0;
             background: #ffffff;
             border: 1px solid #e0e0e0;
         }

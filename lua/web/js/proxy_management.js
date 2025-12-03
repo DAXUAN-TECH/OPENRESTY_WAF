@@ -223,10 +223,8 @@ const pageSize = 20;
                 </div>
                 `;
             } else {
-                // TCP/UDP 代理：不包含 location-path-section、location-divider 和 location-actions
+                // TCP/UDP 代理：简化结构，去掉不必要的嵌套（location-content 和 location-backends）
                 locationContentHtml = `
-                <div class="location-content">
-                    <div class="location-backends">
                         <div class="backend-row">
                             <div class="input-with-add address-input">
                 <input type="text" placeholder="IP地址" class="backend-address">
@@ -242,8 +240,6 @@ const pageSize = 20;
                                 <button type="button" class="btn-icon btn-remove-icon" onclick="removeBackendRow(this)" title="删除">−</button>
                             </div>
                         </div>
-                    </div>
-                </div>
                 `;
             }
             
@@ -335,8 +331,19 @@ const pageSize = 20;
         function removeBackendRow(button) {
             const backendRow = button.closest('.backend-row');
             if (backendRow) {
+                // 兼容简化后的结构（TCP/UDP）和完整结构（HTTP）
+                const locationItem = backendRow.closest('.location-item');
                 const locationBackends = backendRow.closest('.location-backends');
-                const backendRows = locationBackends.querySelectorAll('.backend-row');
+                let backendRows;
+                if (locationBackends) {
+                    // HTTP 代理：从 location-backends 中查找
+                    backendRows = locationBackends.querySelectorAll('.backend-row');
+                } else if (locationItem) {
+                    // TCP/UDP 代理：从 location-item 中直接查找
+                    backendRows = locationItem.querySelectorAll('.backend-row');
+                } else {
+                    return;
+                }
                 if (backendRows.length > 1) {
                     backendRow.remove();
                 } else {
@@ -1246,8 +1253,11 @@ const pageSize = 20;
                     // 遍历所有location-item
                     const locationItems = configSection.querySelectorAll('.location-item');
                     locationItems.forEach(locationItem => {
-                        // 遍历该location下的所有backend-row
-                        const backendRows = locationItem.querySelectorAll('.backend-row');
+                        // 遍历该location下的所有backend-row（兼容简化后的结构）
+                        // TCP/UDP 代理：backend-row 直接是 location-item 的子元素
+                        // HTTP 代理：backend-row 在 location-backends 内
+                        const locationBackends = locationItem.querySelector('.location-backends');
+                        const backendRows = locationBackends ? locationBackends.querySelectorAll('.backend-row') : locationItem.querySelectorAll('.backend-row');
                         backendRows.forEach(backendRow => {
                             // 收集该backend-row中的所有输入框
                             const addressInputs = backendRow.querySelectorAll('.backend-address');
@@ -1442,7 +1452,7 @@ const pageSize = 20;
                                     // 如果没有匹配的后端服务器，至少添加一个空行
                                     if (filteredBackends.length === 0) {
                                         addEditBackendRow(locationBackends);
-                                    } else {
+                    } else {
                                         filteredBackends.forEach((backend, backendIndex) => {
                                             addEditBackendRow(locationBackends);
                                             const backendRows = locationBackends.querySelectorAll('.backend-row');
@@ -1640,7 +1650,7 @@ const pageSize = 20;
                             const weight = parseInt(backendRow.querySelector('.backend-weight').value) || 1;
                             
                             // TCP/UDP 代理不支持 backend_path，不收集 targetPath
-                            if (address && port) {
+                if (address && port) {
                                 allBackends.push({
                                     backend_address: address,
                                     backend_port: port,

@@ -342,7 +342,14 @@ local function generate_http_server_config(proxy, upstream_name, backends, proje
     
     -- WAF封控检查（如果关联了防护规则）
     local ip_rule_ids = proxy.ip_rule_ids
+    local cjson = require "cjson"
+    ngx.log(ngx.INFO, "generate_http_server_config: proxy_id=", proxy.id, ", proxy_name=", proxy.proxy_name or "nil", 
+            ", ip_rule_ids type: ", type(ip_rule_ids), 
+            ", ip_rule_ids value: ", ip_rule_ids and (type(ip_rule_ids) == "table" and cjson.encode(ip_rule_ids) or tostring(ip_rule_ids)) or "nil",
+            ", is table: ", (ip_rule_ids and type(ip_rule_ids) == "table") and "yes" or "no",
+            ", table length: ", (ip_rule_ids and type(ip_rule_ids) == "table") and tostring(#ip_rule_ids) or "N/A")
     if ip_rule_ids and type(ip_rule_ids) == "table" and #ip_rule_ids > 0 then
+        ngx.log(ngx.INFO, "generate_http_server_config: 为代理 ", proxy.id, " 添加WAF封控检查，规则ID: ", table.concat(ip_rule_ids, ","))
         config = config .. "\n    # WAF封控检查（关联防护规则ID: " .. table.concat(ip_rule_ids, ",") .. "）\n"
         -- 将规则ID数组转换为Lua表字符串
         local rule_ids_str = "{"

@@ -872,20 +872,50 @@ function _M.check(rule_id)
     if rule_id then
         local rule_id_num = tonumber(rule_id)
         if rule_id_num then
-            local is_blocked, matched_rule = check_specific_rule(client_ip, rule_id_num)
-            if is_blocked then
-                -- 记录封控日志
-                log_block(client_ip, matched_rule, "manual")
-                
-                -- 记录监控指标
-                if config.metrics and config.metrics.enable then
-                    metrics.record_block("manual")
+            local is_matched, matched_rule = check_specific_rule(client_ip, rule_id_num)
+            if matched_rule then
+                if matched_rule.rule_type == "ip_whitelist" then
+                    -- 白名单匹配，允许通过
+                    return
+                elseif matched_rule.rule_type == "ip_blacklist" then
+                    -- 黑名单匹配，拒绝访问
+                    log_block(client_ip, matched_rule, "manual")
+                    
+                    -- 记录监控指标
+                    if config.metrics and config.metrics.enable then
+                        metrics.record_block("manual")
+                    end
+                    
+                    -- 返回 403
+                    error_pages.return_403(client_ip, "已被封控")
+                    return
+                elseif matched_rule.rule_type == "geo_whitelist" or matched_rule.rule_type == "geo_blacklist" then
+                    -- 地域规则检查（由geo_block模块处理）
+                    local geo_block = require "waf.geo_block"
+                    if matched_rule.rule_type == "geo_whitelist" then
+                        local is_allowed = geo_block.check_whitelist(client_ip, rule_id_num)
+                        if is_allowed then
+                            return  -- 在地域白名单中，允许通过
+                        end
+                    elseif matched_rule.rule_type == "geo_blacklist" then
+                        local is_blocked_geo = geo_block.check_blacklist(client_ip, rule_id_num)
+                        if is_blocked_geo then
+                            -- 记录封控日志
+                            log_block(client_ip, matched_rule, "manual")
+                            
+                            -- 记录监控指标
+                            if config.metrics and config.metrics.enable then
+                                metrics.record_block("manual")
+                            end
+                            
+                            -- 返回403错误
+                            error_pages.return_403(client_ip, "已被封控")
+                            return
+                        end
+                    end
                 end
-                
-                -- 返回 403
-                error_pages.return_403(client_ip, "已被封控")
             end
-            -- 白名单匹配或规则不匹配，允许通过
+            -- 规则不匹配或规则不存在，允许通过
             return
         end
     end

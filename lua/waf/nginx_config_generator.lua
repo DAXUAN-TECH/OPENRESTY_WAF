@@ -529,18 +529,15 @@ local function generate_http_server_config(proxy, upstream_name, backends, proje
             end
         end
         
-        -- 如果用户没有创建 location /，必须添加 location / 作为catch-all
-        -- 这样可以确保所有请求都匹配到某个location，避免Nginx使用默认行为
-        -- 注意：location / 必须放在所有其他location之后，优先级最低
-        -- 优化：直接重定向到@custom_404，避免重复的404处理逻辑
+        -- 如果用户没有创建 location /，不需要添加 location / 作为catch-all
+        -- 原因：当没有location匹配时，Nginx会尝试从root目录读取文件
+        -- 由于root设置为/dev/null，无法读取文件，会返回404
+        -- 这个404会触发error_page 404 = @custom_404，然后调用@custom_404
+        -- 因此不需要显式的location /，可以依赖root /dev/null和error_page机制
+        -- 注意：这样可以简化配置，避免重复的404处理逻辑
         if not has_root_location then
-            ngx.log(ngx.INFO, "generate_http_server_config: 代理 ", proxy.id, " (", proxy.proxy_name, ") 没有创建 location /，添加 location / 返回404")
-            config = config .. "\n    # 默认location（处理不匹配任何location的请求，返回404避免显示OpenResty默认页面）\n"
-            config = config .. "    # 注意：location / 必须放在所有其他location之后，作为catch-all\n"
-            config = config .. "    # 优化：直接重定向到@custom_404，避免重复的404处理逻辑\n"
-            config = config .. "    location / {\n"
-            config = config .. "        return 404;\n"
-            config = config .. "    }\n"
+            ngx.log(ngx.INFO, "generate_http_server_config: 代理 ", proxy.id, " (", proxy.proxy_name, ") 没有创建 location /，依赖root /dev/null和error_page机制返回404")
+            -- 不需要添加location /，依赖root /dev/null和error_page机制
         end
     else
         -- 如果没有location_paths，记录错误并返回503

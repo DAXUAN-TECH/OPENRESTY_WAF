@@ -212,13 +212,13 @@ function _M.create_proxy(proxy_data)
     -- 构建SQL
     local sql = [[
         INSERT INTO waf_proxy_configs 
-        (proxy_name, proxy_type, listen_port, listen_address, server_name, location_path, location_paths,
+        (proxy_name, proxy_type, listen_port, listen_address, server_name, location_paths,
          backend_type, load_balance,
          health_check_enable, health_check_interval, health_check_timeout,
          max_fails, fail_timeout, proxy_timeout, proxy_connect_timeout,
          proxy_send_timeout, proxy_read_timeout, ssl_enable, ssl_cert_path, ssl_key_path,
          description, ip_rule_ids, status)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ]]
     
     local listen_address = proxy_data.listen_address or "0.0.0.0"
@@ -227,7 +227,6 @@ function _M.create_proxy(proxy_data)
     if proxy_data.proxy_type == "http" then
         server_name = null_to_nil(proxy_data.server_name)
     end
-    local location_path = proxy_data.location_path or "/"
     
     -- 处理location_paths（多个location_path配置）
     local location_paths_json = nil
@@ -274,7 +273,6 @@ function _M.create_proxy(proxy_data)
         listen_port,
         listen_address,
         server_name,
-        location_path,
         location_paths_json,
         backend_type,
         load_balance,
@@ -382,8 +380,8 @@ function _M.list_proxies(params)
     
     -- 查询列表（LEFT JOIN规则表获取规则名称和类型）
     local offset = (page - 1) * page_size
-    local sql = string.format([[
-        SELECT p.id, p.proxy_name, p.proxy_type, p.listen_port, p.listen_address, p.server_name, p.location_path, p.location_paths,
+        local sql = string.format([[
+        SELECT p.id, p.proxy_name, p.proxy_type, p.listen_port, p.listen_address, p.server_name, p.location_paths,
                p.backend_type, p.load_balance,
                p.health_check_enable, p.health_check_interval, p.health_check_timeout,
                p.max_fails, p.fail_timeout, p.proxy_timeout, p.proxy_connect_timeout,
@@ -536,7 +534,7 @@ function _M.get_proxy(proxy_id)
     end
     
     local sql = [[
-        SELECT id, proxy_name, proxy_type, listen_port, listen_address, server_name, location_path, location_paths,
+        SELECT id, proxy_name, proxy_type, listen_port, listen_address, server_name, location_paths,
                backend_type, load_balance,
                health_check_enable, health_check_interval, health_check_timeout,
                max_fails, fail_timeout, proxy_timeout, proxy_connect_timeout,
@@ -776,7 +774,7 @@ function _M.update_proxy(proxy_id, proxy_data)
     local update_params = {}
     
     local fields_to_update = {
-        "proxy_name", "proxy_type", "listen_port", "listen_address", "server_name", "location_path", "location_paths",
+        "proxy_name", "proxy_type", "listen_port", "listen_address", "server_name", "location_paths",
         "backend_type", "load_balance",
         "health_check_enable", "health_check_interval", "health_check_timeout",
         "max_fails", "fail_timeout", "proxy_timeout", "proxy_connect_timeout",

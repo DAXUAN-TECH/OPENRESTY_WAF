@@ -1344,10 +1344,10 @@ const pageSize = 20;
                             let locationPaths = [];
                             if (proxy.location_paths && Array.isArray(proxy.location_paths) && proxy.location_paths.length > 0) {
                                 locationPaths = proxy.location_paths;
-                    } else {
-                                // 向后兼容：如果没有location_paths，使用location_path
+                            } else {
+                                // 如果没有location_paths，使用默认值
                                 locationPaths = [{
-                                    location_path: proxy.location_path || '/',
+                                    location_path: '/',
                                     backend_path: ''
                                 }];
                             }

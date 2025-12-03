@@ -356,6 +356,7 @@ local function generate_http_server_config(proxy, upstream_name, backends, proje
     end
     
     -- WAF封控检查（如果关联了防护规则）
+    -- 注意：如果同时需要IP访问检查和WAF封控检查，将它们合并到一个access_by_lua_block中
     local ip_rule_ids = proxy.ip_rule_ids
     local cjson = require "cjson"
     ngx.log(ngx.INFO, "generate_http_server_config: proxy_id=", proxy.id, ", proxy_name=", proxy.proxy_name or "nil", 
@@ -363,42 +364,77 @@ local function generate_http_server_config(proxy, upstream_name, backends, proje
             ", ip_rule_ids value: ", ip_rule_ids and (type(ip_rule_ids) == "table" and cjson.encode(ip_rule_ids) or tostring(ip_rule_ids)) or "nil",
             ", is table: ", (ip_rule_ids and type(ip_rule_ids) == "table") and "yes" or "no",
             ", table length: ", (ip_rule_ids and type(ip_rule_ids) == "table") and tostring(#ip_rule_ids) or "N/A")
-    if ip_rule_ids and type(ip_rule_ids) == "table" and #ip_rule_ids > 0 then
-        ngx.log(ngx.INFO, "generate_http_server_config: 为代理 ", proxy.id, " 添加WAF封控检查，规则ID: ", table.concat(ip_rule_ids, ","))
-        config = config .. "\n    # WAF封控检查（关联防护规则ID: " .. table.concat(ip_rule_ids, ",") .. "）\n"
-        -- 将规则ID数组转换为Lua表字符串
-        local rule_ids_str = "{"
-        for i, rule_id in ipairs(ip_rule_ids) do
-            if i > 1 then
-                rule_ids_str = rule_ids_str .. ","
-            end
-            rule_ids_str = rule_ids_str .. rule_id
+    
+    local has_waf_check = ip_rule_ids and type(ip_rule_ids) == "table" and #ip_rule_ids > 0
+    
+    -- 如果同时需要IP访问检查和WAF封控检查，合并到一个access_by_lua_block中
+    if need_ip_block_check or has_waf_check then
+        config = config .. "\n    # 访问控制检查\n"
+        if need_ip_block_check then
+            config = config .. "    # 禁止使用IP访问（已配置域名）\n"
         end
-        rule_ids_str = rule_ids_str .. "}"
-        config = config .. "    set $proxy_ip_rule_ids '" .. rule_ids_str .. "';\n"
+        if has_waf_check then
+            config = config .. "    # WAF封控检查（关联防护规则ID: " .. table.concat(ip_rule_ids, ",") .. "）\n"
+        end
+        
+        if has_waf_check then
+            -- 将规则ID数组转换为Lua表字符串
+            local rule_ids_str = "{"
+            for i, rule_id in ipairs(ip_rule_ids) do
+                if i > 1 then
+                    rule_ids_str = rule_ids_str .. ","
+                end
+                rule_ids_str = rule_ids_str .. rule_id
+            end
+            rule_ids_str = rule_ids_str .. "}"
+            config = config .. "    set $proxy_ip_rule_ids '" .. rule_ids_str .. "';\n"
+        end
+        
         config = config .. "    access_by_lua_block {\n"
-        config = config .. "        local rule_ids_str = ngx.var.proxy_ip_rule_ids\n"
-        config = config .. "        local rule_ids = {}\n"
-        config = config .. "        if rule_ids_str then\n"
-        config = config .. "            -- 解析Lua表字符串（格式：{1,2,3}）\n"
-        config = config .. "            local ids_str = rule_ids_str:match(\"^%s*{%s*(.-)%s*}%s*$\")\n"
-        config = config .. "            if ids_str then\n"
-        config = config .. "                for id_str in ids_str:gmatch(\"([^,]+)\") do\n"
-        config = config .. "                    local id = tonumber(id_str:match(\"^%s*(.-)%s*$\"))\n"
-        config = config .. "                    if id then\n"
-        config = config .. "                        table.insert(rule_ids, id)\n"
-        config = config .. "                    end\n"
-        config = config .. "                end\n"
-        config = config .. "            else\n"
-        config = config .. "                -- 兼容旧格式：单个规则ID\n"
-        config = config .. "                local single_id = tonumber(rule_ids_str)\n"
-        config = config .. "                if single_id then\n"
-        config = config .. "                    rule_ids = {single_id}\n"
-        config = config .. "                end\n"
-        config = config .. "            end\n"
-        config = config .. "        end\n"
-        config = config .. "        require(\"waf.ip_block\").check_multiple(rule_ids)\n"
+        
+        -- IP访问检查（优先级最高，先执行）
+        if need_ip_block_check then
+            config = config .. "        -- 禁止使用IP访问检查\n"
+            config = config .. "        local ip_utils = require \"waf.ip_utils\"\n"
+            config = config .. "        local host = ngx.var.host or ngx.var.http_host\n"
+            config = config .. "        if host and ip_utils.is_ip_host(host) then\n"
+            config = config .. "            ngx.log(ngx.WARN, \"IP access blocked: Host header is IP address: \", host)\n"
+            config = config .. "            ngx.status = 403\n"
+            config = config .. "            ngx.header.content_type = \"text/html; charset=utf-8\"\n"
+            config = config .. "            ngx.say(\"<!DOCTYPE html><html><head><meta charset='UTF-8'><title>禁止IP访问</title></head><body><h1>403 Forbidden</h1><p>禁止使用IP地址访问，请使用配置的域名访问。</p></body></html>\")\n"
+            config = config .. "            ngx.exit(403)\n"
+            config = config .. "        end\n"
+        end
+        
+        -- WAF封控检查（在IP访问检查之后执行）
+        if has_waf_check then
+            config = config .. "        -- WAF封控检查\n"
+            config = config .. "        local rule_ids_str = ngx.var.proxy_ip_rule_ids\n"
+            config = config .. "        local rule_ids = {}\n"
+            config = config .. "        if rule_ids_str then\n"
+            config = config .. "            -- 解析Lua表字符串（格式：{1,2,3}）\n"
+            config = config .. "            local ids_str = rule_ids_str:match(\"^%s*{%s*(.-)%s*}%s*$\")\n"
+            config = config .. "            if ids_str then\n"
+            config = config .. "                for id_str in ids_str:gmatch(\"([^,]+)\") do\n"
+            config = config .. "                    local id = tonumber(id_str:match(\"^%s*(.-)%s*$\"))\n"
+            config = config .. "                    if id then\n"
+            config = config .. "                        table.insert(rule_ids, id)\n"
+            config = config .. "                    end\n"
+            config = config .. "                end\n"
+            config = config .. "            else\n"
+            config = config .. "                -- 兼容旧格式：单个规则ID\n"
+            config = config .. "                local single_id = tonumber(rule_ids_str)\n"
+            config = config .. "                if single_id then\n"
+            config = config .. "                    rule_ids = {single_id}\n"
+            config = config .. "                end\n"
+            config = config .. "            end\n"
+            config = config .. "        end\n"
+            config = config .. "        require(\"waf.ip_block\").check_multiple(rule_ids)\n"
+        end
+        
         config = config .. "    }\n"
+    else
+        ngx.log(ngx.INFO, "generate_http_server_config: proxy_id=", proxy.id, ", proxy_name=", proxy.proxy_name, ", 没有关联防护规则或规则为空，跳过WAF封控检查")
     end
     
     -- 日志采集

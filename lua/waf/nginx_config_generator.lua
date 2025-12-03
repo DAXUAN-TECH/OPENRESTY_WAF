@@ -295,8 +295,6 @@ local function generate_http_server_config(proxy, upstream_name, backends, proje
         config = config .. "    ssl_prefer_server_ciphers off;\n"
         config = config .. "    ssl_session_cache shared:SSL:10m;\n"
         config = config .. "    ssl_session_timeout 10m;\n"
-        -- 使用独立指令启用 HTTP/2，避免在 listen 指令上使用已废弃的 \"listen ... http2\" 形式
-        config = config .. "    http2 on;\n"
     end
     
     -- WAF封控检查（如果关联了防护规则）

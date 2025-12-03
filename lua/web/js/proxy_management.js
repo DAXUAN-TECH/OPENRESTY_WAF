@@ -687,8 +687,19 @@ const pageSize = 20;
         function removeEditBackendRow(button) {
             const backendRow = button.closest('.backend-row');
             if (backendRow) {
+                // 兼容简化后的结构（TCP/UDP）和完整结构（HTTP）
+                const locationItem = backendRow.closest('.location-item');
                 const locationBackends = backendRow.closest('.location-backends');
-                const backendRows = locationBackends.querySelectorAll('.backend-row');
+                let backendRows;
+                if (locationBackends) {
+                    // HTTP 代理：从 location-backends 中查找
+                    backendRows = locationBackends.querySelectorAll('.backend-row');
+                } else if (locationItem) {
+                    // TCP/UDP 代理：从 location-item 中直接查找
+                    backendRows = locationItem.querySelectorAll('.backend-row');
+                } else {
+                    return;
+                }
                 if (backendRows.length > 1) {
                     backendRow.remove();
                 } else {

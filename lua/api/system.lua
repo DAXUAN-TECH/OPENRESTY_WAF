@@ -190,7 +190,8 @@ local function update_waf_conf_for_admin_ssl(enabled, server_name, force_https)
 
     -- 2) 如果启用 SSL，则插入 include 行
     if enabled == 1 then
-        local include_line = "    include $project_root/conf.d/vhost_conf/waf_admin_ssl.conf;\n"
+        -- 使用绝对路径，而不是 $project_root 变量（因为部署脚本可能不会替换 waf.conf 中的变量）
+        local include_line = "    include " .. project_root .. "/conf.d/vhost_conf/waf_admin_ssl.conf;\n"
         local replaced = false
         -- 优先插在 server_name 行之后
         local new_content, n = content:gsub("(server_name%s+.-;%s*\n)", "%1" .. include_line, 1)

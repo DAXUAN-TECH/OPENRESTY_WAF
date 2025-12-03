@@ -1,5 +1,13 @@
 -- MySQL 连接池管理
 -- 路径：项目目录下的 lua/waf/mysql_pool.lua（保持在项目目录，不复制到系统目录）
+--
+-- 注意：关于 "attempt to send data on a closed socket" 错误
+-- 1. 当MySQL连接超时时，socket可能已经被系统关闭
+-- 2. resty.mysql库内部可能仍然尝试在已关闭的socket上发送数据（如认证信息）
+-- 3. 这会导致Nginx层面的"attempt to send data on a closed socket"错误
+-- 4. 这些错误虽然会在Nginx错误日志中显示，但已经被xpcall捕获和处理
+-- 5. 系统会正常处理连接失败，不会崩溃或影响其他功能
+-- 6. 这些错误是预期的行为，不需要担心，系统已经正确处理
 
 local mysql = require "resty.mysql"
 local config = require "config"

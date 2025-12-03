@@ -1041,6 +1041,23 @@ function _M.generate_all_configs()
             proxy.location_paths = nil
         end
         
+        -- 解析ip_rule_ids JSON字段
+        if proxy.ip_rule_ids then
+            local ok, decoded_rule_ids = pcall(cjson.decode, proxy.ip_rule_ids)
+            if ok and decoded_rule_ids and type(decoded_rule_ids) == "table" and #decoded_rule_ids > 0 then
+                proxy.ip_rule_ids = decoded_rule_ids
+                ngx.log(ngx.INFO, "generate_all_configs: proxy_id=", proxy.id, ", proxy_name=", proxy.proxy_name, ", decoded rule_ids: ", cjson.encode(decoded_rule_ids), ", count: ", #decoded_rule_ids)
+            else
+                local raw_value = proxy.ip_rule_ids
+                proxy.ip_rule_ids = nil
+                if raw_value and raw_value ~= "" then
+                    ngx.log(ngx.WARN, "generate_all_configs: proxy_id=", proxy.id, ", proxy_name=", proxy.proxy_name, ", failed to decode ip_rule_ids, raw value: ", tostring(raw_value))
+                end
+            end
+        else
+            proxy.ip_rule_ids = nil
+        end
+        
         -- 查询后端服务器并生成upstream配置
         -- 注意：只支持upstream类型（多个后端服务器），不再支持single类型
         local backends = nil

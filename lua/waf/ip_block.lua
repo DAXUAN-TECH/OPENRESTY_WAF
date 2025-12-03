@@ -1057,9 +1057,21 @@ function _M.check_multiple(rule_ids)
         local rule_id_num = tonumber(rule_id)
         if rule_id_num then
             local is_whitelisted, matched_rule = check_specific_rule(client_ip, rule_id_num)
-            if is_whitelisted and matched_rule and matched_rule.rule_type == "ip_whitelist" then
-                -- 在白名单中，直接允许通过
-                return
+            if is_whitelisted and matched_rule then
+                -- 检查规则类型是否为白名单
+                if matched_rule.rule_type == "ip_whitelist" then
+                    -- 在白名单中，直接允许通过
+                    ngx.log(ngx.INFO, "check_multiple: IP ", client_ip, " is whitelisted by rule_id=", rule_id_num, ", rule_name=", matched_rule.rule_name or "unknown")
+                    return
+                elseif matched_rule.rule_type == "geo_whitelist" then
+                    -- 地域白名单检查（由geo_block模块处理）
+                    local geo_block = require "waf.geo_block"
+                    local is_allowed = geo_block.check_whitelist(client_ip, rule_id_num)
+                    if is_allowed then
+                        ngx.log(ngx.INFO, "check_multiple: IP ", client_ip, " is geo-whitelisted by rule_id=", rule_id_num, ", rule_name=", matched_rule.rule_name or "unknown")
+                        return  -- 在地域白名单中，允许通过
+                    end
+                end
             end
         end
     end

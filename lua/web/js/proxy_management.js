@@ -1367,21 +1367,34 @@ const pageSize = 20;
                                     // 清空默认的后端行
                                     locationBackends.innerHTML = '';
                                     
-                                    proxy.backends.forEach((backend, backendIndex) => {
-                                        addEditBackendRow(locationBackends);
-                                        const backendRows = locationBackends.querySelectorAll('.backend-row');
-                                        const lastBackendRow = backendRows[backendRows.length - 1];
-                                        
-                                        lastBackendRow.querySelector('.backend-address').value = backend.backend_address;
-                                        lastBackendRow.querySelector('.backend-port').value = backend.backend_port;
-                                        lastBackendRow.querySelector('.backend-weight').value = backend.weight || 1;
-                                        
-                                        // 设置目标路径（如果存在）
-                                        const targetPathInput = lastBackendRow.querySelector('.location-backend-path-input');
-                                        if (targetPathInput) {
-                                            targetPathInput.value = loc.backend_path || backend.backend_path || '';
-                                        }
+                                    // 只显示属于当前 location 的后端服务器（通过 location_path 匹配）
+                                    const currentLocationPath = loc.location_path || '/';
+                                    const filteredBackends = proxy.backends.filter(backend => {
+                                        // 匹配 backend.location_path 和当前 location 的 location_path
+                                        const backendLocationPath = backend.location_path || '/';
+                                        return backendLocationPath === currentLocationPath;
                                     });
+                                    
+                                    // 如果没有匹配的后端服务器，至少添加一个空行
+                                    if (filteredBackends.length === 0) {
+                                        addEditBackendRow(locationBackends);
+                                    } else {
+                                        filteredBackends.forEach((backend, backendIndex) => {
+                                            addEditBackendRow(locationBackends);
+                                            const backendRows = locationBackends.querySelectorAll('.backend-row');
+                                            const lastBackendRow = backendRows[backendRows.length - 1];
+                                            
+                                            lastBackendRow.querySelector('.backend-address').value = backend.backend_address;
+                                            lastBackendRow.querySelector('.backend-port').value = backend.backend_port;
+                                            lastBackendRow.querySelector('.backend-weight').value = backend.weight || 1;
+                                            
+                                            // 设置目标路径（如果存在）
+                                            const targetPathInput = lastBackendRow.querySelector('.location-backend-path-input');
+                                            if (targetPathInput) {
+                                                targetPathInput.value = loc.backend_path || backend.backend_path || '';
+                                            }
+                                        });
+                                    }
                                 }
                             });
                     } else {

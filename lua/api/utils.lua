@@ -11,7 +11,23 @@ function _M.json_response(data, status_code)
     status_code = status_code or 200
     ngx.status = status_code
     ngx.header.content_type = "application/json; charset=utf-8"
-    ngx.say(cjson.encode(data))
+    
+    -- 确保空表序列化为数组而不是对象
+    -- 保存原始设置
+    local old_encode_empty_table_as_object = cjson.encode_empty_table_as_object
+    if old_encode_empty_table_as_object then
+        cjson.encode_empty_table_as_object(false)
+    end
+    
+    -- 序列化数据
+    local json_str = cjson.encode(data)
+    
+    -- 恢复原始设置
+    if old_encode_empty_table_as_object then
+        cjson.encode_empty_table_as_object(old_encode_empty_table_as_object)
+    end
+    
+    ngx.say(json_str)
     ngx.exit(status_code)
 end
 

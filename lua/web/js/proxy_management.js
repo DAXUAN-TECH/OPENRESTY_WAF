@@ -1560,7 +1560,7 @@ const pageSize = 20;
                 proxyData.listen_address = document.getElementById('edit-tcp-udp-listen-address').value;
                 // TCP/UDP 代理不支持监听域名，设置为 null
                 proxyData.server_name = null;
-            } else if (proxyType === 'tcp' || proxyType === 'udp') {
+                
                 // TCP/UDP代理：从新的location结构收集后端服务器
                 const configSection = document.getElementById('edit-config-section');
                 const allBackends = [];
@@ -1575,11 +1575,13 @@ const pageSize = 20;
                             const port = parseInt(backendRow.querySelector('.backend-port').value);
                             const weight = parseInt(backendRow.querySelector('.backend-weight').value) || 1;
                             
-                if (address && port) {
+                            // TCP/UDP 代理不支持 backend_path，不收集 targetPath
+                            if (address && port) {
                                 allBackends.push({
                                     backend_address: address,
                                     backend_port: port,
                                     weight: weight
+                                    // 注意：TCP/UDP 代理不包含 backend_path
                                 });
                             }
                         });

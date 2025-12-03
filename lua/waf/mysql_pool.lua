@@ -180,7 +180,35 @@ function _M.get_connection()
             end
         end
         
+        -- 检查是否是认证错误（1045, 28000），认证错误不应该进行DNS重试
+        local is_auth_error = false
+        if errcode == 1045 or (sqlstate and sqlstate == "28000") then
+            is_auth_error = true
+        elseif err and (err:match("Access denied") or err:match("1045") or err:match("28000")) then
+            is_auth_error = true
+        end
+        
+        -- 如果是认证错误，直接返回，不进行DNS重试
+        if is_auth_error then
+            local error_msg = err or "unknown error"
+            local error_details = ""
+            if errcode then
+                error_details = " (errcode: " .. tostring(errcode)
+                if sqlstate then
+                    error_details = error_details .. ", sqlstate: " .. tostring(sqlstate)
+                end
+                error_details = error_details .. ")"
+            end
+            ngx.log(ngx.ERR, "MySQL authentication failed: ", error_msg, error_details, " (host: ", mysql_host, ", original: ", config.mysql.host, ")")
+            ngx.log(ngx.ERR, "Authentication errors cannot be resolved by DNS retry. Please check:")
+            ngx.log(ngx.ERR, "1. MySQL username and password in lua/config.lua")
+            ngx.log(ngx.ERR, "2. MySQL user privileges and host restrictions")
+            ngx.log(ngx.ERR, "3. MySQL user exists and has access from this host")
+            return nil, error_msg
+        end
+        
         -- 连接失败时，如果使用的是域名，清除缓存并重新解析（应对动态 IP 变化）
+        -- 注意：只有非认证错误才会进行DNS重试
         local original_host = config.mysql.host
         if not original_host:match("^%d+%.%d+%.%d+%.%d+$") then
             local old_ip = resolved_host_cache.ip

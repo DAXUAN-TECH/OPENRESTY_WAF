@@ -708,10 +708,11 @@ local function check_specific_rule(client_ip, rule_id)
         
         if rule_type == "geo_whitelist" then
             -- 地域白名单：匹配则允许通过，不匹配则拒绝
+            -- 注意：返回true表示匹配成功（白名单），第二个返回值是规则信息
             if is_match then
-                return false, nil  -- 白名单匹配，允许通过
+                return true, rule  -- 白名单匹配，允许通过
             else
-                return true, rule  -- 白名单不匹配，拒绝访问
+                return false, nil  -- 白名单不匹配，不在白名单中
             end
         else
             -- 地域黑名单：匹配则拒绝，不匹配则允许

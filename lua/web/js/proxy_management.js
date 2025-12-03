@@ -1766,8 +1766,11 @@ const pageSize = 20;
                 if (configSection) {
                     const locationItems = configSection.querySelectorAll('.location-item');
                     locationItems.forEach(locationItem => {
+                        // 兼容简化后的结构（TCP/UDP）和完整结构（HTTP）
+                        // HTTP 代理：backend-row 在 location-backends 内
+                        // TCP/UDP 代理：backend-row 直接是 location-item 的子元素
                         const locationBackends = locationItem.querySelector('.location-backends');
-                        const backendRows = locationBackends ? locationBackends.querySelectorAll('.backend-row') : [];
+                        const backendRows = locationBackends ? locationBackends.querySelectorAll('.backend-row') : locationItem.querySelectorAll('.backend-row');
                         backendRows.forEach(backendRow => {
                             const address = backendRow.querySelector('.backend-address').value.trim();
                             const port = parseInt(backendRow.querySelector('.backend-port').value);

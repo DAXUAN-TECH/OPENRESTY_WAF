@@ -55,7 +55,7 @@ local function generate_upstream_config_for_location(proxy, backends, upstream_n
     end
     
     if not upstream_name then
-        upstream_name = "upstream_" .. proxy.id
+        upstream_name = "upstream_" .. tostring(proxy.id)
     end
     
     local config = "upstream " .. upstream_name .. " {\n"
@@ -121,7 +121,7 @@ local function generate_upstream_config(proxy, backends)
         return "", nil
     end
     
-    local upstream_name = "upstream_" .. proxy.id
+    local upstream_name = "upstream_" .. tostring(proxy.id)
     local config = generate_upstream_config_for_location(proxy, backends, upstream_name)
     if config then
         return config, upstream_name
@@ -223,7 +223,10 @@ local function generate_http_server_config(proxy, upstream_name, backends)
                 config = config .. "\n    location " .. escape_nginx_value(loc.location_path) .. " {\n"
                 
                 -- 为每个location使用独立的upstream配置
-                local location_upstream_name = "upstream_" .. proxy.id .. "_loc_" .. loc_index
+                -- 确保 proxy.id 和 loc_index 都是字符串类型
+                local proxy_id_str = tostring(proxy.id)
+                local loc_index_str = tostring(loc_index)
+                local location_upstream_name = "upstream_" .. proxy_id_str .. "_loc_" .. loc_index_str
                 
                 -- 筛选属于当前location的后端服务器
                 local location_backends = {}
@@ -270,8 +273,10 @@ local function generate_http_server_config(proxy, upstream_name, backends)
                     end
                     
                     -- 如果后端服务器有路径，在proxy_pass中添加路径
+                    -- 确保 backend_path 是字符串类型
                     if backend_path and backend_path ~= "" then
-                        config = config .. "        proxy_pass http://" .. location_upstream_name .. escape_nginx_value(backend_path) .. ";\n"
+                        local backend_path_str = tostring(backend_path)
+                        config = config .. "        proxy_pass http://" .. location_upstream_name .. escape_nginx_value(backend_path_str) .. ";\n"
                     else
                         -- 如果后端服务器没有路径，直接代理到根路径
                         config = config .. "        proxy_pass http://" .. location_upstream_name .. ";\n"
@@ -335,7 +340,7 @@ local function generate_stream_upstream_config(proxy, backends)
         return ""
     end
     
-    local upstream_name = "stream_upstream_" .. proxy.id
+    local upstream_name = "stream_upstream_" .. tostring(proxy.id)
     local config = "upstream " .. upstream_name .. " {\n"
     
     -- 负载均衡算法

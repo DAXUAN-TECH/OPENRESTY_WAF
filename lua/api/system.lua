@@ -125,7 +125,7 @@ local function write_admin_ssl_files(enabled, server_name, ssl_pem, ssl_key, for
     key_file:write(ssl_key)
     key_file:close()
 
-    -- 写入管理端 server 的附加 SSL 配置（由 waf.conf include）
+    -- 写入管理端 server 的附加 SSL 配置（由 waf.conf 动态 include）
     local conf, ferr = io.open(admin_conf_path, "w")
     if not conf then
         return false, "写入管理端SSL配置文件失败: " .. (ferr or "unknown error")
@@ -143,13 +143,99 @@ local function write_admin_ssl_files(enabled, server_name, ssl_pem, ssl_key, for
     conf:write("    ssl_prefer_server_ciphers off;\n")
     conf:write("    ssl_session_cache shared:SSL:10m;\n")
     conf:write("    ssl_session_timeout 10m;\n")
-    -- 如果开启强制HTTPS，则在同一server内基于scheme做301跳转
-    if tonumber(force_https or 0) == 1 then
-        conf:write("    if ($scheme = http) {\n")
-        conf:write("        return 301 https://$host$request_uri;\n")
-        conf:write("    }\n")
-    end
     conf:close()
+
+    return true
+end
+
+-- 更新 waf.conf 中的管理端 SSL 相关配置：
+-- 1. 根据 enabled 决定是否插入 include waf_admin_ssl.conf 行
+-- 2. 当启用 SSL 时，更新 server_name 为传入的域名
+-- 3. 当 force_https=1 时，在 waf.conf 中插入 HTTP→HTTPS 强制跳转配置；force_https=0 时移除
+local function update_waf_conf_for_admin_ssl(enabled, server_name, force_https)
+    local project_root = path_utils.get_project_root()
+    if not project_root or project_root == "" then
+        return false, "无法获取项目根目录（project_root）"
+    end
+
+    local waf_conf_path = project_root .. "/conf.d/vhost_conf/waf.conf"
+    local f, err = io.open(waf_conf_path, "r")
+    if not f then
+        return false, "读取 waf.conf 失败: " .. (err or "unknown error")
+    end
+    local content = f:read("*all")
+    f:close()
+    if not content or content == "" then
+        return false, "waf.conf 内容为空"
+    end
+
+    enabled = tonumber(enabled) or 0
+    local force_num = tonumber(force_https or 0) or 0
+
+    -- 1) 始终先移除旧版本可能遗留的 include 行，避免重复
+    content = content:gsub("\n%s*include%s+%$project_root/conf%.d/vhost_conf/waf_admin_ssl%.conf;%s*\n", "\n")
+
+    -- 2) 如果启用 SSL，则插入 include 行
+    if enabled == 1 then
+        local include_line = "    include $project_root/conf.d/vhost_conf/waf_admin_ssl.conf;\n"
+        local replaced = false
+        -- 优先插在 server_name 行之后
+        local new_content, n = content:gsub("(server_name%s+.-;%s*\n)", "%1" .. include_line, 1)
+        if n > 0 then
+            content = new_content
+            replaced = true
+        end
+        if not replaced then
+            -- 退而求其次：插在 listen 80; 之后
+            new_content, n = content:gsub("(listen%s+80%s*;%s*\n)", "%1" .. include_line, 1)
+            if n > 0 then
+                content = new_content
+                replaced = true
+            end
+        end
+        if not replaced then
+            -- 再不行就追加在 server 块末尾（理论上不会走到这里）
+            content = content:gsub("(%s*}%s*)$", "\n" .. include_line .. "%1")
+        end
+    end
+
+    -- 3) 启用 SSL 时，如果提供了域名，则更新 server_name 行（仅更新第一处）
+    if enabled == 1 and server_name and server_name ~= "" then
+        local new_line = "    server_name  " .. server_name .. ";"
+        local new_content, n = content:gsub("server_name%s+.-;", new_line, 1)
+        if n > 0 then
+            content = new_content
+        end
+    end
+
+    -- 4) 处理强制跳转配置：先移除旧的标记块
+    content = content:gsub("\n%s*# 管理端 HTTPS 强制跳转开始（自动生成，请勿手工修改）.-# 管理端 HTTPS 强制跳转结束%s*\n", "\n")
+
+    if enabled == 1 and force_num == 1 then
+        local redirect_block = [[
+
+    # 管理端 HTTPS 强制跳转开始（自动生成，请勿手工修改）
+    if ($scheme = http) {
+        return 301 https://$host$request_uri;
+    }
+    # 管理端 HTTPS 强制跳转结束
+]]
+        -- 将重定向块插入到 charset utf-8; 之后，保持结构清晰
+        local new_content, n = content:gsub("(charset%s+utf%-8;%s*\n)", "%1" .. redirect_block .. "\n", 1)
+        if n > 0 then
+            content = new_content
+        else
+            -- 如果找不到 charset 行，则直接在 server 块中追加
+            content = content:gsub("(%s*}%s*)$", redirect_block .. "%1")
+        end
+    end
+
+    local wf, werr = io.open(waf_conf_path, "w")
+    if not wf then
+        return false, "写入 waf.conf 失败: " .. (werr or "unknown error")
+    end
+    wf:write(content)
+    wf:close()
 
     return true
 end
@@ -535,6 +621,13 @@ function _M.update_admin_ssl_config()
     local ok_files, err_files = write_admin_ssl_files(enable_num, server_name, ssl_pem, ssl_key, force_num)
     if not ok_files then
         api_utils.json_response({ error = "写入管理端SSL文件失败: " .. tostring(err_files) }, 500)
+        return
+    end
+
+    -- 同步更新 waf.conf 中的 include 与强制跳转配置
+    local ok_waf, err_waf = update_waf_conf_for_admin_ssl(enable_num, server_name, force_num)
+    if not ok_waf then
+        api_utils.json_response({ error = "更新 waf.conf 失败: " .. tostring(err_waf) }, 500)
         return
     end
 

@@ -676,10 +676,10 @@ const pageSize = 20;
                 if (currentBackendRow) {
                     currentBackendRow.parentNode.insertBefore(backendRow, currentBackendRow.nextSibling);
                 } else {
-                    locationBackends.appendChild(backendRow);
+                    container.appendChild(backendRow);
                 }
             } else {
-                locationBackends.appendChild(backendRow);
+                container.appendChild(backendRow);
             }
         }
         
@@ -1572,20 +1572,31 @@ const pageSize = 20;
                                 }
                             });
                     } else {
-                            // TCP/UDP代理：直接创建location项，不包含匹配路径
+                            // TCP/UDP代理：直接创建location项，不包含匹配路径和 location-content
                             addEditLocation();
                             const locationItems = configSection.querySelectorAll('.location-item');
                             const lastLocationItem = locationItems[locationItems.length - 1];
                             
-                            // 设置后端服务器
+                            // 设置后端服务器（TCP/UDP 代理：backend-row 直接是 location-item 的子元素）
+                            // 兼容简化后的结构（TCP/UDP）和完整结构（HTTP）
                             const locationBackends = lastLocationItem.querySelector('.location-backends');
-                            if (locationBackends && proxy.backends && proxy.backends.length > 0) {
+                            let container;
+                            if (locationBackends) {
+                                // HTTP 代理：使用 location-backends
+                                container = locationBackends;
+                            } else {
+                                // TCP/UDP 代理：直接使用 location-item
+                                container = lastLocationItem;
+                            }
+                            
+                            if (container && proxy.backends && proxy.backends.length > 0) {
                                 // 清空默认的后端行
-                                locationBackends.innerHTML = '';
+                                const existingBackendRows = container.querySelectorAll('.backend-row');
+                                existingBackendRows.forEach(row => row.remove());
                                 
                                 proxy.backends.forEach((backend) => {
-                                    addEditBackendRow(locationBackends);
-                                    const backendRows = locationBackends.querySelectorAll('.backend-row');
+                                    addEditBackendRow(container);
+                                    const backendRows = container.querySelectorAll('.backend-row');
                                     const lastBackendRow = backendRows[backendRows.length - 1];
                                     
                                     lastBackendRow.querySelector('.backend-address').value = backend.backend_address;

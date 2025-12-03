@@ -369,16 +369,23 @@ function _M.init_worker()
                         local has_existing_configs = false
                         
                         -- 检查HTTP/HTTPS代理配置文件
+                        -- 使用更安全的方法：先检查目录是否存在，再查找配置文件
                         local http_dir = io.open(http_config_dir, "r")
                         if http_dir then
                             http_dir:close()
-                            -- 检查是否有配置文件
-                            local test_file = io.popen("ls " .. http_config_dir .. "/proxy_http_*.conf 2>/dev/null | head -1")
+                            -- 使用find命令查找配置文件（更安全，避免shell注入）
+                            -- 转义路径中的特殊字符，防止命令注入
+                            local escaped_dir = http_config_dir:gsub("'", "'\\''")
+                            local find_cmd = "find '" .. escaped_dir .. "' -maxdepth 1 -name 'proxy_http_*.conf' 2>/dev/null | head -1"
+                            local test_file = io.popen(find_cmd)
                             if test_file then
                                 local first_file = test_file:read("*line")
                                 test_file:close()
                                 if first_file and first_file ~= "" then
-                                    has_existing_configs = true
+                                    -- 验证文件路径是否在预期目录内（防止路径遍历攻击）
+                                    if first_file:match("^" .. http_config_dir:gsub("%-", "%%-") .. "/") then
+                                        has_existing_configs = true
+                                    end
                                 end
                             end
                         end
@@ -388,12 +395,19 @@ function _M.init_worker()
                             local tcp_dir = io.open(tcp_config_dir, "r")
                             if tcp_dir then
                                 tcp_dir:close()
-                                local test_file = io.popen("ls " .. tcp_config_dir .. "/proxy_stream_*.conf 2>/dev/null | head -1")
+                                -- 使用find命令查找配置文件（更安全，避免shell注入）
+                                -- 转义路径中的特殊字符，防止命令注入
+                                local escaped_dir = tcp_config_dir:gsub("'", "'\\''")
+                                local find_cmd = "find '" .. escaped_dir .. "' -maxdepth 1 -name 'proxy_*.conf' 2>/dev/null | head -1"
+                                local test_file = io.popen(find_cmd)
                                 if test_file then
                                     local first_file = test_file:read("*line")
                                     test_file:close()
                                     if first_file and first_file ~= "" then
-                                        has_existing_configs = true
+                                        -- 验证文件路径是否在预期目录内（防止路径遍历攻击）
+                                        if first_file:match("^" .. tcp_config_dir:gsub("%-", "%%-") .. "/") then
+                                            has_existing_configs = true
+                                        end
                                     end
                                 end
                             end

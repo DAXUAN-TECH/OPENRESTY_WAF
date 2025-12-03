@@ -739,22 +739,20 @@ chmod -R 755 "${PROJECT_ROOT}/conf.d/vhost_conf" 2>/dev/null || true
 # 将所有 .conf 文件权限统一设置为 644（目录权限已在上面设置为 755）
 find "${PROJECT_ROOT}/conf.d/vhost_conf" -type f -name "*.conf" -exec chmod 644 {} \; 2>/dev/null || true
 
-# 检查并修复 waf_admin_ssl.conf 文件
-# 如果文件包含不完整的 SSL 配置（有 listen 443 ssl 但没有 ssl_certificate），则重置为占位文件
+# 确保 waf_admin_ssl.conf 文件存在（动态生成的文件，不在代码仓库中）
+# 如果文件不存在，创建占位文件；如果文件包含不完整的 SSL 配置，重置为占位文件
 WAF_ADMIN_SSL_CONF="${PROJECT_ROOT}/conf.d/vhost_conf/waf_admin_ssl.conf"
-if [ -f "$WAF_ADMIN_SSL_CONF" ]; then
-    # 检查文件是否包含 listen 443 ssl 但没有 ssl_certificate
-    if grep -q "listen.*443.*ssl" "$WAF_ADMIN_SSL_CONF" 2>/dev/null && ! grep -q "ssl_certificate" "$WAF_ADMIN_SSL_CONF" 2>/dev/null; then
-        echo -e "${YELLOW}  检测到 waf_admin_ssl.conf 包含不完整的 SSL 配置，重置为占位文件...${NC}"
-        cat > "$WAF_ADMIN_SSL_CONF" << 'EOF'
+if [ ! -f "$WAF_ADMIN_SSL_CONF" ]; then
+    # 文件不存在，创建占位文件
+    echo -e "${YELLOW}  创建 waf_admin_ssl.conf 占位文件...${NC}"
+    cat > "$WAF_ADMIN_SSL_CONF" << 'EOF'
 #
 # waf_admin_ssl.conf
 # --------------------------------------------
-# 管理端 HTTPS 配置占位文件
+# 管理端 HTTPS 配置占位文件（由系统设置动态生成，请勿手工修改）
 #
 # 说明：
-# - 此文件会被 waf.conf 中的 include 指令加载：
-#     include $project_root/conf.d/vhost_conf/waf_admin_ssl.conf;
+# - 此文件会被 waf.conf 中的 include 指令动态加载（仅在启用管理端 SSL 时）
 # - 当你在"系统设置 → 管理端SSL/域名"中未启用 SSL 时，
 #   后端会保持本文件只包含注释，不生成任何 listen/ssl 配置，
 #   因此不会影响管理端通过 HTTP(80) 的访问。
@@ -763,16 +761,43 @@ if [ -f "$WAF_ADMIN_SSL_CONF" ]; then
 #     - listen 443 ssl;
 #     - server_name ...;
 #     - ssl_certificate / ssl_certificate_key 等指令；
-#     - 以及可选的 HTTP→HTTPS 301 跳转逻辑（根据 admin_force_https 开关）。
+# - 强制 HTTPS 跳转逻辑配置在 waf.conf 中（根据 admin_force_https 开关）。
 #
 # 如果你看到的只是这些注释，说明当前尚未在系统设置中启用管理端 HTTPS。
 #
 
 EOF
-        chown "$WAF_USER:$WAF_GROUP" "$WAF_ADMIN_SSL_CONF" 2>/dev/null || true
-        chmod 644 "$WAF_ADMIN_SSL_CONF" 2>/dev/null || true
-        echo -e "${GREEN}  ✓ waf_admin_ssl.conf 已重置为占位文件${NC}"
-    fi
+    chown "$WAF_USER:$WAF_GROUP" "$WAF_ADMIN_SSL_CONF" 2>/dev/null || true
+    chmod 644 "$WAF_ADMIN_SSL_CONF" 2>/dev/null || true
+    echo -e "${GREEN}  ✓ waf_admin_ssl.conf 占位文件已创建${NC}"
+elif grep -q "listen.*443.*ssl" "$WAF_ADMIN_SSL_CONF" 2>/dev/null && ! grep -q "ssl_certificate" "$WAF_ADMIN_SSL_CONF" 2>/dev/null; then
+    # 文件存在但包含不完整的 SSL 配置，重置为占位文件
+    echo -e "${YELLOW}  检测到 waf_admin_ssl.conf 包含不完整的 SSL 配置，重置为占位文件...${NC}"
+    cat > "$WAF_ADMIN_SSL_CONF" << 'EOF'
+#
+# waf_admin_ssl.conf
+# --------------------------------------------
+# 管理端 HTTPS 配置占位文件（由系统设置动态生成，请勿手工修改）
+#
+# 说明：
+# - 此文件会被 waf.conf 中的 include 指令动态加载（仅在启用管理端 SSL 时）
+# - 当你在"系统设置 → 管理端SSL/域名"中未启用 SSL 时，
+#   后端会保持本文件只包含注释，不生成任何 listen/ssl 配置，
+#   因此不会影响管理端通过 HTTP(80) 的访问。
+# - 当你在系统设置中启用管理端 SSL 时，
+#   后端会自动覆盖本文件，写入：
+#     - listen 443 ssl;
+#     - server_name ...;
+#     - ssl_certificate / ssl_certificate_key 等指令；
+# - 强制 HTTPS 跳转逻辑配置在 waf.conf 中（根据 admin_force_https 开关）。
+#
+# 如果你看到的只是这些注释，说明当前尚未在系统设置中启用管理端 HTTPS。
+#
+
+EOF
+    chown "$WAF_USER:$WAF_GROUP" "$WAF_ADMIN_SSL_CONF" 2>/dev/null || true
+    chmod 644 "$WAF_ADMIN_SSL_CONF" 2>/dev/null || true
+    echo -e "${GREEN}  ✓ waf_admin_ssl.conf 已重置为占位文件${NC}"
 fi
 
 chown -R "$WAF_USER:$WAF_GROUP" "${PROJECT_ROOT}/conf.d/vhost_conf/http_https" 2>/dev/null || true

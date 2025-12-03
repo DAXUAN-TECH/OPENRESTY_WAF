@@ -1,1 +1,4 @@
 .DS_Store
+
+# 动态生成的配置文件（由系统设置自动生成，不应提交到代码仓库）
+conf.d/vhost_conf/waf_admin_ssl.conf

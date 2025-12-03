@@ -132,9 +132,11 @@ local function write_admin_ssl_files(enabled, server_name, ssl_pem, ssl_key, for
     end
 
     -- 这里的指令会被直接插入 waf.conf 的 server 块中
+    -- 注意：waf.conf已经监听80端口（带default_server），这里只需要添加443端口的SSL配置
+    -- 不要在这里添加default_server，避免与80端口的default_server冲突
     conf:write("# 本文件由系统设置自动生成，请勿手工修改\n")
     conf:write("# 管理端 HTTPS 配置\n")
-    conf:write("    listen 443 ssl default_server;\n")
+    conf:write("    listen 443 ssl;\n")
     conf:write("    server_name " .. server_name .. ";\n")
     conf:write("    ssl_certificate     " .. cert_path .. ";\n")
     conf:write("    ssl_certificate_key " .. key_path .. ";\n")

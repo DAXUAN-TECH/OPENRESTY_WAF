@@ -531,8 +531,11 @@ end
 -- 检查特定规则ID（用于反向代理关联的规则）
 local function check_specific_rule(client_ip, rule_id)
     if not rule_id then
+        ngx.log(ngx.WARN, "check_specific_rule: rule_id is nil")
         return false, nil
     end
+    
+    ngx.log(ngx.INFO, "check_specific_rule: 开始检查规则ID: ", rule_id, ", 客户端IP: ", client_ip)
     
     -- 查询指定规则
     local sql = [[
@@ -547,18 +550,24 @@ local function check_specific_rule(client_ip, rule_id)
     
     local res, err = mysql_pool.query(sql, rule_id)
     if err then
-        ngx.log(ngx.ERR, "check specific rule query error: ", err)
+        ngx.log(ngx.ERR, "check_specific_rule: 查询规则失败，rule_id: ", rule_id, ", error: ", err)
         return false, nil
     end
     
     if not res or #res == 0 then
         -- 规则不存在或已禁用，允许通过
+        ngx.log(ngx.INFO, "check_specific_rule: 规则不存在或已禁用，rule_id: ", rule_id)
         return false, nil
     end
     
     local rule = res[1]
     local rule_type = rule.rule_type
     local rule_value = rule.rule_value
+    
+    ngx.log(ngx.INFO, "check_specific_rule: 规则查询成功，rule_id: ", rule_id, 
+            ", rule_type: ", rule_type, 
+            ", rule_name: ", rule.rule_name or "unknown",
+            ", rule_value: ", rule_value)
     
     -- 检查规则类型
     if rule_type == "ip_whitelist" then

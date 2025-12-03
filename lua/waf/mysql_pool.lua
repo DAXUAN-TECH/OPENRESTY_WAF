@@ -172,8 +172,15 @@ function _M.get_connection()
 
     if not ok then
         -- 安全关闭失败的连接（使用 pcall 避免在已关闭的 socket 上操作）
-        if db then
-            pcall(function() db:close() end)
+        -- 注意：connect 失败后，socket 可能已经处于关闭状态，必须使用 pcall 安全关闭
+        local close_ok, close_err = pcall(function()
+            if db then
+                db:close()
+            end
+        end)
+        if not close_ok and close_err then
+            -- 关闭失败是预期的（socket 可能已经关闭），只记录 debug 日志
+            ngx.log(ngx.DEBUG, "Failed to close MySQL connection (expected if socket already closed): ", tostring(close_err))
         end
         
         -- 连接失败时，如果使用的是域名，清除缓存并重新解析（应对动态 IP 变化）
@@ -220,12 +227,19 @@ function _M.get_connection()
                     ngx.log(ngx.INFO, "MySQL connection retry successful with new IP: ", mysql_host)
                 else
                     -- 重试也失败，安全关闭
-                    pcall(function() db:close() end)
+                    local close_ok, close_err = pcall(function()
+                        if db then
+                            db:close()
+                        end
+                    end)
+                    if not close_ok and close_err then
+                        ngx.log(ngx.DEBUG, "Failed to close MySQL retry connection (expected if socket already closed): ", tostring(close_err))
+                    end
                 end
             end
         else
             -- 如果使用的是 IP 地址，不需要重试 DNS 解析，直接返回错误
-            pcall(function() db:close() end)
+            -- 连接已经在上面的 pcall 中安全关闭了，这里不需要再次关闭
         end
         
         if not ok then

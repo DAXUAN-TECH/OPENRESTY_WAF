@@ -739,6 +739,31 @@ chmod -R 755 "${PROJECT_ROOT}/conf.d/vhost_conf" 2>/dev/null || true
 # 将所有 .conf 文件权限统一设置为 644（目录权限已在上面设置为 755）
 find "${PROJECT_ROOT}/conf.d/vhost_conf" -type f -name "*.conf" -exec chmod 644 {} \; 2>/dev/null || true
 
+# 检查配置文件中的 Git 冲突标记（防止包含冲突标记的配置文件被部署）
+echo -e "${YELLOW}  检查配置文件中的 Git 冲突标记...${NC}"
+CONFLICT_FILES=()
+while IFS= read -r -d '' conf_file; do
+    if grep -qE '^(<<<<<<<|=======|>>>>>>>)' "$conf_file" 2>/dev/null; then
+        CONFLICT_FILES+=("$conf_file")
+    fi
+done < <(find "${PROJECT_ROOT}/conf.d" -type f -name "*.conf" -print0 2>/dev/null)
+
+if [ ${#CONFLICT_FILES[@]} -gt 0 ]; then
+    echo -e "${RED}  ✗ 检测到以下配置文件包含 Git 冲突标记，请先解决冲突：${NC}"
+    for file in "${CONFLICT_FILES[@]}"; do
+        echo -e "${RED}    - $file${NC}"
+    done
+    echo -e "${YELLOW}  解决方法：${NC}"
+    echo -e "${YELLOW}    1. 在服务器上执行：cd ${PROJECT_ROOT} && git status${NC}"
+    echo -e "${YELLOW}    2. 检查冲突文件，手动编辑删除冲突标记（<<<<<<<、=======、>>>>>>>）${NC}"
+    echo -e "${YELLOW}    3. 或者执行：git checkout --theirs conf.d/vhost_conf/waf.conf（如果确定使用远程版本）${NC}"
+    echo -e "${YELLOW}    4. 或者执行：git checkout --ours conf.d/vhost_conf/waf.conf（如果确定使用本地版本）${NC}"
+    echo -e "${YELLOW}    5. 解决冲突后重新运行部署脚本${NC}"
+    exit 1
+else
+    echo -e "${GREEN}  ✓ 未检测到 Git 冲突标记${NC}"
+fi
+
 # 可选：如果已存在旧版本的 waf_admin_ssl.conf 且配置不完整，可以在这里做一次修复
 # 当前策略：不再强制创建占位文件，waf_admin_ssl.conf 完全由系统设置接口动态生成
 #WAF_ADMIN_SSL_CONF="${PROJECT_ROOT}/conf.d/vhost_conf/waf_admin_ssl.conf"

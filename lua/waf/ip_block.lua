@@ -614,9 +614,13 @@ local function check_specific_rule(client_ip, rule_id)
         if is_match then
             -- 白名单匹配，允许通过
             -- 注意：返回true表示匹配成功（白名单），第二个返回值是规则信息
+            ngx.log(ngx.INFO, "check_specific_rule: IP白名单匹配成功，rule_id: ", rule_id, 
+                    ", client_ip: ", client_ip, ", rule_value: ", rule_value)
             return true, rule
         else
             -- 白名单不匹配，不在白名单中（但不一定被封控，可能在其他白名单中）
+            ngx.log(ngx.INFO, "check_specific_rule: IP白名单不匹配，rule_id: ", rule_id, 
+                    ", client_ip: ", client_ip, ", rule_value: ", rule_value)
             return false, nil
         end
     elseif rule_type == "ip_blacklist" then

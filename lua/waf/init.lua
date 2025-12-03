@@ -353,14 +353,18 @@ function _M.init_worker()
         end
         
         -- 检查是否有已存在的代理配置文件
-        -- 注意：generate_all_configs() 会同时生成 upstream 和 server 配置文件
-        -- 为了更准确地判断，我们同时检查 upstream 和 server 配置文件
+        -- 注意：generate_all_configs() 会同时生成：
+        --   1. upstream 配置文件（http_upstream_*.conf, stream_upstream_*.conf等）
+        --   2. server 配置文件（proxy_http_*.conf, proxy_stream_*.conf等）
+        --   3. SSL 证书文件（proxy_*.pem, proxy_*.key）
+        -- 为了更准确地判断，我们同时检查这些配置文件
         -- 如果任一类型的配置文件存在，说明是reload，不需要重新生成
         
         local http_server_dir = project_root .. "/conf.d/vhost_conf/http_https"
         local tcp_server_dir = project_root .. "/conf.d/vhost_conf/tcp_udp"
         local http_upstream_dir = project_root .. "/conf.d/upstream/http_https"
         local tcp_upstream_dir = project_root .. "/conf.d/upstream/tcp_udp"
+        local cert_dir = project_root .. "/conf.d/cert"
         local config_exists = false
         
         -- 检查HTTP/HTTPS server配置文件
@@ -418,6 +422,25 @@ function _M.init_worker()
             if tcp_upstream_dir_fd then
                 tcp_upstream_dir_fd:close()
                 local find_cmd = "find " .. tcp_upstream_dir .. " -maxdepth 1 -name '*_upstream_*.conf' 2>/dev/null | head -1"
+                local find_result = io.popen(find_cmd)
+                if find_result then
+                    local found_file = find_result:read("*line")
+                    find_result:close()
+                    if found_file and found_file ~= "" then
+                        config_exists = true
+                    end
+                end
+            end
+        end
+        
+        -- 如果以上都没有，检查SSL证书文件（proxy_*.pem 或 proxy_*.key）
+        -- 注意：SSL证书文件是在generate_http_server_config()中生成的，也是generate_all_configs()的一部分
+        if not config_exists then
+            local cert_dir_fd = io.open(cert_dir, "r")
+            if cert_dir_fd then
+                cert_dir_fd:close()
+                -- 检查是否有代理的SSL证书文件（排除管理端的admin_*.pem和admin_*.key）
+                local find_cmd = "find " .. cert_dir .. " -maxdepth 1 -name 'proxy_*.pem' -o -name 'proxy_*.key' 2>/dev/null | head -1"
                 local find_result = io.popen(find_cmd)
                 if find_result then
                     local found_file = find_result:read("*line")

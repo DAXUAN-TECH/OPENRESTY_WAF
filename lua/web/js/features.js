@@ -155,9 +155,7 @@ let features = [];
                 // 界面功能
                 'stats': '统计报表',
                 'monitor': '监控面板',
-                'proxy_management': '反向代理管理',
-                // 其他功能
-                'testing': '测试功能'
+                'proxy_management': '反向代理管理'
             };
             return names[key] || key;
         }

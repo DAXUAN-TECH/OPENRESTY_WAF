@@ -482,9 +482,7 @@ INSERT INTO waf_feature_switches (feature_key, feature_name, description, enable
 -- 界面功能
 ('stats', '统计报表', '封控统计报表功能，提供封控数据统计和分析', 1, 'database'),
 ('monitor', '监控面板', '实时监控面板功能，显示系统运行状态和关键指标', 1, 'database'),
-('proxy_management', '反向代理管理', '反向代理配置管理功能，支持HTTP、TCP、UDP代理配置', 1, 'database'),
--- 其他功能
-('testing', '测试功能', '单元测试和集成测试功能', 1, 'database')
+('proxy_management', '反向代理管理', '反向代理配置管理功能，支持HTTP、TCP、UDP代理配置', 1, 'database')
 ON DUPLICATE KEY UPDATE 
     feature_name = VALUES(feature_name),
     description = VALUES(description),

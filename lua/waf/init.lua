@@ -337,161 +337,33 @@ function _M.init_worker()
     
     -- 初始化nginx代理配置生成（确保配置文件存在）
     -- 使用定时器延迟执行，避免在init_worker阶段阻塞
-    -- 重要：只在首次启动时生成配置，reload时不再生成
+    -- 重要：每次init_worker执行时都重新生成配置文件（包括首次启动和reload）
+    -- 这样确保配置文件始终与数据库配置保持一致
     local function init_proxy_configs(premature)
         if premature then
             return
         end
         
-        -- 检查是否是首次启动（通过检查配置文件是否存在）
-        -- 如果配置文件已存在，说明是reload，不需要重新生成
         local path_utils = require "waf.path_utils"
         local project_root = path_utils.get_project_root()
         if not project_root then
-            ngx.log(ngx.ERR, "无法获取项目根目录，跳过配置生成检查")
+            ngx.log(ngx.ERR, "无法获取项目根目录，跳过配置生成")
             return
         end
         
-        -- 检查是否有已存在的代理配置文件
-        -- 注意：generate_all_configs() 会同时生成：
-        --   1. upstream 配置文件（http_upstream_*.conf, stream_upstream_*.conf等）
-        --   2. server 配置文件（proxy_http_*.conf, proxy_stream_*.conf等）
-        --   3. SSL 证书文件（proxy_*.pem, proxy_*.key）
-        -- 为了更准确地判断，我们同时检查这些配置文件
-        -- 如果任一类型的配置文件存在，说明是reload，不需要重新生成
-        
-        local http_server_dir = project_root .. "/conf.d/vhost_conf/http_https"
-        local tcp_server_dir = project_root .. "/conf.d/vhost_conf/tcp_udp"
-        local http_upstream_dir = project_root .. "/conf.d/upstream/http_https"
-        local tcp_upstream_dir = project_root .. "/conf.d/upstream/tcp_udp"
-        local cert_dir = project_root .. "/conf.d/cert"
-        local config_exists = false
-        
-        -- 检查HTTP/HTTPS server配置文件
-        local http_server_dir_fd = io.open(http_server_dir, "r")
-        if http_server_dir_fd then
-            http_server_dir_fd:close()
-            local find_cmd = "find " .. http_server_dir .. " -maxdepth 1 -name 'proxy_*.conf' 2>/dev/null | head -1"
-            local find_result = io.popen(find_cmd)
-            if find_result then
-                local found_file = find_result:read("*line")
-                find_result:close()
-                if found_file and found_file ~= "" then
-                    config_exists = true
-                end
-            end
-        end
-        
-        -- 如果HTTP/HTTPS server没有，检查HTTP/HTTPS upstream配置文件
-        if not config_exists then
-            local http_upstream_dir_fd = io.open(http_upstream_dir, "r")
-            if http_upstream_dir_fd then
-                http_upstream_dir_fd:close()
-                local find_cmd = "find " .. http_upstream_dir .. " -maxdepth 1 -name 'http_upstream_*.conf' 2>/dev/null | head -1"
-                local find_result = io.popen(find_cmd)
-                if find_result then
-                    local found_file = find_result:read("*line")
-                    find_result:close()
-                    if found_file and found_file ~= "" then
-                        config_exists = true
-                    end
-                end
-            end
-        end
-        
-        -- 如果HTTP/HTTPS都没有，检查TCP/UDP server配置文件
-        if not config_exists then
-            local tcp_server_dir_fd = io.open(tcp_server_dir, "r")
-            if tcp_server_dir_fd then
-                tcp_server_dir_fd:close()
-                local find_cmd = "find " .. tcp_server_dir .. " -maxdepth 1 -name 'proxy_*.conf' 2>/dev/null | head -1"
-                local find_result = io.popen(find_cmd)
-                if find_result then
-                    local found_file = find_result:read("*line")
-                    find_result:close()
-                    if found_file and found_file ~= "" then
-                        config_exists = true
-                    end
-                end
-            end
-        end
-        
-        -- 如果TCP/UDP server没有，检查TCP/UDP upstream配置文件
-        if not config_exists then
-            local tcp_upstream_dir_fd = io.open(tcp_upstream_dir, "r")
-            if tcp_upstream_dir_fd then
-                tcp_upstream_dir_fd:close()
-                local find_cmd = "find " .. tcp_upstream_dir .. " -maxdepth 1 -name '*_upstream_*.conf' 2>/dev/null | head -1"
-                local find_result = io.popen(find_cmd)
-                if find_result then
-                    local found_file = find_result:read("*line")
-                    find_result:close()
-                    if found_file and found_file ~= "" then
-                        config_exists = true
-                    end
-                end
-            end
-        end
-        
-        -- 如果以上都没有，检查SSL证书文件（proxy_*.pem 或 proxy_*.key）
-        -- 注意：SSL证书文件是在generate_http_server_config()中生成的，也是generate_all_configs()的一部分
-        if not config_exists then
-            local cert_dir_fd = io.open(cert_dir, "r")
-            if cert_dir_fd then
-                cert_dir_fd:close()
-                -- 检查是否有代理的SSL证书文件（排除管理端的admin_*.pem和admin_*.key）
-                local find_cmd = "find " .. cert_dir .. " -maxdepth 1 -name 'proxy_*.pem' -o -name 'proxy_*.key' 2>/dev/null | head -1"
-                local find_result = io.popen(find_cmd)
-                if find_result then
-                    local found_file = find_result:read("*line")
-                    find_result:close()
-                    if found_file and found_file ~= "" then
-                        config_exists = true
-                    end
-                end
-            end
-        end
-        
-        -- 如果配置文件已存在，说明是reload，不需要重新生成
-        if config_exists then
-            ngx.log(ngx.INFO, "检测到配置文件已存在，这是reload操作，跳过配置生成")
-            return
-        end
-        
-        -- 首次启动，需要生成配置文件
-        ngx.log(ngx.INFO, "首次启动检测：配置文件不存在，开始生成配置文件...")
+        -- 每次init_worker执行时都重新生成配置文件
+        -- 这样确保配置文件始终与数据库配置保持一致
+        ngx.log(ngx.INFO, "开始生成/更新代理配置文件...")
         
         local ok, nginx_config_generator = pcall(require, "waf.nginx_config_generator")
         if ok and nginx_config_generator and nginx_config_generator.generate_all_configs then
             local gen_ok, gen_err = nginx_config_generator.generate_all_configs()
             if gen_ok then
-                ngx.log(ngx.INFO, "Proxy configs initialized: ", gen_err or "success")
-                
-                -- 首次启动生成配置后，测试配置并执行reload，确保配置文件被加载
-                local system_api = require "api.system"
-                
-                -- 测试配置
-                local test_ok, test_err = system_api.test_nginx_config_internal()
-                if not test_ok then
-                    ngx.log(ngx.ERR, "首次启动配置测试失败: ", test_err or "unknown error")
-                    ngx.log(ngx.ERR, "配置文件已生成，但测试失败，请手动检查配置")
-                    return
-                end
-                
-                ngx.log(ngx.INFO, "首次启动配置测试通过，开始执行reload...")
-                
-                -- 执行reload（注意：reload时不会再生成配置，因为配置文件已存在）
-                local reload_ok, reload_err = system_api.reload_nginx_internal()
-                if not reload_ok then
-                    ngx.log(ngx.ERR, "首次启动reload失败: ", reload_err or "unknown error")
-                    ngx.log(ngx.ERR, "配置文件已生成，但reload失败，请手动执行reload")
-                else
-                    ngx.log(ngx.INFO, "首次启动reload成功，配置文件已加载")
-                end
+                ngx.log(ngx.INFO, "Proxy configs generated: ", gen_err or "success")
             else
                 -- 记录详细错误信息，但不阻止系统运行
                 local error_msg = gen_err or "unknown error"
-                ngx.log(ngx.WARN, "Failed to initialize proxy configs: ", error_msg)
+                ngx.log(ngx.WARN, "Failed to generate proxy configs: ", error_msg)
                 
                 -- 如果是 DNS 解析错误，提供解决建议
                 if error_msg:match("no resolver") or error_msg:match("failed to resolve") then
@@ -502,7 +374,7 @@ function _M.init_worker()
                 end
             end
         else
-            ngx.log(ngx.WARN, "nginx_config_generator module not available, skipping proxy config initialization")
+            ngx.log(ngx.WARN, "nginx_config_generator module not available, skipping proxy config generation")
         end
     end
     

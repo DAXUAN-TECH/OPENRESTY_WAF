@@ -209,10 +209,8 @@ local function generate_http_server_config(proxy, upstream_name, backends, proje
     -- 监听端口
     local listen_line = "    listen       " .. proxy.listen_port
     if proxy.ssl_enable == 1 then
+        -- 启用SSL时，在listen指令上只追加 ssl，遵循新语法；http2 使用单独指令
         listen_line = listen_line .. " ssl"
-        if proxy.ssl_pem and proxy.ssl_key then
-            listen_line = listen_line .. " http2"
-        end
     end
     listen_line = listen_line .. ";\n"
     config = config .. listen_line
@@ -297,6 +295,8 @@ local function generate_http_server_config(proxy, upstream_name, backends, proje
         config = config .. "    ssl_prefer_server_ciphers off;\n"
         config = config .. "    ssl_session_cache shared:SSL:10m;\n"
         config = config .. "    ssl_session_timeout 10m;\n"
+        -- 使用独立指令启用 HTTP/2，避免在 listen 指令上使用已废弃的 \"listen ... http2\" 形式
+        config = config .. "    http2 on;\n"
     end
     
     -- WAF封控检查（如果关联了防护规则）

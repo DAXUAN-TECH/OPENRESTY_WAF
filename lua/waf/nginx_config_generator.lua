@@ -337,18 +337,14 @@ local function generate_http_server_config(proxy, upstream_name, backends)
                     -- 如果后端服务器有路径，在proxy_pass中添加路径
                     -- 确保 backend_path 正确转换为字符串，并且只有在非空时才拼接
                     local backend_path_str = nil
-                    if backend_path then
-                        -- 处理 cjson.null 和 nil
-                        if backend_path == cjson.null then
+                    -- 先处理 cjson.null
+                    if backend_path and backend_path ~= cjson.null then
+                        backend_path_str = tostring(backend_path)
+                        -- 去除前后空格
+                        backend_path_str = backend_path_str:gsub("^%s+", ""):gsub("%s+$", "")
+                        -- 如果为空字符串，设置为 nil
+                        if backend_path_str == "" then
                             backend_path_str = nil
-                        else
-                            backend_path_str = tostring(backend_path)
-                            -- 去除前后空格
-                            backend_path_str = backend_path_str:gsub("^%s+", ""):gsub("%s+$", "")
-                            -- 如果为空字符串，设置为 nil
-                            if backend_path_str == "" then
-                                backend_path_str = nil
-                            end
                         end
                     end
                     

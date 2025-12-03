@@ -414,7 +414,9 @@ local function generate_stream_upstream_config(proxy, backends)
         return ""
     end
     
-    local upstream_name = "stream_upstream_" .. tostring(proxy.id)
+    -- 新命名格式：stream_$proxy_type
+    local proxy_type_safe = sanitize_upstream_name(proxy.proxy_type)
+    local upstream_name = "stream_" .. proxy_type_safe
     local config = "upstream " .. upstream_name .. " {\n"
     
     -- 负载均衡算法

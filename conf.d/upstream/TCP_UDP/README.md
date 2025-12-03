@@ -2,13 +2,13 @@
 
 ## 目录说明
 
-`conf.d/upstream/TCP_UDP/` 目录用于存放 TCP 和 UDP 代理的 upstream 配置文件。
+`conf.d/upstream/tcp_udp/` 目录用于存放 TCP 和 UDP 代理的 upstream 配置文件。
 
 ## 配置文件类型
 
 ### 自动生成的 Upstream 配置
 
-**位置**：`conf.d/upstream/TCP_UDP/stream_upstream_{proxy_id}.conf`
+**位置**：`conf.d/upstream/tcp_udp/stream_upstream_{proxy_id}.conf`
 
 这些文件由系统根据数据库中的 TCP/UDP 代理配置自动生成。
 
@@ -113,7 +113,7 @@ upstream stream_upstream_4 {
 server {
     listen 3306;
     
-    # 引用 upstream（upstream配置在TCP_UDP目录下）
+    # 引用 upstream（upstream配置在tcp_udp目录下）
     proxy_pass stream_upstream_3;
     
     # 超时设置
@@ -135,7 +135,7 @@ server {
 ```nginx
 stream {
     # 1. TCP/UDP upstream 配置（在 server 配置之前）
-    include /path/to/project/conf.d/upstream/TCP_UDP/stream_upstream_*.conf;
+    include /path/to/project/conf.d/upstream/tcp_udp/stream_upstream_*.conf;
     
     # 2. Stream server 配置（可以引用 upstream）
     include /path/to/project/conf.d/vhost_conf/proxy_stream_*.conf;
@@ -151,7 +151,7 @@ stream {
 1. 在 Web 管理界面创建 TCP/UDP 代理配置
 2. 选择后端类型为 "upstream"（多个后端服务器）
 3. 添加后端服务器配置
-4. 系统自动生成 upstream 配置文件到 `conf.d/upstream/TCP_UDP/` 目录
+4. 系统自动生成 upstream 配置文件到 `conf.d/upstream/tcp_udp/` 目录
 5. 系统自动生成 server 配置文件到 `conf.d/vhost_conf/` 目录
 6. Server 配置自动引用对应的 upstream
 7. 自动触发 Nginx 重载（如果代理已启用）
@@ -160,7 +160,7 @@ stream {
 
 ### 1. 自动生成的文件
 
-- **不要手动修改** `conf.d/upstream/TCP_UDP/` 目录下自动生成的文件
+- **不要手动修改** `conf.d/upstream/tcp_udp/` 目录下自动生成的文件
 - 这些文件会在代理配置更新时自动覆盖
 - 如果需要自定义配置，请使用手动配置方式
 
@@ -195,7 +195,7 @@ stream {
 ### Q1: 为什么我的 upstream 配置没有生效？
 
 **A**: 检查以下几点：
-1. 配置文件是否在正确的目录（`conf.d/upstream/TCP_UDP/`）
+1. 配置文件是否在正确的目录（`conf.d/upstream/tcp_udp/`）
 2. 配置文件是否被 nginx.conf 正确包含
 3. Nginx 配置是否已重新加载
 4. 配置文件语法是否正确
@@ -204,7 +204,7 @@ stream {
 ### Q2: 如何查看当前生效的 upstream 配置？
 
 **A**: 可以通过以下方式查看：
-1. 查看配置文件：`cat conf.d/upstream/TCP_UDP/stream_upstream_*.conf`
+1. 查看配置文件：`cat conf.d/upstream/tcp_udp/stream_upstream_*.conf`
 2. 查看 Nginx 配置：`/usr/local/openresty/bin/openresty -T`
 3. 在 Web 管理界面查看代理配置详情
 
@@ -233,7 +233,7 @@ proxy_pass stream_upstream_{proxy_id};
 
 ## 相关文档
 
-- [HTTP/HTTPS Upstream 配置说明](../HTTP_HTTPS/README.md)
+- [HTTP/HTTPS Upstream 配置说明](../http_https/README.md)
 - [Server 配置说明](../../vhost_conf/README.md)
 - [Nginx 配置说明](../../../init_file/nginx.conf)
 - [部署脚本说明](../../../scripts/deploy_README.md)

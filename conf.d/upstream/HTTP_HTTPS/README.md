@@ -2,13 +2,13 @@
 
 ## 目录说明
 
-`conf.d/upstream/HTTP_HTTPS/` 目录用于存放 HTTP 和 HTTPS 代理的 upstream 配置文件。
+`conf.d/upstream/http_https/` 目录用于存放 HTTP 和 HTTPS 代理的 upstream 配置文件。
 
 ## 配置文件类型
 
 ### 自动生成的 Upstream 配置
 
-**位置**：`conf.d/upstream/HTTP_HTTPS/http_upstream_{proxy_id}.conf`
+**位置**：`conf.d/upstream/http_https/http_upstream_{proxy_id}.conf`
 
 这些文件由系统根据数据库中的 HTTP/HTTPS 代理配置自动生成。
 
@@ -142,7 +142,7 @@ server {
     server_name example.com;
     
     location / {
-        # 引用 upstream（upstream配置在HTTP_HTTPS目录下）
+        # 引用 upstream（upstream配置在http_https目录下）
         proxy_pass http://upstream_1;
     }
 }
@@ -163,7 +163,7 @@ http {
     include /path/to/project/conf.d/set_conf/*.conf;
     
     # 2. HTTP/HTTPS upstream 配置（在 server 配置之前）
-    include /path/to/project/conf.d/upstream/HTTP_HTTPS/*.conf;
+    include /path/to/project/conf.d/upstream/http_https/*.conf;
     
     # 3. 服务器配置（可以引用 upstream）
     include /path/to/project/conf.d/vhost_conf/*.conf;
@@ -180,7 +180,7 @@ http {
 1. 在 Web 管理界面创建 HTTP/HTTPS 代理配置
 2. 选择后端类型为 "upstream"（多个后端服务器）
 3. 添加后端服务器配置
-4. 系统自动生成 upstream 配置文件到 `conf.d/upstream/HTTP_HTTPS/` 目录
+4. 系统自动生成 upstream 配置文件到 `conf.d/upstream/http_https/` 目录
 5. 系统自动生成 server 配置文件到 `conf.d/vhost_conf/` 目录
 6. Server 配置自动引用对应的 upstream
 7. 自动触发 Nginx 重载（如果代理已启用）
@@ -189,7 +189,7 @@ http {
 
 ### 1. 自动生成的文件
 
-- **不要手动修改** `conf.d/upstream/HTTP_HTTPS/` 目录下自动生成的文件
+- **不要手动修改** `conf.d/upstream/http_https/` 目录下自动生成的文件
 - 这些文件会在代理配置更新时自动覆盖
 - 如果需要自定义配置，请使用手动配置方式（`conf.d/set_conf/upstream.conf`）
 
@@ -224,7 +224,7 @@ http {
 ### Q1: 为什么我的 upstream 配置没有生效？
 
 **A**: 检查以下几点：
-1. 配置文件是否在正确的目录（`conf.d/upstream/HTTP_HTTPS/`）
+1. 配置文件是否在正确的目录（`conf.d/upstream/http_https/`）
 2. 配置文件是否被 nginx.conf 正确包含
 3. Nginx 配置是否已重新加载
 4. 配置文件语法是否正确
@@ -233,7 +233,7 @@ http {
 ### Q2: 如何查看当前生效的 upstream 配置？
 
 **A**: 可以通过以下方式查看：
-1. 查看配置文件：`cat conf.d/upstream/HTTP_HTTPS/http_upstream_*.conf`
+1. 查看配置文件：`cat conf.d/upstream/http_https/http_upstream_*.conf`
 2. 查看 Nginx 配置：`/usr/local/openresty/bin/openresty -T`
 3. 在 Web 管理界面查看代理配置详情
 
@@ -255,7 +255,7 @@ Upstream 名称必须与 upstream 配置块中的名称一致。
 
 ## 相关文档
 
-- [TCP/UDP Upstream 配置说明](../TCP_UDP/README.md)
+- [TCP/UDP Upstream 配置说明](../tcp_udp/README.md)
 - [Server 配置说明](../../vhost_conf/README.md)
 - [Nginx 配置说明](../../../init_file/nginx.conf)
 - [部署脚本说明](../../../scripts/deploy_README.md)

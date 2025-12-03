@@ -470,9 +470,32 @@ function _M.delete()
     -- 记录审计日志（成功）
     audit_log.log_proxy_action("delete", proxy_id, proxy_name, true, nil)
     
+    -- 删除代理后，需要：生成配置 -> 测试配置 -> reload
+    -- 注意：delete_proxy() 已经同步生成了nginx配置文件（排除已删除的代理）
+    -- 使用 ngx.timer.at(0, ...) 确保在当前请求处理完成后立即执行，但不会阻塞响应
+    ngx.timer.at(0, function()
+        -- 1. 测试配置
+        local test_ok, test_err = system_api.test_nginx_config_internal()
+        if not test_ok then
+            ngx.log(ngx.ERR, "删除代理后配置测试失败: ", test_err or "unknown error")
+            ngx.log(ngx.ERR, "配置文件已生成，但测试失败，不会执行reload")
+            return
+        end
+        
+        ngx.log(ngx.INFO, "删除代理后配置测试通过，开始执行reload...")
+        
+        -- 2. 测试通过后执行reload（reload时不会再生成配置）
+        local reload_ok, reload_err = system_api.reload_nginx_internal()
+        if not reload_ok then
+            ngx.log(ngx.ERR, "删除代理后自动触发nginx重载失败: ", reload_err or "unknown error")
+        else
+            ngx.log(ngx.INFO, "删除代理后自动触发nginx重载成功，配置已生效")
+        end
+    end)
+    
     api_utils.json_response({
         success = true,
-        message = "代理配置已删除"
+        message = "代理配置已删除，nginx配置正在重新加载"
     })
 end
 

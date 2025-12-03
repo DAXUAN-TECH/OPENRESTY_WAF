@@ -842,7 +842,7 @@ function _M.generate_all_configs()
     
     if not proxies or #proxies == 0 then
         -- 如果没有启用的代理，清理所有代理配置文件
-        cleanup_orphaned_files(project_root, active_proxy_ids, {})
+        cleanup_orphaned_files(project_root, active_proxy_ids, {}, {}, {})
         return true, "没有启用的代理配置，已清理所有配置文件"
     end
     

@@ -698,6 +698,16 @@ function _M.generate_all_configs()
         if proxy.proxy_type == "http" and proxy.location_paths and type(proxy.location_paths) == "table" and #proxy.location_paths > 0 then
             -- 为每个location生成独立的upstream配置
             local upstream_dir = project_root .. "/conf.d/upstream/http_https"
+            
+            -- 确保父目录存在且有正确权限
+            local upstream_parent_dir = project_root .. "/conf.d/upstream"
+            local parent_dir_ok = path_utils.ensure_dir(upstream_parent_dir)
+            if not parent_dir_ok then
+                ngx.log(ngx.ERR, "无法创建upstream父目录: ", upstream_parent_dir)
+                return false, "无法创建upstream父目录: " .. upstream_parent_dir
+            end
+            
+            -- 确保目标目录存在
             local dir_ok = path_utils.ensure_dir(upstream_dir)
             if not dir_ok then
                 ngx.log(ngx.ERR, "无法创建upstream目录: ", upstream_dir)
@@ -705,13 +715,23 @@ function _M.generate_all_configs()
             end
             
             -- 检查目录是否有写入权限
-            local test_file = io.open(upstream_dir .. "/.test_write", "w")
+            local test_file, err_msg = io.open(upstream_dir .. "/.test_write", "w")
             if test_file then
                 test_file:close()
-                os.remove(upstream_dir .. "/.test_write")
+                local remove_ok, remove_err = os.remove(upstream_dir .. "/.test_write")
+                if not remove_ok then
+                    ngx.log(ngx.WARN, "无法删除测试文件: ", upstream_dir .. "/.test_write", ", 错误: ", tostring(remove_err))
+                end
             else
-                ngx.log(ngx.ERR, "upstream目录无写入权限: ", upstream_dir)
-                return false, "upstream目录无写入权限: " .. upstream_dir
+                -- 获取更详细的错误信息
+                local detailed_err = err_msg or "unknown error"
+                -- 尝试获取当前用户信息（如果可能）
+                local current_user = os.getenv("USER") or os.getenv("USERNAME") or "unknown"
+                ngx.log(ngx.ERR, "upstream目录无写入权限: ", upstream_dir, 
+                    ", 错误: ", detailed_err,
+                    ", 当前用户: ", current_user,
+                    ", 请检查目录权限（应为 755 且所有者应为 waf:waf 或运行 OpenResty 的用户）")
+                return false, "upstream目录无写入权限: " .. upstream_dir .. " (错误: " .. detailed_err .. ")"
             end
             
             -- 为每个location生成upstream配置

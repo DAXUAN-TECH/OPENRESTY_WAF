@@ -764,13 +764,26 @@ function _M.generate_all_configs()
                     end
                 end
                 
+                -- 检查进程用户是否与目录所有者匹配
+                local user_mismatch = ""
+                local fix_suggestion = ""
+                if dir_info:match("所有者:([^:]+):") then
+                    local dir_owner = dir_info:match("所有者:([^:]+):")
+                    if current_user ~= dir_owner and current_user ~= "unknown" then
+                        user_mismatch = ", ⚠️ 进程用户(" .. current_user .. ")与目录所有者(" .. dir_owner .. ")不匹配"
+                        fix_suggestion = ", 修复步骤: 1) 检查 /etc/systemd/system/openresty.service 中的 User= 和 Group= 配置; 2) 执行 systemctl daemon-reload; 3) 执行 systemctl restart openresty"
+                    end
+                end
+                
                 ngx.log(ngx.ERR, "upstream目录无写入权限: ", upstream_dir, 
                     ", 错误: ", detailed_err,
                     ", 进程用户: ", current_user,
                     dir_info,
                     parent_info,
-                    ", 修复建议: chown -R waf:waf ", upstream_dir, " && chmod 755 ", upstream_dir)
-                return false, "upstream目录无写入权限: " .. upstream_dir .. " (错误: " .. detailed_err .. ", 进程用户: " .. current_user .. ")"
+                    user_mismatch,
+                    ", 修复建议: chown -R waf:waf ", upstream_dir, " && chmod 755 ", upstream_dir,
+                    fix_suggestion)
+                return false, "upstream目录无写入权限: " .. upstream_dir .. " (错误: " .. detailed_err .. ", 进程用户: " .. current_user .. user_mismatch .. ")"
             end
             
             -- 为每个location生成upstream配置
@@ -910,13 +923,26 @@ function _M.generate_all_configs()
                             end
                         end
                         
+                        -- 检查进程用户是否与目录所有者匹配
+                        local user_mismatch = ""
+                        local fix_suggestion = ""
+                        if dir_info:match("所有者:([^:]+):") then
+                            local dir_owner = dir_info:match("所有者:([^:]+):")
+                            if current_user ~= dir_owner and current_user ~= "unknown" then
+                                user_mismatch = ", ⚠️ 进程用户(" .. current_user .. ")与目录所有者(" .. dir_owner .. ")不匹配"
+                                fix_suggestion = ", 修复步骤: 1) 检查 /etc/systemd/system/openresty.service 中的 User= 和 Group= 配置; 2) 执行 systemctl daemon-reload; 3) 执行 systemctl restart openresty"
+                            end
+                        end
+                        
                         ngx.log(ngx.ERR, "upstream目录无写入权限: ", upstream_dir, 
                             ", 错误: ", detailed_err,
                             ", 进程用户: ", current_user,
                             dir_info,
                             parent_info,
-                            ", 修复建议: chown -R waf:waf ", upstream_dir, " && chmod 755 ", upstream_dir)
-                        return false, "upstream目录无写入权限: " .. upstream_dir .. " (错误: " .. detailed_err .. ", 进程用户: " .. current_user .. ")"
+                            user_mismatch,
+                            ", 修复建议: chown -R waf:waf ", upstream_dir, " && chmod 755 ", upstream_dir,
+                            fix_suggestion)
+                        return false, "upstream目录无写入权限: " .. upstream_dir .. " (错误: " .. detailed_err .. ", 进程用户: " .. current_user .. user_mismatch .. ")"
                     end
                     
                     local upstream_fd = io.open(upstream_file, "w")

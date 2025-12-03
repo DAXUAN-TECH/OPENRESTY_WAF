@@ -249,6 +249,11 @@ const pageSize = 20;
             
             locationItem.innerHTML = locationContentHtml;
             
+            // 根据代理类型设置类名
+            if (proxyType === 'tcp' || proxyType === 'udp') {
+                locationItem.classList.add('tcp-udp-mode');
+            }
+            
             configSection.appendChild(locationItem);
         }
         

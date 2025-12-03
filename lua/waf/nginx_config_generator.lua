@@ -941,6 +941,15 @@ function _M.generate_all_configs()
             active_proxy_names[proxy_name_safe] = true
         end
         
+        -- 确保数值字段正确转换为数字（MySQL可能返回字符串）
+        proxy.ssl_enable = tonumber(proxy.ssl_enable) or 0
+        proxy.force_https_redirect = tonumber(proxy.force_https_redirect) or 0
+        proxy.listen_port = tonumber(proxy.listen_port) or 80
+        proxy.proxy_timeout = tonumber(proxy.proxy_timeout) or 60
+        proxy.proxy_connect_timeout = tonumber(proxy.proxy_connect_timeout) or 60
+        proxy.proxy_send_timeout = tonumber(proxy.proxy_send_timeout) or 60
+        proxy.proxy_read_timeout = tonumber(proxy.proxy_read_timeout) or 60
+        
         -- 解析location_paths JSON字段
         if proxy.location_paths then
             local ok, decoded_location_paths = pcall(cjson.decode, proxy.location_paths)

@@ -400,7 +400,7 @@ const pageSize = 20;
             if (currentBackendRow) {
                 currentBackendRow.parentNode.insertBefore(backendRow, currentBackendRow.nextSibling);
             } else {
-                locationBackends.insertBefore(backendRow, button);
+                container.appendChild(backendRow);
             }
         }
         

@@ -27,7 +27,7 @@
   - 所有管理界面都通过此入口访问
   - `/login` - 登录页面（不需要认证）
   - `/admin` 或 `/admin/` - 管理首页
-  - `/admin/features` - 功能管理界面（必须可用）
+  - `/admin/features` - 已合并到系统设置（/admin/system?tab=features），重定向到系统设置
   - `/admin/rules` - 规则管理界面（受 `rule_management_ui` 功能开关控制）
   - `/admin/proxy` - 反向代理管理界面（受 `proxy_management` 功能开关控制）
   - `/admin/stats` - 统计报表界面（受 `stats` 功能开关控制）

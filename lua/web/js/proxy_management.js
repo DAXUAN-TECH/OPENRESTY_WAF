@@ -569,7 +569,11 @@ const pageSize = 20;
                 `;
             }
             
-            locationItem.innerHTML = `
+            // 根据代理类型生成不同的 HTML 结构
+            let locationContentHtml = '';
+            if (proxyType === 'http') {
+                // HTTP 代理：包含 location-content
+                locationContentHtml = `
                 <div class="location-content">
                     <div class="location-path-section">
                         ${locationPathHtml}
@@ -578,18 +582,16 @@ const pageSize = 20;
                     <div class="location-backends">
                         <div class="backend-row">
                             <div class="input-with-add address-input">
-                                <input type="text" placeholder="IP地址" class="backend-address">
+                <input type="text" placeholder="IP地址" class="backend-address">
                             </div>
                             <div class="input-with-add port-input">
-                                <input type="number" placeholder="端口" class="backend-port" min="1" max="65535">
+                <input type="number" placeholder="端口" class="backend-port" min="1" max="65535">
                             </div>
-                            ${proxyType === 'http' ? `
                             <div class="input-with-add location-backend-path-input-wrapper">
                                 <input type="text" placeholder="目标路径：/PATH" class="location-backend-path-input" title="目标路径：/PATH">
                             </div>
-                            ` : ''}
                             <div class="input-with-add input-weight">
-                                <input type="number" placeholder="权重" class="backend-weight" value="1" min="1">
+                <input type="number" placeholder="权重" class="backend-weight" value="1" min="1">
                             </div>
                             <div class="backend-row-actions">
                                 <button type="button" class="btn-icon btn-add-icon" onclick="addEditBackendRow(this)" title="添加">+</button>
@@ -602,7 +604,34 @@ const pageSize = 20;
                     <button type="button" class="btn btn-primary btn-sm" onclick="addEditLocation()">添加location</button>
                     <button type="button" class="btn btn-danger btn-sm" onclick="removeEditLocation(this)">删除location</button>
                 </div>
-            `;
+                `;
+            } else {
+                // TCP/UDP 代理：不包含 location-content，简化结构
+                locationContentHtml = `
+                        <div class="backend-row">
+                            <div class="input-with-add address-input">
+                <input type="text" placeholder="IP地址" class="backend-address">
+                            </div>
+                            <div class="input-with-add port-input">
+                <input type="number" placeholder="端口" class="backend-port" min="1" max="65535">
+                            </div>
+                            <div class="input-with-add input-weight">
+                <input type="number" placeholder="权重" class="backend-weight" value="1" min="1">
+                            </div>
+                            <div class="backend-row-actions">
+                                <button type="button" class="btn-icon btn-add-icon" onclick="addEditBackendRow(this)" title="添加">+</button>
+                                <button type="button" class="btn-icon btn-remove-icon" onclick="removeEditBackendRow(this)" title="删除">−</button>
+                            </div>
+                        </div>
+                `;
+            }
+            
+            locationItem.innerHTML = locationContentHtml;
+            
+            // 根据代理类型设置类名
+            if (proxyType === 'tcp' || proxyType === 'udp') {
+                locationItem.classList.add('tcp-udp-mode');
+            }
             configSection.appendChild(locationItem);
         }
         

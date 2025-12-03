@@ -161,7 +161,7 @@ function _M.get_latest_backup()
     return nil
 end
 
--- 清理旧备份文件
+-- 清理旧备份文件（只保留一个月的备份）
 function _M.cleanup_old_backups()
     ensure_backup_dir()
     
@@ -174,32 +174,70 @@ function _M.cleanup_old_backups()
     -- 转义路径中的特殊字符（防止shell注入）
     local escaped_dir = BACKUP_DIR:gsub("'", "'\\''")
     
-    -- 列出所有备份文件，按时间排序（使用安全转义）
-    local cmd = "ls -t '" .. escaped_dir .. "/rules_backup_*.*' 2>/dev/null"
+    -- 列出所有备份文件（使用安全转义）
+    local cmd = "ls '" .. escaped_dir .. "/rules_backup_*.*' 2>/dev/null"
     local handle = io.popen(cmd)
     if not handle then
         return
     end
     
-    local files = {}
+    local current_time = ngx.time()
+    -- 计算一个月前的时间戳（30天 = 30 * 24 * 60 * 60 秒）
+    local one_month_ago = current_time - (30 * 24 * 60 * 60)
+    
     for line in handle:lines() do
         -- 验证文件名是否在备份目录内（防止路径遍历攻击）
         if line:match("^" .. BACKUP_DIR:gsub("%-", "%%-") .. "/") then
-            table.insert(files, line)
-        end
-    end
-    handle:close()
-    
-    -- 删除超出最大数量的文件
-    if #files > MAX_BACKUP_FILES then
-        for i = MAX_BACKUP_FILES + 1, #files do
-            -- 再次验证文件路径（双重检查）
-            if files[i]:match("^" .. BACKUP_DIR:gsub("%-", "%%-") .. "/") then
-                os.remove(files[i])
-                ngx.log(ngx.INFO, "removed old backup file: ", files[i])
+            -- 从文件名中提取时间戳
+            -- 文件名格式：rules_backup_YYYYMMDD_HHMMSS.json 或 rules_backup_YYYYMMDD_HHMMSS.msgpack
+            local timestamp_str = line:match("rules_backup_(%d%d%d%d%d%d%d%d_%d%d%d%d%d%d)")
+            if timestamp_str then
+                -- 解析时间戳：YYYYMMDD_HHMMSS
+                local year = tonumber(timestamp_str:sub(1, 4))
+                local month = tonumber(timestamp_str:sub(5, 6))
+                local day = tonumber(timestamp_str:sub(7, 8))
+                local hour = tonumber(timestamp_str:sub(10, 11))
+                local minute = tonumber(timestamp_str:sub(12, 13))
+                local second = tonumber(timestamp_str:sub(14, 15))
+                
+                if year and month and day and hour and minute and second then
+                    -- 使用os.time构建时间戳
+                    -- 注意：备份文件名使用os.date("%Y%m%d_%H%M%S", ngx.time())生成，使用本地时区
+                    -- os.time也使用本地时区，所以可以直接使用
+                    local file_time = os.time({
+                        year = year,
+                        month = month,
+                        day = day,
+                        hour = hour,
+                        min = minute,
+                        sec = second
+                    })
+                    
+                    -- 如果文件时间早于一个月前，删除该文件
+                    if file_time and file_time < one_month_ago then
+                        -- 再次验证文件路径（双重检查，防止路径遍历攻击）
+                        if line:match("^" .. BACKUP_DIR:gsub("%-", "%%-") .. "/") then
+                            local ok, err = os.remove(line)
+                            if ok then
+                                ngx.log(ngx.INFO, "removed old backup file (older than 1 month): ", line, 
+                                        " (file_time: ", os.date("%Y-%m-%d %H:%M:%S", file_time), 
+                                        ", threshold: ", os.date("%Y-%m-%d %H:%M:%S", one_month_ago), ")")
+                            else
+                                ngx.log(ngx.WARN, "failed to remove old backup file: ", line, ", error: ", err or "unknown")
+                            end
+                        end
+                    end
+                else
+                    -- 如果无法解析时间戳，记录警告但不删除（可能是旧格式或其他文件）
+                    ngx.log(ngx.WARN, "cannot parse timestamp from backup file: ", line)
+                end
+            else
+                -- 如果文件名格式不匹配，记录警告但不删除（可能是其他文件）
+                ngx.log(ngx.WARN, "backup file name format not recognized: ", line)
             end
         end
     end
+    handle:close()
 end
 
 -- 从备份加载规则到缓存（降级模式）

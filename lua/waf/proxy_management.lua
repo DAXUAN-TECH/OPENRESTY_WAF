@@ -412,8 +412,13 @@ function _M.list_proxies(params)
                 -- 调试日志：记录解析的规则ID
                 ngx.log(ngx.DEBUG, "proxy_id=", proxy.id, ", decoded rule_ids: ", cjson.encode(rule_ids), ", count: ", #rule_ids)
             else
+                -- 解码失败，保存原始值用于日志
+                local raw_value = proxy.ip_rule_ids
                 proxy.ip_rule_ids = nil
-                ngx.log(ngx.WARN, "proxy_id=", proxy.id, ", failed to decode ip_rule_ids: ", tostring(proxy.ip_rule_ids))
+                -- 只在解码失败且原始值不为空时记录警告（可能是数据格式错误）
+                if raw_value and raw_value ~= "" then
+                    ngx.log(ngx.WARN, "proxy_id=", proxy.id, ", failed to decode ip_rule_ids, raw value: ", tostring(raw_value))
+                end
             end
         else
             proxy.ip_rule_ids = nil

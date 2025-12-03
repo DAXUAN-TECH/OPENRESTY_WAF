@@ -806,18 +806,20 @@ function _M.generate_all_configs()
                     -- 如果该location有后端服务器，生成upstream配置
                     if #location_backends > 0 then
                         -- 生成upstream名称：upstream_{proxy_id}_loc_{index}
-                        local location_upstream_name = "upstream_" .. proxy.id .. "_loc_" .. loc_index
+                        local proxy_id_str = tostring(proxy.id)
+                        local loc_index_str = tostring(loc_index)
+                        local location_upstream_name = "upstream_" .. proxy_id_str .. "_loc_" .. loc_index_str
                         local location_upstream_config = generate_upstream_config_for_location(proxy, location_backends, location_upstream_name)
                         
                         if location_upstream_config then
                             -- 生成独立的upstream配置文件
-                            local location_upstream_filename = "http_upstream_" .. proxy.id .. "_loc_" .. loc_index .. ".conf"
+                            local location_upstream_filename = "http_upstream_" .. tostring(proxy.id) .. "_loc_" .. tostring(loc_index) .. ".conf"
                             local location_upstream_file = upstream_dir .. "/" .. location_upstream_filename
                             
                             local upstream_fd = io.open(location_upstream_file, "w")
                             if upstream_fd then
                                 local upstream_file_content = "# ============================================\n"
-                                upstream_file_content = upstream_file_content .. "# Upstream配置: " .. escape_nginx_value(proxy.proxy_name) .. " (代理ID: " .. proxy.id .. ")\n"
+                                upstream_file_content = upstream_file_content .. "# Upstream配置: " .. escape_nginx_value(proxy.proxy_name) .. " (代理ID: " .. tostring(proxy.id) .. ")\n"
                                 upstream_file_content = upstream_file_content .. "# Location路径: " .. escape_nginx_value(loc.location_path) .. "\n"
                                 upstream_file_content = upstream_file_content .. "# 类型: " .. string.upper(proxy.proxy_type) .. "\n"
                                 upstream_file_content = upstream_file_content .. "# 后端类型: 多个后端（负载均衡）\n"
@@ -852,7 +854,7 @@ function _M.generate_all_configs()
                     if proxy.proxy_type == "http" then
                         upstream_subdir = "http_https"
                         -- HTTP/HTTPS upstream文件名使用 http_upstream_ 前缀
-                        upstream_filename = "http_upstream_" .. proxy.id .. ".conf"
+                        upstream_filename = "http_upstream_" .. tostring(proxy.id) .. ".conf"
                     else
                         upstream_subdir = "tcp_udp"
                         -- TCP/UDP upstream文件名保持 stream_upstream_ 前缀
@@ -953,7 +955,7 @@ function _M.generate_all_configs()
                     local upstream_fd = io.open(upstream_file, "w")
                     if upstream_fd then
                         local upstream_file_content = "# ============================================\n"
-                        upstream_file_content = upstream_file_content .. "# Upstream配置: " .. escape_nginx_value(proxy.proxy_name) .. " (代理ID: " .. proxy.id .. ")\n"
+                        upstream_file_content = upstream_file_content .. "# Upstream配置: " .. escape_nginx_value(proxy.proxy_name) .. " (代理ID: " .. tostring(proxy.id) .. ")\n"
                         upstream_file_content = upstream_file_content .. "# 类型: " .. string.upper(proxy.proxy_type) .. "\n"
                         upstream_file_content = upstream_file_content .. "# 后端类型: 多个后端（负载均衡）\n"
                         upstream_file_content = upstream_file_content .. "# 自动生成，请勿手动修改\n"

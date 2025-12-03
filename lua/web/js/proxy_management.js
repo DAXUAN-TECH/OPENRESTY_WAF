@@ -1097,8 +1097,10 @@ const pageSize = 20;
                         const locationPathInput = locationItem.querySelector('.location-path-input');
                         const locationPath = locationPathInput ? locationPathInput.value.trim() : '';
                         
-                        // 遍历该location下的所有backend-row
+                        // 先收集该location下的所有后端服务器
                         const backendRows = locationItem.querySelectorAll('.backend-row');
+                        const locationBackends = [];
+                        
                         backendRows.forEach(backendRow => {
                             // 收集该backend-row中的所有输入框
                             const addressInputs = backendRow.querySelectorAll('.backend-address');
@@ -1122,16 +1124,8 @@ const pageSize = 20;
                                 const weight = weightInputs[i]?.value || '1';
                                 
                                 if (address && port) {
-                                    // 如果有location_path，添加到location_paths
-                                    if (locationPath) {
-                                        locationPaths.push({
-                                            location_path: locationPath,
-                                            backend_path: locationBackendPath || null
-                                        });
-                                    }
-                                    
                                     // 添加到backends，关联location_path
-                                    backends.push({
+                                    locationBackends.push({
                                         location_path: locationPath || null,
                                         backend_address: address,
                                         backend_port: parseInt(port),
@@ -1141,6 +1135,29 @@ const pageSize = 20;
                                 }
                             }
                         });
+                        
+                        // 如果该location有后端服务器，添加到location_paths（每个location只添加一次）
+                        if (locationPath && locationPath !== '/' && locationBackends.length > 0) {
+                            // 获取该location下第一个后端行的目标路径（用于location_paths的backend_path）
+                            let backendPath = null;
+                            if (locationBackends.length > 0 && locationBackends[0].backend_path) {
+                                backendPath = locationBackends[0].backend_path;
+                            }
+                            
+                            locationPaths.push({
+                                location_path: locationPath,
+                                backend_path: backendPath || null
+                            });
+                            
+                            // 将该location的所有后端服务器添加到总的后端服务器列表
+                            backends.push(...locationBackends);
+                        } else if (locationPath && locationPath !== '/' && locationBackends.length === 0) {
+                            // 即使没有后端服务器，也添加location_path（用于后续添加后端服务器）
+                            locationPaths.push({
+                                location_path: locationPath,
+                                backend_path: null
+                            });
+                        }
                     });
                 }
                 
@@ -1472,8 +1489,10 @@ const pageSize = 20;
                             locationPath = locationPathInput.value.trim() || '/';
                         }
                         
-                        // 收集该location下的所有后端服务器
+                        // 先收集该location下的所有后端服务器
                         const backendRows = locationBackends ? locationBackends.querySelectorAll('.backend-row') : [];
+                        const locationBackendsList = [];
+                        
                         backendRows.forEach(backendRow => {
                             const address = backendRow.querySelector('.backend-address').value.trim();
                             const port = parseInt(backendRow.querySelector('.backend-port').value);
@@ -1482,7 +1501,8 @@ const pageSize = 20;
                             const targetPath = targetPathInput ? targetPathInput.value.trim() : '';
                             
                             if (address && port) {
-                                allBackends.push({
+                                locationBackendsList.push({
+                                    location_path: locationPath || null,
                                     backend_address: address,
                                     backend_port: port,
                                     weight: weight,
@@ -1491,21 +1511,26 @@ const pageSize = 20;
                             }
                         });
                         
-                        // 收集location_paths（HTTP代理）
+                        // 如果该location有后端服务器，添加到location_paths（每个location只添加一次）
                         if (locationPathInput && locationPath !== '/') {
                             // 获取该location下第一个后端行的目标路径
-                            const firstBackendRow = backendRows[0];
-                            let backendPath = '';
-                            if (firstBackendRow) {
-                                const targetPathInput = firstBackendRow.querySelector('.location-backend-path-input');
-                                if (targetPathInput) {
-                                    backendPath = targetPathInput.value.trim();
-                                }
+                            let backendPath = null;
+                            if (locationBackendsList.length > 0 && locationBackendsList[0].backend_path) {
+                                backendPath = locationBackendsList[0].backend_path;
                             }
                             
                             locationPaths.push({
                                 location_path: locationPath,
                                 backend_path: backendPath || null
+                            });
+                            
+                            // 将该location的所有后端服务器添加到总的后端服务器列表
+                            allBackends.push(...locationBackendsList);
+                        } else if (locationPathInput && locationPath !== '/' && locationBackendsList.length === 0) {
+                            // 即使没有后端服务器，也添加location_path（用于后续添加后端服务器）
+                            locationPaths.push({
+                                location_path: locationPath,
+                                backend_path: null
                             });
                         }
                     });

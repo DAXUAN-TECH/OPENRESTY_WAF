@@ -317,7 +317,6 @@ INSERT INTO waf_system_config (config_key, config_value, description) VALUES
 ('shared_memory_optimizer_enable', '1', '是否启用共享内存优化（使用Redis替代部分共享内存，1-启用，0-禁用）'),
 ('shared_memory_redis_fallback_enable', '1', '是否启用Redis回退机制（Redis失败时回退到共享内存，1-启用，0-禁用）'),
 -- 网络优化配置
-('http2_enable', '0', '是否启用HTTP/2支持（需要SSL/TLS，1-启用，0-禁用）'),
 ('brotli_enable', '0', '是否启用Brotli压缩（需要ngx_brotli模块，1-启用，0-禁用）'),
 -- 系统访问白名单配置（从waf_system_access_whitelist_config表合并）
 ('system_access_whitelist_enabled', '0', '是否启用系统访问白名单（1-启用，0-禁用，开启时只有白名单内的IP才能访问管理系统）'),
@@ -483,7 +482,6 @@ INSERT INTO waf_feature_switches (feature_key, feature_name, description, enable
 ('proxy_trusted_check', '受信任代理检查', '受信任代理检查功能，安全获取客户端真实IP', 1, 'database'),
 -- 注意：系统访问白名单功能已从功能管理中移除，保留在系统设置中管理
 -- 网络优化
-('http2', 'HTTP/2支持', 'HTTP/2支持功能（需要SSL/TLS）', 0, 'database'),
 ('brotli', 'Brotli压缩', 'Brotli压缩功能（需要ngx_brotli模块）', 0, 'database'),
 -- 界面功能
 ('stats', '统计报表', '封控统计报表功能，提供封控数据统计和分析', 1, 'database'),

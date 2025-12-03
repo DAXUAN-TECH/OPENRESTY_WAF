@@ -508,7 +508,7 @@ local function generate_http_server_config(proxy, upstream_name, backends, proje
         
         -- 检查用户是否明确创建了 location /（不自动生成默认location）
         -- 只有在用户明确创建了 location / 时，才会生成 location / 配置
-        -- 如果用户没有创建 location /，则不生成，让Nginx返回404（更符合用户预期）
+        -- 如果用户没有创建 location /，则添加 location / 返回404，避免显示OpenResty默认页面
         local has_root_location = false
         if location_paths and #location_paths > 0 then
             for _, loc in ipairs(location_paths) do
@@ -519,10 +519,14 @@ local function generate_http_server_config(proxy, upstream_name, backends, proje
             end
         end
         
-        -- 如果用户没有创建 location /，不生成默认 location /
-        -- 这样可以让不匹配的请求返回404，而不是被代理到第一个location的upstream
+        -- 如果用户没有创建 location /，添加 location / 返回404
+        -- 这样可以避免Nginx使用默认的root目录（/usr/local/openresty/nginx/html）显示默认页面
         if not has_root_location then
-            ngx.log(ngx.INFO, "generate_http_server_config: 代理 ", proxy.id, " (", proxy.proxy_name, ") 没有创建 location /，不生成默认 location /")
+            ngx.log(ngx.INFO, "generate_http_server_config: 代理 ", proxy.id, " (", proxy.proxy_name, ") 没有创建 location /，添加 location / 返回404")
+            config = config .. "\n    # 默认location（处理不匹配任何location的请求，返回404避免显示OpenResty默认页面）\n"
+            config = config .. "    location / {\n"
+            config = config .. "        return 404;\n"
+            config = config .. "    }\n"
         end
     else
         -- 如果没有location_paths，记录错误并返回503

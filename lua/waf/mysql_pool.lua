@@ -7,20 +7,37 @@ local config = require "config"
 local _M = {}
 local pool = {}
 
--- 缓存解析后的 MySQL host IP 地址
-local resolved_host = nil
+-- 缓存解析后的 MySQL host IP 地址（带过期时间，应对动态 IP）
+local resolved_host_cache = {
+    ip = nil,
+    expire_time = 0,  -- 缓存过期时间（Unix 时间戳）
+    cache_ttl = 300   -- 缓存有效期（秒），5 分钟
+}
+
+-- 清除 DNS 缓存（当连接失败时调用）
+function _M.clear_dns_cache()
+    resolved_host_cache.ip = nil
+    resolved_host_cache.expire_time = 0
+    ngx.log(ngx.INFO, "MySQL DNS cache cleared")
+end
 
 -- 解析域名到 IP 地址（使用系统命令，不依赖 resolver）
-local function resolve_hostname(hostname)
+-- 支持缓存和自动刷新，应对动态 IP 地址
+local function resolve_hostname(hostname, force_refresh)
     -- 如果已经是 IP 地址格式，直接返回
     if hostname:match("^%d+%.%d+%.%d+%.%d+$") then
         return hostname
     end
     
-    -- 如果已经解析过，直接返回缓存
-    if resolved_host then
-        return resolved_host
+    local current_time = ngx.time()
+    
+    -- 检查缓存是否有效（未过期且未强制刷新）
+    if not force_refresh and resolved_host_cache.ip and current_time < resolved_host_cache.expire_time then
+        return resolved_host_cache.ip
     end
+    
+    -- 需要重新解析
+    local resolved_ip = nil
     
     -- 使用 getent hosts 命令解析域名（Linux 系统）
     local cmd = "getent hosts " .. hostname .. " 2>/dev/null | awk '{print $1}' | head -n 1"
@@ -29,26 +46,38 @@ local function resolve_hostname(hostname)
         local ip = handle:read("*line")
         handle:close()
         if ip and ip:match("^%d+%.%d+%.%d+%.%d+$") then
-            resolved_host = ip
-            ngx.log(ngx.INFO, "Resolved MySQL hostname '", hostname, "' to IP: ", ip)
-            return ip
+            resolved_ip = ip
         end
     end
     
     -- 如果 getent 失败，尝试使用 nslookup（备用方案）
-    local nslookup_cmd = "nslookup " .. hostname .. " 2>/dev/null | grep -A 1 'Name:' | tail -n 1 | awk '{print $2}'"
-    local nslookup_handle = io.popen(nslookup_cmd)
-    if nslookup_handle then
-        local ip = nslookup_handle:read("*line")
-        nslookup_handle:close()
-        if ip and ip:match("^%d+%.%d+%.%d+%.%d+$") then
-            resolved_host = ip
-            ngx.log(ngx.INFO, "Resolved MySQL hostname '", hostname, "' to IP (via nslookup): ", ip)
-            return ip
+    if not resolved_ip then
+        local nslookup_cmd = "nslookup " .. hostname .. " 2>/dev/null | grep -A 1 'Name:' | tail -n 1 | awk '{print $2}'"
+        local nslookup_handle = io.popen(nslookup_cmd)
+        if nslookup_handle then
+            local ip = nslookup_handle:read("*line")
+            nslookup_handle:close()
+            if ip and ip:match("^%d+%.%d+%.%d+%.%d+$") then
+                resolved_ip = ip
+            end
         end
     end
     
-    -- 如果解析失败，记录警告但返回原始 hostname（让连接尝试失败，而不是静默失败）
+    -- 如果解析成功，更新缓存
+    if resolved_ip then
+        resolved_host_cache.ip = resolved_ip
+        resolved_host_cache.expire_time = current_time + resolved_host_cache.cache_ttl
+        ngx.log(ngx.INFO, "Resolved MySQL hostname '", hostname, "' to IP: ", resolved_ip, " (cached for ", resolved_host_cache.cache_ttl, "s)")
+        return resolved_ip
+    end
+    
+    -- 如果解析失败，但有缓存，使用缓存（可能 DNS 暂时不可用）
+    if resolved_host_cache.ip then
+        ngx.log(ngx.WARN, "Failed to resolve MySQL hostname '", hostname, "', using cached IP: ", resolved_host_cache.ip)
+        return resolved_host_cache.ip
+    end
+    
+    -- 如果解析失败且无缓存，记录警告但返回原始 hostname
     ngx.log(ngx.WARN, "Failed to resolve MySQL hostname '", hostname, "' to IP address. Will use hostname directly (may require resolver configuration).")
     return hostname
 end
@@ -142,8 +171,36 @@ function _M.get_connection()
     }
 
     if not ok then
-        ngx.log(ngx.ERR, "failed to connect: ", err, ": ", errcode, " ", sqlstate)
-        return nil, err
+        -- 连接失败时，如果使用的是域名且使用了缓存的 IP，清除缓存并重试一次
+        local original_host = config.mysql.host
+        if not original_host:match("^%d+%.%d+%.%d+%.%d+$") and resolved_host_cache.ip then
+            ngx.log(ngx.WARN, "MySQL connection failed with cached IP, clearing cache and retrying with fresh DNS resolution")
+            _M.clear_dns_cache()
+            
+            -- 重新解析域名（强制刷新）
+            mysql_host = resolve_hostname(original_host, true)
+            
+            -- 创建新连接并重试
+            db:close()
+            db, err = mysql:new()
+            if db then
+                db:set_timeout(config.mysql.pool_timeout)
+                ok, err, errcode, sqlstate = db:connect{
+                    host = mysql_host,
+                    port = config.mysql.port,
+                    database = config.mysql.database,
+                    user = config.mysql.user,
+                    password = config.mysql.password,
+                    max_packet_size = config.mysql.max_packet_size,
+                    charset = "utf8mb4",
+                }
+            end
+        end
+        
+        if not ok then
+            ngx.log(ngx.ERR, "failed to connect to MySQL: ", err, ": ", errcode, " ", sqlstate, " (host: ", mysql_host, ")")
+            return nil, err
+        end
     end
 
     return db, nil

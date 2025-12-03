@@ -214,7 +214,7 @@ local function generate_http_server_config(proxy, upstream_name, backends, proje
     else
         -- 未启用SSL时，按配置的监听端口生成
         local listen_line = "    listen       " .. proxy.listen_port .. ";\n"
-        config = config .. listen_line
+    config = config .. listen_line
     end
     
     -- 服务器名称
@@ -984,8 +984,13 @@ function _M.generate_all_configs()
             if test_file then
                 test_file:close()
                 local remove_ok, remove_err = os.remove(upstream_dir .. "/.test_write")
-                if not remove_ok then
-                    ngx.log(ngx.WARN, "无法删除测试文件: ", upstream_dir .. "/.test_write", ", 错误: ", tostring(remove_err))
+                if not remove_ok and remove_err then
+                    -- 只有当删除失败且错误不是"文件不存在"时才记录警告
+                    -- 文件不存在是正常的（可能已经被删除或从未创建），不需要警告
+                    local err_str = tostring(remove_err)
+                    if not err_str:match("No such file") and not err_str:match("not found") then
+                        ngx.log(ngx.WARN, "无法删除测试文件: ", upstream_dir .. "/.test_write", ", 错误: ", err_str)
+                    end
                 end
             else
                 -- 获取更详细的错误信息
@@ -1159,8 +1164,13 @@ function _M.generate_all_configs()
                 if test_file then
                     test_file:close()
                         local remove_ok, remove_err = os.remove(upstream_dir .. "/.test_write")
-                        if not remove_ok then
-                            ngx.log(ngx.WARN, "无法删除测试文件: ", upstream_dir .. "/.test_write", ", 错误: ", tostring(remove_err))
+                        if not remove_ok and remove_err then
+                            -- 只有当删除失败且错误不是"文件不存在"时才记录警告
+                            -- 文件不存在是正常的（可能已经被删除或从未创建），不需要警告
+                            local err_str = tostring(remove_err)
+                            if not err_str:match("No such file") and not err_str:match("not found") then
+                                ngx.log(ngx.WARN, "无法删除测试文件: ", upstream_dir .. "/.test_write", ", 错误: ", err_str)
+                            end
                         end
                     else
                         -- 获取更详细的错误信息

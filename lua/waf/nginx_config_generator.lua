@@ -229,7 +229,12 @@ local function generate_http_server_config(proxy, upstream_name, backends, proje
     config = config .. "    client_max_body_size 10m;\n"
 
     -- 如果启用SSL并开启强制HTTPS跳转，则将HTTP请求重定向到HTTPS
+    -- 调试日志：记录SSL和强制跳转状态
+    ngx.log(ngx.DEBUG, "generate_http_server_config: proxy_id=", proxy.id, ", ssl_enable=", tostring(proxy.ssl_enable), 
+            " (type: ", type(proxy.ssl_enable), "), force_https_redirect=", tostring(proxy.force_https_redirect),
+            " (type: ", type(proxy.force_https_redirect), ")")
     if proxy.ssl_enable == 1 and proxy.force_https_redirect == 1 then
+        ngx.log(ngx.INFO, "generate_http_server_config: 为代理 ", proxy.id, " (", proxy.proxy_name, ") 添加强制HTTPS跳转规则")
         config = config .. "    if ($scheme = http) {\n"
         config = config .. "        return 301 https://$host$request_uri;\n"
         config = config .. "    }\n"

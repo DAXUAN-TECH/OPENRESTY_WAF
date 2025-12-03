@@ -82,6 +82,33 @@ local function sanitize_filename(value)
     return value
 end
 
+-- 生成安全的 upstream 名称（用于 nginx 配置中的 upstream 块名称）
+-- upstream 名称只能包含字母、数字、下划线，不能包含其他特殊字符
+local function sanitize_upstream_name(value)
+    if not value then
+        return ""
+    end
+    -- 转换为字符串
+    value = tostring(value)
+    -- 去除前导和尾随空格
+    value = value:gsub("^%s+", ""):gsub("%s+$", "")
+    -- 替换不允许的字符为下划线（upstream 名称只能包含字母、数字、下划线）
+    value = value:gsub("[^%w_]", "_")  -- 保留字母、数字、下划线，其他替换为下划线
+    -- 去除连续的下划线
+    value = value:gsub("_+", "_")
+    -- 去除开头和结尾的下划线
+    value = value:gsub("^_+", ""):gsub("_+$", "")
+    -- 确保以字母或下划线开头（nginx upstream 名称必须以字母或下划线开头）
+    if value ~= "" and not value:match("^[%a_]") then
+        value = "upstream_" .. value
+    end
+    -- 如果为空，使用默认值
+    if value == "" then
+        value = "default"
+    end
+    return value
+end
+
 -- 生成upstream配置（用于单个location）
 local function generate_upstream_config_for_location(proxy, backends, upstream_name)
     if not backends or #backends == 0 then
@@ -257,10 +284,10 @@ local function generate_http_server_config(proxy, upstream_name, backends)
                 config = config .. "\n    location " .. escape_nginx_value(loc.location_path) .. " {\n"
                 
                 -- 为每个location使用独立的upstream配置
-                -- 确保 proxy.id 和 loc_index 都是字符串类型
-                local proxy_id_str = tostring(proxy.id)
-                local loc_index_str = tostring(loc_index)
-                local location_upstream_name = "upstream_" .. proxy_id_str .. "_loc_" .. loc_index_str
+                -- 新命名格式：upstream_$proxy_name_$location_path
+                local proxy_name_safe = sanitize_upstream_name(proxy.proxy_name)
+                local location_path_safe = sanitize_upstream_name(loc.location_path)
+                local location_upstream_name = "upstream_" .. proxy_name_safe .. "_" .. location_path_safe
                 
                 -- 筛选属于当前location的后端服务器
                 local location_backends = {}
@@ -888,10 +915,10 @@ function _M.generate_all_configs()
                     
                     -- 如果该location有后端服务器，生成upstream配置
                     if #location_backends > 0 then
-                        -- 生成upstream名称：upstream_{proxy_id}_loc_{index}
-                        local proxy_id_str = tostring(proxy.id)
-                        local loc_index_str = tostring(loc_index)
-                        local location_upstream_name = "upstream_" .. proxy_id_str .. "_loc_" .. loc_index_str
+                        -- 生成upstream名称：upstream_$proxy_name_$location_path
+                        local proxy_name_safe = sanitize_upstream_name(proxy.proxy_name)
+                        local location_path_safe = sanitize_upstream_name(loc.location_path)
+                        local location_upstream_name = "upstream_" .. proxy_name_safe .. "_" .. location_path_safe
                         local location_upstream_config = generate_upstream_config_for_location(proxy, location_backends, location_upstream_name)
                         
                         if location_upstream_config then

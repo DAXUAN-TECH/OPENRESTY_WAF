@@ -506,59 +506,23 @@ local function generate_http_server_config(proxy, upstream_name, backends, proje
             end
         end
         
-        -- 添加默认location（location /）作为兜底，处理不匹配任何location的请求
-        -- 注意：这个location必须在所有其他location之后，优先级最低
-        -- 如果所有location都有后端服务器，使用第一个location的upstream作为默认
-        if location_paths and #location_paths > 0 and backends and #backends > 0 then
-            -- 找到第一个有后端服务器的location
-            local default_location = nil
-            local default_upstream_name = nil
+        -- 检查用户是否明确创建了 location /（不自动生成默认location）
+        -- 只有在用户明确创建了 location / 时，才会生成 location / 配置
+        -- 如果用户没有创建 location /，则不生成，让Nginx返回404（更符合用户预期）
+        local has_root_location = false
+        if location_paths and #location_paths > 0 then
             for _, loc in ipairs(location_paths) do
-                if loc.location_path and loc.location_path ~= "" then
-                    -- 检查这个location是否有后端服务器
-                    local has_backends = false
-                    for _, backend in ipairs(backends) do
-                        local backend_location_path = null_to_nil(backend.location_path)
-                        if backend_location_path == loc.location_path then
-                            has_backends = true
-                            break
-                        end
-                    end
-                    if has_backends then
-                        default_location = loc
-                        local proxy_name_safe = sanitize_upstream_name(proxy.proxy_name)
-                        local location_path_safe = sanitize_upstream_name(loc.location_path)
-                        default_upstream_name = "upstream_" .. proxy_name_safe .. "_" .. location_path_safe
-                        break
-                    end
+                if loc.location_path and loc.location_path == "/" then
+                    has_root_location = true
+                    break
                 end
             end
-            
-            -- 如果找到了默认location，生成默认location块
-            if default_location and default_upstream_name then
-                config = config .. "\n    # 默认location（处理不匹配任何location的请求）\n"
-                config = config .. "    location / {\n"
-                config = config .. "        proxy_pass http://" .. default_upstream_name .. ";\n"
-                config = config .. "\n        # 请求头设置\n"
-                config = config .. "        proxy_set_header Host $host;\n"
-                config = config .. "        proxy_set_header X-Real-IP $remote_addr;\n"
-                config = config .. "        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n"
-                config = config .. "        proxy_set_header X-Forwarded-Proto $scheme;\n"
-                config = config .. "        proxy_set_header Connection \"\";\n"
-                config = config .. "\n        # HTTP版本\n"
-                config = config .. "        proxy_http_version 1.1;\n"
-                config = config .. "\n        # 超时设置\n"
-                if proxy.proxy_connect_timeout then
-                    config = config .. "        proxy_connect_timeout " .. proxy.proxy_connect_timeout .. "s;\n"
-                end
-                if proxy.proxy_send_timeout then
-                    config = config .. "        proxy_send_timeout " .. proxy.proxy_send_timeout .. "s;\n"
-                end
-                if proxy.proxy_read_timeout then
-                    config = config .. "        proxy_read_timeout " .. proxy.proxy_read_timeout .. "s;\n"
-                end
-                config = config .. "    }\n"
-            end
+        end
+        
+        -- 如果用户没有创建 location /，不生成默认 location /
+        -- 这样可以让不匹配的请求返回404，而不是被代理到第一个location的upstream
+        if not has_root_location then
+            ngx.log(ngx.INFO, "generate_http_server_config: 代理 ", proxy.id, " (", proxy.proxy_name, ") 没有创建 location /，不生成默认 location /")
         end
     else
         -- 如果没有location_paths，记录错误并返回503

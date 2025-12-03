@@ -964,7 +964,7 @@ function _M.generate_all_configs()
                backend_type, load_balance,
                ssl_enable, ssl_pem, ssl_key, force_https_redirect,
                proxy_timeout, proxy_connect_timeout, proxy_send_timeout, proxy_read_timeout,
-               status
+               ip_rule_ids, status
             FROM waf_proxy_configs
             WHERE status = 1
             ORDER BY id ASC

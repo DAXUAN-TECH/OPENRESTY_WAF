@@ -298,8 +298,8 @@ function _M.query(sql, ...)
         ngx.log(ngx.DEBUG, "failed to set keepalive (possibly already closed): ", tostring(err_keepalive))
     else
         local ok, err = ok_keepalive, err_keepalive
-        if not ok then
-            ngx.log(ngx.ERR, "failed to set keepalive: ", err)
+    if not ok then
+        ngx.log(ngx.ERR, "failed to set keepalive: ", err)
         end
     end
 
@@ -338,7 +338,7 @@ function _M.insert(sql, ...)
         ngx.log(ngx.DEBUG, "failed to set keepalive for insert (possibly already closed): ", tostring(err_keepalive))
     else
         local ok, err = ok_keepalive, err_keepalive
-        if not ok then
+    if not ok then
             ngx.log(ngx.ERR, "failed to set keepalive for insert: ", err)
         end
     end

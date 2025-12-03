@@ -351,6 +351,12 @@ function _M.create_proxy(proxy_data)
     
     ngx.log(ngx.INFO, "proxy created: ", insert_id)
     
+    -- 清除代理规则缓存（如果使用灵活模式）
+    local ok_cache, proxy_rule_cache = pcall(require, "waf.proxy_rule_cache")
+    if ok_cache and proxy_rule_cache then
+        proxy_rule_cache.clear_cache(insert_id)
+    end
+    
     -- 如果代理已启用，生成nginx配置
     if status == 1 then
         local ok, err = nginx_config_generator.generate_all_configs()
@@ -400,7 +406,7 @@ function _M.list_proxies(params)
     
     -- 查询列表（LEFT JOIN规则表获取规则名称和类型）
     local offset = (page - 1) * page_size
-        local sql = string.format([[
+    local sql = string.format([[
         SELECT p.id, p.proxy_name, p.proxy_type, p.listen_port, p.listen_address, p.server_name, p.location_paths,
                p.backend_type, p.load_balance,
                p.health_check_enable, p.health_check_interval, p.health_check_timeout,
@@ -514,11 +520,11 @@ function _M.list_proxies(params)
                     ngx.log(ngx.DEBUG, "proxy_id=", proxy.id, ", found ", #ordered_rules, " rules")
                 else
                     proxy.rules = {}
-                    proxy.rule_name = nil
-                    proxy.rule_type = nil
+                proxy.rule_name = nil
+                proxy.rule_type = nil
                     ngx.log(ngx.WARN, "proxy_id=", proxy.id, ", ordered_rules is empty after mapping")
-                end
-            else
+            end
+        else
                 proxy.rules = {}
                 proxy.rule_name = nil
                 proxy.rule_type = nil
@@ -917,6 +923,12 @@ function _M.update_proxy(proxy_id, proxy_data)
     
     ngx.log(ngx.INFO, "proxy updated: ", proxy_id)
     
+    -- 清除代理规则缓存（如果使用灵活模式）
+    local ok_cache, proxy_rule_cache = pcall(require, "waf.proxy_rule_cache")
+    if ok_cache and proxy_rule_cache then
+        proxy_rule_cache.clear_cache(proxy_id)
+    end
+    
     -- 注意：如果状态、SSL配置或强制跳转配置发生变化，需要重新生成nginx配置
     -- 但是，如果是从 disable_proxy() 或 enable_proxy() 调用的，它们会自己调用 generate_all_configs()
     -- 所以这里只在直接调用 update_proxy() 时才重新生成配置
@@ -969,6 +981,12 @@ function _M.delete_proxy(proxy_id)
     end
     
     ngx.log(ngx.INFO, "proxy deleted: ", proxy_id)
+    
+    -- 清除代理规则缓存（如果使用灵活模式）
+    local ok_cache, proxy_rule_cache = pcall(require, "waf.proxy_rule_cache")
+    if ok_cache and proxy_rule_cache then
+        proxy_rule_cache.clear_cache(proxy_id)
+    end
     
     -- 重新生成nginx配置（排除已删除的代理）
     local ok, err = nginx_config_generator.generate_all_configs()

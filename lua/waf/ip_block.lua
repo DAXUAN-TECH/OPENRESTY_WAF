@@ -789,16 +789,16 @@ function _M.check_stream(rule_id)
                     return
                 elseif matched_rule.rule_type == "ip_blacklist" then
                     -- 黑名单匹配，拒绝连接
-                    log_block(client_ip, matched_rule, "manual")
-                    
-                    -- 记录监控指标
-                    if config.metrics and config.metrics.enable then
-                        metrics.record_block("manual")
-                    end
-                    
-                    -- Stream块中拒绝连接（使用ngx.exit()）
-                    ngx.log(ngx.INFO, "Stream connection blocked by IP rule: ", client_ip, ", rule_id: ", rule_id_num)
-                    ngx.exit(1)  -- 拒绝连接
+                log_block(client_ip, matched_rule, "manual")
+                
+                -- 记录监控指标
+                if config.metrics and config.metrics.enable then
+                    metrics.record_block("manual")
+                end
+                
+                -- Stream块中拒绝连接（使用ngx.exit()）
+                ngx.log(ngx.INFO, "Stream connection blocked by IP rule: ", client_ip, ", rule_id: ", rule_id_num)
+                ngx.exit(1)  -- 拒绝连接
                     return
                 elseif matched_rule.rule_type == "geo_whitelist" or matched_rule.rule_type == "geo_blacklist" then
                     -- 地域规则检查（由geo_block模块处理）
@@ -935,14 +935,14 @@ function _M.check(rule_id)
                     return
                 elseif matched_rule.rule_type == "ip_blacklist" then
                     -- 黑名单匹配，拒绝访问
-                    log_block(client_ip, matched_rule, "manual")
-                    
-                    -- 记录监控指标
-                    if config.metrics and config.metrics.enable then
-                        metrics.record_block("manual")
-                    end
-                    
-                    -- 返回 403
+                log_block(client_ip, matched_rule, "manual")
+                
+                -- 记录监控指标
+                if config.metrics and config.metrics.enable then
+                    metrics.record_block("manual")
+                end
+                
+                -- 返回 403
                     error_pages.return_403(client_ip, "已被封控")
                     return
                 elseif matched_rule.rule_type == "geo_whitelist" or matched_rule.rule_type == "geo_blacklist" then
@@ -1184,19 +1184,19 @@ function _M.check_multiple(rule_ids)
             if matched_rule and matched_rule.rule_type == "geo_blacklist" then
                 -- 地域黑名单检查（由geo_block模块处理）
                 local geo_block = require "waf.geo_block"
-                local is_blocked_geo = geo_block.check_blacklist(client_ip, rule_id_num)
-                if is_blocked_geo then
-                    -- 记录封控日志
-                    log_block(client_ip, matched_rule, "manual")
-                    
-                    -- 记录监控指标
-                    if config.metrics and config.metrics.enable then
-                        metrics.record_block("manual")
-                    end
-                    
-                    -- 返回403错误
+                    local is_blocked_geo = geo_block.check_blacklist(client_ip, rule_id_num)
+                    if is_blocked_geo then
+                        -- 记录封控日志
+                        log_block(client_ip, matched_rule, "manual")
+                        
+                        -- 记录监控指标
+                        if config.metrics and config.metrics.enable then
+                            metrics.record_block("manual")
+                        end
+                        
+                        -- 返回403错误
                     error_pages.return_403(client_ip, "已被封控")
-                    return
+                                    return
                 end
             end
         end
@@ -1311,19 +1311,19 @@ function _M.check_stream_multiple(rule_ids)
             if matched_rule and matched_rule.rule_type == "geo_blacklist" then
                 -- 地域黑名单检查（由geo_block模块处理）
                 local geo_block = require "waf.geo_block"
-                local is_blocked_geo = geo_block.check_blacklist(client_ip, rule_id_num)
-                if is_blocked_geo then
-                    -- 记录封控日志
-                    log_block(client_ip, matched_rule, "manual")
-                    
-                    -- 记录监控指标
-                    if config.metrics and config.metrics.enable then
-                        metrics.record_block("manual")
-                    end
-                    
-                    -- Stream块中拒绝连接（使用ngx.exit()）
-                    ngx.log(ngx.INFO, "Stream connection blocked by geo rule: ", client_ip, ", rule_id: ", rule_id_num)
-                    ngx.exit(1)  -- 拒绝连接
+                    local is_blocked_geo = geo_block.check_blacklist(client_ip, rule_id_num)
+                    if is_blocked_geo then
+                        -- 记录封控日志
+                        log_block(client_ip, matched_rule, "manual")
+                        
+                        -- 记录监控指标
+                        if config.metrics and config.metrics.enable then
+                            metrics.record_block("manual")
+                        end
+                        
+                        -- Stream块中拒绝连接（使用ngx.exit()）
+                        ngx.log(ngx.INFO, "Stream connection blocked by geo rule: ", client_ip, ", rule_id: ", rule_id_num)
+                        ngx.exit(1)  -- 拒绝连接
                     return
                 end
             end

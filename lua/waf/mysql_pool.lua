@@ -210,11 +210,21 @@ function _M.get_connection()
         sqlstate = connect_results.sqlstate
     else
         -- xpcall 失败，说明 connect 过程中抛出了异常（可能是 socket 已关闭）
+        -- 注意：即使xpcall捕获了异常，resty.mysql库内部可能仍然会在已关闭的socket上操作
+        -- 这会导致"attempt to send data on a closed socket"错误，但这是预期的行为
         ok = false
         err = connect_results.err or connect_err or "connection failed with exception"
         errcode = nil
         sqlstate = nil
-        ngx.log(ngx.WARN, "MySQL connect() xpcall failed: ", tostring(connect_err))
+        -- 如果是socket相关错误，记录为DEBUG级别（这是预期的，不需要警告）
+        local err_str = tostring(connect_err) or ""
+        if err_str:match("attempt to send data on a closed socket") or 
+           err_str:match("closed socket") or
+           err_str:match("timeout") then
+            ngx.log(ngx.DEBUG, "MySQL connect() xpcall socket error (expected): ", err_str)
+        else
+            ngx.log(ngx.WARN, "MySQL connect() xpcall failed: ", err_str)
+        end
     end
 
     if not ok then

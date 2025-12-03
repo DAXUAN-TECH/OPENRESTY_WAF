@@ -7,6 +7,52 @@ local config = require "config"
 local _M = {}
 local pool = {}
 
+-- 缓存解析后的 MySQL host IP 地址
+local resolved_host = nil
+
+-- 解析域名到 IP 地址（使用系统命令，不依赖 resolver）
+local function resolve_hostname(hostname)
+    -- 如果已经是 IP 地址格式，直接返回
+    if hostname:match("^%d+%.%d+%.%d+%.%d+$") then
+        return hostname
+    end
+    
+    -- 如果已经解析过，直接返回缓存
+    if resolved_host then
+        return resolved_host
+    end
+    
+    -- 使用 getent hosts 命令解析域名（Linux 系统）
+    local cmd = "getent hosts " .. hostname .. " 2>/dev/null | awk '{print $1}' | head -n 1"
+    local handle = io.popen(cmd)
+    if handle then
+        local ip = handle:read("*line")
+        handle:close()
+        if ip and ip:match("^%d+%.%d+%.%d+%.%d+$") then
+            resolved_host = ip
+            ngx.log(ngx.INFO, "Resolved MySQL hostname '", hostname, "' to IP: ", ip)
+            return ip
+        end
+    end
+    
+    -- 如果 getent 失败，尝试使用 nslookup（备用方案）
+    local nslookup_cmd = "nslookup " .. hostname .. " 2>/dev/null | grep -A 1 'Name:' | tail -n 1 | awk '{print $2}'"
+    local nslookup_handle = io.popen(nslookup_cmd)
+    if nslookup_handle then
+        local ip = nslookup_handle:read("*line")
+        nslookup_handle:close()
+        if ip and ip:match("^%d+%.%d+%.%d+%.%d+$") then
+            resolved_host = ip
+            ngx.log(ngx.INFO, "Resolved MySQL hostname '", hostname, "' to IP (via nslookup): ", ip)
+            return ip
+        end
+    end
+    
+    -- 如果解析失败，记录警告但返回原始 hostname（让连接尝试失败，而不是静默失败）
+    ngx.log(ngx.WARN, "Failed to resolve MySQL hostname '", hostname, "' to IP address. Will use hostname directly (may require resolver configuration).")
+    return hostname
+end
+
 -- SQL 转义函数
 local function escape_sql(str)
     -- 检查是否为 nil 或 cjson.null
@@ -82,8 +128,11 @@ function _M.get_connection()
 
     db:set_timeout(config.mysql.pool_timeout)
 
+    -- 解析 host（如果是域名，解析为 IP 地址；如果是 IP，直接使用）
+    local mysql_host = resolve_hostname(config.mysql.host)
+
     local ok, err, errcode, sqlstate = db:connect{
-        host = config.mysql.host,
+        host = mysql_host,
         port = config.mysql.port,
         database = config.mysql.database,
         user = config.mysql.user,

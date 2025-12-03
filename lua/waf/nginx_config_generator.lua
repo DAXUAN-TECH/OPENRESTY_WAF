@@ -571,15 +571,19 @@ local function generate_http_server_config(proxy, upstream_name, backends, proje
             end
         end
         
-        -- 如果用户没有创建 location /，不需要添加 location / 作为catch-all
+        -- 如果用户没有创建 location /，添加一个 catch-all location / 作为兜底
         -- 原因：当没有location匹配时，Nginx会尝试从root目录读取文件
-        -- 由于root设置为/dev/null，无法读取文件，会返回404
-        -- 这个404会触发error_page 404 = @custom_404，然后调用@custom_404
-        -- 因此不需要显式的location /，可以依赖root /dev/null和error_page机制
-        -- 注意：这样可以简化配置，避免重复的404处理逻辑
+        -- 虽然root设置为/dev/null，但在某些情况下（如access_by_lua_block执行失败），
+        -- Nginx可能仍然尝试从/dev/null读取文件，导致"open() /dev/null/xxx failed"错误
+        -- 因此需要显式的location /来确保所有未匹配的请求都返回404，而不是尝试读取文件
         if not has_root_location then
-            ngx.log(ngx.INFO, "generate_http_server_config: 代理 ", proxy.id, " (", proxy.proxy_name, ") 没有创建 location /，依赖root /dev/null和error_page机制返回404")
-            -- 不需要添加location /，依赖root /dev/null和error_page机制
+            ngx.log(ngx.INFO, "generate_http_server_config: 代理 ", proxy.id, " (", proxy.proxy_name, ") 没有创建 location /，添加catch-all location / 返回404")
+            config = config .. "\n    # Catch-all location /（处理所有未匹配的请求）\n"
+            config = config .. "    location / {\n"
+            config = config .. "        content_by_lua_block {\n"
+            config = config .. "            require(\"waf.error_pages\").return_404(ngx.var.request_uri)\n"
+            config = config .. "        }\n"
+            config = config .. "    }\n"
         end
     else
         -- 如果没有location_paths，记录错误并返回503

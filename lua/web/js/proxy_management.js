@@ -1161,14 +1161,11 @@ const pageSize = 20;
                     });
                 }
                 
-                // 如果location_paths有值，使用它；否则使用location_path（向后兼容）
+                // 设置location_paths
                 if (locationPaths.length > 0) {
                     proxyData.location_paths = locationPaths;
-                    // 为了向后兼容，也设置location_path为第一个值
-                    proxyData.location_path = locationPaths[0].location_path;
                 } else {
-                    // 向后兼容：如果没有location_paths，使用location_path
-                    proxyData.location_path = '/';
+                    // 如果没有location_paths，设置为null
                     proxyData.location_paths = null;
                 }
                 
@@ -1344,7 +1341,7 @@ const pageSize = 20;
                             let locationPaths = [];
                             if (proxy.location_paths && Array.isArray(proxy.location_paths) && proxy.location_paths.length > 0) {
                                 locationPaths = proxy.location_paths;
-                            } else {
+                    } else {
                                 // 如果没有location_paths，使用默认值
                                 locationPaths = [{
                                     location_path: '/',
@@ -1536,14 +1533,11 @@ const pageSize = 20;
                     });
                 }
                 
-                // 如果location_paths有值，使用它；否则使用location_path（向后兼容）
+                // 设置location_paths
                 if (locationPaths.length > 0) {
                     proxyData.location_paths = locationPaths;
-                    // 为了向后兼容，也设置location_path为第一个值
-                    proxyData.location_path = locationPaths[0].location_path;
                 } else {
-                    // 向后兼容：如果没有location_paths，使用location_path
-                    proxyData.location_path = '/';
+                    // 如果没有location_paths，设置为null
                     proxyData.location_paths = null;
                 }
                 

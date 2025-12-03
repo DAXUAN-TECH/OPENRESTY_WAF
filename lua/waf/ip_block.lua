@@ -726,9 +726,17 @@ local function check_specific_rule(client_ip, rule_id)
             -- 地域白名单：匹配则允许通过，不匹配则拒绝
             -- 注意：返回true表示匹配成功（白名单），第二个返回值是规则信息
             if is_match then
+                ngx.log(ngx.INFO, "check_specific_rule: 地域白名单匹配成功，rule_id: ", rule_id, 
+                        ", client_ip: ", client_ip, ", rule_value: ", rule_value)
                 return true, rule  -- 白名单匹配，允许通过
             else
-                return false, nil  -- 白名单不匹配，不在白名单中
+                -- 地域白名单不匹配，不在白名单中
+                -- 注意：即使IP不匹配，也要返回规则信息（matched_rule），以便check_multiple知道存在白名单规则
+                -- 返回false表示IP不匹配，但返回rule表示规则存在
+                ngx.log(ngx.INFO, "check_specific_rule: 地域白名单不匹配，rule_id: ", rule_id, 
+                        ", client_ip: ", client_ip, ", rule_value: ", rule_value, 
+                        ", 但规则存在，需要检查是否还有其他白名单规则")
+                return false, rule  -- 返回false表示不匹配，但返回rule表示规则存在
             end
         else
             -- 地域黑名单：匹配则拒绝，不匹配则允许

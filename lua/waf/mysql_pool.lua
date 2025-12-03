@@ -11,7 +11,7 @@ local pool = {}
 local resolved_host_cache = {
     ip = nil,
     expire_time = 0,  -- 缓存过期时间（Unix 时间戳）
-    cache_ttl = 300   -- 缓存有效期（秒），5 分钟
+    cache_ttl = 60    -- 缓存有效期（秒），60 秒（1 分钟），应对动态 IP 快速变化
 }
 
 -- 清除 DNS 缓存（当连接失败时调用）
@@ -171,17 +171,25 @@ function _M.get_connection()
     }
 
     if not ok then
-        -- 连接失败时，如果使用的是域名且使用了缓存的 IP，清除缓存并重试一次
+        -- 连接失败时，如果使用的是域名，清除缓存并重新解析（应对动态 IP 变化）
         local original_host = config.mysql.host
-        if not original_host:match("^%d+%.%d+%.%d+%.%d+$") and resolved_host_cache.ip then
-            ngx.log(ngx.WARN, "MySQL connection failed with cached IP, clearing cache and retrying with fresh DNS resolution")
+        if not original_host:match("^%d+%.%d+%.%d+%.%d+$") then
+            local old_ip = resolved_host_cache.ip
+            ngx.log(ngx.WARN, "MySQL connection failed (host: ", mysql_host, "), clearing DNS cache and retrying with fresh resolution (original hostname: ", original_host, ")")
             _M.clear_dns_cache()
             
-            -- 重新解析域名（强制刷新）
+            -- 重新解析域名（强制刷新，获取最新 IP）
             mysql_host = resolve_hostname(original_host, true)
             
+            -- 如果解析到新的 IP，记录日志
+            if old_ip and mysql_host ~= old_ip and mysql_host:match("^%d+%.%d+%.%d+%.%d+$") then
+                ngx.log(ngx.INFO, "MySQL IP address changed: ", old_ip, " -> ", mysql_host, " (hostname: ", original_host, ")")
+            end
+            
             -- 创建新连接并重试
-            db:close()
+            if db then
+                db:close()
+            end
             db, err = mysql:new()
             if db then
                 db:set_timeout(config.mysql.pool_timeout)
@@ -194,11 +202,15 @@ function _M.get_connection()
                     max_packet_size = config.mysql.max_packet_size,
                     charset = "utf8mb4",
                 }
+                
+                if ok then
+                    ngx.log(ngx.INFO, "MySQL connection retry successful with new IP: ", mysql_host)
+                end
             end
         end
         
         if not ok then
-            ngx.log(ngx.ERR, "failed to connect to MySQL: ", err, ": ", errcode, " ", sqlstate, " (host: ", mysql_host, ")")
+            ngx.log(ngx.ERR, "failed to connect to MySQL after retry: ", err, ": ", errcode, " ", sqlstate, " (host: ", mysql_host, ", original: ", original_host, ")")
             return nil, err
         end
     end

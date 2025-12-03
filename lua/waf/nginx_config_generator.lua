@@ -525,7 +525,9 @@ local function generate_http_server_config(proxy, upstream_name, backends, proje
             ngx.log(ngx.INFO, "generate_http_server_config: 代理 ", proxy.id, " (", proxy.proxy_name, ") 没有创建 location /，添加 location / 返回404")
             config = config .. "\n    # 默认location（处理不匹配任何location的请求，返回404避免显示OpenResty默认页面）\n"
             config = config .. "    location / {\n"
-            config = config .. "        return 404;\n"
+            config = config .. "        content_by_lua_block {\n"
+            config = config .. "            require(\"waf.error_pages\").return_404(ngx.var.request_uri)\n"
+            config = config .. "        }\n"
             config = config .. "    }\n"
         end
     else

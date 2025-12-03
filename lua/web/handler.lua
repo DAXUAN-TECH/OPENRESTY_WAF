@@ -411,9 +411,8 @@ function _M.route()
     end
     
     -- 未匹配的路径
-    ngx.status = 404
-    ngx.header.content_type = "text/html; charset=utf-8"
-    ngx.say("<html><body><h1>404 Not Found</h1><p>页面不存在: " .. escape_html(path) .. "</p></body></html>")
+    local error_pages = require "waf.error_pages"
+    error_pages.return_404(path)
 end
 
 return _M

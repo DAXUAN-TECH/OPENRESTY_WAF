@@ -917,19 +917,30 @@ function _M.update_proxy(proxy_id, proxy_data)
     
     ngx.log(ngx.INFO, "proxy updated: ", proxy_id)
     
-    -- 注意：如果状态发生变化，需要重新生成nginx配置
+    -- 注意：如果状态、SSL配置或强制跳转配置发生变化，需要重新生成nginx配置
     -- 但是，如果是从 disable_proxy() 或 enable_proxy() 调用的，它们会自己调用 generate_all_configs()
     -- 所以这里只在直接调用 update_proxy() 时才重新生成配置
-    -- 检查状态是否发生变化
+    -- 检查状态或SSL相关配置是否发生变化
     local updated_proxy, _ = _M.get_proxy(proxy_id)
     if updated_proxy then
-        -- 如果状态发生变化（启用或禁用），重新生成nginx配置
+        -- 如果状态发生变化（启用或禁用），或者SSL相关配置发生变化，重新生成nginx配置
+        local need_regenerate = false
         if proxy_data.status ~= nil then
+            need_regenerate = true
+        end
+        -- 检查SSL相关配置是否发生变化
+        if proxy_data.ssl_enable ~= nil or proxy_data.force_https_redirect ~= nil or 
+           proxy_data.ssl_pem ~= nil or proxy_data.ssl_key ~= nil then
+            need_regenerate = true
+        end
+        
+        if need_regenerate then
+            ngx.log(ngx.INFO, "update_proxy: 检测到配置变化，重新生成nginx配置...")
             local ok, err = nginx_config_generator.generate_all_configs()
             if not ok then
                 ngx.log(ngx.WARN, "生成nginx配置失败: ", err or "unknown error")
             else
-                ngx.log(ngx.INFO, "代理状态已更新，nginx配置已重新生成")
+                ngx.log(ngx.INFO, "代理配置已更新，nginx配置已重新生成")
             end
         end
     end

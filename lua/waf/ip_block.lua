@@ -1052,31 +1052,54 @@ function _M.check_multiple(rule_ids)
         return
     end
     
-    -- 先检查白名单（如果存在白名单规则，直接允许通过）
+    -- 第一步：检查是否存在白名单规则（ip_whitelist或geo_whitelist）
+    local has_whitelist_rule = false
+    local is_in_whitelist = false
+    local whitelist_rule_name = nil
+    
     for _, rule_id in ipairs(rule_ids) do
         local rule_id_num = tonumber(rule_id)
         if rule_id_num then
-            local is_whitelisted, matched_rule = check_specific_rule(client_ip, rule_id_num)
-            if is_whitelisted and matched_rule then
-                -- 检查规则类型是否为白名单
+            local is_matched, matched_rule = check_specific_rule(client_ip, rule_id_num)
+            if matched_rule then
                 if matched_rule.rule_type == "ip_whitelist" then
-                    -- 在白名单中，直接允许通过
-                    ngx.log(ngx.INFO, "check_multiple: IP ", client_ip, " is whitelisted by rule_id=", rule_id_num, ", rule_name=", matched_rule.rule_name or "unknown")
-                    return
+                    has_whitelist_rule = true
+                    if is_matched then
+                        -- 在白名单中
+                        is_in_whitelist = true
+                        whitelist_rule_name = matched_rule.rule_name
+                        ngx.log(ngx.INFO, "check_multiple: IP ", client_ip, " is whitelisted by rule_id=", rule_id_num, ", rule_name=", matched_rule.rule_name or "unknown")
+                        break
+                    end
                 elseif matched_rule.rule_type == "geo_whitelist" then
+                    has_whitelist_rule = true
                     -- 地域白名单检查（由geo_block模块处理）
                     local geo_block = require "waf.geo_block"
                     local is_allowed = geo_block.check_whitelist(client_ip, rule_id_num)
                     if is_allowed then
+                        is_in_whitelist = true
+                        whitelist_rule_name = matched_rule.rule_name
                         ngx.log(ngx.INFO, "check_multiple: IP ", client_ip, " is geo-whitelisted by rule_id=", rule_id_num, ", rule_name=", matched_rule.rule_name or "unknown")
-                        return  -- 在地域白名单中，允许通过
+                        break
                     end
                 end
             end
         end
     end
     
-    -- 检查黑名单（如果存在黑名单规则，拒绝访问）
+    -- 如果存在白名单规则，但IP不在白名单中，拒绝访问
+    if has_whitelist_rule and not is_in_whitelist then
+        ngx.log(ngx.INFO, "check_multiple: IP ", client_ip, " is not in whitelist, access denied")
+        error_pages.return_403(client_ip, "IP不在白名单中，访问被拒绝")
+        return
+    end
+    
+    -- 如果IP在白名单中，直接允许通过（不检查黑名单）
+    if is_in_whitelist then
+        return
+    end
+    
+    -- 第二步：检查黑名单（如果存在黑名单规则，拒绝访问）
     for _, rule_id in ipairs(rule_ids) do
         local rule_id_num = tonumber(rule_id)
         if rule_id_num then
@@ -1097,34 +1120,27 @@ function _M.check_multiple(rule_ids)
         end
     end
     
-    -- 检查地域规则（如果存在地域规则）
+    -- 第三步：检查地域黑名单规则
     for _, rule_id in ipairs(rule_ids) do
         local rule_id_num = tonumber(rule_id)
         if rule_id_num then
             local is_blocked, matched_rule = check_specific_rule(client_ip, rule_id_num)
-            if matched_rule and (matched_rule.rule_type == "geo_whitelist" or matched_rule.rule_type == "geo_blacklist") then
-                -- 地域规则检查（由geo_block模块处理）
+            if matched_rule and matched_rule.rule_type == "geo_blacklist" then
+                -- 地域黑名单检查（由geo_block模块处理）
                 local geo_block = require "waf.geo_block"
-                if matched_rule.rule_type == "geo_whitelist" then
-                    local is_allowed = geo_block.check_whitelist(client_ip, rule_id_num)
-                    if is_allowed then
-                        return  -- 在地域白名单中，允许通过
+                local is_blocked_geo = geo_block.check_blacklist(client_ip, rule_id_num)
+                if is_blocked_geo then
+                    -- 记录封控日志
+                    log_block(client_ip, matched_rule, "manual")
+                    
+                    -- 记录监控指标
+                    if config.metrics and config.metrics.enable then
+                        metrics.record_block("manual")
                     end
-                elseif matched_rule.rule_type == "geo_blacklist" then
-                    local is_blocked_geo = geo_block.check_blacklist(client_ip, rule_id_num)
-                    if is_blocked_geo then
-                        -- 记录封控日志
-                        log_block(client_ip, matched_rule, "manual")
-                        
-                        -- 记录监控指标
-                        if config.metrics and config.metrics.enable then
-                            metrics.record_block("manual")
-                        end
-                        
-                        -- 返回403错误
-                        error_pages.return_403(client_ip, "已被封控")
-                        return
-                    end
+                    
+                    -- 返回403错误
+                    error_pages.return_403(client_ip, "已被封控")
+                    return
                 end
             end
         end
@@ -1162,31 +1178,54 @@ function _M.check_stream_multiple(rule_ids)
         return
     end
     
-    -- 先检查白名单（如果存在白名单规则，直接允许通过）
+    -- 第一步：检查是否存在白名单规则（ip_whitelist或geo_whitelist）
+    local has_whitelist_rule = false
+    local is_in_whitelist = false
+    local whitelist_rule_name = nil
+    
     for _, rule_id in ipairs(rule_ids) do
         local rule_id_num = tonumber(rule_id)
         if rule_id_num then
-            local is_whitelisted, matched_rule = check_specific_rule(client_ip, rule_id_num)
-            if is_whitelisted and matched_rule then
-                -- 检查规则类型是否为白名单
+            local is_matched, matched_rule = check_specific_rule(client_ip, rule_id_num)
+            if matched_rule then
                 if matched_rule.rule_type == "ip_whitelist" then
-                    -- 在白名单中，直接允许通过
-                    ngx.log(ngx.INFO, "check_stream_multiple: IP ", client_ip, " is whitelisted by rule_id=", rule_id_num, ", rule_name=", matched_rule.rule_name or "unknown")
-                    return
+                    has_whitelist_rule = true
+                    if is_matched then
+                        -- 在白名单中
+                        is_in_whitelist = true
+                        whitelist_rule_name = matched_rule.rule_name
+                        ngx.log(ngx.INFO, "check_stream_multiple: IP ", client_ip, " is whitelisted by rule_id=", rule_id_num, ", rule_name=", matched_rule.rule_name or "unknown")
+                        break
+                    end
                 elseif matched_rule.rule_type == "geo_whitelist" then
+                    has_whitelist_rule = true
                     -- 地域白名单检查（由geo_block模块处理）
                     local geo_block = require "waf.geo_block"
                     local is_allowed = geo_block.check_whitelist(client_ip, rule_id_num)
                     if is_allowed then
+                        is_in_whitelist = true
+                        whitelist_rule_name = matched_rule.rule_name
                         ngx.log(ngx.INFO, "check_stream_multiple: IP ", client_ip, " is geo-whitelisted by rule_id=", rule_id_num, ", rule_name=", matched_rule.rule_name or "unknown")
-                        return  -- 在地域白名单中，允许通过
+                        break
                     end
                 end
             end
         end
     end
     
-    -- 检查黑名单（如果存在黑名单规则，拒绝连接）
+    -- 如果存在白名单规则，但IP不在白名单中，拒绝连接
+    if has_whitelist_rule and not is_in_whitelist then
+        ngx.log(ngx.INFO, "check_stream_multiple: IP ", client_ip, " is not in whitelist, connection denied")
+        ngx.exit(1)  -- 拒绝连接
+        return
+    end
+    
+    -- 如果IP在白名单中，直接允许通过（不检查黑名单）
+    if is_in_whitelist then
+        return
+    end
+    
+    -- 第二步：检查黑名单（如果存在黑名单规则，拒绝连接）
     for _, rule_id in ipairs(rule_ids) do
         local rule_id_num = tonumber(rule_id)
         if rule_id_num then
@@ -1203,38 +1242,33 @@ function _M.check_stream_multiple(rule_ids)
                 -- Stream块中拒绝连接（使用ngx.exit()）
                 ngx.log(ngx.INFO, "Stream connection blocked by IP rule: ", client_ip, ", rule_id: ", rule_id_num)
                 ngx.exit(1)  -- 拒绝连接
+                return
             end
         end
     end
     
-    -- 检查地域规则（如果存在地域规则）
+    -- 第三步：检查地域黑名单规则
     for _, rule_id in ipairs(rule_ids) do
         local rule_id_num = tonumber(rule_id)
         if rule_id_num then
             local is_blocked, matched_rule = check_specific_rule(client_ip, rule_id_num)
-            if matched_rule and (matched_rule.rule_type == "geo_whitelist" or matched_rule.rule_type == "geo_blacklist") then
-                -- 地域规则检查（由geo_block模块处理）
+            if matched_rule and matched_rule.rule_type == "geo_blacklist" then
+                -- 地域黑名单检查（由geo_block模块处理）
                 local geo_block = require "waf.geo_block"
-                if matched_rule.rule_type == "geo_whitelist" then
-                    local is_allowed = geo_block.check_whitelist(client_ip, rule_id_num)
-                    if is_allowed then
-                        return  -- 在地域白名单中，允许通过
+                local is_blocked_geo = geo_block.check_blacklist(client_ip, rule_id_num)
+                if is_blocked_geo then
+                    -- 记录封控日志
+                    log_block(client_ip, matched_rule, "manual")
+                    
+                    -- 记录监控指标
+                    if config.metrics and config.metrics.enable then
+                        metrics.record_block("manual")
                     end
-                elseif matched_rule.rule_type == "geo_blacklist" then
-                    local is_blocked_geo = geo_block.check_blacklist(client_ip, rule_id_num)
-                    if is_blocked_geo then
-                        -- 记录封控日志
-                        log_block(client_ip, matched_rule, "manual")
-                        
-                        -- 记录监控指标
-                        if config.metrics and config.metrics.enable then
-                            metrics.record_block("manual")
-                        end
-                        
-                        -- Stream块中拒绝连接（使用ngx.exit()）
-                        ngx.log(ngx.INFO, "Stream connection blocked by geo rule: ", client_ip, ", rule_id: ", rule_id_num)
-                        ngx.exit(1)  -- 拒绝连接
-                    end
+                    
+                    -- Stream块中拒绝连接（使用ngx.exit()）
+                    ngx.log(ngx.INFO, "Stream connection blocked by geo rule: ", client_ip, ", rule_id: ", rule_id_num)
+                    ngx.exit(1)  -- 拒绝连接
+                    return
                 end
             end
         end
@@ -1245,5 +1279,9 @@ function _M.check_stream_multiple(rule_ids)
 end
 
 return _M
+
+
+
+
 
 

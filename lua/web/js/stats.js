@@ -47,13 +47,23 @@ let timeseriesChart = null;
                 }
                 
                 // 更新概览卡片
-                document.getElementById('totalBlocks').textContent = overviewData.data.total_blocks || 0;
-                document.getElementById('uniqueIPs').textContent = overviewData.data.unique_blocked_ips || 0;
-                document.getElementById('manualBlocks').textContent = overviewData.data.by_reason.manual || 0;
+                const totalBlocks = overviewData.data.total_blocks || 0;
+                const uniqueIPs = overviewData.data.unique_blocked_ips || 0;
+                const manualBlocks = overviewData.data.by_reason.manual || 0;
                 const autoBlocks = (overviewData.data.by_reason.auto_frequency || 0) + 
                                  (overviewData.data.by_reason.auto_error || 0) + 
                                  (overviewData.data.by_reason.auto_scan || 0);
+                
+                document.getElementById('totalBlocks').textContent = totalBlocks;
+                document.getElementById('uniqueIPs').textContent = uniqueIPs;
+                document.getElementById('manualBlocks').textContent = manualBlocks;
                 document.getElementById('autoBlocks').textContent = autoBlocks;
+                
+                // 如果所有数据都是0，显示提示信息
+                if (totalBlocks === 0 && uniqueIPs === 0 && manualBlocks === 0 && autoBlocks === 0) {
+                    // 不显示错误，只是记录到控制台
+                    console.info('统计报表：在选定时间范围内没有封控数据');
+                }
                 
                 // 加载时间序列数据
                 const timeseriesRes = await fetch(`/api/stats/timeseries?start_time=${encodeURIComponent(startTime)}&end_time=${encodeURIComponent(endTime)}&interval=${interval}`);
@@ -92,7 +102,14 @@ let timeseriesChart = null;
                 document.getElementById('content').style.display = 'block';
             } catch (error) {
                 document.getElementById('loading').style.display = 'none';
-                showError('加载失败：' + error.message);
+                document.getElementById('content').style.display = 'none';
+                
+                // 检查是否是功能被禁用的错误
+                if (error.message && (error.message.includes('统计功能已禁用') || error.message.includes('403'))) {
+                    showError('统计功能已被禁用，请在系统设置中启用统计报表功能');
+                } else {
+                    showError('加载失败：' + error.message);
+                }
             }
         }
         
@@ -101,6 +118,27 @@ let timeseriesChart = null;
             // 防御性检查：确保 data 是数组
             if (!data) {
                 console.warn('updateTimeseriesChart: data is null or undefined');
+                // 显示空图表提示
+                const ctx = document.getElementById('timeseriesChart').getContext('2d');
+                if (timeseriesChart) {
+                    timeseriesChart.destroy();
+                }
+                timeseriesChart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: [],
+                        datasets: []
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: '在选定时间范围内没有数据'
+                            }
+                        }
+                    }
+                });
                 return;
             }
             
@@ -131,6 +169,32 @@ let timeseriesChart = null;
             
             if (timeseriesChart) {
                 timeseriesChart.destroy();
+            }
+            
+            // 如果没有数据，显示空图表提示
+            if (dataArray.length === 0) {
+                timeseriesChart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: [],
+                        datasets: []
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: '在选定时间范围内没有封控数据'
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true
+                            }
+                        }
+                    }
+                });
+                return;
             }
             
             timeseriesChart = new Chart(ctx, {
@@ -197,7 +261,7 @@ let timeseriesChart = null;
             }
             
             if (dataArray.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 20px;">暂无数据</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 20px; color: #999;">在选定时间范围内没有规则命中数据</td></tr>';
                 return;
             }
             
@@ -206,7 +270,7 @@ let timeseriesChart = null;
             
             // 如果过滤后没有数据，显示提示
             if (dataArray.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 20px;">在选定时间范围内没有规则命中数据</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 20px; color: #999;">在选定时间范围内没有规则命中数据</td></tr>';
                 return;
             }
             
@@ -263,7 +327,7 @@ let timeseriesChart = null;
             }
             
             if (dataArray.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 20px;">暂无数据</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 20px; color: #999;">在选定时间范围内没有被封控的IP数据</td></tr>';
                 return;
             }
             

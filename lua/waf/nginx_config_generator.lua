@@ -453,7 +453,7 @@ local function generate_http_server_config(proxy, upstream_name, backends, proje
                     if backend_path_str and backend_path_str ~= "" then
                         -- 有目标路径，拼接路径
                         config = config .. "        proxy_pass http://" .. location_upstream_name .. escape_nginx_value(backend_path_str) .. ";\n"
-                    else
+        else
                         -- 没有目标路径，直接代理到根路径
                         config = config .. "        proxy_pass http://" .. location_upstream_name .. ";\n"
         end

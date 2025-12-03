@@ -491,6 +491,70 @@ function _M.reload_nginx_internal()
     return do_reload_nginx()
 end
 
+-- 测试OpenResty配置（内部调用，返回结果，不发送HTTP响应）
+function _M.test_nginx_config_internal()
+    -- 查找OpenResty可执行文件
+    local openresty_binary = find_openresty_binary()
+    
+    if not openresty_binary then
+        local fallback_path = "/usr/local/openresty/bin/openresty"
+        ngx.log(ngx.WARN, "无法通过检查找到OpenResty可执行文件，尝试使用默认路径: ", fallback_path)
+        openresty_binary = fallback_path
+    end
+    
+    -- 执行OpenResty配置测试（使用 -e /dev/null 避免权限问题）
+    local test_cmd = openresty_binary .. " -t -e /dev/null 2>&1"
+    local test_result = io.popen(test_cmd)
+    if not test_result then
+        local error_msg = "无法执行OpenResty配置测试命令: " .. test_cmd .. " (可能在timer上下文中受限)"
+        ngx.log(ngx.ERR, error_msg)
+        return false, error_msg
+    end
+    
+    local test_output = test_result:read("*all")
+    local test_code = test_result:close()
+    
+    if test_code ~= 0 then
+        -- 检查输出中是否包含 "syntax is ok"（即使有权限错误，语法正确也算通过）
+        if test_output and test_output:match("syntax is ok") then
+            -- 配置语法正确，即使有权限警告也可以继续
+            ngx.log(ngx.WARN, "OpenResty配置语法正确，但可能存在权限警告: ", test_output)
+            return true, test_output
+        elseif test_output and (test_output:match("Permission denied") or test_output:match("13:")) then
+            -- 如果是权限问题，尝试不使用临时文件，直接测试
+            ngx.log(ngx.WARN, "配置测试因权限问题失败，尝试直接测试配置语法...")
+            local simple_test_cmd = openresty_binary .. " -t -q 2>&1"
+            local simple_test_result = io.popen(simple_test_cmd)
+            if simple_test_result then
+                local simple_test_output = simple_test_result:read("*all")
+                local simple_test_code = simple_test_result:close()
+                -- 检查输出中是否包含 "syntax is ok"
+                if simple_test_code == 0 or (simple_test_output and simple_test_output:match("syntax is ok")) then
+                    -- 语法测试通过，但可能因为权限问题无法完全测试
+                    ngx.log(ngx.WARN, "配置语法测试通过，但可能存在权限问题")
+                    return true, simple_test_output
+                else
+                    local error_msg = "OpenResty配置测试失败: " .. (simple_test_output or "unknown error")
+                    ngx.log(ngx.ERR, error_msg, " (命令: ", simple_test_cmd, ")")
+                    return false, error_msg
+                end
+            else
+                local error_msg = "OpenResty配置测试失败（权限问题）: " .. (test_output or "unknown error")
+                ngx.log(ngx.ERR, error_msg, " (命令: ", test_cmd, ")")
+                return false, error_msg
+            end
+        else
+            -- 真正的配置错误
+            local error_msg = "OpenResty配置测试失败: " .. (test_output or "unknown error")
+            ngx.log(ngx.ERR, error_msg, " (命令: ", test_cmd, ")")
+            return false, error_msg
+        end
+    else
+        ngx.log(ngx.INFO, "OpenResty配置测试通过: ", test_output or "success")
+        return true, test_output
+    end
+end
+
 -- 测试OpenResty配置
 function _M.test_nginx_config()
     -- 查找OpenResty可执行文件

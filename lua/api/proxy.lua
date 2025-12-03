@@ -69,15 +69,25 @@ function _M.create()
     -- 记录审计日志（成功）
     audit_log.log_proxy_action("create", result.id, proxy_data.proxy_name, true, nil)
     
-    -- 如果代理配置已启用，尝试触发nginx重载（异步，不阻塞响应）
-    -- 注意：create_proxy() 已经同步生成了nginx配置文件，这里只需要重载nginx
+    -- 如果代理配置已启用，需要：生成配置 -> 测试配置 -> reload
+    -- 注意：create_proxy() 已经同步生成了nginx配置文件
     -- 使用 ngx.timer.at(0, ...) 确保在当前请求处理完成后立即执行，但不会阻塞响应
     if proxy_data.status ~= 0 then
         ngx.timer.at(0, function()
-            -- 先测试配置，再重载（由 reload_nginx_internal() 内部处理）
-            local ok, result = system_api.reload_nginx_internal()
-            if not ok then
-                ngx.log(ngx.WARN, "创建代理后自动触发nginx重载失败: ", result or "unknown error")
+            -- 1. 测试配置
+            local test_ok, test_err = system_api.test_nginx_config_internal()
+            if not test_ok then
+                ngx.log(ngx.ERR, "创建代理后配置测试失败: ", test_err or "unknown error")
+                ngx.log(ngx.ERR, "配置文件已生成，但测试失败，不会执行reload")
+                return
+            end
+            
+            ngx.log(ngx.INFO, "创建代理后配置测试通过，开始执行reload...")
+            
+            -- 2. 测试通过后执行reload（reload时不会再生成配置）
+            local reload_ok, reload_err = system_api.reload_nginx_internal()
+            if not reload_ok then
+                ngx.log(ngx.ERR, "创建代理后自动触发nginx重载失败: ", reload_err or "unknown error")
             else
                 ngx.log(ngx.INFO, "创建代理后自动触发nginx重载成功，配置已生效")
             end
@@ -398,12 +408,24 @@ function _M.update()
     -- 记录审计日志（成功）
     audit_log.log_proxy_action("update", proxy_id, proxy_name, true, nil)
     
-    -- 触发nginx重载（异步，不阻塞响应）
-    -- 注意：代理配置更新后（无论状态如何）都需要reload使新配置生效
+    -- 代理配置更新后，需要：生成配置 -> 测试配置 -> reload
+    -- 注意：update_proxy() 如果检测到配置变化，已经同步生成了nginx配置文件
+    -- 使用 ngx.timer.at(0, ...) 确保在当前请求处理完成后立即执行，但不会阻塞响应
     ngx.timer.at(0, function()
-        local ok, result = system_api.reload_nginx_internal()
-        if not ok then
-            ngx.log(ngx.WARN, "更新代理配置后自动触发nginx重载失败: ", result or "unknown error")
+        -- 1. 测试配置
+        local test_ok, test_err = system_api.test_nginx_config_internal()
+        if not test_ok then
+            ngx.log(ngx.ERR, "更新代理配置后配置测试失败: ", test_err or "unknown error")
+            ngx.log(ngx.ERR, "配置文件已生成，但测试失败，不会执行reload")
+            return
+        end
+        
+        ngx.log(ngx.INFO, "更新代理配置后配置测试通过，开始执行reload...")
+        
+        -- 2. 测试通过后执行reload（reload时不会再生成配置）
+        local reload_ok, reload_err = system_api.reload_nginx_internal()
+        if not reload_ok then
+            ngx.log(ngx.ERR, "更新代理配置后自动触发nginx重载失败: ", reload_err or "unknown error")
         else
             ngx.log(ngx.INFO, "更新代理配置后自动触发nginx重载成功")
         end
@@ -481,13 +503,26 @@ function _M.enable()
     -- 记录审计日志（成功）
     audit_log.log_proxy_action("enable", proxy_id, proxy_name, true, nil)
     
-    -- 启用代理后，尝试触发nginx重载（异步，不阻塞响应）
+    -- 启用代理后，需要：生成配置 -> 测试配置 -> reload
+    -- 注意：enable_proxy() 已经同步生成了nginx配置文件
+    -- 使用 ngx.timer.at(0, ...) 确保在当前请求处理完成后立即执行，但不会阻塞响应
     ngx.timer.at(0, function()
-        local ok, result = system_api.reload_nginx_internal()
-        if not ok then
-            ngx.log(ngx.WARN, "自动触发nginx重载失败: ", result or "unknown error")
+        -- 1. 测试配置
+        local test_ok, test_err = system_api.test_nginx_config_internal()
+        if not test_ok then
+            ngx.log(ngx.ERR, "启用代理后配置测试失败: ", test_err or "unknown error")
+            ngx.log(ngx.ERR, "配置文件已生成，但测试失败，不会执行reload")
+            return
+        end
+        
+        ngx.log(ngx.INFO, "启用代理后配置测试通过，开始执行reload...")
+        
+        -- 2. 测试通过后执行reload（reload时不会再生成配置）
+        local reload_ok, reload_err = system_api.reload_nginx_internal()
+        if not reload_ok then
+            ngx.log(ngx.ERR, "启用代理后自动触发nginx重载失败: ", reload_err or "unknown error")
         else
-            ngx.log(ngx.INFO, "自动触发nginx重载成功")
+            ngx.log(ngx.INFO, "启用代理后自动触发nginx重载成功，配置已生效")
         end
     end)
     
@@ -524,16 +559,26 @@ function _M.disable()
     -- 记录审计日志（成功）
     audit_log.log_proxy_action("disable", proxy_id, proxy_name, true, nil)
     
-    -- 禁用代理后，尝试触发nginx重载（异步，不阻塞响应）
-    -- 注意：disable_proxy() 已经同步生成了nginx配置文件（清理了禁用的代理配置），这里只需要重载nginx
+    -- 禁用代理后，需要：生成配置 -> 测试配置 -> reload
+    -- 注意：disable_proxy() 已经同步生成了nginx配置文件（清理了禁用的代理配置）
     -- 使用 ngx.timer.at(0, ...) 确保在当前请求处理完成后立即执行，但不会阻塞响应
     ngx.timer.at(0, function()
-        -- 先测试配置，再重载（由 reload_nginx_internal() 内部处理）
-        local ok, result = system_api.reload_nginx_internal()
-        if not ok then
-            ngx.log(ngx.WARN, "停用代理后自动触发nginx重载失败: ", result or "unknown error")
+        -- 1. 测试配置
+        local test_ok, test_err = system_api.test_nginx_config_internal()
+        if not test_ok then
+            ngx.log(ngx.ERR, "禁用代理后配置测试失败: ", test_err or "unknown error")
+            ngx.log(ngx.ERR, "配置文件已生成，但测试失败，不会执行reload")
+            return
+        end
+        
+        ngx.log(ngx.INFO, "禁用代理后配置测试通过，开始执行reload...")
+        
+        -- 2. 测试通过后执行reload（reload时不会再生成配置）
+        local reload_ok, reload_err = system_api.reload_nginx_internal()
+        if not reload_ok then
+            ngx.log(ngx.ERR, "禁用代理后自动触发nginx重载失败: ", reload_err or "unknown error")
         else
-            ngx.log(ngx.INFO, "停用代理后自动触发nginx重载成功，端口已停止监听")
+            ngx.log(ngx.INFO, "禁用代理后自动触发nginx重载成功，端口已停止监听")
         end
     end)
     

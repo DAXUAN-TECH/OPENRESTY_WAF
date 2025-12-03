@@ -388,7 +388,7 @@ function _M.list_proxies(params)
                p.backend_type, p.load_balance,
                p.health_check_enable, p.health_check_interval, p.health_check_timeout,
                p.max_fails, p.fail_timeout, p.proxy_timeout, p.proxy_connect_timeout,
-               p.proxy_send_timeout, p.proxy_read_timeout, p.ssl_enable, p.ssl_cert_path, p.ssl_key_path,
+               p.proxy_send_timeout, p.proxy_read_timeout, p.ssl_enable, p.ssl_pem, p.ssl_key,
                p.description, p.ip_rule_ids, p.status, p.priority, p.created_at, p.updated_at
         FROM waf_proxy_configs p
         %s
@@ -546,7 +546,7 @@ function _M.get_proxy(proxy_id)
                backend_type, load_balance,
                health_check_enable, health_check_interval, health_check_timeout,
                max_fails, fail_timeout, proxy_timeout, proxy_connect_timeout,
-               proxy_send_timeout, proxy_read_timeout, ssl_enable, ssl_cert_path, ssl_key_path,
+               proxy_send_timeout, proxy_read_timeout, ssl_enable, ssl_pem, ssl_key,
                description, ip_rule_ids, status, created_at, updated_at
         FROM waf_proxy_configs
         WHERE id = ?

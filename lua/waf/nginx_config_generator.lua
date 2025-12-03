@@ -739,7 +739,7 @@ function _M.generate_all_configs()
         local sql = [[
             SELECT id, proxy_name, proxy_type, listen_port, listen_address, server_name, location_paths,
                backend_type, load_balance,
-               ssl_enable, ssl_cert_path, ssl_key_path,
+               ssl_enable, ssl_pem, ssl_key,
                proxy_timeout, proxy_connect_timeout, proxy_send_timeout, proxy_read_timeout,
                status
             FROM waf_proxy_configs

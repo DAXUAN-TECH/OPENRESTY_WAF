@@ -825,7 +825,8 @@ function _M.generate_all_configs()
         project_root .. "/conf.d/vhost_conf/tcp_udp",
         project_root .. "/conf.d/upstream",
         project_root .. "/conf.d/upstream/http_https",
-        project_root .. "/conf.d/upstream/tcp_udp"
+        project_root .. "/conf.d/upstream/tcp_udp",
+        project_root .. "/conf.d/cert"
     }
     
     for _, dir in ipairs(dirs) do

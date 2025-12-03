@@ -356,8 +356,19 @@ const pageSize = 20;
         
         // 添加后端行（在location内）
         function addBackendRow(button) {
+            // 兼容简化后的结构（TCP/UDP）和完整结构（HTTP）
             const locationBackends = button.closest('.location-backends');
-            if (!locationBackends) return;
+            const locationItem = button.closest('.location-item');
+            let container;
+            if (locationBackends) {
+                // HTTP 代理：添加到 location-backends
+                container = locationBackends;
+            } else if (locationItem) {
+                // TCP/UDP 代理：直接添加到 location-item
+                container = locationItem;
+            } else {
+                return;
+            }
             
             const proxyType = document.getElementById('create-proxy-type').value;
             const backendRow = document.createElement('div');

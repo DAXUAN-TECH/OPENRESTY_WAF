@@ -219,9 +219,20 @@ local function update_waf_conf_for_admin_ssl(enabled, server_name, force_https)
         end
     end
 
-    -- 3) 启用 SSL 时，如果提供了域名，则更新 server_name 行（仅更新第一处）
-    if enabled == 1 and server_name and server_name ~= "" then
+    -- 3) 更新 server_name 行（无论是否启用SSL）
+    -- 如果提供了域名，使用提供的域名；否则使用 _（不匹配任何域名，只作为default_server）
+    -- 这样可以确保业务代理的请求不会被错误地路由到WAF管理界面
+    if server_name and server_name ~= "" then
+        -- 提供了域名，使用提供的域名
         local new_line = "    server_name  " .. server_name .. ";"
+        local new_content, n = content:gsub("server_name%s+.-;", new_line, 1)
+        if n > 0 then
+            content = new_content
+        end
+    else
+        -- 没有提供域名，使用 _（不匹配任何域名，只作为default_server）
+        -- 这样可以确保只有明确匹配的请求才会路由到WAF管理界面
+        local new_line = "    server_name  _;"
         local new_content, n = content:gsub("server_name%s+.-;", new_line, 1)
         if n > 0 then
             content = new_content

@@ -174,8 +174,14 @@ local function update_waf_conf_for_admin_ssl(enabled, server_name, force_https)
 
     -- 1) 始终先移除所有可能的 SSL 配置残留（无论格式如何）
     -- 1.1) 移除 include waf_admin_ssl.conf 行（支持各种格式和缩进）
+    -- 支持 $project_root 变量格式（旧格式）
     content = content:gsub("\n%s*include%s+%$project_root/conf%.d/vhost_conf/waf_admin_ssl%.conf;%s*\n", "\n")
     content = content:gsub("\n%s*include%s+%$project_root/conf%.d/vhost_conf/waf_admin_ssl%.conf;%s*", "\n")
+    -- 支持绝对路径格式（新格式）
+    local admin_ssl_conf_path = project_root .. "/conf.d/vhost_conf/waf_admin_ssl.conf"
+    local escaped_path = admin_ssl_conf_path:gsub("([%(%)%.%+%*%?%[%]%^%$%%])", "%%%1")  -- 转义特殊字符
+    content = content:gsub("\n%s*include%s+" .. escaped_path .. "%s*;%s*\n", "\n")
+    content = content:gsub("\n%s*include%s+" .. escaped_path .. "%s*;%s*", "\n")
     -- 1.2) 移除直接写在 waf.conf 中的 listen 443 ssl 行（如果存在）
     content = content:gsub("\n%s*listen%s+443%s+ssl;%s*\n", "\n")
     content = content:gsub("\n%s*listen%s+443%s+ssl%s*;%s*", "\n")

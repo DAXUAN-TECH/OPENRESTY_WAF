@@ -53,7 +53,7 @@ end
 --   enabled: 0/1
 --   server_name: 管理端域名（可包含多个域名，用空格分隔）
 --   ssl_pem, ssl_key: 证书/私钥内容（PEM/KEY）
-local function write_admin_ssl_files(enabled, server_name, ssl_pem, ssl_key)
+local function write_admin_ssl_files(enabled, server_name, ssl_pem, ssl_key, force_https)
     local project_root = path_utils.get_project_root()
     if not project_root or project_root == "" then
         return false, "无法获取项目根目录（project_root）"
@@ -143,6 +143,12 @@ local function write_admin_ssl_files(enabled, server_name, ssl_pem, ssl_key)
     conf:write("    ssl_prefer_server_ciphers off;\n")
     conf:write("    ssl_session_cache shared:SSL:10m;\n")
     conf:write("    ssl_session_timeout 10m;\n")
+    -- 如果开启强制HTTPS，则在同一server内基于scheme做301跳转
+    if tonumber(force_https or 0) == 1 then
+        conf:write("    if ($scheme = http) {\n")
+        conf:write("        return 301 https://$host$request_uri;\n")
+        conf:write("    }\n")
+    end
     conf:close()
 
     return true
@@ -433,6 +439,7 @@ function _M.get_admin_ssl_config()
     local server_name = config_manager.get_config("admin_server_name", "localhost")
     local ssl_pem = config_manager.get_config("admin_ssl_pem", "")
     local ssl_key = config_manager.get_config("admin_ssl_key", "")
+    local force_https = config_manager.get_config("admin_force_https", "0")
 
     api_utils.json_response({
         success = true,
@@ -440,7 +447,8 @@ function _M.get_admin_ssl_config()
             ssl_enable = tonumber(enabled) or 0,
             server_name = server_name or "",
             ssl_pem = ssl_pem or "",
-            ssl_key = ssl_key or ""
+            ssl_key = ssl_key or "",
+            force_https = tonumber(force_https) or 0
         }
     })
 end
@@ -457,6 +465,7 @@ function _M.update_admin_ssl_config()
     local server_name = args.server_name or ""
     local ssl_pem = args.ssl_pem or ""
     local ssl_key = args.ssl_key or ""
+    local force_https = args.force_https or args.admin_force_https
 
     if ssl_enable == nil then
         api_utils.json_response({ error = "ssl_enable 参数不能为空" }, 400)
@@ -466,6 +475,12 @@ function _M.update_admin_ssl_config()
     local enable_num = tonumber(ssl_enable)
     if enable_num ~= 0 and enable_num ~= 1 then
         api_utils.json_response({ error = "ssl_enable 参数必须是0或1" }, 400)
+        return
+    end
+
+    local force_num = tonumber(force_https or 0)
+    if force_num ~= 0 and force_num ~= 1 then
+        api_utils.json_response({ error = "force_https 参数必须是0或1" }, 400)
         return
     end
 
@@ -510,8 +525,14 @@ function _M.update_admin_ssl_config()
         return
     end
 
+    local ok5, err5 = config_manager.set_config("admin_force_https", force_num, "是否强制将管理端HTTP重定向到HTTPS（1-开启，0-关闭）")
+    if not ok5 then
+        api_utils.json_response({ error = "更新 admin_force_https 失败: " .. tostring(err5) }, 500)
+        return
+    end
+
     -- 写入/更新实际的证书文件与 waf_admin_ssl.conf
-    local ok_files, err_files = write_admin_ssl_files(enable_num, server_name, ssl_pem, ssl_key)
+    local ok_files, err_files = write_admin_ssl_files(enable_num, server_name, ssl_pem, ssl_key, force_num)
     if not ok_files then
         api_utils.json_response({ error = "写入管理端SSL文件失败: " .. tostring(err_files) }, 500)
         return

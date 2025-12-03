@@ -132,10 +132,12 @@ let currentPage = 1;
                 if (data && data.success && data.data) {
                     const cfg = data.data;
                     const enableEl = document.getElementById('admin-ssl-enable');
+                    const forceEl = document.getElementById('admin-force-https');
                     const nameEl = document.getElementById('admin-server-name');
                     const pemEl = document.getElementById('admin-ssl-pem');
                     const keyEl = document.getElementById('admin-ssl-key');
                     if (enableEl) enableEl.checked = cfg.ssl_enable == 1;
+                    if (forceEl) forceEl.checked = cfg.force_https == 1;
                     if (nameEl) nameEl.value = cfg.server_name || '';
                     if (pemEl) pemEl.value = cfg.ssl_pem || '';
                     if (keyEl) keyEl.value = cfg.ssl_key || '';
@@ -204,11 +206,13 @@ let currentPage = 1;
         // 保存管理端 SSL 与域名配置
         async function saveAdminSslConfig() {
             const enableEl = document.getElementById('admin-ssl-enable');
+            const forceEl = document.getElementById('admin-force-https');
             const nameEl = document.getElementById('admin-server-name');
             const pemEl = document.getElementById('admin-ssl-pem');
             const keyEl = document.getElementById('admin-ssl-key');
 
             const sslEnable = enableEl && enableEl.checked ? 1 : 0;
+            const forceHttps = forceEl && forceEl.checked ? 1 : 0;
             const serverName = nameEl ? nameEl.value.trim() : '';
             const sslPem = pemEl ? pemEl.value.trim() : '';
             const sslKey = keyEl ? keyEl.value.trim() : '';
@@ -240,6 +244,7 @@ let currentPage = 1;
                 params.append('server_name', serverName);
                 params.append('ssl_pem', sslPem);
                 params.append('ssl_key', sslKey);
+                params.append('force_https', String(forceHttps));
 
                 const response = await fetch('/api/system/admin-ssl/config', {
                     method: 'POST',

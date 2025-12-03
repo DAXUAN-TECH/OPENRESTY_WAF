@@ -1282,8 +1282,19 @@ const pageSize = 20;
             };
             
             if (proxyData.proxy_type === 'http') {
+                const sslEnableEl = document.getElementById('create-ssl-enable');
+                const forceHttpsEl = document.getElementById('create-force-https');
+                const ssl_enable = sslEnableEl && sslEnableEl.checked ? 1 : 0;
+                const force_https_redirect = forceHttpsEl && forceHttpsEl.checked ? 1 : 0;
+                if (force_https_redirect === 1 && ssl_enable !== 1) {
+                    alert('强制跳转HTTPS需要先启用SSL');
+                    return;
+                }
+
                 const serverName = document.getElementById('create-server-name').value.trim();
                 proxyData.server_name = serverName || null;
+                proxyData.force_https_redirect = force_https_redirect;
+                proxyData.ssl_enable = ssl_enable;
                 
                 // 从location结构中收集路径匹配和后端服务器数据
                 const configSection = document.querySelector('#upstream-fields .config-section');
@@ -1484,12 +1495,17 @@ const pageSize = 20;
                     
                     // 填充SSL配置
                     const sslEnable = proxy.ssl_enable == 1;
+                    const forceHttps = proxy.force_https_redirect == 1;
                     const editSslEnableEl = document.getElementById('edit-ssl-enable');
                     const editSslPemEl = document.getElementById('edit-ssl-pem');
                     const editSslKeyEl = document.getElementById('edit-ssl-key');
+                    const editForceHttpsEl = document.getElementById('edit-force-https');
                     
                     if (editSslEnableEl) {
                         editSslEnableEl.checked = sslEnable;
+                    }
+                    if (editForceHttpsEl) {
+                        editForceHttpsEl.checked = forceHttps;
                     }
                     if (editSslPemEl) {
                         if (sslEnable && proxy.ssl_pem) {
@@ -1710,15 +1726,20 @@ const pageSize = 20;
             const editSslEnableEl = document.getElementById('edit-ssl-enable');
             const editSslPemEl = document.getElementById('edit-ssl-pem');
             const editSslKeyEl = document.getElementById('edit-ssl-key');
+            const editForceHttpsEl = document.getElementById('edit-force-https');
 
             let ssl_enable = 0;
             let ssl_pem = null;
             let ssl_key = null;
+            let force_https_redirect = 0;
 
             if (editSslEnableEl) {
                 ssl_enable = editSslEnableEl.checked ? 1 : 0;
             }
             if (ssl_enable === 1) {
+                if (editForceHttpsEl && editForceHttpsEl.checked) {
+                    force_https_redirect = 1;
+                }
                 if (editSslPemEl) {
                     ssl_pem = editSslPemEl.value.trim();
                 }
@@ -1728,6 +1749,12 @@ const pageSize = 20;
                 // 基础校验：开启SSL时必须填写PEM和KEY
                 if (!ssl_pem || !ssl_key) {
                     showAlert('启用SSL时，SSL证书和密钥不能为空', 'error');
+                    return;
+                }
+            } else {
+                // 未启用SSL时不允许强制HTTPS
+                if (editForceHttpsEl && editForceHttpsEl.checked) {
+                    showAlert('强制跳转HTTPS需要先启用SSL', 'error');
                     return;
                 }
             }
@@ -1741,10 +1768,11 @@ const pageSize = 20;
                 proxy_read_timeout: parseInt(document.getElementById('edit-proxy-read-timeout').value) || 60,
                 ip_rule_ids: ipRuleIds.length > 0 ? ipRuleIds : null,
                 status: currentEditingProxy ? currentEditingProxy.status : 1,
-                // SSL相关字段：后端会根据这些字段更新 waf_proxy_configs.ssl_enable / ssl_pem / ssl_key
+                // SSL相关字段：后端会根据这些字段更新 waf_proxy_configs.ssl_enable / ssl_pem / ssl_key / force_https_redirect
                 ssl_enable: ssl_enable,
                 ssl_pem: ssl_pem,
-                ssl_key: ssl_key
+                ssl_key: ssl_key,
+                force_https_redirect: force_https_redirect
             };
             
             if (proxyType === 'http') {
@@ -2023,7 +2051,9 @@ const pageSize = 20;
             const sslEnable = document.getElementById('create-ssl-enable');
             const sslPem = document.getElementById('create-ssl-pem');
             const sslKey = document.getElementById('create-ssl-key');
+            const forceHttps = document.getElementById('create-force-https');
             if (sslEnable) sslEnable.checked = false;
+            if (forceHttps) forceHttps.checked = false;
             if (sslPem) sslPem.value = '';
             if (sslKey) sslKey.value = '';
             toggleSslConfig();

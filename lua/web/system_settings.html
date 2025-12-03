@@ -72,6 +72,13 @@
                 </div>
             </div>
             <div class="form-group">
+                <label>强制跳转到 HTTPS</label>
+                <div style="display:flex;align-items:center;gap:10px;">
+                    <input type="checkbox" id="admin-force-https">
+                    <span style="font-size:13px;color:#666;">开启后，所有访问 http:// 管理端的请求将 301 重定向到 https://</span>
+                </div>
+            </div>
+            <div class="form-group">
                 <label>管理端域名</label>
                 <input type="text" id="admin-server-name" placeholder="例如：waf-admin.example.com，多域名请用空格分隔">
                 <small style="color:#666;font-size:12px;display:block;margin-top:4px;">此域名将用于 Nginx 的 server_name 配置，建议与证书中的域名保持一致。</small>

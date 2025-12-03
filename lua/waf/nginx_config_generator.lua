@@ -207,13 +207,15 @@ local function generate_http_server_config(proxy, upstream_name, backends, proje
     end
     
     -- 监听端口
-    local listen_line = "    listen       " .. proxy.listen_port
     if proxy.ssl_enable == 1 then
-        -- 启用SSL时，在listen指令上只追加 ssl，遵循新语法；http2 使用单独指令
-        listen_line = listen_line .. " ssl"
+        -- 启用SSL时，同时监听80和443，其中443启用ssl
+        config = config .. "    listen       80;\n"
+        config = config .. "    listen       443 ssl;\n"
+    else
+        -- 未启用SSL时，按配置的监听端口生成
+        local listen_line = "    listen       " .. proxy.listen_port .. ";\n"
+        config = config .. listen_line
     end
-    listen_line = listen_line .. ";\n"
-    config = config .. listen_line
     
     -- 服务器名称
     if proxy.server_name then
@@ -225,6 +227,13 @@ local function generate_http_server_config(proxy, upstream_name, backends, proje
     
     -- 客户端请求体大小
     config = config .. "    client_max_body_size 10m;\n"
+
+    -- 如果启用SSL并开启强制HTTPS跳转，则将HTTP请求重定向到HTTPS
+    if proxy.ssl_enable == 1 and proxy.force_https_redirect == 1 then
+        config = config .. "    if ($scheme = http) {\n"
+        config = config .. "        return 301 https://$host$request_uri;\n"
+        config = config .. "    }\n"
+    end
     
     -- SSL配置
     if proxy.ssl_enable == 1 and proxy.ssl_pem and proxy.ssl_key then
@@ -864,7 +873,7 @@ function _M.generate_all_configs()
         local sql = [[
             SELECT id, proxy_name, proxy_type, listen_port, listen_address, server_name, location_paths,
                backend_type, load_balance,
-               ssl_enable, ssl_pem, ssl_key,
+               ssl_enable, ssl_pem, ssl_key, force_https_redirect,
                proxy_timeout, proxy_connect_timeout, proxy_send_timeout, proxy_read_timeout,
                status
             FROM waf_proxy_configs

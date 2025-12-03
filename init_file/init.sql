@@ -326,6 +326,7 @@ INSERT INTO waf_system_config (config_key, config_value, description) VALUES
 ('admin_server_name', 'localhost', '管理端访问域名（例如：waf-admin.example.com，多域名请用空格分隔）'),
 ('admin_ssl_pem', '', '管理端SSL证书内容（PEM格式）'),
 ('admin_ssl_key', '', '管理端SSL私钥内容（KEY格式）'),
+('admin_force_https', '0', '是否强制将管理端HTTP重定向到HTTPS（1-开启，0-关闭）'),
 -- 缓存版本控制配置（从waf_cache_versions表合并）
 ('cache_version_rules', '1', '规则缓存版本号（用于缓存失效）'),
 ('cache_version_whitelist', '1', '白名单缓存版本号（用于缓存失效）'),
@@ -604,6 +605,7 @@ CREATE TABLE IF NOT EXISTS waf_proxy_configs (
     ssl_enable TINYINT NOT NULL DEFAULT 0 COMMENT '是否启用SSL：1-启用，0-禁用（HTTP代理时使用）',
     ssl_pem TEXT DEFAULT NULL COMMENT 'SSL证书内容（PEM格式，启用SSL时使用）',
     ssl_key TEXT DEFAULT NULL COMMENT 'SSL密钥内容（KEY格式，启用SSL时使用）',
+    force_https_redirect TINYINT NOT NULL DEFAULT 0 COMMENT '是否强制将HTTP重定向到HTTPS（仅HTTP/HTTPS代理有效）',
     description TEXT DEFAULT NULL COMMENT '配置说明（描述代理配置的用途和来源）',
     ip_rule_ids JSON DEFAULT NULL COMMENT '防护规则ID数组（JSON格式，存储多个规则ID，支持IP白名单、IP黑名单、地域白名单、地域黑名单，但必须遵守互斥关系）',
     status TINYINT NOT NULL DEFAULT 1 COMMENT '状态：1-启用（代理生效），0-禁用（代理不生效）',

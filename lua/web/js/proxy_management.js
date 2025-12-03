@@ -97,11 +97,19 @@ const pageSize = 20;
             } else if (proxyType === 'tcp' || proxyType === 'udp') {
                 httpFields.style.display = 'none';
                 tcpUdpFields.style.display = 'flex';
-                // 隐藏location中的路径匹配输入框和目标路径输入框
+                // TCP/UDP 代理：隐藏 location-path-section、location-divider 和 location-actions
                 document.querySelectorAll('.location-item').forEach(locationItem => {
-                    const locationPathWrapper = locationItem.querySelector('.location-path-input-wrapper');
-                    if (locationPathWrapper) {
-                        locationPathWrapper.style.display = 'none';
+                    const locationPathSection = locationItem.querySelector('.location-path-section');
+                    if (locationPathSection) {
+                        locationPathSection.style.display = 'none';
+                    }
+                    const locationDivider = locationItem.querySelector('.location-divider');
+                    if (locationDivider) {
+                        locationDivider.style.display = 'none';
+                    }
+                    const locationActions = locationItem.querySelector('.location-actions');
+                    if (locationActions) {
+                        locationActions.style.display = 'none';
                     }
                     // 隐藏所有backend-row中的目标路径输入框
                     locationItem.querySelectorAll('.location-backend-path-input').forEach(input => {

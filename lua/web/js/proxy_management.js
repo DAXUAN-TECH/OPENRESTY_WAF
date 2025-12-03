@@ -1484,16 +1484,26 @@ const pageSize = 20;
                     
                     // 填充SSL配置
                     const sslEnable = proxy.ssl_enable == 1;
-                    document.getElementById('edit-ssl-enable').checked = sslEnable;
-                    if (sslEnable && proxy.ssl_pem) {
-                        document.getElementById('edit-ssl-pem').value = proxy.ssl_pem;
-                    } else {
-                        document.getElementById('edit-ssl-pem').value = '';
+                    const editSslEnableEl = document.getElementById('edit-ssl-enable');
+                    const editSslPemEl = document.getElementById('edit-ssl-pem');
+                    const editSslKeyEl = document.getElementById('edit-ssl-key');
+                    
+                    if (editSslEnableEl) {
+                        editSslEnableEl.checked = sslEnable;
                     }
-                    if (sslEnable && proxy.ssl_key) {
-                        document.getElementById('edit-ssl-key').value = proxy.ssl_key;
-                    } else {
-                        document.getElementById('edit-ssl-key').value = '';
+                    if (editSslPemEl) {
+                        if (sslEnable && proxy.ssl_pem) {
+                            editSslPemEl.value = proxy.ssl_pem;
+                        } else {
+                            editSslPemEl.value = '';
+                        }
+                    }
+                    if (editSslKeyEl) {
+                        if (sslEnable && proxy.ssl_key) {
+                            editSslKeyEl.value = proxy.ssl_key;
+                        } else {
+                            editSslKeyEl.value = '';
+                        }
                     }
                     toggleEditSslConfig();
                     
@@ -2112,10 +2122,10 @@ const pageSize = 20;
         
         // 切换编辑SSL配置显示
         function toggleEditSslConfig() {
-            const sslEnable = document.getElementById('edit-ssl-enable').checked;
+            const sslEnableEl = document.getElementById('edit-ssl-enable');
             const sslFields = document.getElementById('edit-ssl-fields');
-            if (sslFields) {
-                sslFields.style.display = sslEnable ? 'block' : 'none';
+            if (sslEnableEl && sslFields) {
+                sslFields.style.display = sslEnableEl.checked ? 'block' : 'none';
             }
         }
         

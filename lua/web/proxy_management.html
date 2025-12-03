@@ -280,6 +280,13 @@
                         <label>监听地址</label>
                         <input type="text" id="edit-listen-address">
                     </div>
+                    <div class="form-group">
+                        <label>启用SSL</label>
+                        <label class="switch">
+                            <input type="checkbox" id="edit-ssl-enable" onchange="toggleEditSslConfig()">
+                            <span class="slider"></span>
+                        </label>
+                    </div>
                 </div>
                 
                 <div class="form-row" id="edit-tcp-udp-fields" style="display: none;">

@@ -310,10 +310,15 @@ function _M.init_worker()
     -- 使用定时器延迟执行，避免在init_worker阶段阻塞
     -- 重要：每次init_worker执行时都重新生成配置文件（包括首次启动和reload）
     -- 这样确保配置文件始终与数据库配置保持一致
-    local function init_proxy_configs(premature)
+    -- 添加重试机制，确保数据库连接成功时能够读取到配置
+    local function init_proxy_configs(premature, retry_count)
         if premature then
             return
         end
+        
+        retry_count = retry_count or 0
+        local max_retries = 5  -- 最大重试次数
+        local retry_interval = 3  -- 重试间隔（秒）
         
         local path_utils = require "waf.path_utils"
         local project_root = path_utils.get_project_root()
@@ -324,7 +329,11 @@ function _M.init_worker()
         
         -- 每次init_worker执行时都重新生成配置文件
         -- 这样确保配置文件始终与数据库配置保持一致
-        ngx.log(ngx.INFO, "开始生成/更新代理配置文件...")
+        if retry_count == 0 then
+            ngx.log(ngx.INFO, "开始生成/更新代理配置文件...")
+        else
+            ngx.log(ngx.INFO, "重试生成/更新代理配置文件... (第 ", retry_count, " 次重试)")
+        end
         
         local ok, nginx_config_generator = pcall(require, "waf.nginx_config_generator")
         if ok and nginx_config_generator and nginx_config_generator.generate_all_configs then
@@ -332,16 +341,38 @@ function _M.init_worker()
             if gen_ok then
                 ngx.log(ngx.INFO, "Proxy configs generated: ", gen_err or "success")
             else
-                -- 记录详细错误信息，但不阻止系统运行
+                -- 记录详细错误信息
                 local error_msg = gen_err or "unknown error"
-                ngx.log(ngx.WARN, "Failed to generate proxy configs: ", error_msg)
                 
-                -- 如果是 DNS 解析错误，提供解决建议
-                if error_msg:match("no resolver") or error_msg:match("failed to resolve") then
-                    ngx.log(ngx.WARN, "DNS resolution error detected. Please check:")
-                    ngx.log(ngx.WARN, "1. MySQL host configuration in lua/config.lua (use IP address instead of domain name if possible)")
-                    ngx.log(ngx.WARN, "2. resolver directive in nginx.conf (should be configured in http block)")
-                    ngx.log(ngx.WARN, "3. Network connectivity and DNS server availability")
+                -- 检查是否是数据库连接错误
+                local is_connection_error = error_msg:match("failed to connect") or 
+                                          error_msg:match("timeout") or 
+                                          error_msg:match("Connection refused") or
+                                          error_msg:match("Can't connect") or
+                                          error_msg:match("查询代理配置失败")
+                
+                if is_connection_error and retry_count < max_retries then
+                    -- 如果是连接错误且未达到最大重试次数，则重试
+                    ngx.log(ngx.WARN, "数据库连接失败，", retry_interval, " 秒后重试 (", retry_count + 1, "/", max_retries, "): ", error_msg)
+                    local retry_ok, retry_err = ngx.timer.at(retry_interval, init_proxy_configs, retry_count + 1)
+                    if not retry_ok then
+                        ngx.log(ngx.ERR, "failed to create retry timer: ", retry_err)
+                    end
+                else
+                    -- 如果不是连接错误，或者已达到最大重试次数，记录错误但不阻止系统运行
+                    if retry_count >= max_retries then
+                        ngx.log(ngx.ERR, "Failed to generate proxy configs after ", max_retries, " retries: ", error_msg)
+                    else
+                        ngx.log(ngx.WARN, "Failed to generate proxy configs: ", error_msg)
+                    end
+                    
+                    -- 如果是 DNS 解析错误，提供解决建议
+                    if error_msg:match("no resolver") or error_msg:match("failed to resolve") then
+                        ngx.log(ngx.WARN, "DNS resolution error detected. Please check:")
+                        ngx.log(ngx.WARN, "1. MySQL host configuration in lua/config.lua (use IP address instead of domain name if possible)")
+                        ngx.log(ngx.WARN, "2. resolver directive in nginx.conf (should be configured in http block)")
+                        ngx.log(ngx.WARN, "3. Network connectivity and DNS server availability")
+                    end
                 end
             end
         else
@@ -350,7 +381,7 @@ function _M.init_worker()
     end
     
     -- 延迟1秒执行，确保数据库连接已建立
-    local ok, err = ngx.timer.at(1, init_proxy_configs)
+    local ok, err = ngx.timer.at(1, init_proxy_configs, 0)
     if not ok then
         ngx.log(ngx.ERR, "failed to create proxy config initialization timer: ", err)
     else

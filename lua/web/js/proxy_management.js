@@ -1971,6 +1971,14 @@ const pageSize = 20;
                 addLocation();
             }
             toggleProxyFields();
+            // 重置SSL配置
+            const sslEnable = document.getElementById('create-ssl-enable');
+            const sslPem = document.getElementById('create-ssl-pem');
+            const sslKey = document.getElementById('create-ssl-key');
+            if (sslEnable) sslEnable.checked = false;
+            if (sslPem) sslPem.value = '';
+            if (sslKey) sslKey.value = '';
+            toggleSslConfig();
             // 清空规则列表，只保留一个空规则条目
             const rulesList = document.getElementById('rules-list');
             if (rulesList) {

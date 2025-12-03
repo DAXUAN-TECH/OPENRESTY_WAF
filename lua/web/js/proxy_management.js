@@ -67,8 +67,20 @@ const pageSize = 20;
             if (proxyType === 'http') {
                 httpFields.style.display = 'flex';
                 tcpUdpFields.style.display = 'none';
-                // 显示location中的路径匹配输入框和目标路径输入框
+                // HTTP 代理：显示 location-path-section、location-divider 和 location-actions
                 document.querySelectorAll('.location-item').forEach(locationItem => {
+                    const locationPathSection = locationItem.querySelector('.location-path-section');
+                    if (locationPathSection) {
+                        locationPathSection.style.display = 'flex';
+                    }
+                    const locationDivider = locationItem.querySelector('.location-divider');
+                    if (locationDivider) {
+                        locationDivider.style.display = 'block';
+                    }
+                    const locationActions = locationItem.querySelector('.location-actions');
+                    if (locationActions) {
+                        locationActions.style.display = 'flex';
+                    }
                     const locationPathWrapper = locationItem.querySelector('.location-path-input-wrapper');
                     if (locationPathWrapper) {
                         locationPathWrapper.style.display = 'flex';

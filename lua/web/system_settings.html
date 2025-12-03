@@ -67,14 +67,20 @@
             <div class="form-group">
                 <label>启用管理端 HTTPS</label>
                 <div style="display:flex;align-items:center;gap:10px;">
-                    <input type="checkbox" id="admin-ssl-enable">
+                    <label class="switch">
+                        <input type="checkbox" id="admin-ssl-enable">
+                        <span class="slider"></span>
+                    </label>
                     <span style="font-size:13px;color:#666;">开启后，将在管理端监听 443 端口并加载下方配置的证书</span>
                 </div>
             </div>
             <div class="form-group">
                 <label>强制跳转到 HTTPS</label>
                 <div style="display:flex;align-items:center;gap:10px;">
-                    <input type="checkbox" id="admin-force-https">
+                    <label class="switch">
+                        <input type="checkbox" id="admin-force-https">
+                        <span class="slider"></span>
+                    </label>
                     <span style="font-size:13px;color:#666;">开启后，所有访问 http:// 管理端的请求将 301 重定向到 https://</span>
                 </div>
             </div>

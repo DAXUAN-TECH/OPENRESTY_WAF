@@ -235,6 +235,11 @@ local function generate_http_server_config(proxy, upstream_name, backends, proje
     
     -- 客户端请求体大小
     config = config .. "    client_max_body_size 10m;\n"
+    
+    -- 显式设置root为空目录，避免Nginx使用默认的html目录显示默认页面
+    -- 注意：即使有location /，如果没有显式设置root，Nginx仍可能使用默认root
+    -- 设置为/dev/null确保不会从文件系统提供文件
+    config = config .. "    root /dev/null;\n"
 
     -- 如果启用SSL并开启强制HTTPS跳转，则将HTTP请求重定向到HTTPS
     -- 注意：强制跳转规则必须在SSL配置之前，确保HTTP请求在SSL配置生效前就被重定向

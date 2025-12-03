@@ -529,12 +529,15 @@ local function generate_http_server_config(proxy, upstream_name, backends, proje
             end
         end
         
-        -- 如果用户没有创建 location /，添加 location / 返回404
-        -- 这样可以避免Nginx使用默认的root目录（/usr/local/openresty/nginx/html）显示默认页面
+        -- 如果用户没有创建 location /，必须添加 location / 作为catch-all
+        -- 这样可以确保所有请求都匹配到某个location，避免Nginx使用默认行为
+        -- 注意：location / 必须放在所有其他location之后，优先级最低
         if not has_root_location then
             ngx.log(ngx.INFO, "generate_http_server_config: 代理 ", proxy.id, " (", proxy.proxy_name, ") 没有创建 location /，添加 location / 返回404")
             config = config .. "\n    # 默认location（处理不匹配任何location的请求，返回404避免显示OpenResty默认页面）\n"
+            config = config .. "    # 注意：location / 必须放在所有其他location之后，作为catch-all\n"
             config = config .. "    location / {\n"
+            config = config .. "        # 确保所有不匹配的请求都返回404\n"
             config = config .. "        content_by_lua_block {\n"
             config = config .. "            require(\"waf.error_pages\").return_404(ngx.var.request_uri)\n"
             config = config .. "        }\n"

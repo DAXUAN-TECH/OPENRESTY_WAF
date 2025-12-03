@@ -161,9 +161,12 @@ function _M.get_connection()
     local mysql_host = resolve_hostname(config.mysql.host)
 
     -- 直接调用 connect；如果网络/服务异常会返回超时错误
-    -- 使用 pcall 包装 connect 调用，避免在超时时出现 "attempt to send data on a closed socket" 错误
-    local connect_ok, connect_result = pcall(function()
-        return db:connect{
+    -- 使用 xpcall 包装 connect 调用，避免在超时时出现 "attempt to send data on a closed socket" 错误
+    -- 注意：xpcall 可以正确处理多个返回值的情况
+    local connect_results = {}
+    local connect_ok, connect_err = xpcall(function()
+        -- 将多个返回值收集到表中
+        local ok, err, errcode, sqlstate = db:connect{
             host = mysql_host,
             port = config.mysql.port,
             database = config.mysql.database,
@@ -172,17 +175,35 @@ function _M.get_connection()
             max_packet_size = config.mysql.max_packet_size,
             charset = "utf8mb4",
         }
+        connect_results.ok = ok
+        connect_results.err = err
+        connect_results.errcode = errcode
+        connect_results.sqlstate = sqlstate
+        return ok, err, errcode, sqlstate
+    end, function(err)
+        -- 错误处理函数：记录异常信息
+        ngx.log(ngx.WARN, "MySQL connect() threw an exception: ", tostring(err))
+        connect_results.ok = false
+        connect_results.err = tostring(err) or "connection failed with exception"
+        connect_results.errcode = nil
+        connect_results.sqlstate = nil
+        return err
     end)
     
     local ok, err, errcode, sqlstate
     if connect_ok then
-        -- pcall 成功，获取连接结果
-        ok, err, errcode, sqlstate = connect_result
+        -- xpcall 成功，从结果表中获取返回值
+        ok = connect_results.ok
+        err = connect_results.err
+        errcode = connect_results.errcode
+        sqlstate = connect_results.sqlstate
     else
-        -- pcall 失败，说明 connect 过程中抛出了异常（可能是 socket 已关闭）
+        -- xpcall 失败，说明 connect 过程中抛出了异常（可能是 socket 已关闭）
         ok = false
-        err = connect_result or "connection failed with exception"
-        ngx.log(ngx.WARN, "MySQL connect() threw an exception: ", tostring(connect_result))
+        err = connect_results.err or connect_err or "connection failed with exception"
+        errcode = nil
+        sqlstate = nil
+        ngx.log(ngx.WARN, "MySQL connect() xpcall failed: ", tostring(connect_err))
     end
 
     if not ok then
@@ -228,9 +249,11 @@ function _M.get_connection()
             db, err = mysql:new()
             if db then
                 db:set_timeout(config.mysql.pool_timeout)
-                -- 使用 pcall 包装重试连接，避免在超时时出现 "attempt to send data on a closed socket" 错误
-                local retry_connect_ok, retry_connect_result = pcall(function()
-                    return db:connect{
+                -- 使用 xpcall 包装重试连接，避免在超时时出现 "attempt to send data on a closed socket" 错误
+                local retry_connect_results = {}
+                local retry_connect_ok, retry_connect_err = xpcall(function()
+                    -- 将多个返回值收集到表中
+                    local ok, err, errcode, sqlstate = db:connect{
                         host = mysql_host,
                         port = config.mysql.port,
                         database = config.mysql.database,
@@ -239,16 +262,34 @@ function _M.get_connection()
                         max_packet_size = config.mysql.max_packet_size,
                         charset = "utf8mb4",
                     }
+                    retry_connect_results.ok = ok
+                    retry_connect_results.err = err
+                    retry_connect_results.errcode = errcode
+                    retry_connect_results.sqlstate = sqlstate
+                    return ok, err, errcode, sqlstate
+                end, function(err)
+                    -- 错误处理函数：记录异常信息
+                    ngx.log(ngx.WARN, "MySQL retry connect() threw an exception: ", tostring(err))
+                    retry_connect_results.ok = false
+                    retry_connect_results.err = tostring(err) or "connection retry failed with exception"
+                    retry_connect_results.errcode = nil
+                    retry_connect_results.sqlstate = nil
+                    return err
                 end)
                 
                 if retry_connect_ok then
-                    -- pcall 成功，获取连接结果
-                    ok, err, errcode, sqlstate = retry_connect_result
+                    -- xpcall 成功，从结果表中获取返回值
+                    ok = retry_connect_results.ok
+                    err = retry_connect_results.err
+                    errcode = retry_connect_results.errcode
+                    sqlstate = retry_connect_results.sqlstate
                 else
-                    -- pcall 失败，说明 connect 过程中抛出了异常（可能是 socket 已关闭）
+                    -- xpcall 失败，说明 connect 过程中抛出了异常（可能是 socket 已关闭）
                     ok = false
-                    err = retry_connect_result or "connection retry failed with exception"
-                    ngx.log(ngx.WARN, "MySQL retry connect() threw an exception: ", tostring(retry_connect_result))
+                    err = retry_connect_results.err or retry_connect_err or "connection retry failed with exception"
+                    errcode = nil
+                    sqlstate = nil
+                    ngx.log(ngx.WARN, "MySQL retry connect() xpcall failed: ", tostring(retry_connect_err))
                 end
                 
                 if ok then

@@ -760,5 +760,26 @@ function _M.parse_ip_range(range_str)
     return nil, nil
 end
 
+-- 检查Host头是否为IP地址
+-- @param host string Host头值（可能包含端口号）
+-- @return boolean 如果是IP地址则返回true，否则返回false
+function _M.is_ip_host(host)
+    if not host or host == "" then
+        return false
+    end
+    
+    -- 去除端口号（如果有）
+    local host_without_port = host:match("^([^:]+)")
+    if not host_without_port then
+        host_without_port = host
+    end
+    
+    -- 去除方括号（IPv6地址可能包含方括号）
+    host_without_port = host_without_port:gsub("^%[", ""):gsub("%]$", "")
+    
+    -- 检查是否为有效的IP地址
+    return _M.is_valid_ip(host_without_port)
+end
+
 return _M
 

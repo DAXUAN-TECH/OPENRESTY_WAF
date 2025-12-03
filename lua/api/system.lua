@@ -238,6 +238,45 @@ local function update_waf_conf_for_admin_ssl(enabled, server_name, force_https)
             content = new_content
         end
     end
+    
+    -- 5) 添加/移除禁止IP访问的检查（如果配置了域名）
+    -- 先移除旧的禁止IP访问检查块
+    content = content:gsub("\n%s*# 禁止使用IP访问（已配置域名）.-# 禁止IP访问结束%s*\n", "\n")
+    
+    -- 如果配置了域名，添加禁止IP访问检查
+    if server_name and server_name ~= "" and server_name ~= "localhost" and server_name ~= "_" then
+        local ip_block_check = [[
+
+    # 禁止使用IP访问（已配置域名）
+    # 注意：此配置由系统设置自动生成，请勿手工修改
+    access_by_lua_block {
+        local ip_utils = require "waf.ip_utils"
+        local host = ngx.var.host or ngx.var.http_host
+        if host and ip_utils.is_ip_host(host) then
+            ngx.log(ngx.WARN, "WAF系统IP访问被阻止: Host头是IP地址: ", host)
+            ngx.status = 403
+            ngx.header.content_type = "text/html; charset=utf-8"
+            ngx.say("<!DOCTYPE html><html><head><meta charset='UTF-8'><title>禁止IP访问</title></head><body><h1>403 Forbidden</h1><p>禁止使用IP地址访问WAF系统，请使用配置的域名访问。</p></body></html>")
+            ngx.exit(403)
+        end
+    }
+    # 禁止IP访问结束
+]]
+        -- 插入到系统访问白名单检查之前（优先级最高）
+        local new_content, n = content:gsub("(# 系统访问白名单检查（在 access 阶段执行，优先级最高）)", ip_block_check .. "\n    %1", 1)
+        if n > 0 then
+            content = new_content
+        else
+            -- 如果找不到系统访问白名单检查，则插入到字符集设置之后
+            new_content, n = content:gsub("(charset%s+utf%-8;%s*\n)", "%1" .. ip_block_check .. "\n", 1)
+            if n > 0 then
+                content = new_content
+            else
+                -- 如果找不到字符集设置，则插入到server块开始处
+                content = content:gsub("(server%s+%{%s*\n)", "%1" .. ip_block_check .. "\n", 1)
+            end
+        end
+    end
 
     -- 4) 处理强制跳转配置：先移除旧的标记块
     content = content:gsub("\n%s*# 管理端 HTTPS 强制跳转开始（自动生成，请勿手工修改）.-# 管理端 HTTPS 强制跳转结束%s*\n", "\n")

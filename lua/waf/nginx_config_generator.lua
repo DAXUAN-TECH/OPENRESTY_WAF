@@ -245,6 +245,11 @@ local function generate_http_server_config(proxy, upstream_name, backends, proje
     -- 注意：即使有location /，如果location执行失败，Nginx可能会回退到默认行为
     -- 通过error_page指令，确保所有404都通过Lua代码处理
     config = config .. "    error_page 404 = @custom_404;\n"
+    
+    -- 禁止使用IP访问（如果配置了域名）
+    -- 如果配置了server_name（域名），则禁止通过IP地址访问
+    -- 注意：此检查需要在WAF封控检查之前执行，确保IP访问被优先拦截
+    local need_ip_block_check = proxy.server_name and proxy.server_name ~= "" and proxy.server_name ~= cjson.null and proxy.server_name ~= "_"
 
     -- 如果启用SSL并开启强制HTTPS跳转，则将HTTP请求重定向到HTTPS
     -- 注意：强制跳转规则必须在SSL配置之前，确保HTTP请求在SSL配置生效前就被重定向

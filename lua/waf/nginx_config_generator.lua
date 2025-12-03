@@ -240,6 +240,11 @@ local function generate_http_server_config(proxy, upstream_name, backends, proje
     -- 注意：即使有location /，如果没有显式设置root，Nginx仍可能使用默认root
     -- 设置为/dev/null确保不会从文件系统提供文件
     config = config .. "    root /dev/null;\n"
+    
+    -- 设置默认404错误页面处理，确保所有404都返回自定义页面
+    -- 注意：即使有location /，如果location执行失败，Nginx可能会回退到默认行为
+    -- 通过error_page指令，确保所有404都通过Lua代码处理
+    config = config .. "    error_page 404 = @custom_404;\n"
 
     -- 如果启用SSL并开启强制HTTPS跳转，则将HTTP请求重定向到HTTPS
     -- 注意：强制跳转规则必须在SSL配置之前，确保HTTP请求在SSL配置生效前就被重定向

@@ -200,7 +200,7 @@ local function generate_http_server_config(proxy, upstream_name, backends)
     local listen_line = "    listen       " .. proxy.listen_port
     if proxy.ssl_enable == 1 then
         listen_line = listen_line .. " ssl"
-        if proxy.ssl_cert_path and proxy.ssl_key_path then
+        if proxy.ssl_pem and proxy.ssl_key then
             listen_line = listen_line .. " http2"
         end
     end

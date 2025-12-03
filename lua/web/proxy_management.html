@@ -106,6 +106,13 @@
                         <label>监听地址</label>
                         <input type="text" id="create-listen-address" value="0.0.0.0" placeholder="0.0.0.0">
                     </div>
+                    <div class="form-group">
+                        <label>启用SSL</label>
+                        <label class="switch">
+                            <input type="checkbox" id="create-ssl-enable" onchange="toggleSslConfig()">
+                            <span class="slider"></span>
+                        </label>
+                    </div>
                 </div>
                 
                 <div class="form-row" id="tcp-udp-fields" style="display: none;">
@@ -116,6 +123,20 @@
                     <div class="form-group">
                         <label>监听地址</label>
                         <input type="text" id="create-tcp-udp-listen-address" value="0.0.0.0" placeholder="0.0.0.0">
+                    </div>
+                </div>
+                
+                <div class="form-group" id="ssl-fields" style="display: none;">
+                    <label>SSL配置</label>
+                    <div class="ssl-config-section">
+                        <div class="form-group">
+                            <label>SSL证书（PEM格式） *</label>
+                            <textarea id="create-ssl-pem" rows="10" placeholder="-----BEGIN CERTIFICATE-----&#10;...&#10;-----END CERTIFICATE-----" class="ssl-textarea"></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label>SSL密钥（KEY格式） *</label>
+                            <textarea id="create-ssl-key" rows="10" placeholder="-----BEGIN PRIVATE KEY-----&#10;...&#10;-----END PRIVATE KEY-----" class="ssl-textarea"></textarea>
+                        </div>
                     </div>
                 </div>
                 
@@ -269,6 +290,20 @@
                     <div class="form-group">
                         <label>监听地址</label>
                         <input type="text" id="edit-tcp-udp-listen-address">
+                    </div>
+                </div>
+                
+                <div class="form-group" id="edit-ssl-fields" style="display: none;">
+                    <label>SSL配置</label>
+                    <div class="ssl-config-section">
+                        <div class="form-group">
+                            <label>SSL证书（PEM格式） *</label>
+                            <textarea id="edit-ssl-pem" rows="10" placeholder="-----BEGIN CERTIFICATE-----&#10;...&#10;-----END CERTIFICATE-----" class="ssl-textarea"></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label>SSL密钥（KEY格式） *</label>
+                            <textarea id="edit-ssl-key" rows="10" placeholder="-----BEGIN PRIVATE KEY-----&#10;...&#10;-----END PRIVATE KEY-----" class="ssl-textarea"></textarea>
+                        </div>
                     </div>
                 </div>
                 

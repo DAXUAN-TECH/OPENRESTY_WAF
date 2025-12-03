@@ -219,7 +219,7 @@ function _M.create_proxy(proxy_data)
          backend_type, load_balance,
          health_check_enable, health_check_interval, health_check_timeout,
          max_fails, fail_timeout, proxy_timeout, proxy_connect_timeout,
-         proxy_send_timeout, proxy_read_timeout, ssl_enable, ssl_cert_path, ssl_key_path,
+         proxy_send_timeout, proxy_read_timeout, ssl_enable, ssl_pem, ssl_key,
          description, ip_rule_ids, status)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ]]
@@ -258,8 +258,8 @@ function _M.create_proxy(proxy_data)
     local proxy_send_timeout = proxy_data.proxy_send_timeout or 60
     local proxy_read_timeout = proxy_data.proxy_read_timeout or 60
     local ssl_enable = proxy_data.ssl_enable or 0
-    local ssl_cert_path = null_to_nil(proxy_data.ssl_cert_path)
-    local ssl_key_path = null_to_nil(proxy_data.ssl_key_path)
+    local ssl_pem = null_to_nil(proxy_data.ssl_pem)
+    local ssl_key = null_to_nil(proxy_data.ssl_key)
     local description = null_to_nil(proxy_data.description)
     local status = proxy_data.status or 1
     
@@ -289,8 +289,8 @@ function _M.create_proxy(proxy_data)
         proxy_send_timeout,
         proxy_read_timeout,
         ssl_enable,
-        ssl_cert_path,
-        ssl_key_path,
+        ssl_pem,
+        ssl_key,
         description,
         ip_rule_ids_json,
         status
@@ -786,7 +786,7 @@ function _M.update_proxy(proxy_id, proxy_data)
         "backend_type", "load_balance",
         "health_check_enable", "health_check_interval", "health_check_timeout",
         "max_fails", "fail_timeout", "proxy_timeout", "proxy_connect_timeout",
-        "proxy_send_timeout", "proxy_read_timeout", "ssl_enable", "ssl_cert_path", "ssl_key_path",
+        "proxy_send_timeout", "proxy_read_timeout", "ssl_enable", "ssl_pem", "ssl_key",
         "description"
     }
     
@@ -801,7 +801,7 @@ function _M.update_proxy(proxy_id, proxy_data)
                 else
                     table.insert(update_params, null_to_nil(proxy_data[field]))
                 end
-            elseif field == "ssl_cert_path" or field == "ssl_key_path" or field == "description" then
+            elseif field == "ssl_pem" or field == "ssl_key" or field == "description" then
                 table.insert(update_params, null_to_nil(proxy_data[field]))
             elseif field == "location_paths" then
                 -- location_paths字段需要特殊处理：如果是HTTP代理且有值，转换为JSON；否则为nil

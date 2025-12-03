@@ -1482,6 +1482,21 @@ const pageSize = 20;
                     document.getElementById('edit-proxy-read-timeout').value = proxy.proxy_read_timeout || 60;
                     document.getElementById('edit-description').value = proxy.description || '';
                     
+                    // 填充SSL配置
+                    const sslEnable = proxy.ssl_enable == 1;
+                    document.getElementById('edit-ssl-enable').checked = sslEnable;
+                    if (sslEnable && proxy.ssl_pem) {
+                        document.getElementById('edit-ssl-pem').value = proxy.ssl_pem;
+                    } else {
+                        document.getElementById('edit-ssl-pem').value = '';
+                    }
+                    if (sslEnable && proxy.ssl_key) {
+                        document.getElementById('edit-ssl-key').value = proxy.ssl_key;
+                    } else {
+                        document.getElementById('edit-ssl-key').value = '';
+                    }
+                    toggleEditSslConfig();
+                    
                     // 加载防护规则列表
                     const editRulesList = document.getElementById('edit-rules-list');
                     editRulesList.innerHTML = '';
@@ -2076,6 +2091,24 @@ const pageSize = 20;
         function formatDateTime(datetime) {
             if (!datetime) return '-';
             return datetime.replace('T', ' ').substring(0, 19);
+        }
+        
+        // 切换SSL配置显示
+        function toggleSslConfig() {
+            const sslEnable = document.getElementById('create-ssl-enable').checked;
+            const sslFields = document.getElementById('ssl-fields');
+            if (sslFields) {
+                sslFields.style.display = sslEnable ? 'block' : 'none';
+            }
+        }
+        
+        // 切换编辑SSL配置显示
+        function toggleEditSslConfig() {
+            const sslEnable = document.getElementById('edit-ssl-enable').checked;
+            const sslFields = document.getElementById('edit-ssl-fields');
+            if (sslFields) {
+                sslFields.style.display = sslEnable ? 'block' : 'none';
+            }
         }
         
         function renderPagination(data, containerId, loadFunc) {

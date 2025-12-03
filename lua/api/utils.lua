@@ -13,18 +13,32 @@ function _M.json_response(data, status_code)
     ngx.header.content_type = "application/json; charset=utf-8"
     
     -- 确保空表序列化为数组而不是对象
-    -- 保存原始设置
-    local old_encode_empty_table_as_object = cjson.encode_empty_table_as_object
-    if old_encode_empty_table_as_object then
+    -- 注意：encode_empty_table_as_object 是一个函数，需要安全调用
+    local old_value = nil
+    local ok_get, current_value = pcall(function()
+        -- 尝试获取当前值（某些版本可能不支持无参数调用）
+        return cjson.encode_empty_table_as_object()
+    end)
+    if ok_get and current_value ~= nil then
+        old_value = current_value
+    end
+    
+    -- 设置新值
+    local ok_set = pcall(function()
         cjson.encode_empty_table_as_object(false)
+    end)
+    if not ok_set then
+        ngx.log(ngx.WARN, "无法设置 encode_empty_table_as_object，可能不支持此功能")
     end
     
     -- 序列化数据
     local json_str = cjson.encode(data)
     
-    -- 恢复原始设置
-    if old_encode_empty_table_as_object then
-        cjson.encode_empty_table_as_object(old_encode_empty_table_as_object)
+    -- 恢复原始设置（如果之前成功获取了旧值）
+    if old_value ~= nil then
+        pcall(function()
+            cjson.encode_empty_table_as_object(old_value)
+        end)
     end
     
     ngx.say(json_str)

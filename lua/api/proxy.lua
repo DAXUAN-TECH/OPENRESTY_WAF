@@ -211,14 +211,28 @@ function _M.list()
                     -- 测试 JSON 序列化，确保 rules 是数组格式
                     local cjson = require "cjson"
                     -- 设置 cjson 将空表序列化为数组而不是对象
-                    local old_encode_empty_table_as_object = cjson.encode_empty_table_as_object
-                    if old_encode_empty_table_as_object then
-                        cjson.encode_empty_table_as_object(false)
+                    local old_value = nil
+                    local ok_get, current_value = pcall(function()
+                        return cjson.encode_empty_table_as_object()
+                    end)
+                    if ok_get and current_value ~= nil then
+                        old_value = current_value
                     end
+                    
+                    local ok_set = pcall(function()
+                        cjson.encode_empty_table_as_object(false)
+                    end)
+                    if not ok_set then
+                        ngx.log(ngx.WARN, "无法设置 encode_empty_table_as_object，可能不支持此功能")
+                    end
+                    
                     local test_json = cjson.encode(rules_array)
+                    
                     -- 恢复原始设置
-                    if old_encode_empty_table_as_object then
-                        cjson.encode_empty_table_as_object(old_encode_empty_table_as_object)
+                    if old_value ~= nil then
+                        pcall(function()
+                            cjson.encode_empty_table_as_object(old_value)
+                        end)
                     end
                     -- 检查 JSON 字符串是否以 [ 开头（数组）而不是 { 开头（对象）
                     if not test_json:match("^%[") then
@@ -238,9 +252,9 @@ function _M.list()
                         -- 对于空数组，确保序列化为 []
                         if #rules_array == 0 then
                             -- 空数组，使用 encode_empty_table_as_object(false) 确保序列化为 []
-                            if cjson.encode_empty_table_as_object then
+                            pcall(function()
                                 cjson.encode_empty_table_as_object(false)
-                            end
+                            end)
                         end
                     end
                     -- 调试日志：记录规则数量

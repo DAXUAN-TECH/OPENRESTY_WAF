@@ -201,14 +201,28 @@ function _M.list()
     -- 测试 JSON 序列化，确保 rules 是数组格式
     local cjson = require "cjson"
     -- 设置 cjson 将空表序列化为数组而不是对象
-    local old_encode_empty_table_as_object = cjson.encode_empty_table_as_object
-    if old_encode_empty_table_as_object then
-        cjson.encode_empty_table_as_object(false)
+    local old_value = nil
+    local ok_get, current_value = pcall(function()
+        return cjson.encode_empty_table_as_object()
+    end)
+    if ok_get and current_value ~= nil then
+        old_value = current_value
     end
+    
+    local ok_set = pcall(function()
+        cjson.encode_empty_table_as_object(false)
+    end)
+    if not ok_set then
+        ngx.log(ngx.WARN, "无法设置 encode_empty_table_as_object，可能不支持此功能")
+    end
+    
     local test_json = cjson.encode(final_rules)
+    
     -- 恢复原始设置
-    if old_encode_empty_table_as_object then
-        cjson.encode_empty_table_as_object(old_encode_empty_table_as_object)
+    if old_value ~= nil then
+        pcall(function()
+            cjson.encode_empty_table_as_object(old_value)
+        end)
     end
     ngx.log(ngx.INFO, "Rules JSON serialization test: ", test_json:sub(1, 200))
     
@@ -255,13 +269,15 @@ function _M.list()
             -- 没有非数字键，但序列化后不是数组，可能是 cjson 的问题
             -- 对于空数组，确保使用 encode_empty_table_as_object(false)
             if #final_rules == 0 then
-                if cjson.encode_empty_table_as_object then
+                pcall(function()
                     cjson.encode_empty_table_as_object(false)
-                end
+                end)
                 -- 重新测试
                 test_json = cjson.encode(final_rules)
-                if cjson.encode_empty_table_as_object then
-                    cjson.encode_empty_table_as_object(old_encode_empty_table_as_object)
+                if old_value ~= nil then
+                    pcall(function()
+                        cjson.encode_empty_table_as_object(old_value)
+                    end)
                 end
                 if not test_json:match("^%[") then
                     ngx.log(ngx.ERR, "FATAL: empty rules JSON still not an array, this is a cjson configuration issue")

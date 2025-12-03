@@ -556,6 +556,14 @@ local function generate_http_server_config(proxy, upstream_name, backends, proje
     config = config .. "        access_log off;\n"
     config = config .. "    }\n"
     
+    -- 自定义404错误页面处理（命名location，用于error_page指令）
+    config = config .. "\n    # 自定义404错误页面处理\n"
+    config = config .. "    location @custom_404 {\n"
+    config = config .. "        content_by_lua_block {\n"
+    config = config .. "            require(\"waf.error_pages\").return_404(ngx.var.request_uri)\n"
+    config = config .. "        }\n"
+    config = config .. "    }\n"
+    
     config = config .. "}\n\n"
     return config
 end

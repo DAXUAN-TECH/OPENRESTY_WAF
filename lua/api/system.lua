@@ -725,18 +725,24 @@ function _M.update_admin_ssl_config()
     ngx.log(ngx.INFO, "update_admin_ssl_config: admin_force_https 更新成功")
 
     -- 写入/更新实际的证书文件与 waf_admin_ssl.conf
+    ngx.log(ngx.INFO, "update_admin_ssl_config: 开始写入SSL文件...")
     local ok_files, err_files = write_admin_ssl_files(enable_num, server_name, ssl_pem, ssl_key, force_num)
     if not ok_files then
+        ngx.log(ngx.ERR, "update_admin_ssl_config: 写入管理端SSL文件失败: ", tostring(err_files))
         api_utils.json_response({ error = "写入管理端SSL文件失败: " .. tostring(err_files) }, 500)
         return
     end
+    ngx.log(ngx.INFO, "update_admin_ssl_config: SSL文件写入成功")
 
     -- 同步更新 waf.conf 中的 include 与强制跳转配置
+    ngx.log(ngx.INFO, "update_admin_ssl_config: 开始更新waf.conf...")
     local ok_waf, err_waf = update_waf_conf_for_admin_ssl(enable_num, server_name, force_num)
     if not ok_waf then
+        ngx.log(ngx.ERR, "update_admin_ssl_config: 更新waf.conf失败: ", tostring(err_waf))
         api_utils.json_response({ error = "更新 waf.conf 失败: " .. tostring(err_waf) }, 500)
         return
     end
+    ngx.log(ngx.INFO, "update_admin_ssl_config: waf.conf更新成功")
 
     -- 记录审计日志
     local action_desc = enable_num == 1 and ("启用管理端HTTPS，域名: " .. server_name) or "关闭管理端HTTPS"

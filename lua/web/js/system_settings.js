@@ -728,7 +728,7 @@ let currentPage = 1;
             if (tab === 'features') {
                 switchTab('features');
             } else {
-                loadWhitelist();
+            loadWhitelist();
             }
             
             // 点击模态框外部关闭

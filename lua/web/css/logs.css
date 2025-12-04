@@ -341,6 +341,64 @@
             border-spacing: 0;
             position: relative;
         }
+        /* 访问日志表格列宽优化：
+           - 方法、状态码、响应时间列变窄
+           - 请求路径列变宽，并且内容在本列内换行，不会覆盖其它列 */
+        /* 时间、IP、域名列保持适中宽度 */
+        #access-table th:nth-child(1),
+        #access-table td:nth-child(1) {
+            width: 12%;
+            max-width: 12%;
+        }
+        #access-table th:nth-child(2),
+        #access-table td:nth-child(2) {
+            width: 11%;
+            max-width: 11%;
+        }
+        #access-table th:nth-child(3),
+        #access-table td:nth-child(3) {
+            width: 13%;
+            max-width: 13%;
+        }
+        /* 请求路径列加宽，允许在本列内换行，不压到其它列 */
+        #access-table th:nth-child(4),
+        #access-table td:nth-child(4) {
+            width: 32%;
+            max-width: 32%;
+            text-align: left;
+            word-break: break-all;
+            white-space: normal;
+        }
+        /* 方法列变窄 */
+        #access-table th:nth-child(5),
+        #access-table td:nth-child(5) {
+            width: 6%;
+            max-width: 6%;
+            white-space: nowrap;
+        }
+        /* 状态码列变窄 */
+        #access-table th:nth-child(6),
+        #access-table td:nth-child(6) {
+            width: 6%;
+            max-width: 6%;
+            white-space: nowrap;
+        }
+        /* 响应时间列变窄 */
+        #access-table th:nth-child(7),
+        #access-table td:nth-child(7) {
+            width: 8%;
+            max-width: 8%;
+            white-space: nowrap;
+        }
+        /* User-Agent 列自动占用剩余空间，内容过长时省略显示 */
+        #access-table th:nth-child(8),
+        #access-table td:nth-child(8) {
+            width: 12%;
+            max-width: 12%;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
         
         /* 封控日志：block-table和table-wrapper保持一样的宽度，确保左右对齐 */
         #block-tab {

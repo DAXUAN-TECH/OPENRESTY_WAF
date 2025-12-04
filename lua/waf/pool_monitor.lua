@@ -76,27 +76,70 @@ function _M.test_connection()
     
     db:set_timeout(1000)  -- 1秒超时
     
-    local ok, err, errcode, sqlstate = db:connect{
-        host = config.mysql.host,
-        port = config.mysql.port,
-        database = config.mysql.database,
-        user = config.mysql.user,
-        password = config.mysql.password,
-        charset = "utf8mb4",
-    }
+    -- 使用 xpcall 包装 connect 调用，避免在超时时出现 "attempt to send data on a closed socket" 错误
+    -- 注意：xpcall 可以正确处理多个返回值的情况
+    local connect_results = {}
+    local connect_ok, connect_err = xpcall(function()
+        -- 将多个返回值收集到表中
+        local ok, err, errcode, sqlstate = db:connect{
+            host = config.mysql.host,
+            port = config.mysql.port,
+            database = config.mysql.database,
+            user = config.mysql.user,
+            password = config.mysql.password,
+            charset = "utf8mb4",
+        }
+        connect_results.ok = ok
+        connect_results.err = err
+        connect_results.errcode = errcode
+        connect_results.sqlstate = sqlstate
+        return ok, err, errcode, sqlstate
+    end, function(err)
+        -- 错误处理函数：记录异常信息
+        connect_results.ok = false
+        connect_results.err = tostring(err) or "connection failed with exception"
+        connect_results.errcode = nil
+        connect_results.sqlstate = nil
+        return err
+    end)
+    
+    local ok, err, errcode, sqlstate
+    if connect_ok then
+        -- xpcall 成功，从结果表中获取返回值
+        ok = connect_results.ok
+        err = connect_results.err
+        errcode = connect_results.errcode
+        sqlstate = connect_results.sqlstate
+    else
+        -- xpcall 失败，说明 connect 过程中抛出了异常（可能是 socket 已关闭）
+        ok = false
+        err = connect_results.err or connect_err or "connection failed with exception"
+        errcode = nil
+        sqlstate = nil
+    end
     
     if not ok then
+        -- 安全关闭失败的连接
+        if db then
+            pcall(function() db:close() end)
+        end
         return false, err
     end
     
     -- 测试查询
     local res, err = db:query("SELECT 1")
     if not res then
-        db:close()
+        -- 安全关闭连接
+        if db then
+            pcall(function() db:close() end)
+        end
         return false, err
     end
     
-    db:close()
+    -- 安全关闭连接
+    if db then
+        pcall(function() db:close() end)
+    end
     return true, nil
 end
 

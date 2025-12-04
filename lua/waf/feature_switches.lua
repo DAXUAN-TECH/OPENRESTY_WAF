@@ -191,7 +191,10 @@ function _M.get(feature_key)
         
         -- 检查是否是认证错误（1045）或连接错误
         local is_auth_error = err:match("Access denied") or err:match("1045") or err:match("28000")
-        local is_connection_error = err:match("Connection refused") or err:match("Can't connect")
+        -- 连接错误包括：连接超时、连接被拒绝、无法连接等
+        local is_connection_error = err:match("Connection refused") or err:match("Can't connect") or 
+                                    err:match("timeout") or err:match("failed to connect") or
+                                    err:match("Connection timed out") or err:match("No route to host")
         
         -- 对于认证错误和连接错误，使用缓存机制避免重复日志
         local last_error_time = nil

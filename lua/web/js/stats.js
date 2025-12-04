@@ -108,7 +108,7 @@ let timeseriesChart = null;
                 if (error.message && (error.message.includes('统计功能已禁用') || error.message.includes('403'))) {
                     showError('统计功能已被禁用，请在系统设置中启用统计报表功能');
                 } else {
-                    showError('加载失败：' + error.message);
+                showError('加载失败：' + error.message);
                 }
             }
         }

@@ -132,9 +132,11 @@ local function write_admin_ssl_files(enabled, server_name, ssl_pem, ssl_key, for
     end
 
     -- 这里的指令会被直接插入 waf.conf 的 server 块中
+    -- 注意：waf.conf已经监听80端口（带default_server），这里只需要添加443端口的SSL配置
+    -- 不要在这里添加default_server，避免与80端口的default_server冲突
     conf:write("# 本文件由系统设置自动生成，请勿手工修改\n")
     conf:write("# 管理端 HTTPS 配置\n")
-    conf:write("    listen 443 ssl default_server;\n")
+    conf:write("    listen 443 ssl;\n")
     conf:write("    server_name " .. server_name .. ";\n")
     conf:write("    ssl_certificate     " .. cert_path .. ";\n")
     conf:write("    ssl_certificate_key " .. key_path .. ";\n")
@@ -237,6 +239,86 @@ local function update_waf_conf_for_admin_ssl(enabled, server_name, force_https)
         if n > 0 then
             content = new_content
         end
+    end
+    
+    -- 5) 添加/移除禁止IP访问的检查（如果配置了域名）
+    -- 注意：需要将IP访问检查合并到系统访问白名单检查的access_by_lua_block中
+    -- 因为Nginx中同一个server块或location块中，如果有多个access_by_lua_block，只有最后一个会生效
+    
+    -- 先移除旧的独立IP访问检查块（如果存在）
+    content = content:gsub("\n%s*# 禁止使用IP访问（已配置域名）.-# 禁止IP访问结束%s*\n", "\n")
+    
+    -- IP访问检查代码（需要插入到所有access_by_lua_block的开头）
+    local ip_block_check_code = [[
+        -- 禁止使用IP访问（已配置域名）
+        -- 注意：此配置由系统设置自动生成，请勿手工修改
+        local ip_utils = require "waf.ip_utils"
+        local host = ngx.var.host or ngx.var.http_host
+        if host and ip_utils.is_ip_host(host) then
+            ngx.log(ngx.WARN, "WAF系统IP访问被阻止: Host头是IP地址: ", host)
+            ngx.status = 403
+            ngx.header.content_type = "text/html; charset=utf-8"
+            ngx.say("<!DOCTYPE html><html><head><meta charset='UTF-8'><title>禁止IP访问</title></head><body><h1>403 Forbidden</h1><p>禁止使用IP地址访问WAF系统，请使用配置的域名访问。</p></body></html>")
+            ngx.exit(403)
+        end
+]]
+    
+    if server_name and server_name ~= "" and server_name ~= "localhost" and server_name ~= "_" then
+        -- 如果配置了域名，在所有access_by_lua_block中添加IP访问检查
+        -- 1. 在server级别的access_by_lua_block中添加（系统访问白名单检查）
+        local pattern = "(access_by_lua_block%s+%{)(%s*local system_access_whitelist_api)"
+        local new_content, n = content:gsub(pattern, "%1" .. ip_block_check_code .. "\n        %2", 1)
+        if n > 0 then
+            content = new_content
+        else
+            -- 如果找不到标准格式，尝试其他格式
+            pattern = "(access_by_lua_block%s+%{)(%s*local)"
+            new_content, n = content:gsub(pattern, "%1" .. ip_block_check_code .. "\n        %2", 1)
+            if n > 0 then
+                content = new_content
+            else
+                -- 如果还是找不到，记录警告但不影响其他功能
+                ngx.log(ngx.WARN, "update_waf_conf_for_admin_ssl: 无法找到access_by_lua_block，IP访问检查未添加")
+            end
+        end
+        
+        -- 2. 在location级别的access_by_lua_block中添加（/api/ 和 /）
+        -- 注意：location级别的access_by_lua_block会覆盖server级别的，所以也需要添加
+        -- 匹配 location /api/ 中的 access_by_lua_block
+        pattern = "(location%s+/api/%s*%{[^}]*access_by_lua_block%s+%{)(%s*%-%- 系统访问白名单检查)"
+        new_content, n = content:gsub(pattern, "%1" .. ip_block_check_code .. "\n            %2", 1)
+        if n > 0 then
+            content = new_content
+        else
+            -- 尝试匹配 location /api/ 中的 access_by_lua_block，后面直接是 local
+            pattern = "(location%s+/api/%s*%{[^}]*access_by_lua_block%s+%{)(%s*local)"
+            new_content, n = content:gsub(pattern, "%1" .. ip_block_check_code .. "\n            %2", 1)
+            if n > 0 then
+                content = new_content
+            end
+        end
+        
+        -- 匹配 location / 中的 access_by_lua_block
+        pattern = "(location%s+/%s*%{[^}]*access_by_lua_block%s+%{)(%s*%-%- 系统访问白名单检查)"
+        new_content, n = content:gsub(pattern, "%1" .. ip_block_check_code .. "\n            %2", 1)
+        if n > 0 then
+            content = new_content
+        else
+            -- 尝试匹配 location / 中的 access_by_lua_block，后面直接是 local
+            pattern = "(location%s+/%s*%{[^}]*access_by_lua_block%s+%{)(%s*local)"
+            new_content, n = content:gsub(pattern, "%1" .. ip_block_check_code .. "\n            %2", 1)
+            if n > 0 then
+                content = new_content
+            end
+        end
+    else
+        -- 如果未配置域名，移除所有IP访问检查代码（如果存在）
+        -- 匹配IP访问检查代码并移除（支持多行匹配）
+        local ip_block_remove_pattern = "\n%s*%-%- 禁止使用IP访问（已配置域名）[^\n]*\n[^\n]*\n[^\n]*\n[^\n]*\n[^\n]*\n[^\n]*\n[^\n]*\n"
+        content = content:gsub(ip_block_remove_pattern, "\n")
+        -- 也尝试单行匹配（如果格式不同）
+        ip_block_remove_pattern = "\n%s*%-%- 禁止使用IP访问（已配置域名）[^\n]*\n"
+        content = content:gsub(ip_block_remove_pattern, "\n")
     end
 
     -- 4) 处理强制跳转配置：先移除旧的标记块

@@ -215,38 +215,9 @@ function _M.init_worker()
         end
     end
     
-    -- 初始化规则备份定时器
-    if config.rule_backup and config.rule_backup.enable then
-        local rule_backup = require "waf.rule_backup"
-        local backup_interval = config.rule_backup.backup_interval or 300
-        
-        local function periodic_backup(premature)
-            if premature then
-                return
-            end
-            
-            local ok, result = rule_backup.backup_rules()
-            if ok then
-                ngx.log(ngx.INFO, "Rules backed up: ", result)
-            else
-                ngx.log(ngx.ERR, "Rule backup failed: ", result)
-            end
-            
-            -- 设置下一次定时器
-            local ok, err = ngx.timer.at(backup_interval, periodic_backup)
-            if not ok then
-                ngx.log(ngx.ERR, "failed to create backup timer: ", err)
-            end
-        end
-        
-        -- 启动定时器
-        local ok, err = ngx.timer.at(backup_interval, periodic_backup)
-        if not ok then
-            ngx.log(ngx.ERR, "failed to create initial backup timer: ", err)
-        else
-            ngx.log(ngx.INFO, "Rule backup timer initialized")
-        end
-    end
+    -- 规则备份定时器已移除
+    -- 现在只在规则新增、删除、修改时触发备份（在rule_management.lua中调用）
+    -- 这样可以减少备份文件数量，只在规则变更时备份
     
     -- 初始化告警检查定时器
     if config.alert and config.alert.enable then
@@ -339,10 +310,15 @@ function _M.init_worker()
     -- 使用定时器延迟执行，避免在init_worker阶段阻塞
     -- 重要：每次init_worker执行时都重新生成配置文件（包括首次启动和reload）
     -- 这样确保配置文件始终与数据库配置保持一致
-    local function init_proxy_configs(premature)
+    -- 添加重试机制，确保数据库连接成功时能够读取到配置
+    local function init_proxy_configs(premature, retry_count)
         if premature then
             return
         end
+        
+        retry_count = retry_count or 0
+        local max_retries = 5  -- 最大重试次数
+        local retry_interval = 3  -- 重试间隔（秒）
         
         local path_utils = require "waf.path_utils"
         local project_root = path_utils.get_project_root()
@@ -353,7 +329,11 @@ function _M.init_worker()
         
         -- 每次init_worker执行时都重新生成配置文件
         -- 这样确保配置文件始终与数据库配置保持一致
-        ngx.log(ngx.INFO, "开始生成/更新代理配置文件...")
+        if retry_count == 0 then
+            ngx.log(ngx.INFO, "开始生成/更新代理配置文件...")
+        else
+            ngx.log(ngx.INFO, "重试生成/更新代理配置文件... (第 ", retry_count, " 次重试)")
+        end
         
         local ok, nginx_config_generator = pcall(require, "waf.nginx_config_generator")
         if ok and nginx_config_generator and nginx_config_generator.generate_all_configs then
@@ -361,16 +341,96 @@ function _M.init_worker()
             if gen_ok then
                 ngx.log(ngx.INFO, "Proxy configs generated: ", gen_err or "success")
             else
-                -- 记录详细错误信息，但不阻止系统运行
+                -- 记录详细错误信息
                 local error_msg = gen_err or "unknown error"
-                ngx.log(ngx.WARN, "Failed to generate proxy configs: ", error_msg)
                 
-                -- 如果是 DNS 解析错误，提供解决建议
-                if error_msg:match("no resolver") or error_msg:match("failed to resolve") then
-                    ngx.log(ngx.WARN, "DNS resolution error detected. Please check:")
-                    ngx.log(ngx.WARN, "1. MySQL host configuration in lua/config.lua (use IP address instead of domain name if possible)")
-                    ngx.log(ngx.WARN, "2. resolver directive in nginx.conf (should be configured in http block)")
-                    ngx.log(ngx.WARN, "3. Network connectivity and DNS server availability")
+                -- 检查是否是数据库连接错误
+                local is_connection_error = error_msg:match("failed to connect") or 
+                                          error_msg:match("timeout") or 
+                                          error_msg:match("Connection refused") or
+                                          error_msg:match("Can't connect") or
+                                          error_msg:match("查询代理配置失败")
+                
+                if is_connection_error and retry_count < max_retries then
+                    -- 如果是连接错误且未达到最大重试次数，则重试
+                    ngx.log(ngx.WARN, "数据库连接失败，", retry_interval, " 秒后重试 (", retry_count + 1, "/", max_retries, "): ", error_msg)
+                    local retry_ok, retry_err = ngx.timer.at(retry_interval, init_proxy_configs, retry_count + 1)
+                    if not retry_ok then
+                        ngx.log(ngx.ERR, "failed to create retry timer: ", retry_err)
+                    end
+                else
+                    -- 如果不是连接错误，或者已达到最大重试次数，记录错误但不阻止系统运行
+                    if retry_count >= max_retries then
+                        ngx.log(ngx.ERR, "Failed to generate proxy configs after ", max_retries, " retries: ", error_msg)
+                        
+                        -- 检查是否有已有配置文件，如果有，说明系统可以继续使用已有配置
+                        local http_config_dir = project_root .. "/conf.d/vhost_conf/http_https"
+                        local tcp_config_dir = project_root .. "/conf.d/vhost_conf/tcp_udp"
+                        local has_existing_configs = false
+                        
+                        -- 检查HTTP/HTTPS代理配置文件
+                        -- 使用更安全的方法：先检查目录是否存在，再查找配置文件
+                        local http_dir = io.open(http_config_dir, "r")
+                        if http_dir then
+                            http_dir:close()
+                            -- 使用find命令查找配置文件（更安全，避免shell注入）
+                            -- 转义路径中的特殊字符，防止命令注入
+                            local escaped_dir = http_config_dir:gsub("'", "'\\''")
+                            local find_cmd = "find '" .. escaped_dir .. "' -maxdepth 1 -name 'proxy_http_*.conf' 2>/dev/null | head -1"
+                            local test_file = io.popen(find_cmd)
+                            if test_file then
+                                local first_file = test_file:read("*line")
+                                test_file:close()
+                                if first_file and first_file ~= "" then
+                                    -- 验证文件路径是否在预期目录内（防止路径遍历攻击）
+                                    if first_file:match("^" .. http_config_dir:gsub("%-", "%%-") .. "/") then
+                                        has_existing_configs = true
+                                    end
+                                end
+                            end
+                        end
+                        
+                        -- 检查TCP/UDP代理配置文件
+                        if not has_existing_configs then
+                            local tcp_dir = io.open(tcp_config_dir, "r")
+                            if tcp_dir then
+                                tcp_dir:close()
+                                -- 使用find命令查找配置文件（更安全，避免shell注入）
+                                -- 转义路径中的特殊字符，防止命令注入
+                                local escaped_dir = tcp_config_dir:gsub("'", "'\\''")
+                                local find_cmd = "find '" .. escaped_dir .. "' -maxdepth 1 -name 'proxy_*.conf' 2>/dev/null | head -1"
+                                local test_file = io.popen(find_cmd)
+                                if test_file then
+                                    local first_file = test_file:read("*line")
+                                    test_file:close()
+                                    if first_file and first_file ~= "" then
+                                        -- 验证文件路径是否在预期目录内（防止路径遍历攻击）
+                                        if first_file:match("^" .. tcp_config_dir:gsub("%-", "%%-") .. "/") then
+                                            has_existing_configs = true
+                                        end
+                                    end
+                                end
+                            end
+                        end
+                        
+                        if has_existing_configs then
+                            ngx.log(ngx.WARN, "检测到已有配置文件，系统将继续使用已有配置，服务不会中断")
+                            ngx.log(ngx.WARN, "请尽快修复数据库连接问题，以便更新配置。数据库连接恢复后，配置会自动更新")
+                        else
+                            ngx.log(ngx.ERR, "未检测到已有配置文件，代理配置可能不可用")
+                            ngx.log(ngx.ERR, "请尽快修复数据库连接问题，以便生成代理配置")
+                        end
+                    else
+                        ngx.log(ngx.WARN, "Failed to generate proxy configs: ", error_msg)
+                    end
+                    
+                    -- 如果是 DNS 解析错误，提供解决建议
+                    if error_msg:match("no resolver") or error_msg:match("failed to resolve") then
+                        ngx.log(ngx.WARN, "DNS resolution error detected. Please check:")
+                        ngx.log(ngx.WARN, "1. MySQL host configuration in lua/config.lua (use IP address instead of domain name if possible)")
+                        ngx.log(ngx.WARN, "2. resolver directive in nginx.conf (should be configured in http block)")
+                        ngx.log(ngx.WARN, "3. Network connectivity and DNS server availability")
+                    end
                 end
             end
         else
@@ -379,7 +439,7 @@ function _M.init_worker()
     end
     
     -- 延迟1秒执行，确保数据库连接已建立
-    local ok, err = ngx.timer.at(1, init_proxy_configs)
+    local ok, err = ngx.timer.at(1, init_proxy_configs, 0)
     if not ok then
         ngx.log(ngx.ERR, "failed to create proxy config initialization timer: ", err)
     else

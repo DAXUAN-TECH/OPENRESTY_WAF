@@ -400,7 +400,7 @@ function _M.list_proxies(params)
     
     -- 查询列表（LEFT JOIN规则表获取规则名称和类型）
     local offset = (page - 1) * page_size
-        local sql = string.format([[
+    local sql = string.format([[
         SELECT p.id, p.proxy_name, p.proxy_type, p.listen_port, p.listen_address, p.server_name, p.location_paths,
                p.backend_type, p.load_balance,
                p.health_check_enable, p.health_check_interval, p.health_check_timeout,
@@ -514,11 +514,11 @@ function _M.list_proxies(params)
                     ngx.log(ngx.DEBUG, "proxy_id=", proxy.id, ", found ", #ordered_rules, " rules")
                 else
                     proxy.rules = {}
-                    proxy.rule_name = nil
-                    proxy.rule_type = nil
+                proxy.rule_name = nil
+                proxy.rule_type = nil
                     ngx.log(ngx.WARN, "proxy_id=", proxy.id, ", ordered_rules is empty after mapping")
-                end
-            else
+            end
+        else
                 proxy.rules = {}
                 proxy.rule_name = nil
                 proxy.rule_type = nil

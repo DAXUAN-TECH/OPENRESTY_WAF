@@ -265,6 +265,27 @@ function _M.get_real_ip()
     return nil
 end
 
+-- 检查host是否为IP地址（支持IPv4和IPv6，并处理端口号）
+function _M.is_ip_host(host)
+    if not host then
+        return false
+    end
+    
+    -- 移除端口号（如果有）
+    local ip_only = host:match("^(%d+%.%d+%.%d+%.%d+):%d+$") -- IPv4 with port
+    if ip_only then
+        return _M.is_valid_ip(ip_only)
+    end
+    
+    ip_only = host:match("^%[(.+)%]:%d+$") -- IPv6 with port (格式: [::1]:8080)
+    if ip_only then
+        return _M.is_valid_ip(ip_only)
+    end
+    
+    -- 没有端口号，直接检查是否为IP
+    return _M.is_valid_ip(host)
+end
+
 -- IPv4 转整数
 function _M.ipv4_to_int(ip)
     local a, b, c, d = ip:match("^(%d+)%.(%d+)%.(%d+)%.(%d+)$")

@@ -246,6 +246,24 @@ local function generate_http_server_config(proxy, upstream_name, backends, proje
     -- 通过error_page指令，确保所有404都通过Lua代码处理
     config = config .. "    error_page 404 = @custom_404;\n"
 
+    -- IP访问检查：如果配置了server_name，禁止使用IP访问
+    if proxy.server_name and proxy.server_name ~= "" and proxy.server_name ~= cjson.null then
+        config = config .. "\n    # IP访问检查（禁止使用IP访问，必须使用配置的域名）\n"
+        config = config .. "    access_by_lua_block {\n"
+        config = config .. "        local ip_utils = require \"waf.ip_utils\"\n"
+        config = config .. "        local error_pages = require \"waf.error_pages\"\n"
+        config = config .. "        local host = ngx.var.http_host or ngx.var.host\n"
+        config = config .. "        if host then\n"
+        config = config .. "            -- 移除端口号（如果有）\n"
+        config = config .. "            local host_without_port = host:match(\"^([^:]+)\")\n"
+        config = config .. "            if host_without_port and ip_utils.is_ip_host(host_without_port) then\n"
+        config = config .. "                ngx.log(ngx.WARN, \"IP access forbidden: \", host_without_port, \" (server_name: \", ngx.var.server_name or \"nil\", \")\")\n"
+        config = config .. "                error_pages.return_403(ngx.var.remote_addr or \"unknown\", \"禁止使用IP访问，请使用配置的域名进行访问。\")\n"
+        config = config .. "            end\n"
+        config = config .. "        end\n"
+        config = config .. "    }\n"
+    end
+
     -- 如果启用SSL并开启强制HTTPS跳转，则将HTTP请求重定向到HTTPS
     -- 注意：强制跳转规则必须在SSL配置之前，确保HTTP请求在SSL配置生效前就被重定向
     -- 调试日志：记录SSL和强制跳转状态

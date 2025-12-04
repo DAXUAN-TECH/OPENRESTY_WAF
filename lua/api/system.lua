@@ -266,49 +266,78 @@ local function update_waf_conf_for_admin_ssl(enabled, server_name, force_https)
     if server_name and server_name ~= "" and server_name ~= "localhost" and server_name ~= "_" then
         -- 如果配置了域名，在所有access_by_lua_block中添加IP访问检查
         -- 1. 在server级别的access_by_lua_block中添加（系统访问白名单检查）
-        local pattern = "(access_by_lua_block%s+%{)(%s*local system_access_whitelist_api)"
+        -- 匹配模式1：access_by_lua_block { 后面直接是 local system_access_whitelist_api（可能跨行）
+        local pattern = "(access_by_lua_block%s+%{[%s\n]*)(local%s+system_access_whitelist_api)"
         local new_content, n = content:gsub(pattern, "%1" .. ip_block_check_code .. "\n        %2", 1)
         if n > 0 then
             content = new_content
         else
-            -- 如果找不到标准格式，尝试其他格式
-            pattern = "(access_by_lua_block%s+%{)(%s*local)"
+            -- 匹配模式2：access_by_lua_block { 后面是任何内容，然后是 local（可能跨行）
+            pattern = "(access_by_lua_block%s+%{[%s\n]*)(local)"
             new_content, n = content:gsub(pattern, "%1" .. ip_block_check_code .. "\n        %2", 1)
             if n > 0 then
                 content = new_content
             else
-                -- 如果还是找不到，记录警告但不影响其他功能
-                ngx.log(ngx.WARN, "update_waf_conf_for_admin_ssl: 无法找到access_by_lua_block，IP访问检查未添加")
+                -- 匹配模式3：access_by_lua_block { 后面是换行符和缩进，然后是 local system_access_whitelist_api
+                pattern = "(access_by_lua_block%s+%{\n%s*)(local%s+system_access_whitelist_api)"
+                new_content, n = content:gsub(pattern, "%1" .. ip_block_check_code .. "\n        %2", 1)
+                if n > 0 then
+                    content = new_content
+                else
+                    -- 匹配模式4：access_by_lua_block { 后面是换行符和缩进，然后是 local
+                    pattern = "(access_by_lua_block%s+%{\n%s*)(local)"
+                    new_content, n = content:gsub(pattern, "%1" .. ip_block_check_code .. "\n        %2", 1)
+                    if n > 0 then
+                        content = new_content
+                    else
+                        -- 如果还是找不到，记录警告但不影响其他功能
+                        ngx.log(ngx.WARN, "update_waf_conf_for_admin_ssl: 无法找到access_by_lua_block，IP访问检查未添加")
+                    end
+                end
             end
         end
         
         -- 2. 在location级别的access_by_lua_block中添加（/api/ 和 /）
         -- 注意：location级别的access_by_lua_block会覆盖server级别的，所以也需要添加
         -- 匹配 location /api/ 中的 access_by_lua_block
-        pattern = "(location%s+/api/%s*%{[^}]*access_by_lua_block%s+%{)(%s*%-%- 系统访问白名单检查)"
+        pattern = "(location%s+/api/[^%{]*%{[^}]*access_by_lua_block%s+%{[%s\n]*)(%-%-%s*系统访问白名单检查)"
         new_content, n = content:gsub(pattern, "%1" .. ip_block_check_code .. "\n            %2", 1)
         if n > 0 then
             content = new_content
         else
-            -- 尝试匹配 location /api/ 中的 access_by_lua_block，后面直接是 local
-            pattern = "(location%s+/api/%s*%{[^}]*access_by_lua_block%s+%{)(%s*local)"
+            -- 尝试匹配 location /api/ 中的 access_by_lua_block，后面直接是 local system_access_whitelist_api
+            pattern = "(location%s+/api/[^%{]*%{[^}]*access_by_lua_block%s+%{[%s\n]*)(local%s+system_access_whitelist_api)"
             new_content, n = content:gsub(pattern, "%1" .. ip_block_check_code .. "\n            %2", 1)
             if n > 0 then
                 content = new_content
+            else
+                -- 尝试匹配 location /api/ 中的 access_by_lua_block，后面直接是 local
+                pattern = "(location%s+/api/[^%{]*%{[^}]*access_by_lua_block%s+%{[%s\n]*)(local)"
+                new_content, n = content:gsub(pattern, "%1" .. ip_block_check_code .. "\n            %2", 1)
+                if n > 0 then
+                    content = new_content
+                end
             end
         end
         
         -- 匹配 location / 中的 access_by_lua_block
-        pattern = "(location%s+/%s*%{[^}]*access_by_lua_block%s+%{)(%s*%-%- 系统访问白名单检查)"
+        pattern = "(location%s+/[^%{]*%{[^}]*access_by_lua_block%s+%{[%s\n]*)(%-%-%s*系统访问白名单检查)"
         new_content, n = content:gsub(pattern, "%1" .. ip_block_check_code .. "\n            %2", 1)
         if n > 0 then
             content = new_content
         else
-            -- 尝试匹配 location / 中的 access_by_lua_block，后面直接是 local
-            pattern = "(location%s+/%s*%{[^}]*access_by_lua_block%s+%{)(%s*local)"
+            -- 尝试匹配 location / 中的 access_by_lua_block，后面直接是 local system_access_whitelist_api
+            pattern = "(location%s+/[^%{]*%{[^}]*access_by_lua_block%s+%{[%s\n]*)(local%s+system_access_whitelist_api)"
             new_content, n = content:gsub(pattern, "%1" .. ip_block_check_code .. "\n            %2", 1)
             if n > 0 then
                 content = new_content
+            else
+                -- 尝试匹配 location / 中的 access_by_lua_block，后面直接是 local
+                pattern = "(location%s+/[^%{]*%{[^}]*access_by_lua_block%s+%{[%s\n]*)(local)"
+                new_content, n = content:gsub(pattern, "%1" .. ip_block_check_code .. "\n            %2", 1)
+                if n > 0 then
+                    content = new_content
+                end
             end
         end
     else
